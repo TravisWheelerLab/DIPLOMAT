@@ -13,8 +13,7 @@ from os import PathLike
 from diplomat.processing import Predictor, TQDMProgressBar, Config
 from deeplabcut.utils import auxiliaryfunctions
 from diplomat import processing
-from diplomat.predict_videos_dlc import get_predictor_settings
-from deeplabcut.pose_estimation_tensorflow.predict_videos import GetPandasHeader
+from diplomat.predict_videos_dlc import get_predictor_settings, get_pandas_header
 from pathlib import Path
 import numpy as np
 import diplomat.utils.frame_store_fmt as frame_store_fmt
@@ -237,11 +236,11 @@ def _analyze_frame_store(
                 bp_lst,
             ) = frame_reader.get_header().to_list()
 
-            pd_index = GetPandasHeader(
+            pd_index = get_pandas_header(
                 bp_lst, num_outputs, multi_output_format, dlc_scorer
             )
 
-            predictor_settings = GetPredictorSettings(
+            predictor_settings = get_predictor_settings(
                 cfg, predictor_cls, predictor_settings
             )
 

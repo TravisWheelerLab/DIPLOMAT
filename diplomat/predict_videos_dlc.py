@@ -1,17 +1,63 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Type, Tuple, Optional, Literal, Union
 
 import cv2
 import pandas as pd
 import numpy as np
+import tensorflow as tf
+import os
 from tqdm import tqdm
 from skimage import img_as_ubyte
 from diplomat.processing import *
+from pathlib import Path
 
 # DLC Imports
 from deeplabcut.pose_estimation_tensorflow.core import predict
 from deeplabcut.pose_estimation_tensorflow.predict_videos import checkcropping
+from deeplabcut.pose_estimation_tensorflow.config import load_config
+from deeplabcut.pose_estimation_tensorflow import auxiliaryfunctions
 
-def get_pandas_header(body_parts: List[str], num_outputs: int, out_format: str, dlc_scorer: str):
+Pathy = Union[os.PathLike, str]
+
+def analyze_videos(
+    config: str,
+    videos: List[Pathy],
+    video_type: str = "avi",
+    shuffle: int = 1,
+    training_set_index: int = 0,
+    gpu_index: int = None,
+    save_as_csv: bool = False,
+    destination_folder: str = None,
+    batch_size: int = None,
+    cropping: Tuple[int, int, int, int] = None,
+    model_prefix: str = "",
+    num_outputs: int = None,
+    multi_output_format: Literal["default", "separate"] = "default",
+    predictor: Optional[str] = None,
+    predictor_settings: Optional[Dict[str, Any]] = None
+) -> str:
+    if("TF_CUDNN_USE_AUTOTUNE" in os.environ):
+        del os.environ["TF_CUDNN_USE_AUTOTUNE"]
+
+    if(gpu_index is not None):
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_index)
+
+    tf.compat.v1.reset_default_graph()
+    this_dir = Path.cwd()
+
+    config = load_config(config)
+    iteration = config["iteration"]
+    train_frac = config["TrainingFraction"][training_set_index]
+
+    model_directory = Path(config["project_path"]) / auxiliaryfunctions.GetModelFolder(train_frac, shuffle, config, model_prefix)
+
+    try:
+        model_config = load_config(model_directory / "test" / "pose_cfg.yaml")
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Invalid model selection: (Iteration {iteration}, Training Fraction {train_frac}, Shuffle: {shuffle})")
+
+    snapshots = []
+
+def get_pandas_header(body_parts: List[str], num_outputs: int, out_format: str, dlc_scorer: str) -> pd.MultiIndex:
     """
     Creates the pandas data header for the passed body parts and number of outputs.
     body_parts: The list of body part names. List of strings.
@@ -46,7 +92,11 @@ def get_pandas_header(body_parts: List[str], num_outputs: int, out_format: str, 
 
 
 # Utility method used by AnalyzeVideo, gets the settings for the given predictor plugin
-def get_predictor_settings(cfg: Dict[str, Any], predictor_cls: Predictor, usr_passed_settings: Dict[str, Any] = None):
+def get_predictor_settings(
+    cfg: Dict[str, Any],
+    predictor_cls: Type[Predictor],
+    usr_passed_settings: Dict[str, Any] = None
+) -> Optional[Config]:
     """ Get the predictor settings from deeplabcut config and return a dictionary for plugin to use... """
     # Grab setting blueprints for predictor plugins(dict of name to default value, type, and description)....
     setting_info = predictor_cls.get_settings()
@@ -112,7 +162,7 @@ def get_poses(
     batch_size: int,
     predictor: Predictor,
     cnn_extractor_method = predict.extract_cnn_outputmulti
-):
+) -> Tuple[np.ndarray, int]:
     """ Gets the poses for any batch size, including batch size of only 1 """
     # Create a numpy array to hold all pose prediction data...
     pose_prediction_data = np.zeros(
