@@ -1,3 +1,4 @@
+import time
 from typing import List, Dict, Any, Type, Tuple, Optional, Literal, Union
 
 import cv2
@@ -8,6 +9,8 @@ import os
 from tqdm import tqdm
 from skimage import img_as_ubyte
 from diplomat.processing import *
+from diplomat import processing
+from diplomat.utils import video_info
 from pathlib import Path
 
 # DLC Imports
@@ -15,6 +18,7 @@ from deeplabcut.pose_estimation_tensorflow.core import predict
 from deeplabcut.pose_estimation_tensorflow.predict_videos import checkcropping
 from deeplabcut.pose_estimation_tensorflow.config import load_config
 from deeplabcut.pose_estimation_tensorflow import auxiliaryfunctions
+from deeplabcut.pose_estimation_tensorflow import predict_multianimal
 
 Pathy = Union[os.PathLike, str]
 
@@ -55,7 +59,219 @@ def analyze_videos(
     except FileNotFoundError:
         raise FileNotFoundError(f"Invalid model selection: (Iteration {iteration}, Training Fraction {train_frac}, Shuffle: {shuffle})")
 
-    snapshots = []
+    try:
+        snapshot_list = sorted([
+            f.stem for f in (model_directory / "train").iterdir() if(f.suffix == "index")
+        ], key=lambda f: int(f.split("-")[1]))
+    except FileNotFoundError:
+        raise FileNotFoundError("Snapshots don't exist! Please make sure the model is trained first.")
+
+    selected_snapshot = snapshot_list[config["snapshotindex"] if(config["snapshotindex"] != "all") else -1]
+    model_config["init_weights"] = model_directory / "train" / selected_snapshot
+    train_iterations = selected_snapshot.split("-")[-1]
+
+    # Set the number of outputs...
+    model_config["num_outputs"] = config.get("num_outputs", model_config.get("num_outputs", 1))
+    old_num_outputs = model_config["num_outputs"]
+    model_config["num_outputs"] = (
+        int(num_outputs)
+        if ((num_outputs is not None) and (num_outputs >= 1))
+        else model_config["num_outputs"]
+    )
+
+    batch_size = batch_size if(batch_size is not None) else config["batch_size"]
+    model_config["batch_size"] = batch_size
+    config["batch_size"] = batch_size
+
+    if predictor is not None:
+        # If predictor plugin was selected, disable dynamic mode and GPU predictions.
+        predictor_cls = processing.get_predictor(predictor)
+        print(f"Predictor '{predictor}' selected, disabling GPU predictions and dynamic cropping as both of these are not supported.")
+
+        if model_config["num_outputs"] > 1 and (not predictor_cls.supports_multi_output()):
+            raise NotImplementedError(
+                "Predictor plugin does not support num_outputs greater than 1."
+            )
+    else:
+        predictor_cls = processing.get_predictor("ArgMax")
+
+    dlc_scorer, __ = auxiliaryfunctions.GetScorerName(
+        config,
+        shuffle,
+        train_frac,
+        trainingsiterations=train_iterations,
+        modelprefix=model_prefix,
+    )
+
+    sess, inputs, outputs = predict.setup_pose_prediction(model_config)
+
+    table_header = get_pandas_header(
+        model_config["all_joints_names"],
+        model_config["num_outputs"],
+        multi_output_format,
+        dlc_scorer,
+    )
+
+    video_list = auxiliaryfunctions.Getlistofvideos(videos, video_type)
+
+    if(len(video_list) > 0):
+        for video in video_list:
+            analyze_video(
+                video,
+                dlc_scorer,
+                train_frac,
+                config,
+                model_config,
+                sess,
+                inputs,
+                outputs,
+                table_header,
+                save_as_csv,
+                destination_folder,
+                predictor_cls,
+                predictor_settings
+            )
+    else:
+        print("No videos found!")
+
+    model_config["num_outputs"] = old_num_outputs
+    os.chdir(this_dir)
+
+    print("Analysis is done!")
+
+    return dlc_scorer
+
+
+def analyze_video(
+    video,
+    dlc_scorer,
+    training_fraction,
+    config,
+    model_config,
+    sess,
+    inputs,
+    outputs,
+    table_header,
+    save_as_csv,
+    dest_folder=None,
+    predictor_cls=None,
+    predictor_settings=None,
+) -> str:
+    print(f"Analyzing video: {video}")
+
+    dest_folder = Path(Path(video).resolve().parent if(dest_folder is None) else dest_folder)
+    dest_folder.mkdir(exist_ok=True)
+
+    video_name = Path(video).stem
+
+    try:
+        __ = auxiliaryfunctions.load_analyzed_data(dest_folder, video_name, dlc_scorer)
+        print(f"Results for video {video} already exist.")
+        return
+    except FileNotFoundError:
+        pass
+
+    h5_path = dest_folder / (video_name + dlc_scorer + ".h5")
+
+    print("Loading the video...")
+    cap = cv2.VideoCapture(str(video))
+    if(not cap.isOpened()):
+        raise IOError(f"Unable to open video: {video}")
+
+    num_frames = video_info.get_frame_count_robust(video)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    duration = num_frames / fps
+
+    vw = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    vh = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+
+    print(f"Video Info: frames={num_frames}, fps={fps}, duration={duration}, width={vw}, height={vh}")
+
+    # Passed to the plugin to give it some info about the video...
+    video_metadata = Config({
+        "fps": fps,
+        "duration": duration,
+        "size": (vh, vw),
+        "h5-file-name": str(Path(h5_path).resolve()),
+        "orig-video-path": str(Path(video).resolve()),
+        "cropping-offset": (int(config["y1"]), int(config["x1"]))
+        if (config.get("cropping", False))
+        else None,
+        "dotsize": config["dotsize"],
+        "colormap": config["colormap"],
+        "alphavalue": config["alphavalue"],
+        "pcutoff": config["pcutoff"],
+    })
+
+    # Grab the plugin settings for this plugin...
+    predictor_settings = get_predictor_settings(config, predictor_cls, predictor_settings)
+    print(f"Plugin {predictor_cls.get_name()} Settings: {predictor_settings}")
+
+    # Create a predictor plugin instance...
+    predictor_inst = predictor_cls(
+        model_config["all_joints_names"],
+        model_config["num_outputs"],
+        num_frames,
+        predictor_settings,
+        video_metadata,
+    )
+
+    start = time.time()
+
+    predicted_data, num_frames = get_poses(
+        config,
+        model_config,
+        sess,
+        inputs,
+        outputs,
+        cap,
+        num_frames,
+        int(model_config["batch_size"]),
+        predictor_inst,
+        cnn_extractor_method=(
+            predict.extract_cnn_outputmulti
+            if ("multi-animal" in model_config["dataset_type"]) else
+            lambda *args, **kwargs: predict_multianimal.extract_cnn_outputmulti(*args, **kwargs)[:2]
+        )
+    )
+
+    stop = time.time()
+
+    if(config["cropping"] == True):
+        coords = [config["x1"], config["x2"], config["y1"], config["y2"]]
+    else:
+        coords = [0, vw, 0, vh]
+
+    metadata = {
+        "data": {
+            "start": start,
+            "stop": stop,
+            "run_duration": stop - start,
+            "Scorer": dlc_scorer,
+            "DLC-model-config file": model_config,
+            "fps": fps,
+            "batch_size": model_config["batch_size"],
+            "frame_dimensions": (vh, vw),
+            "nframes": num_frames,
+            "iteration (active-learning)": config["iteration"],
+            "training set fraction": training_fraction,
+            "cropping": config["cropping"],
+            "cropping_parameters": coords
+        }
+    }
+
+    print(f"Saving results in {dest_folder}...")
+    auxiliaryfunctions.SaveData(
+        predicted_data[:num_frames, :],
+        metadata,
+        h5_path,
+        table_header,
+        range(num_frames),
+        save_as_csv,
+    )
+
+    return dlc_scorer
+
 
 def get_pandas_header(body_parts: List[str], num_outputs: int, out_format: str, dlc_scorer: str) -> pd.MultiIndex:
     """
