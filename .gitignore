@@ -1,0 +1,7 @@
+# Python venv if being used...
+.venv
+venv/
+ENV/
+
+# PyCharm IDE settings
+.idea/

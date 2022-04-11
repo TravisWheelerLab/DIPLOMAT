@@ -1,0 +1,145 @@
+from typing import Union, Sequence, Tuple, List
+import cv2
+from os import PathLike as Pl
+from pathlib import Path
+from diplomat.predict_frames_dlc import _sanitize_path_arg
+import tqdm
+import math
+
+PathLike = Union[Pl, str]
+
+FALLBACK_CODEC = "mp4v"
+FALLBACK_EXT = ".mp4"
+
+def split_videos(
+    video_list: Union[PathLike, Sequence[PathLike]],
+    seconds_per_segment: Union[Sequence[int], int] = 300
+) -> List[List[Path]]:
+    """
+    Split a video into even length segments. This will produce a list of videos with "-part{number}" appended to the
+    original video name in the same directory as the original video.
+
+    :param video_list: Either a single path-like object (string or Path) or a list of path-like objects, being the
+                       paths to the videos to split into several segments.
+    :param seconds_per_segment: An integer or a list of integers. If a single integer, represents the length of each
+                                split segment in seconds (Ex. if 30, split the clip every 30 seconds). If a list of
+                                integers, represents the locations to split the video at in seconds. The list can be
+                                out of order, as it will be automatically sorted. Also, values that are out of range
+                                will be ignored.
+                                (Ex. if [10, 400, 100, 30], split the video at 10s, 400s, 100s, and 30s].
+
+    :returns: A list of lists of Path objects, being the new split video paths for each and every video...
+    """
+    video_list = _sanitize_path_arg(video_list)
+
+    if(video_list is None):
+        raise ValueError("No videos provided!!!")
+
+    return [_split_single_video(video, seconds_per_segment) for video in video_list]
+
+
+def _split_single_video(video_path: Path, seconds_per_segment: Union[int, List[int]]) -> List[Path]:
+    """
+    PRIVATE: Splits a single video.
+
+    :param video_path: The path of the original video to split.
+    :param seconds_per_segment: The duration of each segment, in seconds.
+
+    :returns: The paths of the newly split videos, as a list of "Path"s...
+    """
+    print(f"Processing video: {video_path}")
+    vid = cv2.VideoCapture(str(video_path))
+
+    width, height = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)), int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = vid.get(cv2.CAP_PROP_FPS)
+    total_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
+    four_cc = int(vid.get(cv2.CAP_PROP_FOURCC))
+    if(four_cc == 0):
+        four_cc = -1
+    else:
+        four_cc = "".join([chr((four_cc >> i) & 255) for i in range(0, 32, 8)])
+        four_cc = cv2.VideoWriter_fourcc(*four_cc)
+
+    writer = None
+    segment = 0
+    frame = 0
+
+    if(isinstance(seconds_per_segment, int)):
+        # Yes, a range can be indexed just like an array... :)
+        split_loc = range(0, total_frames, int(seconds_per_segment * fps))
+    else:
+        split_loc = sorted(set([0] + [int(seg * fps) for seg in seconds_per_segment]))
+
+    bar = tqdm.tqdm(total=total_frames)
+
+    zero_pad_amt = int(math.ceil(math.log10(total_frames + 1)))
+    paths = []
+
+    while(vid.isOpened()):
+        if(writer is None):
+            try:
+                start = _list_access(split_loc, [total_frames], segment)
+                end = _list_access(split_loc, [total_frames], segment + 1) - 1
+                writer, p = _new_video_writer(video_path, (start, end), zero_pad_amt, four_cc, fps, (width, height))
+                paths.append(p)
+            except OSError as e:
+                vid.release()
+                bar.close()
+                raise e
+            segment += 1
+
+        res, frm = vid.read()
+
+        if(not res):
+            break
+
+        if(writer.isOpened()):
+            writer.write(frm)
+
+        if((segment < len(split_loc)) and (frame >= split_loc[segment])):
+            writer.release()
+            writer = None
+
+        frame += 1
+        bar.update(1)
+
+    if(writer is not None):
+        writer.release()
+
+    bar.close()
+    vid.release()
+
+    return paths
+
+
+def _list_access(list1, list2, index):
+    comb = (list1, list2)
+    return comb[index // len(list1)][index % len(list1)]
+
+def _new_video_writer(
+    video_path: Path,
+    segment: Tuple[int, int],
+    padding: int,
+    four_cc: int,
+    fps: float,
+    size: Tuple[int, int]
+) -> Tuple[cv2.VideoWriter, Path]:
+    """
+    PRIVATE: Construct a new video writer. Will try to use the passed codec if possible, otherwise uses a fallback codec and
+    format.
+    """
+    suffix = f"_part{segment[0]:0{padding}d}-{segment[1]:0{padding}d}"
+    preferred_path = video_path.parent / f"{video_path.stem}{suffix}{video_path.suffix}"
+    writer = cv2.VideoWriter(str(preferred_path), four_cc, fps, size)
+    if(writer.isOpened()):
+        return (writer, preferred_path)
+
+    writer.release()
+    fallback_path = video_path.parent / f"{video_path.stem}{suffix}{FALLBACK_EXT}"
+    writer = cv2.VideoWriter(str(fallback_path), cv2.VideoWriter_fourcc(*FALLBACK_CODEC), fps, size)
+    if(writer.isOpened()):
+        return (writer, fallback_path)
+    else:
+        writer.release()
+        raise OSError("Can't find a codec to write with!!!")
+
