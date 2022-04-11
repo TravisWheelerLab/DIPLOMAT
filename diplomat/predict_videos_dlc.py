@@ -167,7 +167,7 @@ def analyze_video(
     try:
         __ = auxiliaryfunctions.load_analyzed_data(dest_folder, video_name, dlc_scorer)
         print(f"Results for video {video} already exist.")
-        return
+        return dlc_scorer
     except FileNotFoundError:
         pass
 
@@ -237,7 +237,7 @@ def analyze_video(
 
     stop = time.time()
 
-    if(config["cropping"] == True):
+    if(config["cropping"]):
         coords = [config["x1"], config["x2"], config["y1"], config["y2"]]
     else:
         coords = [0, vw, 0, vh]
@@ -387,7 +387,7 @@ def get_poses(
 
     pbar = tqdm(total=num_frames)
 
-    ny, nx = int(cap.get(4)), int(cap.get(3))
+    ny, nx = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
     if cfg["cropping"]:
         ny, nx = checkcropping(cfg, cap)
