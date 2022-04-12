@@ -19,7 +19,6 @@ from deeplabcut.pose_estimation_tensorflow.core import predict
 from deeplabcut.pose_estimation_tensorflow.predict_videos import checkcropping
 from deeplabcut.pose_estimation_tensorflow.config import load_config
 from deeplabcut.pose_estimation_tensorflow import auxiliaryfunctions
-from deeplabcut.pose_estimation_tensorflow import predict_multianimal
 
 Pathy = Union[os.PathLike, str]
 
@@ -107,7 +106,7 @@ def analyze_videos(
 
     sess, inputs, outputs = predict.setup_pose_prediction(model_config)
 
-    table_header = get_pandas_header(
+    table_header = _get_pandas_header(
         model_config["all_joints_names"],
         model_config["num_outputs"],
         multi_output_format,
@@ -120,7 +119,7 @@ def analyze_videos(
 
     if(len(video_list) > 0):
         for video in video_list:
-            analyze_video(
+            _analyze_video(
                 video,
                 dlc_scorer,
                 train_frac,
@@ -146,7 +145,7 @@ def analyze_videos(
     return dlc_scorer
 
 
-def analyze_video(
+def _analyze_video(
     video: str,
     dlc_scorer: str,
     training_fraction: float,
@@ -208,7 +207,7 @@ def analyze_video(
     })
 
     # Grab the plugin settings for this plugin...
-    predictor_settings = get_predictor_settings(config, predictor_cls, predictor_settings)
+    predictor_settings = _get_predictor_settings(config, predictor_cls, predictor_settings)
     print(f"Plugin {predictor_cls.get_name()} Settings: {predictor_settings}")
 
     # Create a predictor plugin instance...
@@ -222,7 +221,7 @@ def analyze_video(
 
     start = time.time()
 
-    predicted_data, num_frames = get_poses(
+    predicted_data, num_frames = _get_poses(
         config,
         model_config,
         sess,
@@ -273,7 +272,7 @@ def analyze_video(
     return dlc_scorer
 
 
-def get_pandas_header(body_parts: List[str], num_outputs: int, out_format: str, dlc_scorer: str) -> pd.MultiIndex:
+def _get_pandas_header(body_parts: List[str], num_outputs: int, out_format: str, dlc_scorer: str) -> pd.MultiIndex:
     """
     Creates the pandas data header for the passed body parts and number of outputs.
     body_parts: The list of body part names. List of strings.
@@ -308,7 +307,7 @@ def get_pandas_header(body_parts: List[str], num_outputs: int, out_format: str, 
 
 
 # Utility method used by AnalyzeVideo, gets the settings for the given predictor plugin
-def get_predictor_settings(
+def _get_predictor_settings(
     cfg: Dict[str, Any],
     predictor_cls: Type[Predictor],
     usr_passed_settings: Dict[str, Any] = None
@@ -339,7 +338,7 @@ def get_predictor_settings(
     return config
 
 # Utility method used by get_poses, gets a batch of frames, stores them in frame_store and returns the size of the batch
-def get_video_batch(cap: cv2.VideoCapture, batch_size: int, cfg: Dict[str, Any], frame_store: np.ndarray) -> int:
+def _get_video_batch(cap: cv2.VideoCapture, batch_size: int, cfg: Dict[str, Any], frame_store: np.ndarray) -> int:
     """ Gets a batch size of frames, and returns them """
     current_frame = 0
 
@@ -367,7 +366,7 @@ def get_video_batch(cap: cv2.VideoCapture, batch_size: int, cfg: Dict[str, Any],
 
 
 # Replaces old system of getting poses and uses a new plugin system for predicting poses...
-def get_poses(
+def _get_poses(
     cfg: Dict[str, Any],
     dlc_cfg: Dict[str, Any],
     sess: tf.compat.v1.Session,
@@ -403,7 +402,7 @@ def get_poses(
     frames_done = 0
 
     while True:
-        size = get_video_batch(cap, batch_size, cfg, frame_store)
+        size = _get_video_batch(cap, batch_size, cfg, frame_store)
         counter += size
 
         # If we pass the current step or phase, update the progress bar

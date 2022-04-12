@@ -13,7 +13,7 @@ from os import PathLike
 from diplomat.processing import Predictor, TQDMProgressBar, Config
 from deeplabcut.utils import auxiliaryfunctions
 from diplomat import processing
-from diplomat.predict_videos_dlc import get_predictor_settings, get_pandas_header
+from diplomat.predict_videos_dlc import _get_predictor_settings, _get_pandas_header
 from pathlib import Path
 import numpy as np
 import diplomat.utils.frame_store_fmt as frame_store_fmt
@@ -33,8 +33,8 @@ def analyze_frame_store(
     multi_output_format: str = "default",
     video_folders: Union[None, Pathy, Iterable[Pathy]] = None,
     num_outputs: Optional[int] = None,
-    shuffle=1,
-    trainingsetindex=0,
+    shuffle: int = 1,
+    training_set_index: int = 0,
     predictor_settings: Optional[Dict[str, Any]] = None,
 ):
     """
@@ -59,7 +59,7 @@ def analyze_frame_store(
                         overriding the option in the config file.
     :param shuffle: int, optional. An integer specifying the shuffle index of the training dataset used for training
                     the network. The default is 1.
-    :param trainingsetindex: int, optional. Integer specifying which TrainingsetFraction to use. By default the first
+    :param training_set_index: int, optional. Integer specifying which TrainingsetFraction to use. By default the first
                              (note that TrainingFraction is a list in config.yaml).
     :param predictor_settings: Optional dictionary of strings to any. This will specify what settings a predictor should use,
                         completely ignoring any settings specified in the config.yaml. Default value is None, which
@@ -75,7 +75,7 @@ def analyze_frame_store(
     # we just call the model 'Unknown' :). Simply means user won't be able to use create_labeled_video, data is still
     # 100% valid.
     cfg = auxiliaryfunctions.read_config(config_path)
-    train_frac = cfg["TrainingFraction"][trainingsetindex]
+    train_frac = cfg["TrainingFraction"][training_set_index]
 
     try:
         dlc_scorer, dlc_scorer_legacy = auxiliaryfunctions.GetScorerName(
@@ -236,11 +236,11 @@ def _analyze_frame_store(
                 bp_lst,
             ) = frame_reader.get_header().to_list()
 
-            pd_index = get_pandas_header(
+            pd_index = _get_pandas_header(
                 bp_lst, num_outputs, multi_output_format, dlc_scorer
             )
 
-            predictor_settings = get_predictor_settings(
+            predictor_settings = _get_predictor_settings(
                 cfg, predictor_cls, predictor_settings
             )
 

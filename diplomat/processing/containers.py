@@ -1,6 +1,6 @@
 from collections import UserDict
 from typing import TypeVar, Dict, Tuple, Any
-from diplomat.processing import TypeCaster
+from diplomat.processing.type_casters import TypeCaster
 
 T = TypeVar("T")
 ConfigSpec = Dict[str, Tuple[T, TypeCaster[T], str]]
