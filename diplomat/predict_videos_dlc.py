@@ -60,13 +60,13 @@ def analyze_videos(
 
     try:
         snapshot_list = sorted([
-            f.stem for f in (model_directory / "train").iterdir() if(f.suffix == "index")
+            f.stem for f in (model_directory / "train").iterdir() if(f.suffix == ".index")
         ], key=lambda f: int(f.split("-")[1]))
     except FileNotFoundError:
         raise FileNotFoundError("Snapshots don't exist! Please make sure the model is trained first.")
 
     selected_snapshot = snapshot_list[config["snapshotindex"] if(config["snapshotindex"] != "all") else -1]
-    model_config["init_weights"] = model_directory / "train" / selected_snapshot
+    model_config["init_weights"] = str(model_directory / "train" / selected_snapshot)
     train_iterations = selected_snapshot.split("-")[-1]
 
     # Set the number of outputs...
@@ -263,7 +263,7 @@ def _analyze_video(
     auxiliaryfunctions.SaveData(
         predicted_data[:num_frames, :],
         metadata,
-        h5_path,
+        str(h5_path),
         table_header,
         range(num_frames),
         save_as_csv,
@@ -415,7 +415,7 @@ def _get_poses(
             scmap, locref = cnn_extractor_method(
                 sess.run(outputs, feed_dict={inputs: frame_store}), dlc_cfg
             )
-            down_scale = dlc_cfg.stride
+            down_scale = dlc_cfg["stride"]
 
             if (
                 len(scmap.shape) == 2
