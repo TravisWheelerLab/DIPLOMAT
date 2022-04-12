@@ -1,5 +1,6 @@
 import time
-from typing import List, Dict, Any, Type, Tuple, Optional, Literal, Union
+from typing import List, Dict, Any, Type, Tuple, Optional, Literal, Union, \
+    Callable
 
 import cv2
 import pandas as pd
@@ -46,7 +47,6 @@ def analyze_videos(
         os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_index)
 
     tf.compat.v1.reset_default_graph()
-    this_dir = Path.cwd()
 
     config = load_config(config)
     iteration = config["iteration"]
@@ -83,15 +83,17 @@ def analyze_videos(
     model_config["batch_size"] = batch_size
     config["batch_size"] = batch_size
 
-    if predictor is not None:
+    if(cropping is not None):
+        config["cropping"] = True
+        config["x1"], config["x2"], config["y1"], config["y2"] = cropping
+
+    if(predictor is not None):
         # If predictor plugin was selected, disable dynamic mode and GPU predictions.
         predictor_cls = processing.get_predictor(predictor)
         print(f"Predictor '{predictor}' selected, disabling GPU predictions and dynamic cropping as both of these are not supported.")
 
         if model_config["num_outputs"] > 1 and (not predictor_cls.supports_multi_output()):
-            raise NotImplementedError(
-                "Predictor plugin does not support num_outputs greater than 1."
-            )
+            raise NotImplementedError("Predictor plugin does not support num_outputs greater than 1!")
     else:
         predictor_cls = processing.get_predictor("ArgMax")
 
@@ -113,6 +115,8 @@ def analyze_videos(
     )
 
     video_list = auxiliaryfunctions.Getlistofvideos(videos, video_type)
+
+    this_dir = Path.cwd()
 
     if(len(video_list) > 0):
         for video in video_list:
@@ -143,14 +147,14 @@ def analyze_videos(
 
 
 def analyze_video(
-    video,
-    dlc_scorer,
-    training_fraction,
-    config,
-    model_config,
-    sess,
-    inputs,
-    outputs,
+    video: str,
+    dlc_scorer: str,
+    training_fraction: float,
+    config: Dict[str, Any],
+    model_config: Dict[str, Any],
+    sess: tf.compat.v1.Session,
+    inputs: tf.compat.v1.Tensor,
+    outputs: List[tf.compat.v1.Tensor],
     table_header,
     save_as_csv,
     dest_folder=None,
@@ -228,11 +232,7 @@ def analyze_video(
         num_frames,
         int(model_config["batch_size"]),
         predictor_inst,
-        cnn_extractor_method=(
-            predict.extract_cnn_outputmulti
-            if ("multi-animal" in model_config["dataset_type"]) else
-            lambda *args, **kwargs: predict_multianimal.extract_cnn_outputmulti(*args, **kwargs)[:2]
-        )
+        cnn_extractor_method=predict.extract_cnn_outputmulti
     )
 
     stop = time.time()
@@ -370,14 +370,14 @@ def get_video_batch(cap: cv2.VideoCapture, batch_size: int, cfg: Dict[str, Any],
 def get_poses(
     cfg: Dict[str, Any],
     dlc_cfg: Dict[str, Any],
-    sess,
-    inputs,
-    outputs,
+    sess: tf.compat.v1.Session,
+    inputs: tf.compat.v1.Tensor,
+    outputs: List[tf.compat.v1.Tensor],
     cap: cv2.VideoCapture,
     num_frames: int,
     batch_size: int,
     predictor: Predictor,
-    cnn_extractor_method = predict.extract_cnn_outputmulti
+    cnn_extractor_method: Callable[[tuple, dict], Tuple[np.ndarray, np.ndarray]] = predict.extract_cnn_outputmulti
 ) -> Tuple[np.ndarray, int]:
     """ Gets the poses for any batch size, including batch size of only 1 """
     # Create a numpy array to hold all pose prediction data...
