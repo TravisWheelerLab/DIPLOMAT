@@ -3,7 +3,6 @@ from typing import NamedTuple, Union, Iterable, Any, Dict, Tuple, ItemsView, Lis
 import numpy as np
 import bisect
 
-
 class Edge(NamedTuple):
     """
     A namedtuple. Represents an edge in a graph, specifically a StorageGraph. Contains 2 entries:
@@ -31,7 +30,7 @@ class Edge(NamedTuple):
         if(isinstance(other, (Edge, Iterable))):
             return frozenset(self) == frozenset(other)
 
-        return super().__eq__(other)
+        return NamedTuple.__eq__(self, other)
 
 """
 An edge-like object, used as argument for looking up an edge in a StorageGraph. Can be an Edge namedtuple object, or 
