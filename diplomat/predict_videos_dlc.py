@@ -25,7 +25,7 @@ Pathy = Union[os.PathLike, str]
 def analyze_videos(
     config: str,
     videos: List[Pathy],
-    video_type: str = "avi",
+    video_type: str = "",
     shuffle: int = 1,
     training_set_index: int = 0,
     gpu_index: int = None,
@@ -51,7 +51,7 @@ def analyze_videos(
     iteration = config["iteration"]
     train_frac = config["TrainingFraction"][training_set_index]
 
-    model_directory = Path(config["project_path"]) / auxiliaryfunctions.GetModelFolder(train_frac, shuffle, config, model_prefix)
+    model_directory = Path(config["project_path"]) / auxiliaryfunctions.get_model_folder(train_frac, shuffle, config, model_prefix)
 
     try:
         model_config = load_config(model_directory / "test" / "pose_cfg.yaml")
@@ -113,7 +113,7 @@ def analyze_videos(
         dlc_scorer,
     )
 
-    video_list = auxiliaryfunctions.Getlistofvideos(videos, video_type)
+    video_list = auxiliaryfunctions.get_list_of_videos(videos, video_type)
 
     this_dir = Path.cwd()
 
