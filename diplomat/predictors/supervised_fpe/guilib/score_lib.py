@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from labeler_lib import SettingCollection, SettingCollectionWidget
-from probability_displayer import ProbabilityDisplayer
+from .labeler_lib import SettingCollection, SettingCollectionWidget
+from .probability_displayer import ProbabilityDisplayer
 import wx
 from diplomat.processing import *
 import numpy as np
