@@ -326,7 +326,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
             if(prob < self._plot_threshold):
                 continue
 
-            color = colormap(bp_idx / num_out, bytes=True)
+            color = colormap(bp_idx / max(1, num_out - 1), bytes=True)
             wx_color = wx.Colour(*color)
             dc.SetPen(wx.Pen(wx_color, 2, wx.PENSTYLE_SOLID))
             dc.SetBrush(wx.Brush(wx_color, wx.BRUSHSTYLE_SOLID))
@@ -762,7 +762,7 @@ class ColoredRadioBox(wx.Panel):
         self._colormap = plt.get_cmap(colormap)
 
         for i, label in enumerate(labels):
-            color = self._colormap(i / len(labels), bytes=True)
+            color = self._colormap(i / max(1, len(labels) - 1), bytes=True)
             wx_color = wx.Colour(*color)
 
             radio_button =  ColoredRadioButton(self._scroller, i, wx_color, label)
