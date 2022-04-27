@@ -10,8 +10,9 @@ Licensed under GNU Lesser General Public License v3.0
 from typing import Iterable, Union, Optional, List, Type, Dict, Any
 from os import PathLike
 
-from diplomat.processing import Predictor, TQDMProgressBar, Config
 from deeplabcut.utils import auxiliaryfunctions
+
+from diplomat.processing import Predictor, TQDMProgressBar, Config
 from diplomat import processing
 from diplomat.predict_videos_dlc import _get_predictor_settings, _get_pandas_header
 from pathlib import Path

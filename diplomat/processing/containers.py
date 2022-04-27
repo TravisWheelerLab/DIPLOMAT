@@ -1,5 +1,5 @@
 from collections import UserDict
-from typing import TypeVar, Dict, Tuple, Any
+from typing import TypeVar, Dict, Tuple, Any, Mapping
 from diplomat.processing.type_casters import TypeCaster
 
 T = TypeVar("T")
@@ -50,6 +50,14 @@ a
         else:
             def_val, conv_meth, desc = self._back_dict[key]
             return conv_meth(def_val)
+
+    def extract(self, data: Mapping):
+        if(self._back_dict is None):
+            self.update(data)
+        else:
+            for key in self._back_dict:
+                if(key in data):
+                    self[key] = data[key]
 
     def __setitem__(self, key: str, value: Any):
         # We only allow for settings in the backing dict to be set, and only
