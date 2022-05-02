@@ -18,7 +18,7 @@ class Config(UserDict):
 
         :args: Only accepts 2 non-keyword arguments, the data, and a backing
                dictionary. See set_backing for more info.
-a
+
         :kwargs: Optional, additional keys and values to add to the dictionary.
         """
         args = list(args)
