@@ -596,7 +596,7 @@ class MITViterbi(FramePass):
                 "probabilities can reach."
             ),
             "obscured_probability": (
-                0.001, tc.RangedFloat(0, 1),
+                0.0000001, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
                 "probability of going to any hidden state cell."
             ),

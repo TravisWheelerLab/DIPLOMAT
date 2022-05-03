@@ -232,7 +232,8 @@ class FPEEditor(wx.Frame):
             "colormap": plot_settings["colormap"],
             "plot_threshold": plot_settings["pcutoff"],
             "point_radius": plot_settings["dotsize"],
-            "point_alpha": plot_settings["alphavalue"]
+            "point_alpha": plot_settings["alphavalue"],
+            "line_thickness": plot_settings["line_thickness"]
         }
         self.video_player = PointEditor(
             self._video_splitter,

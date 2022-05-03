@@ -419,12 +419,12 @@ class ClusterFrames(FramePass):
                 0, float, "The lowest value the 2D Gaussian curve used for edge weights can reach."
             ),
             "minimum_cluster_size": (
-                0.25, float, "The minimum size a cluster is allowed to be (As compared to average of all clusters)."
+                0.1, float, "The minimum size a cluster is allowed to be (As compared to average of all clusters)."
                             "If the cluster is smaller, it get thrown out and a forest is resolved using the rest of"
                             "the data."
             ),
             "max_throwaway_count": (
-                5, float, "The maximum number of clusters to throw away before giving up on clustering a given frame."
+                10, float, "The maximum number of clusters to throw away before giving up on clustering a given frame."
             )
         }
 

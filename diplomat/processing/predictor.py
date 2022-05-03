@@ -62,6 +62,7 @@ class Predictor(ABC):
                                     "pcutoff": The probability at which to display no point in the final plotted video
                                                if the point in the data falls below this threshold. A float between 0
                                                and 1.
+                                    "line_thickness": The thickness of the outline to plot occluded predictions with, an integer.
         """
         self.__bodyparts = [str(b) for b in bodyparts]
         self.__num_outputs = int(num_outputs)

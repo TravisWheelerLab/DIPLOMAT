@@ -256,6 +256,7 @@ def _analyze_frame_store(
                 "colormap": cfg["colormap"],
                 "alphavalue": cfg["alphavalue"],
                 "pcutoff": cfg["pcutoff"],
+                "line_thickness": cfg.get("line_thickness", 1)
             })
 
             # Create the plugin instance...

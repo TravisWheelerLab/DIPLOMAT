@@ -89,7 +89,8 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         ("colormap", "_colormap", plt.get_cmap),
         ("plot_threshold", "_plot_threshold", _bounded_float(0, 1)),
         ("point_radius", "_point_radius", int),
-        ("point_alpha", "_point_alpha", _bounded_float(0, 1))
+        ("point_alpha", "_point_alpha", _bounded_float(0, 1)),
+        ("line_thickness", "_line_thickness", int)
     ]
 
     # All events emitted by this class.
@@ -108,6 +109,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         plot_threshold: float = 0.1,
         point_radius: int = 5,
         point_alpha: float = 0.7,
+        line_thickness: int = 1,
         ctrl_speed_divider = DEF_FAST_MODE_SPEED_FRACTION,
         w_id=wx.ID_ANY,
         pos=wx.DefaultPosition,
@@ -129,6 +131,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         :param plot_threshold: The probability threshold at which to not plot a points. Defaults to 0.1.
         :param point_radius: Determines the size of the points. Defaults to 5.
         :param point_alpha: Determines the alpha level of the points. Defaults to 0.7.
+        :param line_thickness: The thickness to draw occluded poses with. Defaults to 1.
         :param ctrl_speed_divider: The initial slow down multiplier while labeling in fast mode. Defaults to 8.
         :param w_id: The wx ID.
         :param pos: The position of the widget.
@@ -144,13 +147,14 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         self._plot_threshold = None
         self._point_radius = None
         self._point_alpha = None
+        self._line_thickness = None
         self._step_counter = 0
         self._shift_delay = 0
         self._fast_m_speed = ctrl_speed_divider
         self._pose_label_modes = {}
         self._current_pose_labeling_mode = ""
 
-        BasicDataFields.__init__(self, colormap, plot_threshold, point_radius, point_alpha)
+        BasicDataFields.__init__(self, colormap, plot_threshold, point_radius, point_alpha, line_thickness)
 
         self._edit_point = None
         self._new_location = None
@@ -323,14 +327,16 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
             y = self._poses.get_y_at(frame, bp_idx)
             prob = self._poses.get_prob_at(frame, bp_idx)
 
-            if(prob < self._plot_threshold):
-                continue
-
             color = colormap(bp_idx / max(1, num_out - 1), bytes=True)
             wx_color = wx.Colour(*color)
-            dc.SetPen(wx.Pen(wx_color, 2, wx.PENSTYLE_SOLID))
-            dc.SetBrush(wx.Brush(wx_color, wx.BRUSHSTYLE_SOLID))
-            
+
+            if(prob < self._plot_threshold):
+                dc.SetBrush(wx.TRANSPARENT_BRUSH)
+                dc.SetPen(wx.Pen(wx_color, self._line_thickness, wx.PENSTYLE_SOLID))
+            else:
+                dc.SetBrush(wx.Brush(wx_color, wx.BRUSHSTYLE_SOLID))
+                dc.SetPen(wx.Pen(wx_color, 1, wx.PENSTYLE_SOLID))
+
             dc.DrawCircle(
                 (x * (nv_w / ov_w)) + x_off,
                 (y * (nv_h / ov_h)) + y_off,
@@ -890,6 +896,7 @@ class PointEditor(wx.Panel):
         plot_threshold: float = 0.1,
         point_radius: int = 5,
         point_alpha: float = 0.7,
+        line_thickness: int = 1,
         w_id = wx.ID_ANY,
         pos = wx.DefaultPosition,
         size = wx.DefaultSize,
@@ -910,6 +917,7 @@ class PointEditor(wx.Panel):
         :param plot_threshold: The probability threshold at which to not plot a points. Defaults to 0.1.
         :param point_radius: Determines the size of the points. Defaults to 5.
         :param point_alpha: Determines the alpha level of the points. Defaults to 0.7.
+        :param line_thickness: The thickness to draw occluded poses with. Defaults to 1.
         :param w_id: The wx ID.
         :param pos: The position of the widget.
         :param size: The size of the widget.
@@ -927,7 +935,7 @@ class PointEditor(wx.Panel):
         self._side_bar_sizer = wx.BoxSizer(wx.VERTICAL)
 
         self.video_viewer = PointViewNEdit(self, video_hdl, crop_box, poses, colormap, plot_threshold, point_radius,
-                                           point_alpha)
+                                           point_alpha, line_thickness)
 
         for p in labeling_modes:
             self.video_viewer.register_labeling_mode(p)

@@ -204,6 +204,7 @@ def _analyze_video(
         "colormap": config["colormap"],
         "alphavalue": config["alphavalue"],
         "pcutoff": config["pcutoff"],
+        "line_thickness": config.get("line_thickness", 1),
     })
 
     # Grab the plugin settings for this plugin...
