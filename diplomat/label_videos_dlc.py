@@ -22,7 +22,7 @@ LABELED_VIDEO_SETTINGS = {
     "dotsize": (4, int, "The size of the dots."),
     "alphavalue": (0.7, type_casters.RangedFloat(0, 1), "The alpha value of the dots."),
     "colormap": (plt.get_cmap(), plt.get_cmap, "The colormap to use for tracked points in the video."),
-    "line_thickness": (2, int, "Thickness of lines drawn."),
+    "line_thickness": (1, int, "Thickness of lines drawn."),
     "antialiasing": (True, bool, "Use antialiasing when drawing points."),
     "draw_hidden_tracks": (True, bool, "Whether or not to draw locations under the pcutoff value.")
 }

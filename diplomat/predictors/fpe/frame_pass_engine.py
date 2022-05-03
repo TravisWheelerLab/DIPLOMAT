@@ -97,7 +97,7 @@ class FramePassEngine(Predictor):
         """
         if (frame.frame_probs is None or frame.src_data.unpack()[0] is None):
             # No frame data, return 3 for no probability and 0 probability...
-            return (0, 0, 0, -4, -4)
+            return (-1, -1, 0, 0, 0)
         else:
             # Get the max location in the frame....
             y_coords, x_coords, orig_probs, x_offsets, y_offsets = frame.src_data.unpack()
@@ -110,14 +110,18 @@ class FramePassEngine(Predictor):
             try:
                 max_occluded_loc = np.argmax(frame.occluded_probs)
                 m_occluded_prob = frame.occluded_probs[max_occluded_loc]
+                m_occ_x, m_occ_y = frame.occluded_coords[max_occluded_loc]
             except (ValueError, TypeError):
-                m_occluded_prob = -1
+                m_occluded_prob = -np.inf
+                m_occ_x, m_occ_y = 0, 0
 
             max_select = np.array([m_p, m_occluded_prob])
             max_of_max = np.argmax(max_select)
 
             if (max_of_max > 0):
-                return (0, 0, 0 ,-4, -4)
+                # Return correct location for occluded, but return a
+                # probability of 0.
+                return (m_occ_x, m_occ_y, 0, 0, 0)
             else:
                 if (relaxed_radius <= 0):
                     # If no relaxed radius, just set pose...
