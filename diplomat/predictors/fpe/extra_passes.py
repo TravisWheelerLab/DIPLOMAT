@@ -9,6 +9,7 @@ from .frame_pass import type_casters as tc
 from scipy.sparse import csgraph
 from . import fpe_math
 
+
 class OptimizeStandardDeviation(FramePass):
     def __init__(self, width, height, config):
         super().__init__(width, height, config)
