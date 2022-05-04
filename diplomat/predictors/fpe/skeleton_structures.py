@@ -275,6 +275,12 @@ class Histogram:
         # Running Average formula, see notebook...
         self._bins[val_bin] = (freq + 1, avg * (freq / Decimal(freq + 1)) + value * (1 / Decimal(freq + 1)))
 
+    def get_bin_for_value(self, value: Union[Decimal, float]) -> Tuple[Decimal, int, Decimal]:
+        value = Decimal(value)
+        val_bin = int((value - self._bin_offset) / self._bin_size) * self._bin_size + self._bin_offset
+        freq, avg = self._bins.get(val_bin, (0, Decimal()))
+        return (val_bin, freq, avg)
+
     def __iter__(self) -> Iterable[Decimal]:
         return iter(self._bins)
 
@@ -317,6 +323,16 @@ class Histogram:
         std = np.sqrt(np.sum(freqs * (avgs - mean) ** 2) / np.sum(freqs))
 
         return (float(mean), float(std))
+
+    def get_std_using_mean(self, mean: Union[float, Decimal]) -> float:
+        # Weighted average of bins...
+        mean = Decimal(mean)
+        avgs = np.array([avg for (b, (freq, avg)) in self.bins()])
+        freqs = np.array([freq for (b, (freq, avg)) in self.bins()])
+
+        std = np.sqrt(np.sum(freqs * (avgs - Decimal(mean)) ** 2) / np.sum(freqs))
+
+        return float(std)
 
     @classmethod
     def to_floats(cls, lister: Iterable[Any]) -> List[Any]:

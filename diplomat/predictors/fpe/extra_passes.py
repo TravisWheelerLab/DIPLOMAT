@@ -14,10 +14,11 @@ class OptimizeStandardDeviation(FramePass):
     def __init__(self, width, height, config):
         super().__init__(width, height, config)
 
-        self._histogram = Histogram(self.config.bin_size, self.config.bin_offset)
+        self._histogram = None
         self._current_frame = None
         self._prior_max_locations = None
         self._max_locations = None
+        self._ignore_below = None
 
     def run_pass(
         self,
@@ -26,14 +27,23 @@ class OptimizeStandardDeviation(FramePass):
         in_place: bool = True,
         reset_bar: bool = True
     ) -> ForwardBackwardData:
+        d_scale = fb_data.metadata.down_scaling
+        bin_off = self.config.ignore_bins_below / d_scale
+        self._ignore_below = bin_off
+
+        self._histogram = Histogram(
+            self.config.bin_size / d_scale,
+            bin_off
+        )
         self._current_frame = 0
         self._prior_max_locations = None
         self._max_locations = [None] * fb_data.num_bodyparts
 
         result = super().run_pass(fb_data, prog_bar, in_place, reset_bar)
 
+        std = self._histogram.get_std_using_mean(0)
         result.metadata.optimal_std = Histogram.to_floats(
-            self._histogram.get_quantile(self.config.quantile)
+            (*self._histogram.get_bin_for_value(std)[:2], std)
         )
 
         if(self.config.DEBUG):
@@ -68,7 +78,7 @@ class OptimizeStandardDeviation(FramePass):
 
                             min_dist = min(((cx - px) ** 2 + (cy - py) ** 2) ** 0.5, min_dist)
 
-                        if(min_dist != np.inf):
+                        if(min_dist != np.inf and min_dist >= self._ignore_below):
                             self._histogram.add(min_dist)
 
             self._prior_max_locations = self._max_locations
@@ -95,10 +105,12 @@ class OptimizeStandardDeviation(FramePass):
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
-            "bin_size": (1 / 8, tc.RoundedDecimal(5), "A decimal, the size of each bin used in the histogram for computing the mode."),
-            "bin_offset": (0, tc.RoundedDecimal(5), "A decimal, the offset of the first bin used in the histogram for computing "
-                                   "the mode."),
-            "quantile": (0.93, tc.RoundedDecimal(5), "The quantile to use as the standard deviation... Defaults to 0.93 or 93%"),
+            "bin_size": (2, tc.RoundedDecimal(5), "A decimal, the size of each bin used in the histogram for computing the mode, in pixels."),
+            "ignore_bins_below": (
+                0, tc.RoundedDecimal(5),
+                "A decimal, the offset of the first bin used in the histogram for computing "
+                "the mode, in pixels. Defaults to 0."
+            ),
             "DEBUG": (False, bool, "Set to True to print the optimal standard deviation found...")
         }
 
