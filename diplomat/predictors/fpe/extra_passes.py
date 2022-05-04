@@ -109,7 +109,7 @@ class OptimizeStandardDeviation(FramePass):
             "ignore_bins_below": (
                 1, tc.RoundedDecimal(5),
                 "A decimal, the offset of the first bin used in the histogram for computing "
-                "the mode, in pixels. Defaults to 0."
+                "the mode, in pixels. Defaults to 1."
             ),
             "DEBUG": (False, bool, "Set to True to print the optimal standard deviation found...")
         }
@@ -629,6 +629,11 @@ class FixFrame(FramePass):
 
         self._max_frame_idx = int(np.argmax(self._scores))
 
+        if(self.config.fix_frame_override is not None):
+            if(not (0 <= self.config.fix_frame_override < len(self._scores))):
+                raise ValueError("Override Fix Frame Value is not valid!")
+            self._max_frame_idx = self.config.fix_frame_override
+
         if(self.config.DEBUG):
             print(f"Max Scoring Frame: {self._max_frame_idx}")
 
@@ -663,5 +668,10 @@ class FixFrame(FramePass):
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
-            "DEBUG": (False, bool, "Set to True to dump additional information while the pass is running.")
+            "DEBUG": (False, bool, "Set to True to dump additional information while the pass is running."),
+            "fix_frame_override": (
+                None,
+                tc.Union(tc.Literal(None), tc.RangedInteger(0, np.inf)),
+                "Specify the fixed frame manually by setting to an integer index."
+            )
         }
