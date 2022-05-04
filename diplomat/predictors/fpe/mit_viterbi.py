@@ -1,9 +1,7 @@
-from typing import Optional, Tuple, Callable, Iterable, Sequence, List, Union, \
-    TypeVar
+from typing import Optional, Tuple, Callable, Iterable, Sequence, List, Union, TypeVar
 import numpy as np
 from .frame_pass import FramePass, PassOrderError, RangeSlicer, ConfigSpec
-from .sparse_storage import ForwardBackwardFrame, AttributeDict, \
-    ForwardBackwardData, SparseTrackingData
+from .sparse_storage import ForwardBackwardFrame, AttributeDict, ForwardBackwardData, SparseTrackingData
 from .fpe_math import TransitionFunction, Probs, Coords
 from ...processing import ProgressBar
 from . import fpe_math
@@ -54,7 +52,6 @@ class MITViterbi(FramePass):
         self._flatten_std = None
         self._gaussian_table = None
         self._skeleton_tables = None
-        self._skeleton_buffer = None
 
     def _init_gaussian_table(self, metadata: AttributeDict):
         """
@@ -146,12 +143,12 @@ class MITViterbi(FramePass):
         super()._set_step_controls(fix_frame + 1, None, 1, -1)
         self._run_forward(fb_data, prog_bar, True, False)
         super()._set_step_controls(None, fix_frame, -1, 1)
-        self._run_backtrace(fb_data, prog_bar, True, False)
+        self._run_backtrace(fb_data, prog_bar)
 
         super()._set_step_controls(fix_frame - 1, None, -1, 1)
         self._run_forward(fb_data, prog_bar, True, False)
         super()._set_step_controls(None, fix_frame, 1, -1)
-        self._run_backtrace(fb_data, prog_bar, True, False)
+        self._run_backtrace(fb_data, prog_bar)
 
         for f_i in range(fb_data.num_frames):
             for bp_i in range(fb_data.num_bodyparts):
@@ -168,10 +165,83 @@ class MITViterbi(FramePass):
         self,
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
-        in_place: bool = True,
-        reset_bar: bool = True
     ) -> ForwardBackwardData:
-        return super().run_pass(fb_data, prog_bar, in_place, reset_bar)
+        pool_cls = Pool if((fb_data.num_bodyparts // fb_data.metadata.num_outputs) > 2) else NotAPool
+
+        backtrace_priors = [None for __ in range(fb_data.num_bodyparts)]
+        backtrace_current = [None for __ in range(fb_data.num_bodyparts)]
+
+        with pool_cls() as pool:
+            for frame_idx in RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]:
+                if(not (0 <= (frame_idx + self._prior_off) < len(fb_data.frames))):
+                    continue
+
+                # Compute the prior maximum locations for all body parts in
+                # the prior frame...
+                for bp_idx in range(fb_data.num_bodyparts):
+                    prior = fb_data.frames[frame_idx + self._prior_off][bp_idx]
+                    current = fb_data.frames[frame_idx][bp_idx]
+
+                    py, px, __, __, __ = prior.src_data.unpack()
+                    cy, cx, __, __, __ = current.src_data.unpack()
+
+                    if (py is None):
+                        px = py = np.array([0])
+                    if (cy is None):
+                        cx = cy = np.array([0])
+
+                    # Compute the max of all the priors...
+                    combined, combined_coords, source_idxs = arr_utils.pad_coordinates_and_probs(
+                        [prior.frame_probs, prior.occluded_probs],
+                        [np.array([px, py]).T, prior.occluded_coords],
+                        -np.inf
+                    )
+                    combined = np.asarray(combined)
+
+                    prior_max_idxs = np.argmax(combined, axis=1)
+                    max_of_maxes = np.argmax(
+                        np.max(combined, axis=1))  # Is it in occluded or frame?
+
+                    prior_data = [(
+                        np.asarray([combined[max_of_maxes][
+                                        prior_max_idxs[max_of_maxes]]]),
+                        np.asarray([combined_coords[max_of_maxes][
+                                        prior_max_idxs[max_of_maxes]]]).T
+                    )]
+
+                    current_data = [
+                        (current.frame_probs, (cx, cy)),
+                        (current.occluded_probs, current.occluded_coords.T)
+                    ]
+
+                    backtrace_priors[bp_idx] = prior_data
+                    backtrace_current[bp_idx] = current_data
+
+                # Now run the actual backtrace, computing transitions for
+                # prior maximums -> current frames...
+                results = pool.starmap(
+                    type(self)._compute_backtrace_step,
+                    [(
+                        backtrace_priors,
+                        backtrace_current[bp_i],
+                        bp_i,
+                        fb_data.metadata,
+                        self._gaussian_trans_internal,
+                        self._skeleton_tables if (self.config.include_skeleton) else None,
+                        self.config.skeleton_weight
+                    ) for bp_i in range(fb_data.num_bodyparts)]
+                )
+
+                # We stash the entire frame, the maximums are computed on
+                # the next step, and by the FramePassEngine at the end...
+                for bp_i, (frm_prob, occ_prob) in enumerate(results):
+                    fb_data.frames[frame_idx][bp_i].frame_probs = frm_prob
+                    fb_data.frames[frame_idx][bp_i].occluded_probs = occ_prob
+
+                if(prog_bar is not None):
+                    prog_bar.update()
+
+        return fb_data
 
     def _run_forward(
         self,
@@ -202,8 +272,8 @@ class MITViterbi(FramePass):
                 current = current if (in_place) else [c.copy() for c in current]
 
                 results = pool.starmap(
-                    self._compute_normal_frame,
-                    ((
+                    type(self)._compute_normal_frame,
+                    [(
                         prior,
                         current,
                         bp_grp_i,
@@ -211,7 +281,7 @@ class MITViterbi(FramePass):
                         self._gaussian_trans_internal,
                         self._skeleton_tables if (self.config.include_skeleton) else None,
                         self.config.skeleton_weight
-                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs))
+                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)]
                 )
 
                 for (bp_grp_i, res) in enumerate(results):
@@ -225,91 +295,33 @@ class MITViterbi(FramePass):
 
         return fb_data
 
-    # Used for the backtrace...
-    def run_step(
-        self,
-        prior: Optional[ForwardBackwardFrame],
-        current: ForwardBackwardFrame,
-        frame_index: int,
-        bodypart_index: int,
-        metadata: AttributeDict
-    ) -> Optional[ForwardBackwardFrame]:
-        if(prior is None):
-            return
-
-        if(bodypart_index == 0):
-            # Clear the skeleton buffer for new frame...
-            self._skeleton_buffer = [[0, 0] for __ in range(self.fb_data.num_bodyparts)]
-
-        py, px, __, __, __ = prior.src_data.unpack()
-        cy, cx, __, __, __ = current.src_data.unpack()
-
-        if(py is None):
-            px = py = np.array([0])
-        if(cy is None):
-            cx = cy = np.array([0])
-
-        # Backtrace: Compute max in the prior...
-        combined, combined_coords, source_idxs = arr_utils.pad_coordinates_and_probs(
-            [prior.frame_probs, prior.occluded_probs],
-            [np.array([px, py]).T, prior.occluded_coords],
-            -np.inf
-        )
-        combined = np.asarray(combined)
-
-        prior_max_idxs = np.argmax(combined, axis=1)
-        max_of_maxes = np.argmax(np.max(combined, axis=1)) # Is it in occluded or frame?
-
-        prior_data = [(
-            np.asarray([combined[max_of_maxes][prior_max_idxs[max_of_maxes]]]),
-            np.asarray([combined_coords[max_of_maxes][prior_max_idxs[max_of_maxes]]]).T
-        )]
-
-        current_data = [
-            (current.frame_probs, (cx, cy)),
-            (current.occluded_probs, current.occluded_coords.T)
-        ]
-
-        skel_result = self._compute_from_skeleton(
-            self.fb_data.frames[frame_index],
-            prior_data,
-            bodypart_index,
+    @classmethod
+    def _compute_backtrace_step(
+        cls,
+        prior: List[List[Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]]],
+        current: List[Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]],
+        bp_idx: int,
+        metadata: AttributeDict,
+        transition_function: TransitionFunction,
+        skeleton_table: Optional[StorageGraph] = None,
+        skeleton_weight: float = 0
+    ) -> List[np.ndarray]:
+        skel_res = cls._compute_from_skeleton(
+            prior,
+            current,
+            bp_idx,
             metadata,
-            self._skeleton_tables if(self.config.include_skeleton) else None,
-            lambda a: a,
-            lambda a, i: a[0],
-            False
+            skeleton_table
+        )
+        trans_res = cls.log_viterbi_between(
+            current,
+            prior[bp_idx],
+            transition_function
         )
 
-        # Update skeletal part by adding partials to the skeleton buffer...
-        for bp_i, result in skel_result:
-            result = result[0]
-
-            for i in range(len(result)):
-                if(np.all(np.isneginf(result[i]))):
-                    continue
-                self._skeleton_buffer[bp_i][i] += result[i]
-            self._skeleton_buffer[bp_i] = norm_together(self._skeleton_buffer[bp_i])
-
-        trans_result = self.log_viterbi_between(
-            prior_data,
-            current_data,
-            self._gaussian_trans_internal,
-            lambda a: a,
-            lambda a, i: a[0]
-        )[0]
-
-        current.frame_probs, current.occluded_probs = norm_together(trans_result)
-
-        if(bodypart_index == self.fb_data.num_bodyparts - 1):
-            # Flush the skeleton buffer now...
-            for frm, skel_res in zip(self.fb_data.frames[frame_index], self._skeleton_buffer):
-                frm.frame_probs, frm.occluded_probs = norm_together([
-                    trans + self.config.skeleton_weight * skel_trans
-                    for trans, skel_trans in zip((frm.frame_probs, frm.occluded_probs), skel_res)
-                ])
-
-            self._skeleton_buffer = None
+        return norm_together([
+            t + s * skeleton_weight for t, s in zip(trans_res, skel_res)
+        ])
 
     @classmethod
     def _compute_init_frame(
@@ -368,7 +380,7 @@ class MITViterbi(FramePass):
     @classmethod
     def _compute_from_skeleton(
         cls,
-        prior: List[ForwardBackwardFrame],
+        prior: Union[List[ForwardBackwardFrame], List[List[Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]]]],
         current_data: List[Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]],
         bp_idx: int,
         metadata: AttributeDict,
@@ -389,18 +401,21 @@ class MITViterbi(FramePass):
         for other_bp_group_idx, trans_table in skeleton_table[bp_group_idx]:
             # Grab the prior frame...
             prior_frame = prior[other_bp_group_idx * metadata.num_outputs + bp_off]
-            py, px, __, __, __ = prior_frame.src_data.unpack()
+            if(isinstance(prior_frame, ForwardBackwardFrame)):
+                py, px, __, __, __ = prior_frame.src_data.unpack()
 
-            # If wasn't found, don't include in the result.
-            if(prior_frame.frame_probs is None):
-                continue
+                # If wasn't found, don't include in the result.
+                if(prior_frame.frame_probs is None):
+                    continue
 
-            z_a = lambda: np.array([0])
+                z_a = lambda: np.array([0])
 
-            prior_data = [
-                (prior_frame.frame_probs, (px, py) if(py is not None) else (z_a(), z_a())),
-                (prior_frame.occluded_probs, prior_frame.occluded_coords.T)
-            ]
+                prior_data = [
+                    (prior_frame.frame_probs, (px, py) if(py is not None) else (z_a(), z_a())),
+                    (prior_frame.occluded_probs, prior_frame.occluded_coords.T)
+                ]
+            else:
+                prior_data = prior_frame
 
             def transition_func(pp, pc, cp, cc):
                 return fpe_math.table_transition(pc, cc, trans_table)
