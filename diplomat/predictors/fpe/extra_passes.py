@@ -107,7 +107,7 @@ class OptimizeStandardDeviation(FramePass):
         return {
             "bin_size": (2, tc.RoundedDecimal(5), "A decimal, the size of each bin used in the histogram for computing the mode, in pixels."),
             "ignore_bins_below": (
-                0, tc.RoundedDecimal(5),
+                1, tc.RoundedDecimal(5),
                 "A decimal, the offset of the first bin used in the histogram for computing "
                 "the mode, in pixels. Defaults to 0."
             ),
