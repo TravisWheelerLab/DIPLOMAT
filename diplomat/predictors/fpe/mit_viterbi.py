@@ -1,4 +1,5 @@
-from typing import Optional, Tuple, Callable, Iterable, Sequence, List, Union
+from typing import Optional, Tuple, Callable, Iterable, Sequence, List, Union, \
+    TypeVar
 import numpy as np
 from .frame_pass import FramePass, PassOrderError, RangeSlicer, ConfigSpec
 from .sparse_storage import ForwardBackwardFrame, AttributeDict, \
@@ -9,6 +10,22 @@ from . import fpe_math
 from .skeleton_structures import StorageGraph
 from .frame_pass import type_casters as tc
 from . import arr_utils
+
+from multiprocessing import Pool
+
+# Used when the body part count is <= 2...
+class NotAPool:
+    T = TypeVar("T")
+    E = TypeVar("E")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def starmap(self, func: Callable[[T], E], iterable: Iterable[T]) -> Iterable[E]:
+        return (func(*item) for item in iterable)
 
 to_log_space = np.log2
 from_log_space = np.exp2
@@ -171,30 +188,40 @@ class MITViterbi(FramePass):
         if(prog_bar is not None and reset_bar):
             prog_bar.reset(total=fb_data.num_frames)
 
-        for i in frame_iter:
-            prior_idx = i + self._prior_off
+        # We only use a pool if the body part group is high enough...
+        pool_cls = Pool if((fb_data.num_bodyparts // meta.num_outputs) > 2) else NotAPool
 
-            if (not (0 <= prior_idx < fb_data.num_frames)):
-                continue
-            prior = fb_data.frames[prior_idx]
-            current = fb_data.frames[i]
-            current = current if (in_place) else [c.copy() for c in current]
+        with pool_cls() as pool:
+            for i in frame_iter:
+                prior_idx = i + self._prior_off
 
-            for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs):
-                current = self._compute_normal_frame(
-                    prior,
-                    current,
-                    bp_grp_i,
-                    meta,
-                    self._gaussian_trans_internal,
-                    self._skeleton_tables if (self.config.include_skeleton) else None,
-                    self.config.skeleton_weight
+                if (not (0 <= prior_idx < fb_data.num_frames)):
+                    continue
+                prior = fb_data.frames[prior_idx]
+                current = fb_data.frames[i]
+                current = current if (in_place) else [c.copy() for c in current]
+
+                results = pool.starmap(
+                    self._compute_normal_frame,
+                    ((
+                        prior,
+                        current,
+                        bp_grp_i,
+                        meta,
+                        self._gaussian_trans_internal,
+                        self._skeleton_tables if (self.config.include_skeleton) else None,
+                        self.config.skeleton_weight
+                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs))
                 )
 
-            fb_data.frames[i] = current
+                for (bp_grp_i, res) in enumerate(results):
+                    section = slice(bp_grp_i * meta.num_outputs, (bp_grp_i + 1) * meta.num_outputs)
+                    current[section] = res[section]
 
-            if(prog_bar is not None):
-                prog_bar.update()
+                fb_data.frames[i] = current
+
+                if(prog_bar is not None):
+                    prog_bar.update()
 
         return fb_data
 
@@ -256,7 +283,6 @@ class MITViterbi(FramePass):
 
         # Update skeletal part by adding partials to the skeleton buffer...
         for bp_i, result in skel_result:
-            frm = self.fb_data.frames[frame_index][bp_i]
             result = result[0]
 
             for i in range(len(result)):
