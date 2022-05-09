@@ -14,6 +14,9 @@ from diplomat.processing import *
 from matplotlib import pyplot as plt
 from matplotlib import colors as mpl_colors
 
+def cv2_fourcc_string(val) -> int:
+    return int(cv2.VideoWriter_fourcc(*val))
+
 Pathy = Union[PathLike, str]
 
 LABELED_VIDEO_SETTINGS = {
@@ -24,7 +27,8 @@ LABELED_VIDEO_SETTINGS = {
     "colormap": (plt.get_cmap(), plt.get_cmap, "The colormap to use for tracked points in the video."),
     "line_thickness": (1, int, "Thickness of lines drawn."),
     "antialiasing": (True, bool, "Use antialiasing when drawing points."),
-    "draw_hidden_tracks": (True, bool, "Whether or not to draw locations under the pcutoff value.")
+    "draw_hidden_tracks": (True, bool, "Whether or not to draw locations under the pcutoff value."),
+    "output_codec": ("mp4v", cv2_fourcc_string, "The codec to use for the labeled video...")
 }
 
 class EverythingSet:
@@ -111,10 +115,13 @@ def _create_video_single(
 
     labeled_video = cv2.VideoWriter(
         str(export_path),
-        int(unlabeled_video.get(cv2.CAP_PROP_FOURCC)),
+        plotting_settings.output_codec,
         float(unlabeled_video.get(cv2.CAP_PROP_FPS)),
         (x_off2 - x_off, y_off2 - y_off)
     )
+
+    if(not labeled_video.isOpened()):
+        raise IOError("Unable to create labeled video with the specified location and codec.")
 
     # Compute the body parts to look up...
     body_parts_to_plot = EverythingSet() if(body_parts_to_plot is None) else set(body_parts_to_plot)
@@ -133,7 +140,7 @@ def _create_video_single(
     i = 0
 
     # Now begin writing frames...
-    while(unlabeled_video.isOpened() and i < location_data.shape[0]):
+    while(unlabeled_video.isOpened() and labeled_video.isOpened() and i < location_data.shape[0]):
         got_frame, frame = unlabeled_video.read()
 
         if(not got_frame):
