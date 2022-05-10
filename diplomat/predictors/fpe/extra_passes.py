@@ -11,8 +11,8 @@ from . import fpe_math
 
 
 class OptimizeStandardDeviation(FramePass):
-    def __init__(self, width, height, config):
-        super().__init__(width, height, config)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self._histogram = None
         self._current_frame = None
@@ -116,8 +116,8 @@ class OptimizeStandardDeviation(FramePass):
 
 
 class CreateSkeleton(FramePass):
-    def __init__(self, width, height, config):
-        super().__init__(width, height, config)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._skeleton = None
         self._max_locations = None
         self._prior_max_locations = None
@@ -278,16 +278,21 @@ class CreateSkeleton(FramePass):
 
 
 class ClusterFrames(FramePass):
-    def __init__(self, width, height, config):
-        super().__init__(width, height, config)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self._gaussian_table = fpe_math.gaussian_table(
-            height, width, self.config.standard_deviation, self.config.amplitude, self.config.lowest_value
+            self.height,
+            self.width,
+            self.config.standard_deviation,
+            self.config.amplitude,
+            self.config.lowest_value
         )
 
         self._cluster_dict = {}
 
-    def run_pass(self,
+    def run_pass(
+        self,
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
         in_place: bool = True,
@@ -444,8 +449,8 @@ class ClusterFrames(FramePass):
 
 class FixFrame(FramePass):
 
-    def __init__(self, width, height, config):
-        super().__init__(width, height, config)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._scores = None
         self._fb_data = None
         self._max_frame_idx = None

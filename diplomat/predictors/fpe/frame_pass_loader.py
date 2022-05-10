@@ -12,8 +12,10 @@ class FramePassBuilder:
 
         self._config = config
 
-    def __call__(self, width: int, height: int) -> FramePass:
-        return self._clazz(width, height, self._config)
+    def __call__(self, width: int, height: int, allow_multi_threading: bool) -> FramePass:
+        return self._clazz(
+            width, height, allow_multi_threading, self._config
+        )
 
     @classmethod
     def sanitize_pass_config_list(cls, passes: List[Any]) -> List["FramePassBuilder"]:

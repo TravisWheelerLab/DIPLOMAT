@@ -27,7 +27,13 @@ class FramePass(ABC):
         cls.IMPLEMENTORS.add(cls)
         super().__init_subclass__(**kwargs)
 
-    def __init__(self, width: int, height: int, config: Dict[str, Any]):
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        multi_threading_allowed: bool,
+        config: Dict[str, Any]
+    ):
         # Set defaults to forward iteration...
         self._step = 1
         self._start = None
@@ -36,6 +42,7 @@ class FramePass(ABC):
 
         self.__width = width
         self.__height = height
+        self.__multi_threading_allowed = multi_threading_allowed
 
         self._config = Config(config, self.get_config_options())
         self._frame_data = None
@@ -47,6 +54,10 @@ class FramePass(ABC):
     @property
     def height(self) -> int:
         return self.__height
+
+    @property
+    def multi_threading_allowed(self) -> bool:
+        return self.__multi_threading_allowed
 
     def _get_step_controls(self) -> Tuple[oint, oint, oint, oint]:
         return self._start, self._stop, self._step, self._prior_off
