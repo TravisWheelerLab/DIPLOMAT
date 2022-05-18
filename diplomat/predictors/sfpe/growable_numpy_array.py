@@ -5,6 +5,7 @@ from typing import Tuple, Union, Sequence
 class ClosedError(PermissionError):
     pass
 
+
 class GrowableNumpyArray:
     DEF_INIT_CAPACITY = 10
     GROWTH_RATE = 1.5
@@ -12,7 +13,7 @@ class GrowableNumpyArray:
     def __init__(
         self,
         element_shape: Union[Tuple[int], int],
-        dtype: Union[np.dtype, np.__numpy.generic] = np.float32,
+        dtype: Union[np.dtype, np.generic] = np.float32,
         init_capacity: int = DEF_INIT_CAPACITY
     ):
         if(isinstance(element_shape, int)):
@@ -37,4 +38,4 @@ class GrowableNumpyArray:
 
     def finalize(self) -> np.ndarray:
         self._finalized = True
-        return self._array[:self._size + 1]
+        return self._array[:self._size]
