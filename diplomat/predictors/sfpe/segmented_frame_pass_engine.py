@@ -11,19 +11,24 @@ try:
     from ..fpe.frame_pass import FramePass, ProgressBar
     from ..fpe.frame_pass_loader import FramePassBuilder
     from ..fpe.sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
+    from .growable_numpy_array import GrowableNumpyArray
+    from ..fpe.extra_passes import FixFrame
 except ImportError:
     __package__ = "diplomat.predictors.sfpe"
     from ..fpe.frame_pass import FramePass, ProgressBar
     from ..fpe.frame_pass_loader import FramePassBuilder
     from ..fpe.sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
+    from .growable_numpy_array import GrowableNumpyArray
+    from ..fpe.extra_passes import FixFrame
 
 
-class FramePassEngine(Predictor):
+class SegmentedFramePassEngine(Predictor):
     """
     A predictor that applies a collection of frame passes to the frames
     dumped by deeplabcut, and then predicts poses by selecting maximums.
     Contains a collection of useful prediction algorithms which can be listed
-    by calling "get_predictor_settings" on this Predictor.
+    by calling "get_predictor_settings" on this Predictor. This version
+    applies passes in segments, and then stitches those segments together.
     """
 
     def __init__(
@@ -55,6 +60,10 @@ class FramePassEngine(Predictor):
         self._frame_holder.metadata.threshold = self.THRESHOLD
         self._frame_holder.metadata.bodyparts = bodyparts
         self._frame_holder.metadata.num_outputs = num_outputs
+
+        self._segments = None
+        self._segment_scores = None
+        self._segment_bp_order = None
 
         self._current_frame = 0
 
@@ -172,187 +181,93 @@ class FramePassEngine(Predictor):
 
         return poses
 
+    def _run_full_passes(self, progress_bar: Optional[ProgressBar]):
+        for (i, frame_pass_builder) in enumerate(self.FULL_PASSES):
+            frame_pass = frame_pass_builder(self._width, self._height, True)
 
-    class ExportableFields(Enum):
-        SOURCE = "Source"
-        FRAME = "Frame"
-        OCCLUDED_AND_EDGES = "Occluded/Edge"
+            if(progress_bar is not None):
+                progress_bar.message(
+                    f"Running Full Frame Pass {i + 1}/{len(self.FULL_PASSES)}: '{frame_pass.get_name()}'"
+                )
 
-    @classmethod
-    def _get_frame_writer(
-        cls,
-        num_frames: int,
-        frame_metadata: AttributeDict,
-        video_metadata: Config,
-        file_format: str,
-        file: BinaryIO,
-        export_all: bool = False
-    ) -> frame_store_api.FrameWriter:
-        """
-        Get a frame writer that can export frames from the Forward Backward instance. Used internally to support frame
-        export functionality.
-
-        TODO
-        """
-        from diplomat.utils import frame_store_fmt, h5_frame_store_fmt
-
-        exporters = {
-            "DLFS": frame_store_fmt.DLFSWriter,
-            "HDF5": h5_frame_store_fmt.DLH5FSWriter
-        }
-
-        if(export_all):
-            bp_list = [
-                f"{bp}_{track}_{map_type.value}"
-                for bp in frame_metadata.bodyparts
-                for track in range(frame_metadata.num_outputs)
-                for map_type in cls.ExportableFields
-            ]
-        else:
-            bp_list = [
-                f"{bp}_{track}" for bp in frame_metadata.bodyparts for track in range(frame_metadata.num_outputs)
-            ]
-
-        header = frame_store_fmt.DLFSHeader(
-            num_frames,
-            (frame_metadata.height + 2) if(export_all) else frame_metadata.height,
-            (frame_metadata.width + 2) if(export_all) else frame_metadata.width,
-            video_metadata["fps"],
-            frame_metadata.down_scaling,
-            *video_metadata["size"],
-            *((None, None) if (video_metadata["cropping-offset"] is None) else video_metadata["cropping-offset"]),
-            bp_list
-        )
-
-        return exporters.get(file_format, frame_store_fmt.DLFSWriter)(file, header)
-
-    @classmethod
-    def _export_frame(
-        cls,
-        src_frame: ForwardBackwardFrame,
-        metadata: AttributeDict,
-        dest_frame: TrackingData,
-        dst_idx: Tuple[int, int],
-        header: frame_store_api.DLFSHeader,
-        selected_field: ExportableFields,
-        padding: int = 0
-    ):
-        start, end = padding, -padding if(padding > 0) else None
-        spc = padding * 2
-
-        if(selected_field == cls.ExportableFields.SOURCE):
-            res = src_frame.src_data.desparsify(
-                header.frame_width - spc, header.frame_height - spc, header.stride
+            self._frame_holder = frame_pass.run_pass(
+                self._frame_holder,
+                progress_bar,
+                True
             )
 
-            dest_frame.get_prob_table(*dst_idx)[start:end, start:end] = res.get_prob_table(0, 0)
-        elif(selected_field == cls.ExportableFields.FRAME):
-            data = src_frame.src_data.unpack()
-            probs = src_frame.frame_probs
-            if (probs is None):
-                probs = np.zeros(len(data[2]), np.float32)
+        # In order to restore correctly, we need to restore to the state
+        # right before segmentation.
+        if(progress_bar is not None):
+            progress_bar.message("Storing copy of source data...")
 
-            res = SparseTrackingData()
-            res.pack(*data[:2], probs, *data[3:])
-            res = res.desparsify(header.frame_width - spc, header.frame_height - spc, header.stride)
+        for frm in self._frame_holder.frames:
+            for bp in frm:
+                bp.orig_data = bp.src_data.duplicate()
 
-            dest_frame.get_prob_table(*dst_idx)[start:end, start:end] = res.get_prob_table(0, 0)
-        elif(selected_field == cls.ExportableFields.OCCLUDED_AND_EDGES):
-            if(padding < 1):
-                raise ValueError("Padding must be included to export edges and the occluded state!")
+            if(progress_bar is not None):
+                progress_bar.update()
 
-            probs = src_frame.occluded_probs
 
-            o_x, o_y = tuple(src_frame.occluded_coords.T)
-            x, y = o_x + 1, o_y + 1
-            off_x = off_y = np.zeros(len(x), dtype=np.float32)
+    def _build_segments(self, progress_bar: Optional[ProgressBar]):
+        # Compute the scores...
+        if(progress_bar is not None):
+            progress_bar.message("Breaking video into segments...")
 
-            res = SparseTrackingData()
-            res.pack(y, x, probs, off_x, off_y)
+        segment_size = self.settings.segment_size
 
-            # Add 2 to resolve additional padding as needed for the edges...
-            res = res.desparsify(header.frame_width - spc + 2, header.frame_height - spc + 2, header.stride)
+        scores = FixFrame.compute_scores(self._frame_holder, progress_bar)
+        visited = np.zeros(len(scores), bool)
+        ordered_scores = np.argsort(scores)
 
-            new_start = start - 1
-            new_end = end + 1 if(end + 1 < 0) else None
+        self._segments = GrowableNumpyArray(3, np.uint64)
 
-            dest_frame.get_prob_table(*dst_idx)[new_start:new_end, new_start:new_end] = res.get_prob_table(0, 0)
+        # We now iterate through the scores in sorted order, marking off segments...
+        for frame_idx in ordered_scores:
+            if(visited[frame_idx]):
+                continue
 
-    @classmethod
-    def _export_frames(
-        cls,
-        frames: ForwardBackwardData,
-        video_metadata: Config,
-        path: Path,
-        file_format: str,
-        p_bar: Optional[ProgressBar] = None,
-        export_final_probs: bool = True,
-        export_all: bool = False
+            section = slice(int(frame_idx - segment_size / 2), int(frame_idx - segment_size / 2))
+            rev_section = slice(int(frame_idx - segment_size / 2), int(frame_idx - segment_size / 2), -1)
+            start_idx = np.argmin(visited[section])
+            end_idx = np.argmin(segment_size - visited[rev_section])
+            visited[section] = True
+
+            # Start of the segment, end of the segment, the fix frame index...
+            self._segments.add([start_idx, end_idx, frame_idx])
+
+            if(progress_bar is not None):
+                progress_bar.update()
+
+        # Sort the segments by the start of the segment...
+        self._segments = self._segments.finalize()
+        self._segment_scores = scores[self._segments[:, 2]]
+        sort_order = self._segments[:, 2].argsort()
+        self._segments = self._segments[sort_order]
+        self._segment_scores = self._segment_scores[sort_order]
+
+
+    def _run_segmented_passes(
+        self,
+        progress_bar: Optional[ProgressBar],
+        index: int,
+        fresh_run: bool = True
     ):
-        """
-        Private method, exports frames if the user specifies a frame export path.
+        start, end, fix_frame_idx, score = self._segments[index]
 
-        TODO
-        """
-        if(p_bar is not None):
-            p_bar.reset(frames.num_frames)
+        # Create a new temporary sub-frame to pass to all the frame passes...
+        sub_frame = ForwardBackwardData(0, 0)
+        sub_frame.frames = self._frame_holder.frames[start:end]
+        sub_frame.metadata = self._frame_holder.metadata
 
-        with path.open("wb") as f:
-            with cls._get_frame_writer(
-                    frames.num_frames, frames.metadata, video_metadata, file_format, f, export_all
-            ) as fw:
-                header = fw.get_header()
-
-                for f_idx in range(frames.num_frames):
-                    frame_data = TrackingData.empty_tracking_data(
-                        1,
-                        frames.num_bodyparts * (3 if(export_all) else 1),
-                        header.frame_width,
-                        header.frame_height,
-                        frames.metadata.down_scaling,
-                        True
-                    )
-
-                    for bp_idx in range(frames.num_bodyparts):
-                        if(export_final_probs and frames.frames[f_idx][bp_idx].frame_probs is None):
-                            continue
-
-                        if(export_all):
-                            for exp_t_i, exp_t in enumerate(cls.ExportableFields):
-                                cls._export_frame(
-                                    frames.frames[f_idx][bp_idx],
-                                    frames.metadata,
-                                    frame_data,
-                                    (0, bp_idx * len(cls.ExportableFields) + exp_t_i),
-                                    header,
-                                    exp_t,
-                                    padding=1
-                                )
-                        else:
-                            # No padding...
-                            cls._export_frame(
-                                frames.frames[f_idx][bp_idx],
-                                frames.metadata,
-                                frame_data,
-                                (0, bp_idx),
-                                header,
-                                cls.ExportableFields.FRAME if(export_final_probs) else cls.ExportableFields.SOURCE
-                            )
-
-                    fw.write_data(frame_data)
-
-                    if(p_bar is not None):
-                        p_bar.update()
-
-    def _run_frame_passes(self, progress_bar: Optional[ProgressBar], fresh_run: bool = False):
         if(fresh_run):
             if(progress_bar is not None):
-                progress_bar.message("Clearing Old ForwardBackward Data...")
+                progress_bar.message("Clearing Old Data...")
                 progress_bar.reset(self._frame_holder.num_frames)
 
-            for f in range(self._frame_holder.num_frames):
-                for bp in range(self._frame_holder.num_bodyparts):
-                    frame = self._frame_holder.frames[f][bp]
+            for f in range(sub_frame.num_frames):
+                for bp in range(sub_frame.num_bodyparts):
+                    frame = sub_frame.frames[f][bp]
                     frame.src_data = frame.orig_data.duplicate()
                     frame.frame_probs = None
                     frame.occluded_probs = None
@@ -361,33 +276,144 @@ class FramePassEngine(Predictor):
                 if(progress_bar is not None):
                     progress_bar.update()
 
-        for i, frame_pass_builder in enumerate(self.PASSES):
-            frame_pass = frame_pass_builder(self._width, self._height)
+        # Compute the fix frame....
+        fix_frame = FixFrame.create_fix_frame(
+            sub_frame,
+            fix_frame_idx,
+            sub_frame.metadata.skeleton if("skeleton" in sub_frame.metadata) else None
+        )
+
+        sub_frame = FixFrame.restore_all_except_fix_frame(
+            sub_frame,
+            fix_frame_idx,
+            fix_frame,
+            progress_bar,
+            False
+        )
+
+        for (i, frame_pass_builder) in enumerate(self.SEGMENTED_PASSES):
+            frame_pass = frame_pass_builder(self._width, self._height, True)
 
             if(progress_bar is not None):
-                progress_bar.message(f"Running Frame Pass {i + 1}/{len(self.SEGMENTED_PASSES)}: '{frame_pass.get_name()}'")
+                progress_bar.message(
+                    f"Running Full Frame Pass {i + 1}/{len(self.SEGMENTED_PASSES)}: '{frame_pass.get_name()}'"
+                )
 
             self._frame_holder = frame_pass.run_pass(
-                self._frame_holder,
+                sub_frame,
                 progress_bar,
-                True
+                False
             )
 
+    def _run_all_segmented_passes(
+        self,
+        progress_bar: ProgressBar,
+        fresh_run: bool = True
+    ):
+        for index in range(self._segments):
+            self._run_segmented_passes(progress_bar, index, fresh_run)
+
+    def _get_frame_links(
+        self,
+        current_frame: List[ForwardBackwardFrame],
+        prior_frame: List[ForwardBackwardFrame],
+        prior_frame_indexes: np.ndarray
+    ) -> np.ndarray:
+        num_groups = self._frame_holder.num_bodyparts // self.num_outputs
+        num_in_group = self.num_outputs
+
+        out_list = np.zeros(len(current_frame), np.uint16)
+
+        for bp_group in range(num_groups):
+            score_matrix = np.zeros((num_in_group, num_in_group), np.float32)
+
+            for coff in range(num_in_group):
+                for poff in range(num_in_group):
+                    pidx = bp_group * num_in_group + poff
+                    cidx = bp_group * num_in_group + coff
+
+                    cx, cy, cp, cx_off, cy_off = self.get_maximum(
+                        current_frame[cidx],
+                        self.settings.relaxed_maximum_radius
+                    )
+                    px, py, pp, px_off, py_off = self.get_maximum(
+                        prior_frame[pidx],
+                        self.settings.relaxed_maximum_radius
+                    )
+
+                    d_scale = self._frame_holder.metadata.down_scaling
+
+                    score_matrix[poff, coff] = FixFrame.dist(
+                        (
+                            px + px_off / d_scale,
+                            py + py_off / d_scale
+                        ),
+                        (
+                            cx + cx_off / d_scale,
+                            cy + cy_off / d_scale
+                        )
+                    )
+
+            for i in range(num_in_group):
+                p_max_i, c_max_i = np.unravel_index(np.argmin(score_matrix), score_matrix.shape)
+                score_matrix[p_max_i, :] = np.inf
+                score_matrix[:, c_max_i] = np.inf
+                out_list[c_max_i] = prior_frame_indexes[p_max_i]
+
+            return out_list
+
+    def _resolve_frame_orderings(
+        self,
+        progress_bar: ProgressBar,
+        reset_bar: bool = True
+    ):
+        if(reset_bar and progress_bar is not None):
+            progress_bar.message("Resolving Orderings...")
+            progress_bar.reset(len(self._segments))
+
+        self._segment_bp_order = np.zeros((len(self._segments), self._frame_holder.num_bodyparts), np.uint16)
+
+        # Use the best scoring frame as the ground truth ordering...
+        best_segment_idx = np.argmax(self._segment_scores)
+        self._segment_bp_order[best_segment_idx] = np.arange(len(self._segments))
+
+        # Now we align orderings to the 'ground truth' ordering...
+        for i in range(best_segment_idx - 1, -1, -1):
+            # The end is exclusive...
+            start, end, fix_frame = self._segments[i]
+            self._segment_bp_order[i, :] = self._get_frame_links(
+                self._frame_holder.frames[end - 1],
+                self._frame_holder.frames[end],
+                self._segment_bp_order[i + 1]
+            )
+
+            if(progress_bar is not None):
+                progress_bar.update()
+
+        for i in range(best_segment_idx, len(self._segments)):
+            start, end, fix_frame = self._segments[i]
+            self._segment_bp_order[i, :] = self._get_frame_links(
+                self._frame_holder.frames[start],
+                self._frame_holder.frames[start - 1],
+                self._segment_bp_order[i + 1]
+            )
+
+            if(progress_bar is not None):
+                progress_bar.update()
+
+    def _run_frame_passes(self, progress_bar: Optional[ProgressBar], fresh_run: bool = False):
+        self._run_full_passes(progress_bar)
+        self._build_segments(progress_bar)
+        self._run_all_segmented_passes(progress_bar)
+        self._resolve_frame_orderings(progress_bar)
 
     def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         self._run_frame_passes(progress_bar)
 
         if(self.EXPORT_LOC is not None):
             progress_bar.message(f"Exporting Frames to: '{str(self.EXPORT_LOC)}'")
-            self._export_frames(
-                self._frame_holder,
-                self.video_metadata,
-                self.EXPORT_LOC,
-                "DLFS",
-                progress_bar,
-                self.settings.export_final_probs,
-                self.settings.export_all_info
-            )
+            # TODO: Need to add frame export...
+            raise NotImplementedError("TODO: Implement!")
 
         progress_bar.message("Selecting Maximums")
         return self.get_maximums(
@@ -456,6 +482,11 @@ class FramePassEngine(Predictor):
                 f"the provided plugin). If no configuration is provided, the entry can just be a string. "
                 f"the following plugins are currently supported:\n\n{desc_str}"
             ),
+            "segment_size": (
+                200,
+                type_casters.RangedInteger(10, np.inf),
+                "The size of the segments in frames to break the video into for tracking."
+            ),
             "export_frame_path": (
                 None,
                 type_casters.Union(type_casters.Literal(None), str),
@@ -487,7 +518,11 @@ class FramePassEngine(Predictor):
 
     @classmethod
     def get_tests(cls) -> Optional[List[TestFunction]]:
-        return [cls.test_plotting, cls.test_sparsification, cls.test_desparsification]
+        return [
+            cls.test_plotting,
+            cls.test_sparsification,
+            cls.test_desparsification
+        ]
 
     @classmethod
     def get_test_data(cls) -> TrackingData:
@@ -510,7 +545,7 @@ class FramePassEngine(Predictor):
         return track_data
 
     @classmethod
-    def get_test_instance(cls, track_data: TrackingData, settings: dict = None, num_out: int = 1) -> "FramePassEngine":
+    def get_test_instance(cls, track_data: TrackingData, settings: dict = None, num_out: int = 1) -> Predictor:
         return cls(
             [f"part{i + 1}" for i in range(track_data.get_bodypart_count())],
             num_out,
@@ -521,6 +556,9 @@ class FramePassEngine(Predictor):
 
     @classmethod
     def test_plotting(cls) -> Tuple[bool, str, str]:
+        # TODO: Need to update for segmentation...
+        raise NotImplementedError("TODO: Implement!")
+
         track_data = cls.get_test_data()
         predictor = cls.get_test_instance(track_data, {"passes": [
             "ClusterFrames",
