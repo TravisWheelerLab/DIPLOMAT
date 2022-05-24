@@ -652,7 +652,7 @@ class FixFrame(FramePass):
         reset_bar: bool = False
     ) -> ForwardBackwardData:
         # For passes to use....
-        fb_data.metadata.fixed_frame_index = frame_idx
+        fb_data.metadata.fixed_frame_index = int(frame_idx)
 
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
@@ -661,7 +661,7 @@ class FixFrame(FramePass):
             for b_i, data in enumerate(frm):
                 # If the fixed frame, return the fixed frame...
                 if(f_i == frame_idx):
-                    fb_data.frames[f_i][b_i] = fix_frame_data[f_i][b_i]
+                    fb_data.frames[f_i][b_i] = fix_frame_data[b_i]
                 # If any other frame, return the frame as the merged clusters...
                 else:
                     fb_data.frames[f_i][b_i].src_data = fb_data.frames[f_i][b_i].orig_data

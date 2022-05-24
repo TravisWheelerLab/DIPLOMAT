@@ -156,6 +156,8 @@ class SegmentedFramePassEngine(Predictor):
     def get_maximums(
         cls,
         frame_list: ForwardBackwardData,
+        segments: np.ndarray,
+        segment_alignments: np.ndarray,
         progress_bar: ProgressBar,
         relaxed_radius: float = 0
     ) -> Pose:
@@ -165,19 +167,22 @@ class SegmentedFramePassEngine(Predictor):
         if(progress_bar is not None):
             progress_bar.reset(frame_list.num_frames)
 
-        for f_idx in range(frame_list.num_frames):
-            for bp_idx in range(frame_list.num_bodyparts):
-                x, y, p, x_off, y_off = cls.get_maximum(
-                    frame_list.frames[f_idx][bp_idx], relaxed_radius
-                )
+        for seg, alignment in zip(segments, segment_alignments):
+            start, end, fix = [int(elm) for elm in seg]
 
-                poses.set_at(
-                    f_idx, bp_idx, (x, y), (x_off, y_off), p,
-                    frame_list.metadata.down_scaling
-                )
+            for f_idx in range(start, end):
+                for bp_idx in range(frame_list.num_bodyparts):
+                    x, y, p, x_off, y_off = cls.get_maximum(
+                        frame_list.frames[f_idx][bp_idx], relaxed_radius
+                    )
 
-            if (progress_bar is not None):
-                progress_bar.update(1)
+                    poses.set_at(
+                        f_idx, alignment[bp_idx], (x, y), (x_off, y_off), p,
+                        frame_list.metadata.down_scaling
+                    )
+
+                if (progress_bar is not None):
+                    progress_bar.update(1)
 
         return poses
 
@@ -200,6 +205,7 @@ class SegmentedFramePassEngine(Predictor):
         # right before segmentation.
         if(progress_bar is not None):
             progress_bar.message("Storing copy of source data...")
+            progress_bar.reset(self._frame_holder.num_frames)
 
         for frm in self._frame_holder.frames:
             for bp in frm:
@@ -209,10 +215,11 @@ class SegmentedFramePassEngine(Predictor):
                 progress_bar.update()
 
 
-    def _build_segments(self, progress_bar: Optional[ProgressBar]):
+    def _build_segments(self, progress_bar: Optional[ProgressBar], reset_bar: bool = True):
         # Compute the scores...
-        if(progress_bar is not None):
+        if(reset_bar and progress_bar is not None):
             progress_bar.message("Breaking video into segments...")
+            progress_bar.reset(self.num_frames)
 
         segment_size = self.settings.segment_size
 
@@ -227,10 +234,13 @@ class SegmentedFramePassEngine(Predictor):
             if(visited[frame_idx]):
                 continue
 
-            section = slice(int(frame_idx - segment_size / 2), int(frame_idx - segment_size / 2))
-            rev_section = slice(int(frame_idx - segment_size / 2), int(frame_idx - segment_size / 2), -1)
-            start_idx = np.argmin(visited[section])
-            end_idx = np.argmin(segment_size - visited[rev_section])
+            search_start = max(0, int(frame_idx - segment_size / 2))
+            search_end = min(len(ordered_scores), int(frame_idx + segment_size / 2))
+            section = slice(search_start, search_end)
+            rev_section = slice(search_end - 1, search_start - 1 if(search_start > 0) else None, -1)
+
+            start_idx = search_start + np.argmin(visited[section])
+            end_idx = search_end - np.argmin(visited[rev_section])
             visited[section] = True
 
             # Start of the segment, end of the segment, the fix frame index...
@@ -253,7 +263,7 @@ class SegmentedFramePassEngine(Predictor):
         index: int,
         fresh_run: bool = True
     ):
-        start, end, fix_frame_idx, score = self._segments[index]
+        start, end, fix_frame_idx = [int(elm) for elm in self._segments[index]]
 
         # Create a new temporary sub-frame to pass to all the frame passes...
         sub_frame = ForwardBackwardData(0, 0)
@@ -263,7 +273,7 @@ class SegmentedFramePassEngine(Predictor):
         if(fresh_run):
             if(progress_bar is not None):
                 progress_bar.message("Clearing Old Data...")
-                progress_bar.reset(self._frame_holder.num_frames)
+                progress_bar.reset(sub_frame.num_frames)
 
             for f in range(sub_frame.num_frames):
                 for bp in range(sub_frame.num_bodyparts):
@@ -279,16 +289,16 @@ class SegmentedFramePassEngine(Predictor):
         # Compute the fix frame....
         fix_frame = FixFrame.create_fix_frame(
             sub_frame,
-            fix_frame_idx,
+            fix_frame_idx - start,
             sub_frame.metadata.skeleton if("skeleton" in sub_frame.metadata) else None
         )
 
         sub_frame = FixFrame.restore_all_except_fix_frame(
             sub_frame,
-            fix_frame_idx,
+            fix_frame_idx - start,
             fix_frame,
             progress_bar,
-            False
+            True
         )
 
         for (i, frame_pass_builder) in enumerate(self.SEGMENTED_PASSES):
@@ -296,22 +306,30 @@ class SegmentedFramePassEngine(Predictor):
 
             if(progress_bar is not None):
                 progress_bar.message(
-                    f"Running Full Frame Pass {i + 1}/{len(self.SEGMENTED_PASSES)}: '{frame_pass.get_name()}'"
+                    f"Running Segmented Frame Pass {i + 1}/{len(self.SEGMENTED_PASSES)}: '{frame_pass.get_name()}'"
                 )
 
-            self._frame_holder = frame_pass.run_pass(
+            sub_frame = frame_pass.run_pass(
                 sub_frame,
                 progress_bar,
-                False
+                True
             )
 
     def _run_all_segmented_passes(
         self,
         progress_bar: ProgressBar,
-        fresh_run: bool = True
+        fresh_run: bool = True,
+        reset_bar: bool = True
     ):
-        for index in range(self._segments):
+        if(reset_bar and progress_bar is not None):
+            progress_bar.message("Running Segmented Passes...")
+            progress_bar.reset(len(self._segments))
+
+        for index in range(len(self._segments)):
             self._run_segmented_passes(progress_bar, index, fresh_run)
+
+            if(progress_bar is not None):
+                progress_bar.update()
 
     def _get_frame_links(
         self,
@@ -355,12 +373,14 @@ class SegmentedFramePassEngine(Predictor):
                     )
 
             for i in range(num_in_group):
+                off = bp_group * num_in_group
                 p_max_i, c_max_i = np.unravel_index(np.argmin(score_matrix), score_matrix.shape)
                 score_matrix[p_max_i, :] = np.inf
                 score_matrix[:, c_max_i] = np.inf
-                out_list[c_max_i] = prior_frame_indexes[p_max_i]
 
-            return out_list
+                out_list[off + c_max_i] = prior_frame_indexes[off + p_max_i]
+
+        return out_list
 
     def _resolve_frame_orderings(
         self,
@@ -375,12 +395,12 @@ class SegmentedFramePassEngine(Predictor):
 
         # Use the best scoring frame as the ground truth ordering...
         best_segment_idx = np.argmax(self._segment_scores)
-        self._segment_bp_order[best_segment_idx] = np.arange(len(self._segments))
+        self._segment_bp_order[best_segment_idx] = np.arange(self._frame_holder.num_bodyparts)
 
         # Now we align orderings to the 'ground truth' ordering...
         for i in range(best_segment_idx - 1, -1, -1):
             # The end is exclusive...
-            start, end, fix_frame = self._segments[i]
+            start, end, fix_frame = [int(elm) for elm in self._segments[i]]
             self._segment_bp_order[i, :] = self._get_frame_links(
                 self._frame_holder.frames[end - 1],
                 self._frame_holder.frames[end],
@@ -390,16 +410,17 @@ class SegmentedFramePassEngine(Predictor):
             if(progress_bar is not None):
                 progress_bar.update()
 
-        for i in range(best_segment_idx, len(self._segments)):
-            start, end, fix_frame = self._segments[i]
+        for i in range(best_segment_idx + 1, len(self._segments)):
+            start, end, fix_frame = [int(elm) for elm in self._segments[i]]
             self._segment_bp_order[i, :] = self._get_frame_links(
                 self._frame_holder.frames[start],
                 self._frame_holder.frames[start - 1],
-                self._segment_bp_order[i + 1]
+                self._segment_bp_order[i - 1]
             )
 
             if(progress_bar is not None):
                 progress_bar.update()
+
 
     def _run_frame_passes(self, progress_bar: Optional[ProgressBar], fresh_run: bool = False):
         self._run_full_passes(progress_bar)
@@ -417,7 +438,10 @@ class SegmentedFramePassEngine(Predictor):
 
         progress_bar.message("Selecting Maximums")
         return self.get_maximums(
-            self._frame_holder, progress_bar,
+            self._frame_holder,
+            self._segments,
+            self._segment_bp_order,
+            progress_bar,
             relaxed_radius=self.settings.relaxed_maximum_radius
         )
 

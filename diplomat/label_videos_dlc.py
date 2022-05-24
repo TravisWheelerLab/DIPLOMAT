@@ -44,7 +44,6 @@ def create_labeled_videos(
     video_type: str = "",
     **kwargs
 ) -> None:
-    # TODO: Write...
     cfg = auxiliaryfunctions.read_config(config)
     train_frac = cfg["TrainingFraction"][training_set_index]
 
