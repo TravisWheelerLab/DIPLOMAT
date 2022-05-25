@@ -1,3 +1,9 @@
+"""
+A tool providing multi-animal tracking capabilities on top of DeepLabCut.
+"""
+
+__version__ = "0.0.1"
+
 from diplomat.predict_videos_dlc import analyze_videos
 from diplomat.predict_frames_dlc import analyze_frame_store
 from diplomat.predictor_ops import (

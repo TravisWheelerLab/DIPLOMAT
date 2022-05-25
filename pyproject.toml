@@ -1,42 +1,31 @@
 [build-system]
-requires = ["flit_core >=2,<4"]
+requires = ["flit_core >=3.2"]
 build-backend = "flit_core.buildapi"
 
-[tool.flit.scripts]
-bagel = "bagel.__main__:main"
-
-[tool.flit.metadata]
-module = "bagel"
-author = "George Lesica"
-author-email = "george.lesica@umontana.edu"
-maintainer = "George Lesica"
-maintainer-email = "george.lesica@umontana.edu"
-home-page = "https://github.com/TravisWheelerLab/bagel"
+[project]
+name = "diplomat"
+authors = [
+    {name = "Isaac Robinson", email = "isaac.k.robinson2000@gmail.com"}
+]
+readme = "README.md"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
-    "Programming Language :: Python :: 3.9",
+    # TODO: License
+    "Programming Language :: Python :: 3.8",
     "Typing :: Typed",
+    "Private :: Do Not Upload"  # For now...
 ]
-description-file = "README.md"
+requires-python = ">=3.7"
+dynamic = ["version", "description"]
+dependencies = ["deeplabcut", "opencv-python"]
 
-[tool.flit.sdist]
-exclude = [
-    ".DS_Store",
-    ".github",
-    ".gitignore",
-    ".nextflow*",
-    "*.nf",
-    "benchmarks",
-    "bin",
-    "Dockerfile*",
-    "fixtures",
-    "secrets.sh",
-    "tool",
-    "tools",
-    "utils",
-    "work",
+[project.urls]
+Source = "https://github.com/TravisWheelerLab/DIPLOMAT"
+
+[project.optional-dependencies]
+gui = [
+    "wxpython"
 ]
