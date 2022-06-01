@@ -735,7 +735,7 @@ class EntropyOfTransitions(ScoreEngine):
     def _init_gaussian_table(self, width, height):
         if(self._gaussian_table is None):
             self._gaussian_table = fpe_math.gaussian_table(
-                width, height, self._std, 1, 0
+                height, width, self._std, 1, 0
             )
 
     def compute_scores(self, poses: Pose, prog_bar: ProgressBar) -> np.ndarray:
