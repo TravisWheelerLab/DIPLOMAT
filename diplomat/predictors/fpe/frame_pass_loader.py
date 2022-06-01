@@ -12,7 +12,12 @@ class FramePassBuilder:
 
         self._config = config
 
-    def __call__(self, width: int, height: int, allow_multi_threading: bool) -> FramePass:
+    def __call__(
+        self,
+        width: int,
+        height: int,
+        allow_multi_threading: bool = True
+    ) -> FramePass:
         return self._clazz(
             width, height, allow_multi_threading, self._config
         )
