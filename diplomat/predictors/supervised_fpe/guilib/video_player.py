@@ -734,10 +734,10 @@ class VideoController(wx.Panel):
         self._slider_control = wx.Slider(self, value=0, minValue=0, maxValue=video_player.get_total_frames() - 1,
                                          style=wx.SL_HORIZONTAL | wx.SL_LABELS)
 
-        self._sizer.Add(self._back_btn, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.EXPAND | wx.ALL)
-        self._sizer.Add(self._play_pause_btn, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.EXPAND | wx.ALL)
-        self._sizer.Add(self._stop_btn, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.EXPAND | wx.ALL)
-        self._sizer.Add(self._forward_btn, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.EXPAND | wx.ALL)
+        self._sizer.Add(self._back_btn, 0, wx.EXPAND | wx.ALL)
+        self._sizer.Add(self._play_pause_btn, 0, wx.EXPAND | wx.ALL)
+        self._sizer.Add(self._stop_btn, 0, wx.EXPAND | wx.ALL)
+        self._sizer.Add(self._forward_btn, 0, wx.EXPAND | wx.ALL)
         self._sizer.Add(self._slider_control, 1, wx.EXPAND)
 
         self._sizer.SetSizeHints(self)
