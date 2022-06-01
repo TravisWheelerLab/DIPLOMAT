@@ -8,6 +8,7 @@ from .frame_pass import FramePass, ProgressBar, PassOrderError, ConfigSpec
 from .frame_pass import type_casters as tc
 from scipy.sparse import csgraph
 from . import fpe_math
+from decimal import Decimal
 
 
 class OptimizeStandardDeviation(FramePass):
@@ -28,11 +29,11 @@ class OptimizeStandardDeviation(FramePass):
         reset_bar: bool = True
     ) -> ForwardBackwardData:
         d_scale = fb_data.metadata.down_scaling
-        bin_off = self.config.ignore_bins_below / d_scale
+        bin_off = self.config.ignore_bins_below / Decimal(d_scale)
         self._ignore_below = bin_off
 
         self._histogram = Histogram(
-            self.config.bin_size / d_scale,
+            self.config.bin_size / Decimal(d_scale),
             bin_off
         )
         self._current_frame = 0
