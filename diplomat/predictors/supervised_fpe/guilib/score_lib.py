@@ -78,7 +78,7 @@ class ScoreEngineDisplayer(wx.Control):
         self._prob_displayer = ProbabilityDisplayer(
             self, scores, bad_labels, score_engine.get_name()
         )
-        self._main_layout.Add(self._prob_displayer, 1, wx.EXPAND | wx.ALIGN_CENTER)
+        self._main_layout.Add(self._prob_displayer, 1, wx.EXPAND | wx.ALIGN_CENTER_HORIZONTAL)
 
         self.SetSizerAndFit(self._main_layout)
 
