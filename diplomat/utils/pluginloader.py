@@ -47,27 +47,25 @@ def load_plugin_classes(
     plugins: Set[Type[T]] = set()
 
     # Iterate all modules in specified directory using pkgutil, importing them if they are not in sys.modules
-    for importer, package_name, ispkg in pkgutil.iter_modules([path]):
-        mod_name = rel_path + "." + package_name
-
-        # If the module name is not in system modules or the reload flag is set to true, perform a full load of the
+    for importer, package_name, ispkg in pkgutil.iter_modules([path], rel_path + "."):
+        # If the module name is not in system modules or the 'reload' flag is set to true, perform a full load of the
         # modules...
-        if (mod_name not in sys.modules) or do_reload:
+        if (package_name not in sys.modules) or do_reload:
             try:
                 sub_module = importer.find_module(package_name).load_module(
                     package_name
                 )
-                sys.modules[mod_name] = sub_module
+                sys.modules[package_name] = sub_module
             except Exception as e:
                 if(display_error):
                     import traceback
                     warnings.warn(
-                        f"Can't load '{mod_name}'. Due to issue below: \n {traceback.format_exc()}",
+                        f"Can't load '{package_name}'. Due to issue below: \n {traceback.format_exc()}",
                         ImportWarning
                     )
                 continue
         else:
-            sub_module = sys.modules[mod_name]
+            sub_module = sys.modules[package_name]
 
         # Now we check if the module is a package, and if so, recursively call this method
         if ispkg:
@@ -79,13 +77,16 @@ def load_plugin_classes(
             for item in dir(sub_module):
                 field = getattr(sub_module, item)
 
-                # Checking if the field is a class, and if the field is a direct child of the plugin class
-                if (
-                    isinstance(field, type)
-                    and issubclass(field, plugin_metaclass)
-                    and (field != plugin_metaclass)
-                ):
-                    # It is a plugin, add it to the list...
-                    plugins.add(field)
+                try: # Some classes throw an error when passed to issubclass...
+                    # Checking if the field is a class, and if the field is a direct child of the plugin class
+                    if (
+                        isinstance(field, type)
+                        and issubclass(field, plugin_metaclass)
+                        and (field != plugin_metaclass)
+                    ):
+                        # It is a plugin, add it to the list...
+                        plugins.add(field)
+                except Exception:
+                    pass
 
     return plugins

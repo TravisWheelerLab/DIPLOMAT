@@ -15,7 +15,7 @@ import numpy as np
 try:
     from .probability_displayer import ProbabilityDisplayer
 except ImportError:
-    __package__ = "deeplabcut.pose_estimation_tensorflow.nnet.predictors.supervised_fpe.guilib"
+    __package__ = "diplomat.predictors.supervised_fpe.guilib"
     from .probability_displayer import ProbabilityDisplayer
 
 class ControlDeque:
@@ -303,7 +303,7 @@ class VideoPlayer(wx.Control):
         self._back_queue = deque(maxlen=self.BACK_LOAD_AMT)
         self._current_loc = 0
 
-        size = wx.Size(self._width, self._height)
+        size = wx.Size(int(self._width), int(self._height))
         self.SetMinSize(size)
         self.SetInitialSize(size)
         # self.SetSize(size)
@@ -441,7 +441,7 @@ class VideoPlayer(wx.Control):
             self._push_time_change_event()
             # Trigger a redraw on the next pass through the loop and start the timer to play the next frame...
             if(trigger_run):
-                self._core_timer.StartOnce(1000 / self._fps)
+                self._core_timer.StartOnce(int(1000 / self._fps))
         self.Refresh()  # Force a redraw....
 
     def play(self):
@@ -560,7 +560,7 @@ class VideoPlayer(wx.Control):
         # Restore play state prior to frame change...
         self._playing = current_state
         self.Refresh()
-        self._core_timer.StartOnce(1000 / self._fps)
+        self._core_timer.StartOnce(int(1000 / self._fps))
 
 
     def _fast_back(self, amount: int):
@@ -593,7 +593,7 @@ class VideoPlayer(wx.Control):
 
         self._playing = current_state
         self.Refresh()
-        self._core_timer.StartOnce(1000 / self._fps)
+        self._core_timer.StartOnce(int(1000 / self._fps))
 
 
     def _fast_forward(self, amount: int):
@@ -618,7 +618,7 @@ class VideoPlayer(wx.Control):
 
         self._playing = current_state
         self.Refresh()
-        self._core_timer.StartOnce(1000 / self._fps)
+        self._core_timer.StartOnce(int(1000 / self._fps))
 
     def move_back(self, amount: int = 1):
         """
@@ -851,7 +851,7 @@ def get_frame_count(video_hdl):
 if(__name__ == "__main__"):
     # We test the video player by playing a video with it.
     # You will need to change the path below depending on what video you want it to play:
-    vid_path = "/home/isaac/Downloads/TestVidFrm.mp4"
+    vid_path = input("Enter a video path: ")
 
     print(get_frame_count(cv2.VideoCapture(vid_path)))
 
@@ -862,7 +862,7 @@ if(__name__ == "__main__"):
     sizer = wx.BoxSizer(wx.VERTICAL)
 
     wid = VideoPlayer(panel, video_hdl=cv2.VideoCapture(vid_path))
-    obj3 = ProbabilityDisplayer(panel, data=np.random.randint(0, 10, (wid.get_total_frames())))
+    obj3 = ProbabilityDisplayer(panel, data=np.random.randint(0, 10, (wid.get_total_frames())), bad_locations=np.array([], np.uint64))
     obj2 = VideoController(panel, video_player=wid)
 
     obj2.set_keyboard_listener(wid_frame)
