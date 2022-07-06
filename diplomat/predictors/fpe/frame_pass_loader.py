@@ -1,5 +1,5 @@
 from .frame_pass import FramePass, ConfigError
-from typing import List, Any, Dict, Mapping
+from typing import List, Any, Dict, Mapping, Iterable
 
 class FramePassBuilder:
     def __init__(self, name: str, config: Dict[str, Any]):
@@ -38,7 +38,3 @@ class FramePassBuilder:
                 new_passes.append(cls(name, config))
 
         return new_passes
-
-
-from .extra_passes import *
-from .mit_viterbi import *

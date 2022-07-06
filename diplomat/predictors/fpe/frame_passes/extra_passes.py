@@ -2,12 +2,12 @@ from typing import Dict, Tuple, Optional, List, Union
 
 import numpy
 import numpy as np
-from .sparse_storage import ForwardBackwardData, AttributeDict, ForwardBackwardFrame, SparseTrackingData
-from .skeleton_structures import StorageGraph, Histogram
-from .frame_pass import FramePass, ProgressBar, PassOrderError, ConfigSpec
-from .frame_pass import type_casters as tc
+from diplomat.predictors.fpe.sparse_storage import ForwardBackwardData, AttributeDict, ForwardBackwardFrame, SparseTrackingData
+from diplomat.predictors.fpe.skeleton_structures import StorageGraph, Histogram
+from diplomat.predictors.fpe.frame_pass import FramePass, ProgressBar, PassOrderError, ConfigSpec
+from diplomat.predictors.fpe.frame_pass import type_casters as tc
 from scipy.sparse import csgraph
-from . import fpe_math
+from diplomat.predictors.fpe import fpe_math
 from decimal import Decimal
 
 

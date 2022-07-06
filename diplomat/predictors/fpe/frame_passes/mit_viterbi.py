@@ -1,17 +1,17 @@
 from typing import Optional, Tuple, Callable, Iterable, Sequence, List, Union, TypeVar
 import numpy as np
-from .frame_pass import FramePass, PassOrderError, RangeSlicer, ConfigSpec
-from .sparse_storage import ForwardBackwardFrame, AttributeDict, ForwardBackwardData, SparseTrackingData
-from .fpe_math import TransitionFunction, Probs, Coords
-from ...processing import ProgressBar
-from . import fpe_math
-from .skeleton_structures import StorageGraph
-from .frame_pass import type_casters as tc
-from . import arr_utils
+from diplomat.predictors.fpe.frame_pass import FramePass, PassOrderError, RangeSlicer, ConfigSpec
+from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, AttributeDict, ForwardBackwardData, SparseTrackingData
+from diplomat.predictors.fpe.fpe_math import TransitionFunction, Probs, Coords
+from diplomat.processing import ProgressBar
+from diplomat.predictors.fpe import fpe_math
+from diplomat.predictors.fpe.skeleton_structures import StorageGraph
+from diplomat.predictors.fpe.frame_pass import type_casters as tc
+from diplomat.predictors.fpe import arr_utils
 
 from multiprocessing import Pool
 
-# Used when the body part count is <= 2...
+# Used when the body part count is <= 2, or multi-threading is disabled...
 class NotAPool:
     T = TypeVar("T")
     E = TypeVar("E")
@@ -41,6 +41,7 @@ def select(*info):
             return val
 
     return info[::2][-1]
+
 
 class MITViterbi(FramePass):
 

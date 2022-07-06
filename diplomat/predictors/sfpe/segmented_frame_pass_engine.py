@@ -1,25 +1,23 @@
-from enum import Enum
 from pathlib import Path
-from typing import List, Tuple, Optional, BinaryIO
+from typing import List, Tuple, Optional
 
 import numpy as np
 
 from diplomat.processing import *
-from diplomat.utils import frame_store_api
 
 try:
     from ..fpe.frame_pass import FramePass, ProgressBar
     from ..fpe.frame_pass_loader import FramePassBuilder
     from ..fpe.sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
     from .growable_numpy_array import GrowableNumpyArray
-    from ..fpe.extra_passes import FixFrame
+    from diplomat.predictors.fpe.frame_passes.extra_passes import FixFrame
 except ImportError:
     __package__ = "diplomat.predictors.sfpe"
     from ..fpe.frame_pass import FramePass, ProgressBar
     from ..fpe.frame_pass_loader import FramePassBuilder
     from ..fpe.sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
     from .growable_numpy_array import GrowableNumpyArray
-    from ..fpe.extra_passes import FixFrame
+    from diplomat.predictors.fpe.frame_passes.extra_passes import FixFrame
 
 
 class SegmentedFramePassEngine(Predictor):

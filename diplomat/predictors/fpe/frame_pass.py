@@ -21,12 +21,6 @@ class RangeSlicer:
 
 
 class FramePass(ABC):
-    IMPLEMENTORS = set()
-
-    def __init_subclass__(cls, **kwargs):
-        cls.IMPLEMENTORS.add(cls)
-        super().__init_subclass__(**kwargs)
-
     def __init__(
         self,
         width: int,
@@ -132,7 +126,9 @@ class FramePass(ABC):
 
     @classmethod
     def get_subclasses(cls) -> Set[Type["FramePass"]]:
-        return cls.IMPLEMENTORS
+        from diplomat.utils.pluginloader import load_plugin_classes
+        from . import frame_passes
+        return load_plugin_classes(frame_passes, cls)
 
 class ConfigError(ValueError):
     pass
