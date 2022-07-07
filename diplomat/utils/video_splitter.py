@@ -11,6 +11,8 @@ PathLike = Union[Pl, str]
 FALLBACK_CODEC = "mp4v"
 FALLBACK_EXT = ".mp4"
 
+# TODO: Add support for specifying custom output extension and codec...
+
 def split_videos(
     video_list: Union[PathLike, Sequence[PathLike]],
     seconds_per_segment: Union[Sequence[int], int] = 300
