@@ -25,6 +25,13 @@ class GrowableNumpyArray:
         self._finalized = False
         self._size = 0
 
+    @property
+    def view(self) -> np.ndarray:
+        return self._array[:self._size]
+
+    def __len__(self) -> int:
+        return self._size
+
     def add(self, elem: Union[Sequence, np.ndarray]):
         if(self._finalized):
             raise ClosedError("Not allowed to grow a finalized array!")

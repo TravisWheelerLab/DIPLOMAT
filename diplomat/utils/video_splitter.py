@@ -1,4 +1,4 @@
-from typing import Union, Sequence, Tuple, List
+from typing import Union, Sequence, Tuple, List, Optional
 import cv2
 from os import PathLike as Pl
 from pathlib import Path
@@ -15,7 +15,9 @@ FALLBACK_EXT = ".mp4"
 
 def split_videos(
     video_list: Union[PathLike, Sequence[PathLike]],
-    seconds_per_segment: Union[Sequence[int], int] = 300
+    seconds_per_segment: Union[Sequence[int], int] = 300,
+    output_fourcc_string: Optional[str] = None,
+    output_extension: Optional[str] = None
 ) -> List[List[Path]]:
     """
     Split a video into even length segments. This will produce a list of videos with "-part{number}" appended to the
@@ -29,6 +31,9 @@ def split_videos(
                                 out of order, as it will be automatically sorted. Also, values that are out of range
                                 will be ignored.
                                 (Ex. if [10, 400, 100, 30], split the video at 10s, 400s, 100s, and 30s].
+    :param output_fourcc_string: Optional, the fourcc string to use for output videos. If not specified uses input video fourcc code.
+    :param output_extension: Optional, the file extension to use for output videos (including the dot).
+                             Defaults to the input file extension if not specified.
 
     :returns: A list of lists of Path objects, being the new split video paths for each and every video...
     """
@@ -37,15 +42,22 @@ def split_videos(
     if(video_list is None):
         raise ValueError("No videos provided!!!")
 
-    return [_split_single_video(video, seconds_per_segment) for video in video_list]
+    return [_split_single_video(video, seconds_per_segment, output_fourcc_string, output_extension) for video in video_list]
 
 
-def _split_single_video(video_path: Path, seconds_per_segment: Union[int, List[int]]) -> List[Path]:
+def _split_single_video(
+    video_path: Path,
+    seconds_per_segment: Union[int, List[int]],
+    output_fourcc_string: Optional[str] = None,
+    output_extension: Optional[str] = None
+) -> List[Path]:
     """
     PRIVATE: Splits a single video.
 
     :param video_path: The path of the original video to split.
     :param seconds_per_segment: The duration of each segment, in seconds.
+    :param output_fourcc_string: Optional, the output fourcc string. If not specified uses input fourcc code.
+    :param output_extension: Optional, the output file extension. Defaults to the input file extension if not specified.
 
     :returns: The paths of the newly split videos, as a list of "Path"s...
     """
@@ -55,12 +67,18 @@ def _split_single_video(video_path: Path, seconds_per_segment: Union[int, List[i
     width, height = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)), int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = vid.get(cv2.CAP_PROP_FPS)
     total_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
+
     four_cc = int(vid.get(cv2.CAP_PROP_FOURCC))
     if(four_cc == 0):
         four_cc = -1
     else:
         four_cc = "".join([chr((four_cc >> i) & 255) for i in range(0, 32, 8)])
         four_cc = cv2.VideoWriter_fourcc(*four_cc)
+
+    if(output_fourcc_string is not None):
+        four_cc = cv2.VideoWriter_fourcc(*output_fourcc_string)
+
+    extension = video_path.suffix if(output_extension is None) else output_extension
 
     writer = None
     segment = 0
@@ -82,12 +100,12 @@ def _split_single_video(video_path: Path, seconds_per_segment: Union[int, List[i
             try:
                 start = _list_access(split_loc, [total_frames], segment)
                 end = _list_access(split_loc, [total_frames], segment + 1) - 1
-                writer, p = _new_video_writer(video_path, (start, end), zero_pad_amt, four_cc, fps, (width, height))
+                writer, p = _new_video_writer(video_path, (start, end), zero_pad_amt, four_cc, fps, (width, height), extension)
                 paths.append(p)
-            except OSError as e:
+            except OSError:
                 vid.release()
                 bar.close()
-                raise e
+                raise
             segment += 1
 
         res, frm = vid.read()
@@ -124,14 +142,15 @@ def _new_video_writer(
     padding: int,
     four_cc: int,
     fps: float,
-    size: Tuple[int, int]
+    size: Tuple[int, int],
+    ext: str
 ) -> Tuple[cv2.VideoWriter, Path]:
     """
     PRIVATE: Construct a new video writer. Will try to use the passed codec if possible, otherwise uses a fallback codec and
     format.
     """
     suffix = f"_part{segment[0]:0{padding}d}-{segment[1]:0{padding}d}"
-    preferred_path = video_path.parent / f"{video_path.stem}{suffix}{video_path.suffix}"
+    preferred_path = video_path.parent / f"{video_path.stem}{suffix}{ext}"
     writer = cv2.VideoWriter(str(preferred_path), four_cc, fps, size)
     if(writer.isOpened()):
         return (writer, preferred_path)
@@ -141,7 +160,7 @@ def _new_video_writer(
     writer = cv2.VideoWriter(str(fallback_path), cv2.VideoWriter_fourcc(*FALLBACK_CODEC), fps, size)
     if(writer.isOpened()):
         return (writer, fallback_path)
-    else:
-        writer.release()
-        raise OSError("Can't find a codec to write with!!!")
+
+    writer.release()
+    raise OSError("Can't find a codec to write with!!!")
 

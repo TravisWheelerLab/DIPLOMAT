@@ -1,8 +1,6 @@
 from pathlib import Path
 from typing import List, Tuple, Optional
-
 import numpy as np
-
 from diplomat.processing import *
 
 try:
@@ -10,14 +8,15 @@ try:
     from ..fpe.frame_pass_loader import FramePassBuilder
     from ..fpe.sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
     from .growable_numpy_array import GrowableNumpyArray
-    from diplomat.predictors.fpe.frame_passes.extra_passes import FixFrame
+    from ..fpe.frame_passes.fix_frame import FixFrame
 except ImportError:
     __package__ = "diplomat.predictors.sfpe"
     from ..fpe.frame_pass import FramePass, ProgressBar
     from ..fpe.frame_pass_loader import FramePassBuilder
     from ..fpe.sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
     from .growable_numpy_array import GrowableNumpyArray
-    from diplomat.predictors.fpe.frame_passes.extra_passes import FixFrame
+    from ..fpe.frame_passes.fix_frame import FixFrame
+
 
 
 class SegmentedFramePassEngine(Predictor):
@@ -223,7 +222,7 @@ class SegmentedFramePassEngine(Predictor):
 
         scores = FixFrame.compute_scores(self._frame_holder, progress_bar)
         visited = np.zeros(len(scores), bool)
-        ordered_scores = np.argsort(scores)
+        ordered_scores = np.argsort(scores)[::-1]
 
         self._segments = GrowableNumpyArray(3, np.uint64)
 
@@ -240,6 +239,18 @@ class SegmentedFramePassEngine(Predictor):
             start_idx = search_start + np.argmin(visited[section])
             end_idx = search_end - np.argmin(visited[rev_section])
             visited[section] = True
+
+            # If the fix frame is missing body parts, resolve the segment by extending the nearest segment instead...
+            if(np.isneginf(scores[frame_idx])):
+                # We expect this to be very rare, so we iterate all the segments...
+                print("Warning: Found bad segment, appending to another segment...")
+                if(len(self._segments) == 0):
+                    raise ValueError("This video has no frames where all body parts exist, can't run segmentation!")
+
+                closest_idx = np.argmax(np.abs(self._segments.view[:, 2] - frame_idx))
+                start, end, fixed = self._segments.view[closest_idx]
+                self._segments.view[closest_idx] = [min(start, start_idx), max(end, end_idx), fixed]
+                continue
 
             # Start of the segment, end of the segment, the fix frame index...
             self._segments.add([start_idx, end_idx, frame_idx])
@@ -276,7 +287,6 @@ class SegmentedFramePassEngine(Predictor):
             for f in range(sub_frame.num_frames):
                 for bp in range(sub_frame.num_bodyparts):
                     frame = sub_frame.frames[f][bp]
-                    frame.src_data = frame.orig_data.duplicate()
                     frame.frame_probs = None
                     frame.occluded_probs = None
                     frame.occluded_coords = None
@@ -420,7 +430,7 @@ class SegmentedFramePassEngine(Predictor):
                 progress_bar.update()
 
 
-    def _run_frame_passes(self, progress_bar: Optional[ProgressBar], fresh_run: bool = False):
+    def _run_frame_passes(self, progress_bar: Optional[ProgressBar]):
         self._run_full_passes(progress_bar)
         self._build_segments(progress_bar)
         self._run_all_segmented_passes(progress_bar)
