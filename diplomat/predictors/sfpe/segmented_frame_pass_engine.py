@@ -1,7 +1,12 @@
+import os
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Any, Callable, Sequence
 import numpy as np
 from diplomat.processing import *
+from multiprocessing import Array, Pool
+import ctypes
+import time
+
 
 try:
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -17,6 +22,125 @@ except ImportError:
     from .growable_numpy_array import GrowableNumpyArray
     from ..fpe.frame_passes.fix_frame import FixFrame
 
+
+class InternalProgressIndicator(ProgressBar):
+    # Max update rate in seconds...
+    DEF_MAX_UPDATE_RATE = 0.1
+
+    RERUNS = 0
+    PROGRESS = 1
+    TOTAL = 2
+
+    def __init__(self, total: Optional[int] = None, max_refresh_rate: float = DEF_MAX_UPDATE_RATE):
+        self._refresh_rate = max_refresh_rate
+        self._last_update = time.monotonic() - self._refresh_rate
+        self._prog_data = Array(ctypes.c_uint64, [0] * 3)
+        self._internal_prog_data = [0] * 3
+        self.reset(total)
+
+    def inc_rerun_counter(self):
+        self._internal_prog_data[self.RERUNS] += 1
+        self.update_shared_mem(self._internal_prog_data)
+
+    def reset(self, total: Optional[int] = None):
+        self._internal_prog_data[self.TOTAL] = total if(total is not None) else 0
+        self._internal_prog_data[self.PROGRESS] = 0
+        self.rate_limit_update()
+
+    def update(self, amt: int = 1):
+        self._internal_prog_data[self.PROGRESS] = min(
+            self._internal_prog_data[self.PROGRESS] + amt,
+            self._internal_prog_data[self.TOTAL]
+        )
+        self.rate_limit_update()
+
+    def rate_limit_update(self):
+        new_time = time.monotonic()
+        if(new_time - self._last_update > self._refresh_rate):
+            self._last_update = new_time
+            self.update_shared_mem(self._internal_prog_data)
+
+    def update_shared_mem(self, data: list):
+        self._prog_data[:] = data
+
+    def get_prog_info(self) -> Tuple[int, int, int]:
+        # (Number of reruns, current progress, total progress).
+        return tuple(self._prog_data[:])
+
+    def close(self):
+        # Does nothing....
+        pass
+
+    def message(self, message: str):
+        # Does nothing...
+        pass
+
+
+def init_pool_with_progress(internal_prog_indicator: InternalProgressIndicator):
+    globals()["__progress_bar"] = internal_prog_indicator
+
+
+def pool_with_progress_thread(func: Callable, args: List[Any]):
+    # Grab the global progress bar...
+    prog_bar = globals().get("__progress_bar", None)
+    if(prog_bar is None):
+        raise ValueError("Progress info object not set up properly!")
+
+    func(prog_bar, *args)
+
+    # Once a progress step is done, increment the number of runs counter...
+    prog_bar.inc_rerun_counter()
+
+
+class PoolWithProgress:
+    DEF_MAX_REFRESH_RATE = 0.1
+    DEF_SUB_TICKS = 1000
+
+    def __init__(
+        self,
+        progress_bar: ProgressBar,
+        process_count: int = os.cpu_count(),
+        refresh_rate_seconds: float = DEF_MAX_REFRESH_RATE,
+        sub_ticks: int = DEF_SUB_TICKS
+    ):
+        self._progress_bar = progress_bar
+        self._sub_progress_bars = [InternalProgressIndicator() for __ in range(process_count)]
+        self._pool = Pool(
+            process_count,
+            init_pool_with_progress,
+            self._sub_progress_bars
+        )
+        self._refresh_rate = refresh_rate_seconds
+        self._sub_ticks = int(sub_ticks)
+
+    def starmap(self, func: Callable, iterable: Sequence, *args, **kwargs) -> Sequence:
+        total = len(iterable)
+        result = self._pool.starmap_async(pool_with_progress_thread, ((func, val) for val in iterable), *args, **kwargs)
+
+        self._progress_bar.reset(total * self._sub_ticks)
+        current_value = 0
+
+        while(not result.ready()):
+            result.wait(timeout=self._refresh_rate)
+            totals = np.sum(np.array([bar.get_prog_info() for bar in self._sub_progress_bars]), axis=0)
+            new_progress_val = totals[0] * self._sub_ticks + (totals[1] // (totals[2] if(totals[2] > 0) else 1))
+
+            if(current_value < new_progress_val):
+                self._progress_bar.update(new_progress_val - current_value)
+            else:
+                self._progress_bar.reset(total * self._sub_ticks)
+                self._progress_bar.update(new_progress_val)
+
+            current_value = new_progress_val
+
+        return result.get()
+
+    def __enter__(self) -> "PoolWithProgress":
+        self._pool = self._pool.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._pool.__exit__(exc_type, exc_val, exc_tb)
 
 
 class SegmentedFramePassEngine(Predictor):
@@ -513,6 +637,12 @@ class SegmentedFramePassEngine(Predictor):
                 "A list of lists containing a string (the pass name) and a dictionary (the configuration for "
                 f"the provided plugin). If no configuration is provided, the entry can just be a string. "
                 f"the following plugins are currently supported:\n\n{desc_str}"
+            ),
+            "thread_count": (
+                None,
+                type_casters.Union(type_casters.Literal(None), int),
+                "The number of threads to use when running segmented passes. "
+                "Defaults to None, which resolves to os.cpu_count() at runtime."
             ),
             "segment_size": (
                 200,
