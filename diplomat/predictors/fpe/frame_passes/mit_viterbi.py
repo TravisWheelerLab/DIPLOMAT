@@ -167,7 +167,7 @@ class MITViterbi(FramePass):
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
     ) -> ForwardBackwardData:
-        pool_cls = Pool if((fb_data.num_bodyparts // fb_data.metadata.num_outputs) > 2) else NotAPool
+        pool_cls = Pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // fb_data.metadata.num_outputs) > 2) else NotAPool
 
         backtrace_priors = [None for __ in range(fb_data.num_bodyparts)]
         backtrace_current = [None for __ in range(fb_data.num_bodyparts)]
@@ -260,7 +260,7 @@ class MITViterbi(FramePass):
             prog_bar.reset(total=fb_data.num_frames)
 
         # We only use a pool if the body part group is high enough...
-        pool_cls = Pool if((fb_data.num_bodyparts // meta.num_outputs) > 2) else NotAPool
+        pool_cls = Pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // meta.num_outputs) > 2) else NotAPool
 
         with pool_cls() as pool:
             for i in frame_iter:
