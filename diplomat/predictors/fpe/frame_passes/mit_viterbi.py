@@ -608,6 +608,9 @@ class MITViterbi(FramePass):
             )
         )
 
+    def __reduce__(self, *args, **kwargs):
+        raise ValueError("Not allowed to pickle this class!")
+
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         # Class to enforce that probabilities are between 0 and 1....

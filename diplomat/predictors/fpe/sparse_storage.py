@@ -410,7 +410,7 @@ class ForwardBackwardData:
     Represents all forward backward frames/data. This is a 2D list of "ForwardBackwardFrame"s, indexed by frame, then
     body part. It also supports storing metadata like skeleton in the metadata attribute.
     """
-    __slots__ = ["_metadata", "_num_bps", "_frames"]
+    # __slots__ = ["_metadata", "_num_bps", "_frames", "allow_pickle"]
 
     def __init__(self, num_frames: int, num_bp: int):
         """
@@ -421,6 +421,7 @@ class ForwardBackwardData:
         """
         self._metadata = AttributeDict()
         self._num_bps = num_bp
+        self.allow_pickle = True
 
         self._frames = [
             [
@@ -482,3 +483,8 @@ class ForwardBackwardData:
         new_fbd.metadata = self.metadata.copy()
 
         return new_fbd
+
+    def __reduce__(self, *args, **kwargs):
+        if(not self.allow_pickle):
+            raise ValueError("Not allowed to pickle this ForwardBackwardData object.")
+        return super().__reduce__(*args, **kwargs)

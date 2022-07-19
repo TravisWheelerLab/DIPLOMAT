@@ -1,10 +1,11 @@
+import itertools
 import os
 from pathlib import Path
-from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable, Iterator, Union, Type
+from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable
 import numpy as np
 from diplomat.processing import *
-from multiprocessing import Array, Queue, Process
-from threading import Thread
+from multiprocessing import get_context, Queue
+from multiprocessing.context import BaseContext
 import time
 
 
@@ -32,10 +33,10 @@ class InternalProgressIndicator(ProgressBar):
     TOTAL = 2
     IN_USE = 3
 
-    def __init__(self, total: Optional[int] = None, max_refresh_rate: float = DEF_MAX_UPDATE_RATE):
+    def __init__(self, ctx: BaseContext, total: Optional[int] = None, max_refresh_rate: float = DEF_MAX_UPDATE_RATE):
         self._refresh_rate = max_refresh_rate
         self._last_update = time.monotonic() - self._refresh_rate
-        self._prog_data = Array("Q", [0] * 4)
+        self._prog_data = ctx.Array("Q", [0] * 4)
         self._internal_prog_data = [0] * 4
         self.reset(total)
 
@@ -45,6 +46,7 @@ class InternalProgressIndicator(ProgressBar):
         self.update_shared_mem(self._internal_prog_data)
 
     def mark_as_using(self):
+        self._internal_prog_data[:] = self._prog_data[:]
         self._internal_prog_data[self.IN_USE] = True
         self.update_shared_mem(self._internal_prog_data)
 
@@ -72,7 +74,7 @@ class InternalProgressIndicator(ProgressBar):
     def get_prog_info(self) -> Tuple[int, int, int]:
         # (Number of reruns, current progress, total progress).
         self._internal_prog_data[:] = self._prog_data[:]
-        return tuple(self._prog_data[:])
+        return tuple(self._internal_prog_data)
 
     def close(self):
         # Does nothing....
@@ -83,8 +85,10 @@ class InternalProgressIndicator(ProgressBar):
         pass
 
 
-def simple_pool_worker(queue: Queue, out_queue: Queue, max_iters: int, func: Callable, extra_args: Iterable[Any]):
-    for i in range(max_iters):
+def simple_pool_worker(queue: Queue, out_queue: Queue, max_iters: Optional[int], func: Callable, extra_args: Iterable[Any]):
+    iterator = range(max_iters) if(max_iters is not None) else itertools.repeat(None)
+
+    for __ in iterator:
         index, data = queue.get(True)
 
         if(index < 0): # Main process has asked that we kill ourselves....
@@ -97,26 +101,27 @@ def simple_pool_worker(queue: Queue, out_queue: Queue, max_iters: int, func: Cal
 class SimplePool:
     def __init__(
         self,
+        ctx: BaseContext,
         process_func: Callable,
-        process_args: Sequence[Tuple[Any]],
-        max_worker_reuse: int = 1,
+        process_args: Sequence[Iterable[Any]],
+        max_worker_reuse: Optional[int] = None,
         max_queue_size: int = 0,
-        process_cls: Union[Type[Process], Type[Thread]] = Process
     ):
         self._max_queue_size = min(max_queue_size, len(process_args)) if(max_queue_size > 0) else len(process_args)
-        self._input_queue = Queue(self._max_queue_size)
-        self._output_queue = Queue(self._max_queue_size)
+        self._ctx = ctx
+
+        self._input_queue = self._ctx.Queue(self._max_queue_size)
+        self._output_queue = self._ctx.Queue(self._max_queue_size)
         self._args = process_args
         self._proc_func = process_func
         self._max_reuse = max_worker_reuse
 
-        self._process_cls = process_cls
-        if(issubclass(self._process_cls, Thread)):
-            self._process_cls.close = self._process_cls._delete
-
         self._processes = [
-            process_cls(target=simple_pool_worker, args=(self._input_queue, self._output_queue, max_worker_reuse, process_func, arg), daemon=True)
-            for arg in process_args
+            self._ctx.Process(
+                target=simple_pool_worker,
+                args=(self._input_queue, self._output_queue, max_worker_reuse, process_func, arg),
+                daemon=True
+            ) for arg in self._args
         ]
 
     def __enter__(self):
@@ -147,7 +152,7 @@ class SimplePool:
                 if(not p.is_alive()):
                     p.close()
                     del p
-                    self._processes[i] = self._process_cls(
+                    self._processes[i] = self._ctx.Process(
                         target=simple_pool_worker,
                         args=(self._input_queue, self._output_queue, self._max_reuse, self._proc_func, self._args[i]),
                         daemon=True
@@ -186,17 +191,25 @@ class PoolWithProgress:
         process_count: int = os.cpu_count(),
         refresh_rate_seconds: float = DEF_MAX_REFRESH_RATE,
         sub_ticks: int = DEF_SUB_TICKS,
-        max_worker_reuse: int = 1,
+        max_worker_reuse: Optional[int] = None,
         max_queue_size: int = 0
     ):
         self._progress_bar = progress_bar
+        self._ctx = self._get_optimal_ctx()
 
-        self._sub_progress_bars = [InternalProgressIndicator() for __ in range(process_count)]
+        self._sub_progress_bars = [InternalProgressIndicator(self._ctx) for __ in range(process_count)]
 
         self._process_count = process_count
-        self._pool = SimplePool(pool_with_progress_thread, [(p,) for p in self._sub_progress_bars], max_worker_reuse, max_queue_size)
+        self._pool = SimplePool(self._ctx, pool_with_progress_thread, [(p,) for p in self._sub_progress_bars], max_worker_reuse, max_queue_size)
         self._refresh_rate = refresh_rate_seconds
         self._sub_ticks = int(sub_ticks)
+
+    @staticmethod
+    def _get_optimal_ctx():
+        try:
+            return get_context("forkserver")
+        except ValueError:
+            return get_context("spawn")
 
     def fast_map(self, do_work: Callable, getter: Callable[[int], Iterable[Any]], setter: Callable[[int, Any], None], total: int) -> None:
         self._progress_bar.reset(total * self._sub_ticks)
@@ -557,6 +570,8 @@ class SegmentedFramePassEngine(Predictor):
         thread_count = os.cpu_count() if(self.settings.thread_count is None) else self.settings.thread_count
         total_segments = len(segment_idxs)
 
+        self._frame_holder.allow_pickle = False
+
         with PoolWithProgress(progress_bar, thread_count, max_queue_size=1) as pool:
             progress_bar.message("Running on Segments...")
             pool.fast_map(
@@ -763,7 +778,7 @@ class SegmentedFramePassEngine(Predictor):
                 "Defaults to None, which resolves to os.cpu_count() at runtime."
             ),
             "segment_size": (
-                200,
+                100,
                 type_casters.RangedInteger(10, np.inf),
                 "The size of the segments in frames to break the video into for tracking."
             ),
@@ -892,6 +907,9 @@ class SegmentedFramePassEngine(Predictor):
         )
 
         return (np.allclose(result_frame, orig_frame), str(orig_frame) + "\n", str(result_frame) + "\n")
+
+    def __reduce__(self, *args, **kwargs):
+        raise ValueError("Not allowed to pickle this class!")
 
     @classmethod
     def supports_multi_output(cls) -> bool:

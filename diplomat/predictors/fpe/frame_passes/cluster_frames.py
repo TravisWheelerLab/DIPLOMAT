@@ -43,7 +43,9 @@ class ClusterFrames(FramePass):
 
         if(self.multi_threading_allowed):
             from diplomat.predictors.sfpe.segmented_frame_pass_engine import PoolWithProgress
+
             self._frame_data = fb_data
+            self._frame_data.allow_pickle = False
 
             iter_range = RangeSlicer(self._frame_data.frames)[self._start:self._stop:self._step]
 
@@ -212,6 +214,9 @@ class ClusterFrames(FramePass):
 
         return current
 
+
+    def __reduce__(self, *args, **kwargs):
+        raise ValueError("Not allowed to pickle this class!")
 
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
