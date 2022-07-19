@@ -153,6 +153,20 @@ class SparseTrackingData:
         new_sparse_data.pack(*(np.copy(arr) for arr in self.unpack()))
         return new_sparse_data
 
+    def shallow_duplicate(self) -> "SparseTrackingData":
+        """
+        Creates a shallow copy this SparseTrackingData, returning it.
+
+        :return: A new SparseTrackingData, which is identical to the current SparseTrackingData.
+        """
+        new_sparse_data = SparseTrackingData()
+
+        if(self._coords is None):
+            return new_sparse_data
+
+        new_sparse_data.pack(*(arr for arr in self.unpack()))
+        return new_sparse_data
+
     def desparsify(self, orig_width: int, orig_height: int, orig_stride: int) -> TrackingData:
         """
         Desparsifies this SparseTrackingData object.

@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
-from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable, Iterator
+from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable, Iterator, Union, Type
 import numpy as np
 from diplomat.processing import *
-from multiprocessing import Array, Pool, Queue
+from multiprocessing import Array, Queue, Process
+from threading import Thread
 import time
 
 
@@ -70,6 +71,7 @@ class InternalProgressIndicator(ProgressBar):
 
     def get_prog_info(self) -> Tuple[int, int, int]:
         # (Number of reruns, current progress, total progress).
+        self._internal_prog_data[:] = self._prog_data[:]
         return tuple(self._prog_data[:])
 
     def close(self):
@@ -81,16 +83,89 @@ class InternalProgressIndicator(ProgressBar):
         pass
 
 
-def init_pool_with_progress(prog_queue: Queue, progress_bars: List[InternalProgressIndicator]):
-    if("__progress_bar" not in globals()):
-        globals()["__progress_bar"] = progress_bars[prog_queue.get(timeout=10)]
+def simple_pool_worker(queue: Queue, out_queue: Queue, max_iters: int, func: Callable, extra_args: Iterable[Any]):
+    for i in range(max_iters):
+        index, data = queue.get(True)
 
-def pool_with_progress_thread(func: Callable, args: List[Any]):
-    # Grab the global progress bar...
-    prog_bar = globals().get("__progress_bar", None)
-    if(prog_bar is None):
-        raise ValueError("Progress info object not set up properly!")
+        if(index < 0): # Main process has asked that we kill ourselves....
+            return
 
+        result = func(*data, *extra_args)
+        out_queue.put((index, result), True)
+
+
+class SimplePool:
+    def __init__(
+        self,
+        process_func: Callable,
+        process_args: Sequence[Tuple[Any]],
+        max_worker_reuse: int = 1,
+        max_queue_size: int = 0,
+        process_cls: Union[Type[Process], Type[Thread]] = Process
+    ):
+        self._max_queue_size = min(max_queue_size, len(process_args)) if(max_queue_size > 0) else len(process_args)
+        self._input_queue = Queue(self._max_queue_size)
+        self._output_queue = Queue(self._max_queue_size)
+        self._args = process_args
+        self._proc_func = process_func
+        self._max_reuse = max_worker_reuse
+
+        self._process_cls = process_cls
+        if(issubclass(self._process_cls, Thread)):
+            self._process_cls.close = self._process_cls._delete
+
+        self._processes = [
+            process_cls(target=simple_pool_worker, args=(self._input_queue, self._output_queue, max_worker_reuse, process_func, arg), daemon=True)
+            for arg in process_args
+        ]
+
+    def __enter__(self):
+        for p in self._processes:
+            p.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Kill the workers...
+        alive_count = sum(1 if(p.is_alive()) else 0 for p in self._processes)
+        for __ in range(alive_count):
+            self._input_queue.put((-1, None), True)
+
+        for p in self._processes:
+            if(p.is_alive()):
+                p.join()
+            p.close()
+
+        self._input_queue.close()
+        self._output_queue.close()
+
+    def fast_map(self, getter: Callable[[int], Iterable[Any]], setter: Callable[[int, Any], None], length: int, update: Callable):
+        next_idx = 0
+        waiting_for = set()
+
+        while((len(waiting_for) > 0) or (next_idx < length)):
+            for i, p in enumerate(self._processes):
+                if(not p.is_alive()):
+                    p.close()
+                    del p
+                    self._processes[i] = self._process_cls(
+                        target=simple_pool_worker,
+                        args=(self._input_queue, self._output_queue, self._max_reuse, self._proc_func, self._args[i]),
+                        daemon=True
+                    )
+                    self._processes[i].start()
+
+            while((next_idx < length) and (not self._input_queue.full())):
+                self._input_queue.put_nowait((next_idx, getter(next_idx)))
+                waiting_for.add(next_idx)
+                next_idx += 1
+            update()
+            while(not self._output_queue.empty()):
+                finished_idx, res = self._output_queue.get_nowait()
+                setter(finished_idx, res)
+                waiting_for.remove(finished_idx)
+
+
+def pool_with_progress_thread(func: Callable, args: List[Any], prog_bar: InternalProgressIndicator):
     # Mark this thread as being used, and then run the code...
     prog_bar.mark_as_using()
     result = func(*args, prog_bar)
@@ -98,31 +173,6 @@ def pool_with_progress_thread(func: Callable, args: List[Any]):
     # Once a progress step is done, increment the number of runs counter, and mark this thread as unused...
     prog_bar.inc_rerun_counter()
     return result
-
-
-class chunked_iterator:
-    def __init__(self, iterator: Iterable, chunk_size: int):
-        self._iter = iter(iterator)
-        self._size = chunk_size
-
-    def __iter__(self):
-        return self
-
-    def __next__(self) -> list:
-        l = []
-        for i in range(self._size):
-            try:
-                l.append(next(self._iter))
-            except StopIteration:
-                if(len(l) == 0):
-                    raise  # Reraise stop iteration...
-                break
-
-        return l
-
-    def __len__(self) -> int:
-        import math
-        return math.ceil(len(self._iter) / self._size)
 
 
 class PoolWithProgress:
@@ -135,46 +185,51 @@ class PoolWithProgress:
         progress_bar: ProgressBar,
         process_count: int = os.cpu_count(),
         refresh_rate_seconds: float = DEF_MAX_REFRESH_RATE,
-        sub_ticks: int = DEF_SUB_TICKS
+        sub_ticks: int = DEF_SUB_TICKS,
+        max_worker_reuse: int = 1,
+        max_queue_size: int = 0
     ):
         self._progress_bar = progress_bar
 
         self._sub_progress_bars = [InternalProgressIndicator() for __ in range(process_count)]
-        self._index_queue = Queue()
-        for i in range(process_count):
-            self._index_queue.put(i)
 
         self._process_count = process_count
-        self._pool = Pool(
-            process_count,
-            init_pool_with_progress,
-            (self._index_queue, self._sub_progress_bars)
-        )
+        self._pool = SimplePool(pool_with_progress_thread, [(p,) for p in self._sub_progress_bars], max_worker_reuse, max_queue_size)
         self._refresh_rate = refresh_rate_seconds
         self._sub_ticks = int(sub_ticks)
 
-    def iter_starmap(self, func: Callable, iterable: Iterable, total: int, *args, **kwargs) -> Iterable:
+    def fast_map(self, do_work: Callable, getter: Callable[[int], Iterable[Any]], setter: Callable[[int, Any], None], total: int) -> None:
         self._progress_bar.reset(total * self._sub_ticks)
         current_value = 0
+        last_update = time.monotonic()
 
-        for vals in chunked_iterator(iterable, self._process_count * self.CHUNK_MULTIPLIER):
-            result = self._pool.starmap_async(pool_with_progress_thread, ((func, val) for val in vals), *args, **kwargs)
+        def full_getter(i):
+            return (do_work, getter(i))
 
-            while(not result.ready()):
-                totals = np.sum(np.array([bar.get_prog_info() for bar in self._sub_progress_bars]), axis=0)
+        def update():
+            nonlocal current_value
+            nonlocal last_update
+            time_now = time.monotonic()
 
-                new_progress_val = totals[0] * self._sub_ticks + ((totals[1] * totals[3] * self._sub_ticks) // (totals[2] if(totals[2] > 0) else 1))
+            if(time_now - last_update < self._refresh_rate):
+                return
+            last_update = time_now
 
-                if(current_value < new_progress_val):
-                    self._progress_bar.update(new_progress_val - current_value)
-                else:
-                    self._progress_bar.reset(total * self._sub_ticks)
-                    self._progress_bar.update(new_progress_val)
+            totals = np.sum(np.array([bar.get_prog_info() for bar in self._sub_progress_bars]), axis=0)
 
-                current_value = new_progress_val
-                result.wait(timeout=self._refresh_rate)
+            new_progress_val = totals[0] * self._sub_ticks + ((totals[1] * totals[3] * self._sub_ticks) // (totals[2] if (totals[2] > 0) else 1))
 
-            yield from result.get()
+            if (current_value < new_progress_val):
+                self._progress_bar.update(new_progress_val - current_value)
+            else:
+                self._progress_bar.reset(total * self._sub_ticks)
+                self._progress_bar.update(new_progress_val)
+
+            current_value = new_progress_val
+
+        self._pool.fast_map(full_getter, setter, total, update)
+        self._progress_bar.update((total * self._sub_ticks) - current_value)
+        return
 
     def __enter__(self) -> "PoolWithProgress":
         self._pool = self._pool.__enter__()
@@ -371,7 +426,7 @@ class SegmentedFramePassEngine(Predictor):
 
         for frm in self._frame_holder.frames:
             for bp in frm:
-                bp.orig_data = bp.src_data.duplicate()
+                bp.orig_data = bp.src_data.shallow_duplicate()
 
             if(progress_bar is not None):
                 progress_bar.update()
@@ -480,14 +535,18 @@ class SegmentedFramePassEngine(Predictor):
 
         return sub_frame
 
-    @classmethod
-    def sub_segment_generator(cls, frames: ForwardBackwardData, segments: Iterable[List[int]]) -> Iterable[Tuple[ForwardBackwardData, int]]:
-        for start, end, fix_frame in segments:
-            sub_frame = ForwardBackwardData(0, 0)
-            sub_frame.frames = frames.frames[start:end]
-            sub_frame.metadata = frames.metadata
+    def _get_segment(self, index: int):
+        start, end, fix_frame = self._segments[index]
 
-            yield (sub_frame, fix_frame - start)
+        sub_frame = ForwardBackwardData(0, 0)
+        sub_frame.frames = self._frame_holder.frames[start:end]
+        sub_frame.metadata = self._frame_holder.metadata
+
+        return (sub_frame, self.SEGMENTED_PASSES, self._width, self._height, False, fix_frame - start)
+
+    def _set_segment(self, index: int, frame_data: ForwardBackwardData):
+        start, end, fix_frame = self._segments[index]
+        self._frame_holder.frames[start:end] = frame_data.frames
 
     def _run_segmented_passes(
         self,
@@ -497,17 +556,16 @@ class SegmentedFramePassEngine(Predictor):
         cls = type(self)
         thread_count = os.cpu_count() if(self.settings.thread_count is None) else self.settings.thread_count
         total_segments = len(segment_idxs)
-        def segment_iter():
-            return ([int(elm) for elm in self._segments[index]] for index in segment_idxs)
 
-        with PoolWithProgress(progress_bar, thread_count) as pool:
+        with PoolWithProgress(progress_bar, thread_count, max_queue_size=1) as pool:
             progress_bar.message("Running on Segments...")
+            pool.fast_map(
+                cls._run_segment,
+                lambda i: self._get_segment(segment_idxs[i]),
+                lambda i, r: self._set_segment(segment_idxs[i], r),
+                total_segments
+            )
 
-            segments = cls.sub_segment_generator(self._frame_holder, segment_iter())
-            segments = ((sub_frm, self.SEGMENTED_PASSES, self._width, self._height, False, f_i) for sub_frm, f_i in segments)
-
-            for frame_store, (s, e, f) in zip(pool.iter_starmap(cls._run_segment, segments, total_segments), segment_iter()):
-                self._frame_holder.frames[s:e] = frame_store.frames
 
     def _run_all_segmented_passes(
         self,

@@ -1,9 +1,9 @@
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Iterable
 from scipy.sparse import csgraph
 from diplomat.predictors.fpe import fpe_math
-from diplomat.predictors.fpe.frame_pass import FramePass
+from diplomat.predictors.fpe.frame_pass import FramePass, RangeSlicer
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardData, ForwardBackwardFrame, AttributeDict
-from diplomat.processing import ConfigSpec, ProgressBar
+from diplomat.processing import ConfigSpec, ProgressBar, Config
 import numpy as np
 
 
@@ -21,6 +21,16 @@ class ClusterFrames(FramePass):
 
         self._cluster_dict = {}
 
+    def _get_frame_generator(self, frame_range: Iterable[int]):
+        for i in frame_range:
+            yield (self._frame_data.frames[i], self._frame_data.metadata.num_outputs, self._gaussian_table, self.config)
+
+    def _get_frame(self, index: int):
+        return (self._frame_data.frames[index], self._frame_data.metadata.num_outputs, self._gaussian_table, self.config)
+
+    def _set_frame(self, index: int, frame: List[ForwardBackwardFrame]):
+        self._frame_data.frames[index] = frame
+
     def run_pass(
         self,
         fb_data: ForwardBackwardData,
@@ -28,9 +38,26 @@ class ClusterFrames(FramePass):
         in_place: bool = True,
         reset_bar: bool = True
     ) -> ForwardBackwardData:
-        self._cluster_dict = {}
+        if(not in_place):
+            raise ValueError("Clustering must be done in place!")
 
-        fb_data = super().run_pass(fb_data, prog_bar, in_place)
+        if(self.multi_threading_allowed):
+            from diplomat.predictors.sfpe.segmented_frame_pass_engine import PoolWithProgress
+            self._frame_data = fb_data
+
+            iter_range = RangeSlicer(self._frame_data.frames)[self._start:self._stop:self._step]
+
+            with PoolWithProgress(prog_bar) as pool:
+                pool.fast_map(
+                    ClusterFrames._cluster_frames,
+                    lambda i: self._get_frame(iter_range[i]),
+                    lambda i, f: self._set_frame(iter_range[i], f),
+                    len(iter_range)
+                )
+        else:
+            self._cluster_dict = {}
+            fb_data = super().run_pass(fb_data, prog_bar, True)
+
         fb_data.metadata.is_clustered = True
 
         return fb_data
@@ -50,20 +77,52 @@ class ClusterFrames(FramePass):
     ) -> Tuple[np.ndarray, np.ndarray]:
         component_to_remove = np.argmin(component_scores)
         comp_mask = component_to_remove != labels
-        # Zero out the component, this is an adjacency matrix so we just zero out row with given node indexes...
+        # Zero out the component, this is an adjacency matrix, so we just zero out row with given node indexes...
         graph = graph[comp_mask][:, comp_mask]
         indexes = indexes[comp_mask]
 
         return graph, indexes
 
+    @classmethod
+    def _cluster_frames(
+        cls,
+        frame_data: List[ForwardBackwardFrame],
+        num_outputs: int,
+        gaussian_table: np.ndarray,
+        config: Config,
+        progress_bar: Optional[ProgressBar] = None
+    ) -> List[ForwardBackwardFrame]:
+        num_groups = len(frame_data) // num_outputs
+        # PyCharm is dumb...
+        clusters: List[Optional[List]] = [None] * num_groups
+
+        for i, frame in enumerate(frame_data):
+            group_idx, group_offset = divmod(i, num_outputs)
+
+            y, x, prob, x_off, y_off = frame.orig_data.unpack()
+            if (y is None):
+                continue
+
+            if(not frame.ignore_clustering):
+                if(clusters[group_idx] is None):
+                    clusters[group_idx] = cls._compute_cluster(y, x, prob, x_off, y_off, num_outputs, gaussian_table, config)
+
+                frame.src_data = SparseTrackingData()
+                frame.src_data.pack(*(clusters[group_idx][group_offset]))
+
+        return frame_data
+
+    @classmethod
     def _compute_cluster(
-        self,
+        cls,
         y: np.ndarray,
         x: np.ndarray,
         prob: np.ndarray,
         x_off: np.ndarray,
         y_off: np.ndarray,
         num_clusters: int,
+        gaussian_table: np.ndarray,
+        config: Config
     ) -> List[Tuple[np.ndarray, ...]]:
         # Special case: When cluster size is 1...
         if(num_clusters == 1):
@@ -71,7 +130,7 @@ class ClusterFrames(FramePass):
 
         iteration_count = 0
 
-        trans = fpe_math.table_transition((x, y), (x, y), self._gaussian_table)
+        trans = fpe_math.table_transition((x, y), (x, y), gaussian_table)
         indexes = np.arange(len(prob))
         inv_indexes = np.arange(len(prob))
         graph = (np.expand_dims(prob, 0)) * trans * (np.expand_dims(prob, 1))
@@ -91,18 +150,18 @@ class ClusterFrames(FramePass):
         # contains a 'reasonable' chunk of the total probability in the frame, continue throwing out clusters
         # and removing low scoring edges...
         while(True):
-            if(iteration_count >= self.config.max_throwaway_count):
+            if(iteration_count >= config.max_throwaway_count):
                 # Failure to find a good collection of clusters: Just copy the entire frame to each body part...
                 return [(y, x, prob, x_off, y_off) for i in range(num_clusters)]
 
             n_comp, labels = csgraph.connected_components(max_spanning_tree, directed=False)
-            scores = self.cluster_sum(n_comp, labels, prob[indexes])
+            scores = cls.cluster_sum(n_comp, labels, prob[indexes])
 
-            if((n_comp == num_clusters) and np.all(scores >= self.config.minimum_cluster_size)):
+            if((n_comp == num_clusters) and np.all(scores >= config.minimum_cluster_size)):
                 break
             elif(n_comp >= num_clusters):
                 # If we are above or equal to the desired amount of clusters, throw out the worst cluster...
-                max_spanning_tree, indexes = self.remove_cluster(max_spanning_tree, indexes, labels, scores)
+                max_spanning_tree, indexes = cls.remove_cluster(max_spanning_tree, indexes, labels, scores)
                 # Recompute inverse index lookup array
                 inv_indexes[:] = -1
                 inv_indexes[indexes] = np.arange(len(indexes))
@@ -145,7 +204,7 @@ class ClusterFrames(FramePass):
             del self._cluster_dict[(frame_index - 1, bp_group)]
 
         if((not current.ignore_clustering) and ((frame_index, bp_group) not in self._cluster_dict)):
-            self._cluster_dict[(frame_index, bp_group)] = self._compute_cluster(y, x, prob, x_off, y_off, num_out)
+            self._cluster_dict[(frame_index, bp_group)] = self._compute_cluster(y, x, prob, x_off, y_off, num_out, self._gaussian_table, self.config)
 
         if(not current.ignore_clustering):
             current.src_data = SparseTrackingData()
