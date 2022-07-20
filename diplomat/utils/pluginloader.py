@@ -18,7 +18,7 @@ T = TypeVar("T")
 def load_plugin_classes(
     plugin_dir: ModuleType,
     plugin_metaclass: Type[T],
-    do_reload: bool = True,
+    do_reload: bool = False,
     display_error: bool = True,
 ) -> Set[Type[T]]:
     """

@@ -1,4 +1,5 @@
-from typing import Optional, Tuple, List, Iterable
+import os
+from typing import Optional, Tuple, List
 from scipy.sparse import csgraph
 from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.frame_pass import FramePass, RangeSlicer
@@ -21,10 +22,6 @@ class ClusterFrames(FramePass):
 
         self._cluster_dict = {}
 
-    def _get_frame_generator(self, frame_range: Iterable[int]):
-        for i in frame_range:
-            yield (self._frame_data.frames[i], self._frame_data.metadata.num_outputs, self._gaussian_table, self.config)
-
     def _get_frame(self, index: int):
         return (self._frame_data.frames[index], self._frame_data.metadata.num_outputs, self._gaussian_table, self.config)
 
@@ -41,7 +38,9 @@ class ClusterFrames(FramePass):
         if(not in_place):
             raise ValueError("Clustering must be done in place!")
 
-        if(self.multi_threading_allowed):
+        thread_count = os.cpu_count() if(self.config.thread_count is None) else self.config.thread_count
+
+        if(self.multi_threading_allowed and (thread_count > 0)):
             from diplomat.predictors.sfpe.segmented_frame_pass_engine import PoolWithProgress
 
             self._frame_data = fb_data
@@ -49,7 +48,8 @@ class ClusterFrames(FramePass):
 
             iter_range = RangeSlicer(self._frame_data.frames)[self._start:self._stop:self._step]
 
-            with PoolWithProgress(prog_bar) as pool:
+
+            with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
                 pool.fast_map(
                     ClusterFrames._cluster_frames,
                     lambda i: self._get_frame(iter_range[i]),
@@ -220,6 +220,8 @@ class ClusterFrames(FramePass):
 
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
+        import diplomat.processing.type_casters as tc
+
         return  {
             "standard_deviation": (
                 1, float, "The standard deviation of the 2D Gaussian curve used for edge weights in the graph."
@@ -237,5 +239,10 @@ class ClusterFrames(FramePass):
             ),
             "max_throwaway_count": (
                 10, float, "The maximum number of clusters to throw away before giving up on clustering a given frame."
+            ),
+            "thread_count": (
+                None,
+                tc.Union(tc.Literal(None), tc.RangedInteger(0, np.inf)),
+                "The number of threads to use during processing. If None, uses os.cpu_count(). If 0 disables multithreading."
             )
         }

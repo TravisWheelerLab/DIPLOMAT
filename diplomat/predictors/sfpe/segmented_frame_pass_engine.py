@@ -1,12 +1,14 @@
 import itertools
 import os
+from enum import Enum
 from pathlib import Path
-from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable
+from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable, BinaryIO
 import numpy as np
 from diplomat.processing import *
 from multiprocessing import get_context, Queue
 from multiprocessing.context import BaseContext
 import time
+import diplomat.utils.frame_store_api as frame_store_api
 
 
 try:
@@ -22,6 +24,60 @@ except ImportError:
     from ..fpe.sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
     from .growable_numpy_array import GrowableNumpyArray
     from ..fpe.frame_passes.fix_frame import FixFrame
+
+
+class NestedProgressIndicator(ProgressBar):
+
+    DEFAULT_TICKS = 1000
+
+    def __init__(self, progress_bar: ProgressBar, total: Optional[int] = None, ticks: int = DEFAULT_TICKS):
+        self._runs = 0
+        self._total = total
+        self._sub_total = 0
+        self._sub_current = 0
+
+        self._current_prog_val = 0
+
+        self._prog_bar = progress_bar
+        self._ticks = ticks
+
+        self._prog_bar.reset(self._total * self._ticks)
+
+    def reset_runs_counter(self, total: int = 0):
+        self._total = total
+        self._prog_bar.reset(self._total * self._ticks)
+        self._current_prog_val = 0
+        self._runs = 0
+
+    def update(self, amt: int = 1):
+        self._sub_current += amt
+        self._update_pbar()
+
+    def _update_pbar(self):
+        if(self._sub_current > self._sub_total):
+            self._sub_current = self._sub_total
+        val = self._runs * self._ticks + int((self._sub_current / (self._sub_total if(self._sub_total > 0) else 1)) * self._ticks)
+
+        if(val > self._current_prog_val):
+            self._prog_bar.update(val - self._current_prog_val)
+            self._current_prog_val = val
+
+    def inc_rerun_counter(self):
+        self._runs += 1
+        self.reset()
+
+    def reset(self, total: Optional[int] = None):
+        if(total is None):
+            total = 0
+        self._sub_total = total
+        self._sub_current = 0
+        self._update_pbar()
+
+    def close(self):
+        self._prog_bar.close()
+
+    def message(self, message: str):
+        self._prog_bar.message(message)
 
 
 class InternalProgressIndicator(ProgressBar):
@@ -131,6 +187,7 @@ class SimplePool:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Kill the workers...
+        print("Exiting SimplePool...")
         alive_count = sum(1 if(p.is_alive()) else 0 for p in self._processes)
         for __ in range(alive_count):
             self._input_queue.put((-1, None), True)
@@ -195,7 +252,7 @@ class PoolWithProgress:
         max_queue_size: int = 0
     ):
         self._progress_bar = progress_bar
-        self._ctx = self._get_optimal_ctx()
+        self._ctx = self.get_optimal_ctx()
 
         self._sub_progress_bars = [InternalProgressIndicator(self._ctx) for __ in range(process_count)]
 
@@ -205,7 +262,7 @@ class PoolWithProgress:
         self._sub_ticks = int(sub_ticks)
 
     @staticmethod
-    def _get_optimal_ctx():
+    def get_optimal_ctx():
         try:
             return get_context("forkserver")
         except ValueError:
@@ -235,8 +292,7 @@ class PoolWithProgress:
             if (current_value < new_progress_val):
                 self._progress_bar.update(new_progress_val - current_value)
             else:
-                self._progress_bar.reset(total * self._sub_ticks)
-                self._progress_bar.update(new_progress_val)
+                return
 
             current_value = new_progress_val
 
@@ -251,6 +307,22 @@ class PoolWithProgress:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._pool.__exit__(exc_type, exc_val, exc_tb)
 
+
+class AntiClosePool:
+    """
+    Wrap a pool, so it can be used in with statements without closing it...
+    """
+    def __init__(self, pool):
+        self._pool = pool
+
+    def __getattr__(self, item):
+        return self._pool.__getattribute__(item)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
 
 class SegmentedFramePassEngine(Predictor):
     """
@@ -537,6 +609,9 @@ class SegmentedFramePassEngine(Predictor):
             True
         )
 
+        if (isinstance(progress_bar, NestedProgressIndicator)):
+            progress_bar.inc_rerun_counter()
+
         for (i, frame_pass_builder) in enumerate(frame_pass_builders):
             frame_pass = frame_pass_builder(width, height, allow_multi_threading)
 
@@ -545,6 +620,9 @@ class SegmentedFramePassEngine(Predictor):
                 progress_bar,
                 True
             )
+
+            if(isinstance(progress_bar, NestedProgressIndicator)):
+                progress_bar.inc_rerun_counter()
 
         return sub_frame
 
@@ -555,9 +633,11 @@ class SegmentedFramePassEngine(Predictor):
         sub_frame.frames = self._frame_holder.frames[start:end]
         sub_frame.metadata = self._frame_holder.metadata
 
+        print(f"Enter segment {index}")
         return (sub_frame, self.SEGMENTED_PASSES, self._width, self._height, False, fix_frame - start)
 
     def _set_segment(self, index: int, frame_data: ForwardBackwardData):
+        print(f"Set segment {index}")
         start, end, fix_frame = self._segments[index]
         self._frame_holder.frames[start:end] = frame_data.frames
 
@@ -572,14 +652,42 @@ class SegmentedFramePassEngine(Predictor):
 
         self._frame_holder.allow_pickle = False
 
-        with PoolWithProgress(progress_bar, thread_count, max_queue_size=1) as pool:
-            progress_bar.message("Running on Segments...")
-            pool.fast_map(
-                cls._run_segment,
-                lambda i: self._get_segment(segment_idxs[i]),
-                lambda i, r: self._set_segment(segment_idxs[i], r),
-                total_segments
+        if(thread_count <= 0):
+            pass_count = (len(self.SEGMENTED_PASSES) + 1) * total_segments
+
+            passes_can_use_pool = any(b.clazz.UTILIZE_GLOBAL_POOL for b in self.SEGMENTED_PASSES)
+            allow_multithread = self.settings.allow_pass_multithreading
+
+
+            wrapper_bar = NestedProgressIndicator(
+                progress_bar,
+                total=pass_count,
+                ticks=int(self._frame_holder.num_frames / pass_count)
             )
+            print("Running without multithreading!")
+            progress_bar.message("Running on Segments...")
+
+            if(passes_can_use_pool and allow_multithread):
+                with PoolWithProgress.get_optimal_ctx().Pool(processes=os.cpu_count()) as pool:
+                    FramePass.GLOBAL_POOL = AntiClosePool(pool)
+                    for idx in segment_idxs:
+                        frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
+                        self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar)
+            else:
+                for idx in segment_idxs:
+                    frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
+                    self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar)
+
+            FramePass.GLOBAL_POOL = None
+        else:
+            with PoolWithProgress(progress_bar, thread_count, sub_ticks=int(self._frame_holder.num_frames / len(self._segments))) as pool:
+                progress_bar.message("Running on Segments...")
+                pool.fast_map(
+                    cls._run_segment,
+                    lambda i: self._get_segment(segment_idxs[i]),
+                    lambda i, r: self._set_segment(segment_idxs[i], r),
+                    total_segments
+                )
 
 
     def _run_all_segmented_passes(
@@ -693,13 +801,195 @@ class SegmentedFramePassEngine(Predictor):
         self._run_all_segmented_passes(progress_bar)
         self._resolve_frame_orderings(progress_bar)
 
+
+    class ExportableFields(Enum):
+        SOURCE = "Source"
+        FRAME = "Frame"
+        OCCLUDED_AND_EDGES = "Occluded/Edge"
+
+    @classmethod
+    def _get_frame_writer(
+        cls,
+        num_frames: int,
+        frame_metadata: AttributeDict,
+        video_metadata: Config,
+        file_format: str,
+        file: BinaryIO,
+        export_all: bool = False
+    ) -> frame_store_api.FrameWriter:
+        """
+        Get a frame writer that can export frames from the Forward Backward instance. Used internally to support frame
+        export functionality.
+
+        TODO
+        """
+        from diplomat.utils import frame_store_fmt, h5_frame_store_fmt
+
+        exporters = {
+            "DLFS": frame_store_fmt.DLFSWriter,
+            "HDF5": h5_frame_store_fmt.DLH5FSWriter
+        }
+
+        if(export_all):
+            bp_list = [
+                f"{bp}_{track}_{map_type.value}"
+                for bp in frame_metadata.bodyparts
+                for track in range(frame_metadata.num_outputs)
+                for map_type in cls.ExportableFields
+            ]
+        else:
+            bp_list = [
+                f"{bp}_{track}" for bp in frame_metadata.bodyparts for track in range(frame_metadata.num_outputs)
+            ]
+
+        header = frame_store_fmt.DLFSHeader(
+            num_frames,
+            (frame_metadata.height + 2) if(export_all) else frame_metadata.height,
+            (frame_metadata.width + 2) if(export_all) else frame_metadata.width,
+            video_metadata["fps"],
+            frame_metadata.down_scaling,
+            *video_metadata["size"],
+            *((None, None) if (video_metadata["cropping-offset"] is None) else video_metadata["cropping-offset"]),
+            bp_list
+        )
+
+        return exporters.get(file_format, frame_store_fmt.DLFSWriter)(file, header)
+
+    @classmethod
+    def _export_frame(
+        cls,
+        src_frame: ForwardBackwardFrame,
+        dest_frame: TrackingData,
+        dst_idx: Tuple[int, int],
+        header: frame_store_api.DLFSHeader,
+        selected_field: ExportableFields,
+        padding: int = 0
+    ):
+        start, end = padding, -padding if(padding > 0) else None
+        spc = padding * 2
+
+        if(selected_field == cls.ExportableFields.SOURCE):
+            res = src_frame.src_data.desparsify(
+                header.frame_width - spc, header.frame_height - spc, header.stride
+            )
+
+            dest_frame.get_prob_table(*dst_idx)[start:end, start:end] = res.get_prob_table(0, 0)
+        elif(selected_field == cls.ExportableFields.FRAME):
+            data = src_frame.src_data.unpack()
+            probs = src_frame.frame_probs
+            if (probs is None):
+                probs = np.zeros(len(data[2]), np.float32)
+
+            res = SparseTrackingData()
+            res.pack(*data[:2], probs, *data[3:])
+            res = res.desparsify(header.frame_width - spc, header.frame_height - spc, header.stride)
+
+            dest_frame.get_prob_table(*dst_idx)[start:end, start:end] = res.get_prob_table(0, 0)
+        elif(selected_field == cls.ExportableFields.OCCLUDED_AND_EDGES):
+            if(padding < 1):
+                raise ValueError("Padding must be included to export edges and the occluded state!")
+
+            probs = src_frame.occluded_probs
+
+            o_x, o_y = tuple(src_frame.occluded_coords.T)
+            x, y = o_x + 1, o_y + 1
+            off_x = off_y = np.zeros(len(x), dtype=np.float32)
+
+            res = SparseTrackingData()
+            res.pack(y, x, probs, off_x, off_y)
+
+            # Add 2 to resolve additional padding as needed for the edges...
+            res = res.desparsify(header.frame_width - spc + 2, header.frame_height - spc + 2, header.stride)
+
+            new_start = start - 1
+            new_end = end + 1 if(end + 1 < 0) else None
+
+            dest_frame.get_prob_table(*dst_idx)[new_start:new_end, new_start:new_end] = res.get_prob_table(0, 0)
+
+    @classmethod
+    def _export_frames(
+        cls,
+        frames: ForwardBackwardData,
+        segments: np.ndarray,
+        segment_alignments: np.ndarray,
+        video_metadata: Config,
+        path: Path,
+        file_format: str,
+        p_bar: Optional[ProgressBar] = None,
+        export_final_probs: bool = True,
+        export_all: bool = False
+    ):
+        """
+        Private method, exports frames if the user specifies a frame export path.
+
+        TODO
+        """
+        if(p_bar is not None):
+            p_bar.reset(frames.num_frames)
+
+        with path.open("wb") as f:
+            with cls._get_frame_writer(
+                    frames.num_frames, frames.metadata, video_metadata, file_format, f, export_all
+            ) as fw:
+                header = fw.get_header()
+
+                for (s, e, ff), alignment in zip(segments, segment_alignments):
+                    for f_idx in range(s, e):
+                        frame_data = TrackingData.empty_tracking_data(
+                            1,
+                            frames.num_bodyparts * (3 if(export_all) else 1),
+                            header.frame_width,
+                            header.frame_height,
+                            frames.metadata.down_scaling,
+                            True
+                        )
+
+                        for bp_idx in range(frames.num_bodyparts):
+                            if(export_final_probs and frames.frames[f_idx][bp_idx].frame_probs is None):
+                                continue
+
+                            if(export_all):
+                                for exp_t_i, exp_t in enumerate(cls.ExportableFields):
+                                    cls._export_frame(
+                                        frames.frames[f_idx][bp_idx],
+                                        frame_data,
+                                        (0, int(alignment[bp_idx]) * len(cls.ExportableFields) + exp_t_i),
+                                        header,
+                                        exp_t,
+                                        padding=1
+                                    )
+                            else:
+                                # No padding...
+                                cls._export_frame(
+                                    frames.frames[f_idx][bp_idx],
+                                    frame_data,
+                                    (0, int(alignment[bp_idx])),
+                                    header,
+                                    cls.ExportableFields.FRAME if(export_final_probs) else cls.ExportableFields.SOURCE
+                                )
+
+                        fw.write_data(frame_data)
+
+                        if(p_bar is not None):
+                            p_bar.update()
+
+
     def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         self._run_frame_passes(progress_bar)
 
         if(self.EXPORT_LOC is not None):
             progress_bar.message(f"Exporting Frames to: '{str(self.EXPORT_LOC)}'")
-            # TODO: Need to add frame export...
-            raise NotImplementedError("TODO: Implement!")
+            self._export_frames(
+                self._frame_holder,
+                self._segments,
+                self._segment_bp_order,
+                self.video_metadata,
+                self.EXPORT_LOC,
+                "DLFS",
+                progress_bar,
+                self.settings.export_final_probs,
+                self.settings.export_all_info
+            )
 
         progress_bar.message("Selecting Maximums")
         return self.get_maximums(
@@ -773,12 +1063,18 @@ class SegmentedFramePassEngine(Predictor):
             ),
             "thread_count": (
                 None,
-                type_casters.Union(type_casters.Literal(None), int),
+                type_casters.Union(type_casters.Literal(None), type_casters.RangedInteger(0, np.inf)),
                 "The number of threads to use when running segmented passes. "
                 "Defaults to None, which resolves to os.cpu_count() at runtime."
+                "If set to 0, disables multithreading..."
+            ),
+            "allow_pass_multithreading": (
+                True,
+                bool,
+                "Whether or not to allow frame passes to utilize multithreading. Defaults to True."
             ),
             "segment_size": (
-                100,
+                200,
                 type_casters.RangedInteger(10, np.inf),
                 "The size of the segments in frames to break the video into for tracking."
             ),

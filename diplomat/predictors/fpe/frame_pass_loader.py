@@ -12,6 +12,14 @@ class FramePassBuilder:
 
         self._config = config
 
+    @property
+    def clazz(self) -> FramePass:
+        return self._clazz
+
+    @property
+    def config(self) -> Dict[str, Any]:
+        return self._config
+
     def __call__(
         self,
         width: int,

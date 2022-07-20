@@ -46,6 +46,8 @@ def select(*info):
 class MITViterbi(FramePass):
 
     ND_UNIT_PER_SIDE_COUNT = 10
+    # Hidden attribute used for checking if this plugin class uses a pool...
+    UTILIZE_GLOBAL_POOL = True
 
     def __init__(self, width, height, *args, **kwargs):
         super().__init__(width, height, *args, **kwargs)
@@ -167,7 +169,7 @@ class MITViterbi(FramePass):
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
     ) -> ForwardBackwardData:
-        pool_cls = Pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // fb_data.metadata.num_outputs) > 2) else NotAPool
+        pool_cls = self._get_pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // fb_data.metadata.num_outputs) > 2) else NotAPool
 
         backtrace_priors = [None for __ in range(fb_data.num_bodyparts)]
         backtrace_current = [None for __ in range(fb_data.num_bodyparts)]
@@ -244,6 +246,23 @@ class MITViterbi(FramePass):
 
         return fb_data
 
+    @staticmethod
+    def _get_pool():
+        # Check globals for a pool...
+        if(FramePass.GLOBAL_POOL is not None):
+            return FramePass.GLOBAL_POOL
+
+        from multiprocessing import get_context
+        for ctx, args in [("forkserver", {}), ("spawn", {}), ("fork", {"maxtasksperchild": 1})]:
+            try:
+                ctx = get_context(ctx)
+                return ctx.Pool(**args)
+            except ValueError:
+                continue
+
+        return get_context().Pool()
+
+
     def _run_forward(
         self,
         fb_data: ForwardBackwardData,
@@ -260,7 +279,7 @@ class MITViterbi(FramePass):
             prog_bar.reset(total=fb_data.num_frames)
 
         # We only use a pool if the body part group is high enough...
-        pool_cls = Pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // meta.num_outputs) > 2) else NotAPool
+        pool_cls = self._get_pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // meta.num_outputs) > 2) else NotAPool
 
         with pool_cls() as pool:
             for i in frame_iter:
@@ -273,7 +292,7 @@ class MITViterbi(FramePass):
                 current = current if (in_place) else [c.copy() for c in current]
 
                 results = pool.starmap(
-                    type(self)._compute_normal_frame,
+                    MITViterbi._compute_normal_frame,
                     [(
                         prior,
                         current,
@@ -607,9 +626,6 @@ class MITViterbi(FramePass):
                 to_log_space(0 if(disable_occluded) else occluded_prob)
             )
         )
-
-    def __reduce__(self, *args, **kwargs):
-        raise ValueError("Not allowed to pickle this class!")
 
     @classmethod
     def get_config_options(cls) -> ConfigSpec:

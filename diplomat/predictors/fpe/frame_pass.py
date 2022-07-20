@@ -21,6 +21,9 @@ class RangeSlicer:
 
 
 class FramePass(ABC):
+    UTILIZE_GLOBAL_POOL = False
+    GLOBAL_POOL = None
+
     def __init__(
         self,
         width: int,
