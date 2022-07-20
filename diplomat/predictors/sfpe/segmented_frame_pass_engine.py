@@ -187,18 +187,15 @@ class SimplePool:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Kill the workers...
-        print("Exiting SimplePool...")
-        alive_count = sum(1 if(p.is_alive()) else 0 for p in self._processes)
-        for __ in range(alive_count):
-            self._input_queue.put((-1, None), True)
+        self._input_queue.close()
+        self._output_queue.close()
 
         for p in self._processes:
             if(p.is_alive()):
+                p.terminate()
                 p.join()
             p.close()
 
-        self._input_queue.close()
-        self._output_queue.close()
 
     def fast_map(self, getter: Callable[[int], Iterable[Any]], setter: Callable[[int, Any], None], length: int, update: Callable):
         next_idx = 0
@@ -552,7 +549,7 @@ class SegmentedFramePassEngine(Predictor):
                 if(len(self._segments) == 0):
                     raise ValueError("This video has no frames where all body parts exist, can't run segmentation!")
 
-                closest_idx = np.argmax(np.abs(self._segments.view[:, 2] - frame_idx))
+                closest_idx = np.argmin(np.abs(self._segments.view[:, 2] - frame_idx))
                 start, end, fixed = self._segments.view[closest_idx]
                 self._segments.view[closest_idx] = [min(start, start_idx), max(end, end_idx), fixed]
                 continue
@@ -633,11 +630,9 @@ class SegmentedFramePassEngine(Predictor):
         sub_frame.frames = self._frame_holder.frames[start:end]
         sub_frame.metadata = self._frame_holder.metadata
 
-        print(f"Enter segment {index}")
         return (sub_frame, self.SEGMENTED_PASSES, self._width, self._height, False, fix_frame - start)
 
     def _set_segment(self, index: int, frame_data: ForwardBackwardData):
-        print(f"Set segment {index}")
         start, end, fix_frame = self._segments[index]
         self._frame_holder.frames[start:end] = frame_data.frames
 
@@ -664,7 +659,6 @@ class SegmentedFramePassEngine(Predictor):
                 total=pass_count,
                 ticks=int(self._frame_holder.num_frames / pass_count)
             )
-            print("Running without multithreading!")
             progress_bar.message("Running on Segments...")
 
             if(passes_can_use_pool and allow_multithread):
