@@ -109,11 +109,83 @@ class FixFrame(FramePass):
         return fixed_frame
 
     @classmethod
+    def compute_single_score(
+        cls,
+        frames: List[ForwardBackwardFrame],
+        num_outputs: int,
+        down_scaling: int,
+        skeleton: Optional[StorageGraph],
+        progress_bar: Optional[ProgressBar] = None
+    ) -> float:
+        num_bp = len(frames) // num_outputs
+        score = 0
+
+        for bp_group_off in range(num_bp):
+
+            min_dist = np.inf
+            # For body part groupings...
+            for i in range(num_outputs - 1):
+                f1_loc = cls.get_max_location(
+                    frames[bp_group_off * num_outputs + i],
+                    down_scaling
+                )
+
+                if (f1_loc[0] is None):
+                    return -np.inf
+
+                for j in range(i + 1, num_outputs):
+                    f2_loc = cls.get_max_location(
+                        frames[bp_group_off * num_outputs + j], down_scaling
+                    )
+
+                    if (f2_loc[0] is None):
+                        return -np.inf
+
+                    min_dist = min(cls.dist(f1_loc, f2_loc), min_dist)
+
+            score += min_dist
+
+        # If skeleton is implemented...
+        if (skeleton is not None):
+            skel = skeleton
+
+            for bp in range(len(frames)):
+                bp_group_off, bp_off = divmod(bp, num_outputs)
+
+                num_pairs = num_outputs * len(skel[bp_group_off])
+                f1_loc = cls.get_max_location(
+                    frames[bp_group_off * num_outputs + bp_off], down_scaling
+                )
+
+                if (f1_loc[0] is None):
+                    return -np.inf
+
+                for (bp2_group_off, (__, __, avg)) in skel[bp_group_off]:
+                    min_score = np.inf
+
+                    for bp2_off in range(num_outputs):
+                        f2_loc = cls.get_max_location(
+                            frames[bp2_group_off * num_outputs + bp2_off],
+                            down_scaling
+                        )
+
+                        if (f2_loc[0] is None):
+                            return -np.inf
+
+                        result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
+                        min_score = min(result, min_score)
+
+                    score -= (min_score / num_pairs)
+
+        return score
+
+    @classmethod
     def compute_scores(
         cls,
         fb_data: ForwardBackwardData,
         prog_bar: ProgressBar,
-        reset_bar: bool = False
+        reset_bar: bool = False,
+        thread_count: int = 0
     ) -> np.ndarray:
         if(not "is_clustered" in fb_data.metadata):
             raise PassOrderError(
@@ -125,80 +197,25 @@ class FixFrame(FramePass):
         num_outputs = fb_data.metadata.num_outputs
         num_frames = fb_data.num_frames
         down_scaling = fb_data.metadata.down_scaling
-        num_bp = fb_data.num_bodyparts // num_outputs
+        skeleton = fb_data.metadata.get("skeleton", None)
 
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
 
-        for f_idx in range(num_frames):
-            score = 0
-
-            for bp_group_off in range(num_bp):
-
-                min_dist = np.inf
-                # For body part groupings...
-                for i in range(num_outputs - 1):
-                    f1_loc = cls.get_max_location(
-                        fb_data.frames[f_idx][bp_group_off * num_outputs + i],
-                        down_scaling
-                    )
-
-                    if (f1_loc[0] is None):
-                        min_dist = -np.inf
-                        continue
-
-                    for j in range(i + 1, num_outputs):
-                        f2_loc = cls.get_max_location(
-                            fb_data.frames[f_idx][bp_group_off * num_outputs + j], down_scaling
-                        )
-
-                        if (f2_loc[0] is None):
-                            min_dist = -np.inf
-                            continue
-
-                        min_dist = min(cls.dist(f1_loc, f2_loc), min_dist)
-
-                score += min_dist
-
-            # If skeleton is implemented...
-            if ("skeleton" in fb_data.metadata):
-                skel = fb_data.metadata.skeleton
-
-                for bp in range(fb_data.num_bodyparts):
-                    bp_group_off, bp_off = divmod(bp, num_outputs)
-
-                    num_pairs = num_outputs * len(skel[bp_group_off])
-                    f1_loc = cls.get_max_location(
-                        fb_data.frames[f_idx][
-                            bp_group_off * num_outputs + bp_off], down_scaling
-                    )
-
-                    if (f1_loc[0] is None):
-                        score -= np.inf
-                        continue
-
-                    for (bp2_group_off, (__, __, avg)) in skel[bp_group_off]:
-                        min_score = np.inf
-
-                        for bp2_off in range(num_outputs):
-                            f2_loc = cls.get_max_location(
-                                fb_data.frames[f_idx][
-                                    bp2_group_off * num_outputs + bp2_off],
-                                down_scaling
-                            )
-
-                            if (f2_loc[0] is None):
-                                score -= np.inf
-                                continue
-
-                            result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
-                            min_score = min(result, min_score)
-
-                        score -= (min_score / num_pairs)
-
-            scores[f_idx] = score
-            if (prog_bar is not None):
-                prog_bar.update(1)
+        if(thread_count > 0):
+            from ...sfpe.segmented_frame_pass_engine import PoolWithProgress
+            with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
+                pool.fast_map(
+                    cls.compute_single_score,
+                    lambda i: (fb_data.frames[i], num_outputs, down_scaling, skeleton),
+                    scores.__setitem__,
+                    fb_data.num_frames
+                )
+        else:
+            for f_idx in range(num_frames):
+                scores[f_idx] = cls.compute_single_score(fb_data.frames[f_idx], num_outputs, down_scaling, skeleton)
+                if (prog_bar is not None):
+                    prog_bar.update(1)
 
         return scores
 

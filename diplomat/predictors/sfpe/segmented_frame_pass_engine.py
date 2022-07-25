@@ -513,6 +513,8 @@ class SegmentedFramePassEngine(Predictor):
             if(progress_bar is not None):
                 progress_bar.update()
 
+    def _get_thread_count(self) -> int:
+        return os.cpu_count() if(self.settings.thread_count is None) else self.settings.thread_count
 
     def _build_segments(self, progress_bar: Optional[ProgressBar], reset_bar: bool = True):
         # Compute the scores...
@@ -522,7 +524,12 @@ class SegmentedFramePassEngine(Predictor):
 
         segment_size = self.settings.segment_size
 
-        scores = FixFrame.compute_scores(self._frame_holder, progress_bar)
+        scores = FixFrame.compute_scores(
+            self._frame_holder,
+            progress_bar,
+            thread_count=self._get_thread_count()
+        )
+
         visited = np.zeros(len(scores), bool)
         ordered_scores = np.argsort(scores)[::-1]
 
@@ -642,7 +649,7 @@ class SegmentedFramePassEngine(Predictor):
         segment_idxs: Sequence[int],
     ):
         cls = type(self)
-        thread_count = os.cpu_count() if(self.settings.thread_count is None) else self.settings.thread_count
+        thread_count = self._get_thread_count()
         total_segments = len(segment_idxs)
 
         self._frame_holder.allow_pickle = False
@@ -652,7 +659,6 @@ class SegmentedFramePassEngine(Predictor):
 
             passes_can_use_pool = any(b.clazz.UTILIZE_GLOBAL_POOL for b in self.SEGMENTED_PASSES)
             allow_multithread = self.settings.allow_pass_multithreading
-
 
             wrapper_bar = NestedProgressIndicator(
                 progress_bar,
