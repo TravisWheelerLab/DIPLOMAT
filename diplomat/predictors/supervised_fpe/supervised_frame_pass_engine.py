@@ -5,25 +5,13 @@ import traceback
 if os.environ.get('DLClight', default=False) == 'True':
     raise ImportError("Can't use this module in DLClight mode!")
 
-from typing import Union, List, Tuple, Dict, Optional, Any
-
-try:
-    from .guilib.fpe_editor import FPEEditor
-    from .guilib.progress_dialog import FBProgressDialog
-    from .guilib.score_lib import ScoreEngine
-    from ..fpe.frame_pass_engine import FramePassEngine, SparseTrackingData
-    from ..fpe.sparse_storage import ForwardBackwardFrame
-    from ..fpe import fpe_math
-    from .guilib import labeler_lib
-except ImportError:
-    __package__ = "diplomat.predictors.supervised_fpe"
-    from .guilib.fpe_editor import FPEEditor
-    from .guilib.progress_dialog import FBProgressDialog
-    from .guilib.score_lib import ScoreEngine
-    from ..fpe.frame_pass_engine import FramePassEngine, SparseTrackingData
-    from ..fpe.sparse_storage import ForwardBackwardFrame
-    from ..fpe import fpe_math
-    from .guilib import labeler_lib
+from typing import Union, List, Tuple, Dict, Optional
+from .guilib.fpe_editor import FPEEditor
+from .guilib.progress_dialog import FBProgressDialog
+from ..fpe.frame_pass_engine import FramePassEngine, SparseTrackingData
+from ..fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData
+from .labelers import Approximate, Point
+from .scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
 
 import wx
 import cv2
@@ -43,12 +31,12 @@ class SupervisedFramePassEngine(FramePassEngine):
     RERUN_HIST_EVT = "rerun_fb"
 
     def __init__(
-            self,
-            bodyparts: List[str],
-            num_outputs: int,
-            num_frames: int,
-            settings: Config,
-            video_metadata: Config,
+        self,
+        bodyparts: List[str],
+        num_outputs: int,
+        num_frames: int,
+        settings: Config,
+        video_metadata: Config,
     ):
         super().__init__(
             bodyparts, num_outputs, num_frames, settings, video_metadata
@@ -100,6 +88,25 @@ class SupervisedFramePassEngine(FramePassEngine):
         app.MainLoop()
 
         return self._fb_editor.video_player.video_viewer.get_all_poses()
+
+    @property
+    def frame_data(self) -> ForwardBackwardData:
+        return self._frame_holder
+
+    @property
+    def changed_frames(self) -> Dict[Tuple[int, int], ForwardBackwardFrame]:
+        return self._changed_frames
+
+    def get_maximum_with_defaults(self, frame) -> Tuple[int, int, float, float, float]:
+        return self.get_maximum(frame, self.settings.relaxed_maximum_radius)
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @property
+    def height(self) -> int:
+        return self._height
 
     def _on_frame_export(self, export_type: int, file_format: str, file_path: Path) -> Tuple[bool, str]:
         """
@@ -434,417 +441,3 @@ class SupervisedFramePassEngine(FramePassEngine):
     @classmethod
     def supports_multi_output(cls) -> bool:
         return True
-
-
-class Point(labeler_lib.PoseLabeler):
-    """
-    The manual labeling mode, sets probability map to exact location of the
-    user click always.
-    """
-    def __init__(self, frame_engine: SupervisedFramePassEngine):
-        super().__init__()
-        self._frame_engine = frame_engine
-
-    def predict_location(
-        self,
-        frame_idx: int,
-        bp_idx: int,
-        x: float,
-        y: float,
-        probability: float
-    ) -> Tuple[Any, Tuple[float, float, float]]:
-        meta = self._frame_engine._frame_holder.metadata
-        frame = self._frame_engine._frame_holder.frames[frame_idx][bp_idx]
-        s = self._frame_engine.settings
-
-        if(x is None):
-            x, y, prob = self._frame_engine.scmap_to_video_coord(
-                *self._frame_engine.get_maximum(frame, s.relaxed_maximum_radius),
-                meta.down_scaling
-            )
-            return ((frame_idx, bp_idx, x, y, 0), (x, y, 0))
-
-        return ((frame_idx, bp_idx, x, y, probability), (x, y, probability))
-
-    def pose_change(self, new_state: Any) -> Any:
-        frm, bp, x, y, p = new_state
-        changed_frames = self._frame_engine._changed_frames
-        frames = self._frame_engine._frame_holder.frames
-
-        x, y, off_x, off_y, prob = self._frame_engine.video_to_scmap_coord((x, y, p))
-        old_frame_data = frames[frm][bp]
-        is_orig = False
-
-        idx = (frm, bp)
-        if (idx not in changed_frames):
-            changed_frames[idx] = old_frame_data
-            is_orig = True
-
-        new_data = SparseTrackingData()
-        if (prob > 0):
-            new_data.pack(*[np.array([item]) for item in [y, x, prob, off_x, off_y]])
-
-        new_frame = ForwardBackwardFrame()
-        new_frame.orig_data = new_data
-        new_frame.disable_occluded = True
-        new_frame.ignore_clustering = True
-
-        frames[frm][bp] = new_frame
-
-        return (frm, bp, is_orig, old_frame_data)
-
-    def undo(self, data: Any) -> Any:
-        frames = self._frame_engine._frame_holder.frames
-        changed_frames = self._frame_engine._changed_frames
-        frm, bp, is_orig, frame_data = data
-
-        idx = (frm, bp)
-        new_is_orig = False
-        new_old_frame_data = frames[frm][bp]
-
-        if (idx not in changed_frames):
-            changed_frames[idx] = new_old_frame_data
-            new_is_orig = True
-        elif (is_orig):
-            del changed_frames[idx]
-
-        frames[frm][bp] = frame_data
-
-        return (frm, bp, new_is_orig, new_old_frame_data)
-
-    def redo(self, data: Any) -> Any:
-        return self.undo(data)
-
-
-class Approximate(labeler_lib.PoseLabeler):
-    """
-    Approximate labeling mode, adds a Gaussian centered around the user
-    predicted location to generate a new frame. This makes results 'snap' to
-    already existing DLC probs when the user input is close enough the
-    DLC predictions.
-    """
-    def __init__(self, frame_engine: SupervisedFramePassEngine):
-        super().__init__()
-        self._frame_engine = frame_engine
-        self._settings = labeler_lib.SettingCollection(
-            user_input_strength = labeler_lib.Slider(500, 1000, 667),
-            user_input_spread = labeler_lib.FloatSpin(0.5, None, 20, 1, 4)
-        )
-        self._cached_gaussian_std = None
-        self._cached_gaussian = None
-
-    def _make_gaussian(self, new_std: float):
-        self._cached_gaussian_std = new_std
-        meta = self._frame_engine._frame_holder.metadata
-
-        d_scale = meta.down_scaling
-        std = self._cached_gaussian_std / d_scale
-        two_std = min(
-            np.ceil(self._cached_gaussian_std * 2),
-            max(meta.width, meta.height)
-        )
-
-        eval_vals = np.arange(-two_std, two_std + 1)
-        x, y = np.meshgrid(eval_vals, eval_vals)
-        g = fpe_math.gaussian_formula(0, x, 0, y, std, 1, 0)
-
-        # Filter to improve memory usage, and performance....
-        good_loc = g > meta.threshold
-        g = g[good_loc]
-        x = x[good_loc]
-        y = y[good_loc]
-
-        self._cached_gaussian = (
-            g.reshape(-1),
-            np.asarray([x.reshape(-1), y.reshape(-1)], dtype=int)
-        )
-
-    @staticmethod
-    def _absorb_frame_data(p1, c1, off1, p2, c2, off2):
-        comb_c = np.concatenate([c1.T, c2.T])
-        comb_p = np.concatenate([p1, p2])
-        comb_off = np.concatenate([off1.T, off2.T])
-        from_dlc = np.repeat([True, False], [len(p1), len(p2)])
-
-        sort_idx = np.lexsort([comb_c[:, 1], comb_c[:, 0]])
-        comb_c = comb_c[sort_idx]
-        comb_p = comb_p[sort_idx]
-        comb_off = comb_off[sort_idx]
-        from_dlc = from_dlc[sort_idx]
-
-        match_idx, = np.nonzero(np.all(comb_c[1:] == comb_c[:-1], axis=1))
-        match_idx_after = match_idx + 1
-
-        comb_p[match_idx_after] = comb_p[match_idx] + comb_p[match_idx_after]
-        comb_off[match_idx_after] = comb_off[match_idx]
-
-        return (
-            np.delete(comb_p, from_dlc, axis=0),
-            np.delete(comb_c, from_dlc, axis=0).T,
-            np.delete(comb_off, from_dlc, axis=0).T
-        )
-
-    def predict_location(
-        self,
-        frame_idx: int,
-        bp_idx: int,
-        x: float,
-        y: float,
-        probability: float
-    ) -> Tuple[Any, Tuple[float, float, float]]:
-        info = self._settings.get_values()
-        user_amp = info.user_input_strength / 1000
-        if(info.user_input_spread != self._cached_gaussian_std):
-            self._make_gaussian(info.user_input_spread)
-
-        meta = self._frame_engine._frame_holder.metadata
-        modified_frames = self._frame_engine._changed_frames
-        if((frame_idx, bp_idx) in modified_frames):
-            frame = modified_frames[(frame_idx, bp_idx)]
-        else:
-            frame = self._frame_engine._frame_holder.frames[frame_idx][bp_idx]
-
-        s = self._frame_engine.settings
-
-        if(x is None):
-            x, y, prob = self._frame_engine.scmap_to_video_coord(
-                *self._frame_engine.get_maximum(frame, s.relaxed_maximum_radius),
-                meta.down_scaling
-            )
-            return ((frame_idx, bp_idx, None, (x, y)), (x, y, 0))
-
-        xvid, yvid = x, y
-        x, y, x_off, y_off, prob = self._frame_engine.video_to_scmap_coord((x, y, probability))
-        gp, gc = self._cached_gaussian
-        gc = gc + np.array([[x], [y]], dtype=int)
-
-        good_locs = ((0 <= gc[0]) & (gc[0] < meta.width)) & ((0 <= gc[1]) & (gc[1] < meta.height))
-        gc = gc[:, good_locs]
-        gp = gp[good_locs]
-
-        fy, fx, fp, foffx, foffy = [a if(a is not None) else np.array([]) for a in frame.orig_data.unpack()]
-        final_p, (final_x, final_y), (final_off_x, final_off_y) = self._absorb_frame_data(
-            fp * ((1 - user_amp) / np.max(fp)),
-            np.asarray([fx, fy]),
-            np.asarray([foffx, foffy]),
-            gp * user_amp,
-            gc,
-            np.asarray([
-                xvid - (gc[0] * meta.down_scaling + meta.down_scaling * 0.5),
-                yvid - (gc[1] * meta.down_scaling + meta.down_scaling * 0.5)
-            ])
-        )
-
-        final_x = final_x.astype(np.int32)
-        final_y = final_y.astype(np.int32)
-        final_p /= np.max(final_p)
-
-        sp = SparseTrackingData()
-        sp.pack(final_y, final_x, final_p, final_off_x, final_off_y)
-        temp_f = ForwardBackwardFrame(src_data=sp, frame_probs=final_p)
-
-        x, y, prob = self._frame_engine.scmap_to_video_coord(
-            *self._frame_engine.get_maximum(temp_f, s.relaxed_maximum_radius),
-            meta.down_scaling
-        )
-
-        return ((frame_idx, bp_idx, temp_f, (x, y)), (x, y, prob))
-
-    def pose_change(self, new_state: Any) -> Any:
-        frm, bp, suggested_frame, coord = new_state
-        changed_frames = self._frame_engine._changed_frames
-        frames = self._frame_engine._frame_holder.frames
-
-        old_frame_data = frames[frm][bp]
-        is_orig = False
-
-        idx = (frm, bp)
-        if (idx not in changed_frames):
-            changed_frames[idx] = old_frame_data
-            is_orig = True
-
-        if(suggested_frame is None):
-            new_data = SparseTrackingData()
-            x, y, off_x, off_y, prob = self._frame_engine.video_to_scmap_coord(
-                coord + (0,)
-            )
-            new_data.pack(*[np.array([item]) for item in [y, x, prob, off_x, off_y]])
-        else:
-            new_data = suggested_frame.src_data
-
-        new_frame = ForwardBackwardFrame()
-        new_frame.orig_data = new_data
-        new_frame.disable_occluded = True
-        new_frame.ignore_clustering = True
-
-        frames[frm][bp] = new_frame
-
-        return (frm, bp, is_orig, old_frame_data)
-
-    def undo(self, data: Any) -> Any:
-        frames = self._frame_engine._frame_holder.frames
-        changed_frames = self._frame_engine._changed_frames
-        frm, bp, is_orig, frame_data = data
-
-        idx = (frm, bp)
-        new_is_orig = False
-        new_old_frame_data = frames[frm][bp]
-
-        if (idx not in changed_frames):
-            changed_frames[idx] = new_old_frame_data
-            new_is_orig = True
-        elif (is_orig):
-            del changed_frames[idx]
-
-        frames[frm][bp] = frame_data
-
-        return (frm, bp, new_is_orig, new_old_frame_data)
-
-    def redo(self, data: Any) -> Any:
-        return self.undo(data)
-
-    def get_settings(self) -> Optional[labeler_lib.SettingCollection]:
-        return self._settings
-
-
-def normalized_shanon_entropy(dists: np.ndarray):
-    # Entropy in bits / Entropy in bits of uniform distribution of size n...
-    dists = dists / np.sum(dists, -1)
-    dists[dists == 0] = 1
-    return (-np.sum(dists * np.log2(dists), -1)) / np.log2(dists.shape[-1])
-
-class EntropyOfTransitions(ScoreEngine):
-    def __init__(self, frame_engine: SupervisedFramePassEngine):
-        super().__init__()
-        self._frame_engine = frame_engine
-
-        self._gaussian_table = None
-        self._std = self._get_std(self._frame_engine._frame_holder.metadata)
-        self._init_gaussian_table(frame_engine._width, frame_engine._height)
-
-        self._settings = labeler_lib.SettingCollection(
-            threshold=labeler_lib.FloatSpin(0, 1, 0.8, 0.05, 4)
-        )
-
-    def _get_std(self, metadata):
-        if("optimal_std" in metadata):
-            return metadata.optimal_std[2]
-        else:
-            return 1 / metadata.down_scaling
-
-    def _init_gaussian_table(self, width, height):
-        if(self._gaussian_table is None):
-            self._gaussian_table = fpe_math.gaussian_table(
-                height, width, self._std, 1, 0
-            )
-
-    def compute_scores(self, poses: Pose, prog_bar: ProgressBar) -> np.ndarray:
-        frames = self._frame_engine._frame_holder
-
-        scores = np.zeros(poses.get_frame_count() + 1, dtype=np.float32)
-        num_in_group = frames.metadata.num_outputs
-        num_groups = poses.get_bodypart_count() // num_in_group
-
-        for f_i in range(1, frames.num_frames):
-            f_list_p = frames.frames[f_i - 1]
-            f_list_c = frames.frames[f_i]
-
-            for b_g_i in range(num_groups):
-                matrix = np.zeros((num_in_group, num_in_group), dtype=np.float32)
-
-                for b_off_i in range(num_in_group):
-                    bp_i = b_g_i * num_in_group + b_off_i
-                    for b_off_j in range(num_in_group):
-                        bp_j = b_g_i * num_in_group + b_off_j
-                        matrix[b_off_i, b_off_j] = self._compute_transition_score(
-                            f_list_p[bp_j],
-                            f_list_c[bp_i],
-                            self._gaussian_table
-                        )
-
-                k = np.nanmax(normalized_shanon_entropy(matrix))
-                scores[f_i] = max(scores[f_i], k)
-
-            prog_bar.update()
-
-        scores[0] = scores[1]
-        scores[-1] = scores[-2]
-        scores = (scores[:-1] + scores[1:]) / 2
-
-        return scores
-
-    @staticmethod
-    def _compute_transition_score(
-        prior_frame: ForwardBackwardFrame,
-        current_frame: ForwardBackwardFrame,
-        trans_matrix: np.ndarray
-    ) -> float:
-        py, px, __, __, __ = prior_frame.src_data.unpack()
-        cy, cx, __, __, __ = current_frame.src_data.unpack()
-
-        if(py is None or cy is None):
-            return 0
-
-        return float(np.sum(
-            np.expand_dims(current_frame.frame_probs, 1)
-            * fpe_math.table_transition((px, py), (cx, cy), trans_matrix)
-            * np.expand_dims(prior_frame.frame_probs, 0)
-        ))
-
-    def compute_bad_indexes(self, scores: np.ndarray) -> np.ndarray:
-        threshold = self._settings.get_values().threshold
-        return np.flatnonzero(scores > threshold)
-
-    def get_settings(self) -> labeler_lib.SettingCollection:
-        return self._settings
-
-    def get_name(self) -> str:
-        return "Maximum Entropy of Transitions"
-
-class MaximumJumpInStandardDeviations(ScoreEngine):
-    def __init__(self, frame_engine: SupervisedFramePassEngine):
-        self._frame_engine = frame_engine
-        self._std = self._get_std(self._frame_engine._frame_holder.metadata)
-        self._pcutoff = self._frame_engine.video_metadata["pcutoff"]
-
-        self._settings = labeler_lib.SettingCollection(
-            threshold = labeler_lib.FloatSpin(0.25, 1000, 4, 0.25, 4)
-        )
-
-    def _get_std(self, metadata):
-        if ("optimal_std" in metadata):
-            return metadata.optimal_std[2] * metadata.down_scaling
-        else:
-            return 1
-
-    def compute_scores(self, poses: Pose, prog_bar: ProgressBar) -> np.ndarray:
-        scores = np.zeros(poses.get_frame_count(), dtype=np.float32)
-
-        for f_i in range(1, poses.get_frame_count()):
-            prior_x = poses.get_x_at(f_i - 1, slice(None))
-            prior_y = poses.get_y_at(f_i - 1, slice(None))
-            prior_p = poses.get_prob_at(f_i - 1, slice(None))
-            c_x = poses.get_x_at(f_i, slice(None))
-            c_y = poses.get_y_at(f_i, slice(None))
-            c_p = poses.get_prob_at(f_i, slice(None))
-
-
-            dists = np.sqrt((c_x - prior_x) ** 2 + (c_y - prior_y) ** 2)
-            dists /= self._std
-            dists[(prior_p < self._pcutoff) | (c_p < self._pcutoff)] = 0
-
-            scores[f_i] = np.max(dists)
-
-            prog_bar.update()
-
-        return scores
-
-    def compute_bad_indexes(self, scores: np.ndarray) -> np.ndarray:
-        threshold = self._settings.get_values().threshold
-        return np.flatnonzero(scores > threshold)
-
-    def get_settings(self) -> labeler_lib.SettingCollection:
-        return self._settings
-
-    def get_name(self) -> str:
-        return "Maximum Jump in Standard Deviations"

@@ -410,7 +410,6 @@ class ForwardBackwardData:
     Represents all forward backward frames/data. This is a 2D list of "ForwardBackwardFrame"s, indexed by frame, then
     body part. It also supports storing metadata like skeleton in the metadata attribute.
     """
-    # __slots__ = ["_metadata", "_num_bps", "_frames", "allow_pickle"]
 
     def __init__(self, num_frames: int, num_bp: int):
         """

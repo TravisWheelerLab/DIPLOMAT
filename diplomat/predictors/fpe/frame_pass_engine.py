@@ -89,7 +89,7 @@ class FramePassEngine(Predictor):
         cls,
         frame: ForwardBackwardFrame,
         relaxed_radius: float = 0
-    ) -> Tuple[float, float, float, float, float]:
+    ) -> Tuple[int, int, float, float, float]:
         """
         PRIVATE: Get the maximum location of a single forward backward frame.
         Returns a tuple containing the values x, y, probability, x offset,
