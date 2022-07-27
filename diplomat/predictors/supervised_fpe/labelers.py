@@ -1,4 +1,4 @@
-from typing import Tuple, Any, Dict, Optional
+from typing import Tuple, Any, Optional, MutableMapping
 from typing_extensions import Protocol
 
 from diplomat.predictors.fpe import fpe_math
@@ -10,7 +10,7 @@ import numpy as np
 
 class EditableFramePassEngine(Protocol):
     @property
-    def changed_frames(self) -> Dict[Tuple[int, int], ForwardBackwardFrame]:
+    def changed_frames(self) -> MutableMapping[Tuple[int, int], ForwardBackwardFrame]:
         raise NotImplementedError
 
     @property
@@ -84,6 +84,7 @@ class Point(labeler_lib.PoseLabeler):
 
         new_frame = ForwardBackwardFrame()
         new_frame.orig_data = new_data
+        new_frame.src_data = new_data
         new_frame.disable_occluded = True
         new_frame.ignore_clustering = True
 
@@ -272,6 +273,7 @@ class Approximate(labeler_lib.PoseLabeler):
 
         new_frame = ForwardBackwardFrame()
         new_frame.orig_data = new_data
+        new_frame.src_data = new_data
         new_frame.disable_occluded = True
         new_frame.ignore_clustering = True
 

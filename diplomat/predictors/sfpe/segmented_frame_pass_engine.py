@@ -305,20 +305,23 @@ class PoolWithProgress:
         self._pool.__exit__(exc_type, exc_val, exc_tb)
 
 
-class AntiClosePool:
+class AntiCloseObject:
     """
     Wrap a pool, so it can be used in with statements without closing it...
     """
-    def __init__(self, pool):
-        self._pool = pool
+    def __init__(self, object):
+        self._object = object
 
     def __getattr__(self, item):
-        return self._pool.__getattribute__(item)
+        return self._object.__getattribute__(item)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def close(self):
         pass
 
 class SegmentedFramePassEngine(Predictor):
@@ -458,15 +461,26 @@ class SegmentedFramePassEngine(Predictor):
         segments: np.ndarray,
         segment_alignments: np.ndarray,
         progress_bar: ProgressBar,
-        relaxed_radius: float = 0
+        relaxed_radius: float = 0,
+        segment_indexes: Optional[Sequence[int]] = None
     ) -> Pose:
-        # Our final pose object:
-        poses = Pose.empty_pose(frame_list.num_frames, frame_list.num_bodyparts)
+        # If segment indexes is None, we return maximums for all the frames...
+        if(segment_indexes is None):
+            segment_indexes = range(len(segments))
+            frame_count = frame_list.num_frames
+        else:
+            # Otherwise we return maximums for the segments in order....
+            frame_count = int(np.sum(segments[segment_indexes, 1] - segments[segment_indexes, 0]))
+
+        # Space to store poses
+        poses = Pose.empty_pose(frame_count, frame_list.num_bodyparts)
 
         if(progress_bar is not None):
-            progress_bar.reset(frame_list.num_frames)
+            progress_bar.reset(frame_count)
 
-        for seg, alignment in zip(segments, segment_alignments):
+        for idx in segment_indexes:
+            seg = segments[idx]
+            alignment = segment_alignments[idx]
             start, end, fix = [int(elm) for elm in seg]
 
             for f_idx in range(start, end):
@@ -669,7 +683,7 @@ class SegmentedFramePassEngine(Predictor):
 
             if(passes_can_use_pool and allow_multithread):
                 with PoolWithProgress.get_optimal_ctx().Pool(processes=os.cpu_count()) as pool:
-                    FramePass.GLOBAL_POOL = AntiClosePool(pool)
+                    FramePass.GLOBAL_POOL = AntiCloseObject(pool)
                     for idx in segment_idxs:
                         frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
                         self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar)
@@ -758,7 +772,8 @@ class SegmentedFramePassEngine(Predictor):
     def _resolve_frame_orderings(
         self,
         progress_bar: ProgressBar,
-        reset_bar: bool = True
+        reset_bar: bool = True,
+        reverse_arr: Optional[np.ndarray] = None
     ):
         if(reset_bar and progress_bar is not None):
             progress_bar.message("Resolving Orderings...")
@@ -769,6 +784,8 @@ class SegmentedFramePassEngine(Predictor):
         # Use the best scoring frame as the ground truth ordering...
         best_segment_idx = np.argmax(self._segment_scores)
         self._segment_bp_order[best_segment_idx] = np.arange(self._frame_holder.num_bodyparts)
+        if(reverse_arr is not None):
+            reverse_arr[best_segment_idx] = np.arange(self._frame_holder.num_bodyparts)
 
         # Now we align orderings to the 'ground truth' ordering...
         for i in range(best_segment_idx - 1, -1, -1):
@@ -779,6 +796,8 @@ class SegmentedFramePassEngine(Predictor):
                 self._frame_holder.frames[end],
                 self._segment_bp_order[i + 1]
             )
+            if(reverse_arr is not None):
+                reverse_arr[i, self._segment_bp_order[i, :]] = np.arange(self._frame_holder.num_bodyparts)
 
             if(progress_bar is not None):
                 progress_bar.update()
@@ -790,6 +809,8 @@ class SegmentedFramePassEngine(Predictor):
                 self._frame_holder.frames[start - 1],
                 self._segment_bp_order[i - 1]
             )
+            if(reverse_arr is not None):
+                reverse_arr[i, self._segment_bp_order[i, :]] = np.arange(self._frame_holder.num_bodyparts)
 
             if(progress_bar is not None):
                 progress_bar.update()

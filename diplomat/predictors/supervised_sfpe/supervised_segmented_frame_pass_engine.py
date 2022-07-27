@@ -2,17 +2,18 @@ import os
 import traceback
 
 # We first check if this is a headless environment, and if so don't even allow this module to be imported...
-from collections import UserList
+from collections import UserList, MutableMapping
 from pathlib import Path
 
+from diplomat.predictors.supervised_fpe.guilib.progress_dialog import FBProgressDialog
 from diplomat.predictors.supervised_fpe.labelers import Approximate, Point
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
 
 if os.environ.get('DLClight', default=False) == 'True':
     raise ImportError("Can't use this module in DLClight mode!")
 
-from typing import Optional, Dict, Tuple, List
-from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine
+from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator
+from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
 from diplomat.predictors.supervised_fpe.guilib.fpe_editor import FPEEditor
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData
 from diplomat.processing import *
@@ -51,6 +52,41 @@ class SegmentedList(UserList):
 
     def __setitem__(self, key: int, value):
         self.data[key] = list(SegmentedSubList(value, *self._segment_find(key)))
+
+    def __delitem__(self, key):
+        raise NotImplementedError
+
+class SegmentedDict(MutableMapping):
+    def __init__(self, wrapper_dict: dict, segments: np.ndarray, segment_alignments: np.ndarray, rev_segment_alignments: np.ndarray):
+        super().__init__()
+        self.data = wrapper_dict
+        self._segments = segments
+        self._segment_alignments = segment_alignments
+        self._rev_segment_alignments = rev_segment_alignments
+
+    def _index_resolve(self, frame: int, bp: int) -> Tuple[int, int]:
+        si = np.searchsorted(self._segments[:, 1], frame, "right")
+        return frame, self._segment_alignments[si, bp]
+
+    def _rev_index_resolve(self, frame: int, bp: int) -> Tuple[int, int]:
+        si = np.searchsorted(self._segments[:, 1], frame, "right")
+        return frame, self._rev_segment_alignments[si, bp]
+
+    def __getitem__(self, item):
+        return self.data[self._index_resolve(*item)]
+
+    def __setitem__(self, key, value):
+        self.data[self._index_resolve(*key)] = value
+
+    def __delitem__(self, key):
+        del self.data[self._index_resolve(*key)]
+
+    def __iter__(self) -> Iterator:
+        return (self._rev_index_resolve(*k) for k in self.data)
+
+    def __len__(self) -> int:
+        return len(self.data)
+
 
 class SegmentedFramePassData(ForwardBackwardData):
     def __init__(self, data: ForwardBackwardData, segments: np.ndarray, segment_alignments: np.ndarray):
@@ -92,6 +128,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         self._video_hdl: Optional[cv2.VideoCapture] = None
         self._final_probabilities = None
         self._fb_editor: Optional[FPEEditor] = None
+        self._reverse_segment_bp_order = None
 
         self._changed_frames: Dict[Tuple[int, int], ForwardBackwardFrame] = {}
 
@@ -143,11 +180,11 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
     @property
     def frame_data(self) -> ForwardBackwardData:
-        return SegmentedFramePassData(self._frame_holder, self._segments, self._segment_bp_order)
+        return SegmentedFramePassData(self._frame_holder, self._segments, self._reverse_segment_bp_order)
 
     @property
-    def changed_frames(self) -> Dict[Tuple[int, int], ForwardBackwardFrame]:
-        return self._changed_frames
+    def changed_frames(self) -> MutableMapping[Tuple[int, int], ForwardBackwardFrame]:
+        return SegmentedDict(self._changed_frames, self._segments, self._reverse_segment_bp_order, self._segment_bp_order)
 
     def get_maximum_with_defaults(self, frame) -> Tuple[int, int, float, float, float]:
         return self.get_maximum(frame, self.settings.relaxed_maximum_radius)
@@ -196,11 +233,106 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
     def _make_plots(self, evt = None):
         # TODO...
-        raise NotImplementedError
+        # Get the frame...
+        import matplotlib
+        matplotlib.use("agg")
+        import matplotlib.pyplot as plt
+
+        frame_idx = self._fb_editor.video_player.video_viewer.get_offset_count()
+
+        new_bitmap_list = []
+
+        # For every body part...
+        for bp_idx in range(self._num_total_bp):
+            bp_name = self.bodyparts[bp_idx // self.num_outputs] + str((bp_idx % self.num_outputs) + 1)
+
+            all_data = self.frame_data.frames[frame_idx][bp_idx]
+            if ((frame_idx, bp_idx) in self.changed_frames):
+                f = self.changed_frames[(frame_idx, bp_idx)]
+                frames, occluded = f.frame_probs, f.occluded_probs
+            else:
+                frames, occluded = all_data.frame_probs, all_data.occluded_probs
+
+            if (frames is not None):
+                # PHASE 1: Generate post forward backward probability map data, as a colormap.
+                figure = plt.figure(figsize=(3.6, 2.8), dpi=100)
+                axes = figure.gca()
+                axes.set_title(bp_name + " Post Passes")
+
+                if ((frame_idx, bp_idx) in self.changed_frames):
+                    data = self.changed_frames[(frame_idx, bp_idx)].orig_data.unpack()
+                else:
+                    data = all_data.orig_data.unpack()
+
+                track_data = SparseTrackingData()
+                track_data.pack(*data[:2], frames, *data[3:])
+                h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
+                down_scaling = self.frame_data.metadata.down_scaling
+                track_data = track_data.desparsify(w, h, down_scaling)
+                axes.imshow(track_data.get_prob_table(0, 0))
+                plt.tight_layout()
+                figure.canvas.draw()
+
+                w, h = figure.canvas.get_width_height()
+                new_bitmap_list.append(wx.Bitmap.FromBufferRGBA(w, h, figure.canvas.buffer_rgba()))
+                axes.cla()
+                figure.clf()
+                plt.close(figure)
+
+            # PHASE 2: Generate original source probability map data, as a colormap.
+            figure = plt.figure(figsize=(3.6, 2.8), dpi=100)
+            axes = figure.gca()
+            axes.set_title(bp_name + " Original Source Frame")
+            h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
+            down_scaling = self.frame_data.metadata.down_scaling
+            if ((frame_idx, bp_idx) in self.changed_frames):
+                track_data = self.changed_frames[(frame_idx, bp_idx)].orig_data.desparsify(w, h, down_scaling)
+            else:
+                track_data = all_data.orig_data.desparsify(w, h, down_scaling)
+            axes.imshow(track_data.get_prob_table(0, 0))
+            plt.tight_layout()
+            figure.canvas.draw()
+
+            w, h = figure.canvas.get_width_height()
+            new_bitmap_list.append(wx.Bitmap.FromBufferRGBA(w, h, figure.canvas.buffer_rgba()))
+            axes.cla()
+            figure.clf()
+            plt.close(figure)
+
+            # If user edited, show user edited frame...
+            if ((frame_idx, bp_idx) in self._changed_frames):
+                figure = plt.figure(figsize=(3.6, 2.8), dpi=100)
+                axes = figure.gca()
+                axes.set_title(bp_name + " Modified Source Frame")
+                h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
+                track_data = all_data.orig_data.desparsify(w, h, down_scaling)
+                axes.imshow(track_data.get_prob_table(0, 0))
+                plt.tight_layout()
+                figure.canvas.draw()
+
+                w, h = figure.canvas.get_width_height()
+                new_bitmap_list.append(wx.Bitmap.FromBufferRGBA(w, h, figure.canvas.buffer_rgba()))
+                axes.cla()
+                figure.clf()
+                plt.close(figure)
+
+        # Now that we have appended all the above bitmaps to a list, update the ScrollImageList widget of the editor
+        # with the new images.
+        self._fb_editor.plot_list.set_bitmaps(new_bitmap_list)
 
     def _on_frame_export(self, export_type: int, file_format: str, file_path: Path) -> Tuple[bool, str]:
         # TODO...
-        raise NotImplementedError
+        return False, "Not implemented yet!"
+
+    def _resolve_frame_orderings(
+        self,
+        progress_bar: ProgressBar,
+        reset_bar: bool = True,
+        reverse_arr: Optional[np.ndarray] = None
+    ):
+        # Ignore the last argument, we need to be able to reverse segment ordering...
+        self._reverse_segment_bp_order = np.zeros((len(self._segments), self._frame_holder.num_bodyparts), np.uint16)
+        return super()._resolve_frame_orderings(progress_bar, reset_bar, self._reverse_segment_bp_order)
 
     def _on_hist_fb(self, old_data: Tuple[np.ndarray, Dict[Tuple[int, int], ForwardBackwardFrame]]):
         """
@@ -214,12 +346,114 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         :returns: The current point edit state in the same format as old_dict. This gets added to history.
         """
-        # TODO...
-        raise NotImplementedError
+        old_user_mods, old_dict = old_data
 
-    def _on_run_fb(self, submit_evt = True) -> bool:
-        # TODO...
-        raise NotImplementedError
+        # Restore the original frames, and temporarily store the user modified frames...
+        current_data = {}
+        frames = self._frame_holder.frames
+
+        for loc, sparse_frame in old_dict.items():
+            frm, bp = loc
+            current_data[loc] = frames[frm][bp]
+            frames[frm][bp] = sparse_frame
+
+        # Get current user modified frames...
+        new_user_mods = np.array([], dtype=np.uint64)
+        for score in self._fb_editor.score_displays:
+            new_user_mods = score.get_prior_modified_user_locations()
+            break
+
+        # Perform a run with the old data put back in place...
+        current_dict = self._changed_frames
+        # If we are doing an undo, use old_dict, otherwise use the data already in current dict...
+        # the fb run doesn't use the data in _current_frames, but uses it to determine which segments need to be rerun...
+        self._changed_frames = self.changed_frames if(len(self._changed_frames) > 0) else old_dict
+        self._on_run_fb(False)
+        self._changed_frames = old_dict
+
+        # Vital: If _frame_holder got updated when FB was run.
+        frames = self._frame_holder.frames
+        d_scale = self._frame_holder.metadata.down_scaling
+
+        # Restore old user edits...
+        for score in self._fb_editor.score_displays:
+            score.set_prior_modified_user_locations(old_user_mods)
+
+        for (frm, bp), sparse_frame in current_data.items():
+            frames[frm][bp] = sparse_frame
+
+        for (frm, bp), sparse_frame in SegmentedDict(current_data, self._segments, self._reverse_segment_bp_order, self._segment_bp_order).items():
+            x, y, prob = self.scmap_to_video_coord(
+                *self.get_maximum_with_defaults(
+                    sparse_frame
+                ),
+                d_scale
+            )
+
+            for score in self._fb_editor.score_displays:
+                score.update_at(frm, np.nan)
+            self._fb_editor.video_player.video_viewer.set_pose(
+                frm, bp, (x, y, prob)
+            )
+
+        return (new_user_mods, current_dict)
+
+    def _partial_rerun(self, changed_frames: Dict[Tuple[int, int], ForwardBackwardFrame], progress_bar: ProgressBar) -> Pose:
+        # Determine what segments have been manipulated...
+        segment_indexes = sorted({np.searchsorted(self._segments[:, 1], f_i, "right") for f_i, b_i in changed_frames})
+
+        self._run_segmented_passes(progress_bar, segment_indexes)
+        self._resolve_frame_orderings(progress_bar)
+
+        return self.get_maximums(
+            self._frame_holder,
+            self._segments,
+            self._segment_bp_order,
+            progress_bar,
+            relaxed_radius=self.settings.relaxed_maximum_radius
+        )
+
+    def _on_run_fb(self, submit_evt: bool = True) -> bool:
+        """
+        PRIVATE: Method is run whenever the Frame Pass Engine is rerun on the data. Runs the Frame Passes only in chunks the user has modified and
+        then updates the UI to display the changed data.
+
+        :param submit_evt: A boolean, determines if this should submit a new history event. Undo/Redo actions call
+                           this method with this parameter set to false, otherwise is defaults to true.
+
+        :returns: False. Tells the FBEditor that it should never clear the history when this method is run.
+        """
+        if (submit_evt and len(self._changed_frames) == 0):
+            return False
+
+        with FBProgressDialog(self._fb_editor, title="Rerunning Passes...") as dialog:
+            dialog.Show()
+            self._fb_editor.Enable(False)
+
+            user_modified_frames = np.ndarray([], dtype=np.uint64)
+            new_user_modified_frames = np.ndarray([], dtype=np.uint64)
+            for score in self._fb_editor.score_displays:
+                user_modified_frames = score.get_prior_modified_user_locations()
+                new_user_modified_frames = score.get_user_modified_locations()
+                break
+
+            if(submit_evt):
+                self._fb_editor.history.do(self.RERUN_HIST_EVT, (user_modified_frames, self._changed_frames))
+
+            poses = self._partial_rerun(self._changed_frames, AntiCloseObject(dialog.progress_bar))
+            self._changed_frames = {}
+
+            self._fb_editor.video_player.video_viewer.set_all_poses(poses)
+            dialog.set_inner_message("Updating Scores...")
+            for score in self._fb_editor.score_displays:
+                score.update_all(poses, dialog.progress_bar)
+                score.set_prior_modified_user_locations(new_user_modified_frames)
+
+            self._fb_editor.Enable(True)
+
+        # Return false to not clear the history....
+        return False
+
 
     def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         self._run_frame_passes(progress_bar)

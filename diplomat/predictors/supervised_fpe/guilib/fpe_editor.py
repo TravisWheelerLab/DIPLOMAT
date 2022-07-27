@@ -497,7 +497,7 @@ class FPEEditor(wx.Frame):
         Set the frame exporting function, which exports current modified frames UI is showing...
 
         :param func: The function to handle frame exporting. It will be passed an integer being the type of frames to
-                     export (0 for non forward backward and 1 for post forward backward), a string being the format to
+                     export (0 for pre frame passes and 1 for post frame passes), a string being the format to
                      save the file to ('DLFS' or 'HDF5') and a Path to where the user selected to save the frames, and
                      is expected to return a boolean being if the export succeeded and a string being the error message
                      displayed if it did not.
@@ -545,7 +545,7 @@ class FPEEditor(wx.Frame):
         """
         selection = [
             "Original Frames with User Edits",
-            "Frames after Forward Backward with User Edits."
+            "Frames after Frame Passes with User Edits."
         ]
 
         if(self._frame_exporter is not None):
