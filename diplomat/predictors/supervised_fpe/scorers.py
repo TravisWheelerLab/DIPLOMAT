@@ -1,5 +1,5 @@
+from typing import Optional
 import numpy as np
-
 from typing_extensions import Protocol
 from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData
@@ -57,14 +57,20 @@ class EntropyOfTransitions(ScoreEngine):
                 height, width, self._std, 1, 0
             )
 
-    def compute_scores(self, poses: Pose, prog_bar: ProgressBar) -> np.ndarray:
+    def compute_scores(self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None) -> np.ndarray:
         frames = self._frame_engine.frame_data
 
-        scores = np.zeros(poses.get_frame_count() + 1, dtype=np.float32)
+        if(sub_section is None):
+            sub_section = slice(None)
+
+        s, e, j = sub_section.indices(frames.num_frames)
+        sub_section = range(s + 1, e, j)
+
+        scores = np.zeros(len(sub_section) + 2, dtype=np.float32)
         num_in_group = frames.metadata.num_outputs
         num_groups = poses.get_bodypart_count() // num_in_group
 
-        for f_i in range(1, frames.num_frames):
+        for f_i in sub_section:
             f_list_p = frames.frames[f_i - 1]
             f_list_c = frames.frames[f_i]
 
@@ -82,7 +88,7 @@ class EntropyOfTransitions(ScoreEngine):
                         )
 
                 k = np.nanmax(normalized_shanon_entropy(matrix))
-                scores[f_i] = max(scores[f_i], k)
+                scores[f_i - sub_section.start + 1] = max(scores[f_i - sub_section.start + 1], k)
 
             prog_bar.update()
 
@@ -137,10 +143,16 @@ class MaximumJumpInStandardDeviations(ScoreEngine):
         else:
             return 1
 
-    def compute_scores(self, poses: Pose, prog_bar: ProgressBar) -> np.ndarray:
-        scores = np.zeros(poses.get_frame_count(), dtype=np.float32)
+    def compute_scores(self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None) -> np.ndarray:
+        if(sub_section is None):
+            sub_section = slice(None)
 
-        for f_i in range(1, poses.get_frame_count()):
+        s, e, j = sub_section.indices(poses.get_frame_count())
+        sub_section = range(s + 1, e, j)
+
+        scores = np.zeros(len(sub_section) + 1, dtype=np.float32)
+
+        for f_i in sub_section:
             prior_x = poses.get_x_at(f_i - 1, slice(None))
             prior_y = poses.get_y_at(f_i - 1, slice(None))
             prior_p = poses.get_prob_at(f_i - 1, slice(None))
@@ -153,7 +165,7 @@ class MaximumJumpInStandardDeviations(ScoreEngine):
             dists /= self._std
             dists[(prior_p < self._pcutoff) | (c_p < self._pcutoff)] = 0
 
-            scores[f_i] = np.max(dists)
+            scores[f_i - sub_section.start + 1] = np.max(dists)
 
             prog_bar.update()
 

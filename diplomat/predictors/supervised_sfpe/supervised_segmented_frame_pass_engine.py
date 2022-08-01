@@ -12,7 +12,7 @@ from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, Max
 if os.environ.get('DLClight', default=False) == 'True':
     raise ImportError("Can't use this module in DLClight mode!")
 
-from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator
+from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
 from diplomat.predictors.supervised_fpe.guilib.fpe_editor import FPEEditor
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData
@@ -231,90 +231,70 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         return (int(x), int(y), off_x, off_y, prob)
 
-    def _make_plots(self, evt = None):
-        # TODO...
+    def _make_plot_of(self, figsize: Tuple[float, float], dpi: int, title: str, track_data: SparseTrackingData) -> wx.Bitmap:
         # Get the frame...
         import matplotlib
         matplotlib.use("agg")
         import matplotlib.pyplot as plt
 
+        figure = plt.figure(figsize=figsize, dpi=dpi)
+        axes = figure.gca()
+        axes.set_title(title)
+
+        h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
+        down_scaling = self.frame_data.metadata.down_scaling
+        track_data = track_data.desparsify(w, h, down_scaling)
+
+        axes.imshow(track_data.get_prob_table(0, 0))
+        figure.tight_layout()
+        figure.canvas.draw()
+
+        w, h = figure.canvas.get_width_height()
+        bitmap = wx.Bitmap.FromBufferRGBA(w, h, figure.canvas.buffer_rgba())
+
+        axes.cla()
+        figure.clf()
+        plt.close(figure)
+
+        return bitmap
+
+
+    def _make_plots(self, evt = None):
+        """
+        PRIVATE: Creates plots of data for current frame in UI and puts them in the side panel.
+        """
         frame_idx = self._fb_editor.video_player.video_viewer.get_offset_count()
 
         new_bitmap_list = []
+        figsize = (3.6, 2.8)
+        dpi = 100
 
         # For every body part...
         for bp_idx in range(self._num_total_bp):
             bp_name = self.bodyparts[bp_idx // self.num_outputs] + str((bp_idx % self.num_outputs) + 1)
-
             all_data = self.frame_data.frames[frame_idx][bp_idx]
+
             if ((frame_idx, bp_idx) in self.changed_frames):
                 f = self.changed_frames[(frame_idx, bp_idx)]
-                frames, occluded = f.frame_probs, f.occluded_probs
+                frames, occluded, orig_data = f.frame_probs, f.occluded_probs, f.orig_data
             else:
-                frames, occluded = all_data.frame_probs, all_data.occluded_probs
+                frames, occluded, orig_data = all_data.frame_probs, all_data.occluded_probs, all_data.orig_data
 
-            if (frames is not None):
-                # PHASE 1: Generate post forward backward probability map data, as a colormap.
-                figure = plt.figure(figsize=(3.6, 2.8), dpi=100)
-                axes = figure.gca()
-                axes.set_title(bp_name + " Post Passes")
-
-                if ((frame_idx, bp_idx) in self.changed_frames):
-                    data = self.changed_frames[(frame_idx, bp_idx)].orig_data.unpack()
-                else:
-                    data = all_data.orig_data.unpack()
-
+            if(frames is not None):
+                # Plot post MIT-Viterbi frame data if it exists...
+                data = orig_data.unpack()
                 track_data = SparseTrackingData()
                 track_data.pack(*data[:2], frames, *data[3:])
-                h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
-                down_scaling = self.frame_data.metadata.down_scaling
-                track_data = track_data.desparsify(w, h, down_scaling)
-                axes.imshow(track_data.get_prob_table(0, 0))
-                plt.tight_layout()
-                figure.canvas.draw()
 
-                w, h = figure.canvas.get_width_height()
-                new_bitmap_list.append(wx.Bitmap.FromBufferRGBA(w, h, figure.canvas.buffer_rgba()))
-                axes.cla()
-                figure.clf()
-                plt.close(figure)
+                new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Post Passes", track_data))
 
-            # PHASE 2: Generate original source probability map data, as a colormap.
-            figure = plt.figure(figsize=(3.6, 2.8), dpi=100)
-            axes = figure.gca()
-            axes.set_title(bp_name + " Original Source Frame")
-            h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
-            down_scaling = self.frame_data.metadata.down_scaling
-            if ((frame_idx, bp_idx) in self.changed_frames):
-                track_data = self.changed_frames[(frame_idx, bp_idx)].orig_data.desparsify(w, h, down_scaling)
-            else:
-                track_data = all_data.orig_data.desparsify(w, h, down_scaling)
-            axes.imshow(track_data.get_prob_table(0, 0))
-            plt.tight_layout()
-            figure.canvas.draw()
-
-            w, h = figure.canvas.get_width_height()
-            new_bitmap_list.append(wx.Bitmap.FromBufferRGBA(w, h, figure.canvas.buffer_rgba()))
-            axes.cla()
-            figure.clf()
-            plt.close(figure)
+            # Plot Pre-MIT-Viterbi frame data, or the original suggested probability frame...
+            new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Original Source Frame", orig_data))
 
             # If user edited, show user edited frame...
             if ((frame_idx, bp_idx) in self._changed_frames):
-                figure = plt.figure(figsize=(3.6, 2.8), dpi=100)
-                axes = figure.gca()
-                axes.set_title(bp_name + " Modified Source Frame")
-                h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
-                track_data = all_data.orig_data.desparsify(w, h, down_scaling)
-                axes.imshow(track_data.get_prob_table(0, 0))
-                plt.tight_layout()
-                figure.canvas.draw()
-
-                w, h = figure.canvas.get_width_height()
-                new_bitmap_list.append(wx.Bitmap.FromBufferRGBA(w, h, figure.canvas.buffer_rgba()))
-                axes.cla()
-                figure.clf()
-                plt.close(figure)
+                track_data = all_data.orig_data
+                new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Modified Source Frame", track_data))
 
         # Now that we have appended all the above bitmaps to a list, update the ScrollImageList widget of the editor
         # with the new images.
@@ -322,7 +302,41 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
     def _on_frame_export(self, export_type: int, file_format: str, file_path: Path) -> Tuple[bool, str]:
         # TODO...
-        return False, "Not implemented yet!"
+        self._fb_editor.Enable(False)
+
+        changed_frames = {}
+
+        if (export_type >= 1):
+            # Option is exporting data after latest fpe run, remove the latest user edits...
+            for (fi, bpi), frame in self._changed_frames.items():
+                changed_frames[(fi, bpi)] = self._frame_holder[fi][bpi]
+                self._frame_holder[fi][bpi] = frame
+
+        try:
+            with FBProgressDialog(self._fb_editor, title="Export Progress", inner_msg="Exporting Frames...") as dialog:
+                dialog.Show()
+                self._export_frames(
+                    self._frame_holder,
+                    self._segments,
+                    self._segment_bp_order,
+                    self.video_metadata,
+                    file_path,
+                    file_format,
+                    dialog.progress_bar,
+                    export_type == 1,
+                    export_type == 2
+                )
+        except (IOError, OSError, ValueError) as e:
+            traceback.print_exc()
+            return (False, f"An error occurred while saving the file: {str(e)}")
+        finally:
+            # If we overwrote the latest user edits, put them back in now...
+            for (fi, bpi), frame in changed_frames.items():
+                self._frame_holder[fi][bpi] = frame
+
+            self._fb_editor.Enable(True)
+
+        return (True, "")
 
     def _resolve_frame_orderings(
         self,
@@ -398,19 +412,22 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         return (new_user_mods, current_dict)
 
-    def _partial_rerun(self, changed_frames: Dict[Tuple[int, int], ForwardBackwardFrame], progress_bar: ProgressBar) -> Pose:
+    def _partial_rerun(self, changed_frames: Dict[Tuple[int, int], ForwardBackwardFrame], progress_bar: ProgressBar) -> Tuple[Pose, Iterable[int]]:
         # Determine what segments have been manipulated...
         segment_indexes = sorted({np.searchsorted(self._segments[:, 1], f_i, "right") for f_i, b_i in changed_frames})
 
         self._run_segmented_passes(progress_bar, segment_indexes)
         self._resolve_frame_orderings(progress_bar)
 
-        return self.get_maximums(
-            self._frame_holder,
-            self._segments,
-            self._segment_bp_order,
-            progress_bar,
-            relaxed_radius=self.settings.relaxed_maximum_radius
+        return (
+            self.get_maximums(
+                self._frame_holder,
+                self._segments,
+                self._segment_bp_order,
+                progress_bar,
+                relaxed_radius=self.settings.relaxed_maximum_radius
+            ),
+            segment_indexes
         )
 
     def _on_run_fb(self, submit_evt: bool = True) -> bool:
@@ -440,13 +457,15 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             if(submit_evt):
                 self._fb_editor.history.do(self.RERUN_HIST_EVT, (user_modified_frames, self._changed_frames))
 
-            poses = self._partial_rerun(self._changed_frames, AntiCloseObject(dialog.progress_bar))
+            poses, segments = self._partial_rerun(self._changed_frames, AntiCloseObject(dialog.progress_bar))
+            segments = [slice(*self._segments[i, :2]) for i in segments]
+
             self._changed_frames = {}
 
             self._fb_editor.video_player.video_viewer.set_all_poses(poses)
             dialog.set_inner_message("Updating Scores...")
             for score in self._fb_editor.score_displays:
-                score.update_all(poses, dialog.progress_bar)
+                score.update_partial(poses, dialog.progress_bar, segments)
                 score.set_prior_modified_user_locations(new_user_modified_frames)
 
             self._fb_editor.Enable(True)
@@ -484,6 +503,10 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             [Approximate(self), Point(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)]
         )
+
+        for s in self._fb_editor.score_displays:
+            s.set_segment_starts(self._segments[:, 0])
+            s.set_segment_fix_frames(self._segments[:, 2])
 
         self._fb_editor.plot_button.Bind(wx.EVT_BUTTON, self._make_plots)
         self._fb_editor.set_frame_exporter(self._on_frame_export)

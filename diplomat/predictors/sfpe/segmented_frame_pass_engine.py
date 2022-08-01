@@ -514,26 +514,13 @@ class SegmentedFramePassEngine(Predictor):
                 True
             )
 
-        # In order to restore correctly, we need to restore to the state
-        # right before segmentation.
-        if(progress_bar is not None):
-            progress_bar.message("Storing copy of source data...")
-            progress_bar.reset(self._frame_holder.num_frames)
-
-        for frm in self._frame_holder.frames:
-            for bp in frm:
-                bp.orig_data = bp.src_data.shallow_duplicate()
-
-            if(progress_bar is not None):
-                progress_bar.update()
-
     def _get_thread_count(self) -> int:
         return os.cpu_count() if(self.settings.thread_count is None) else self.settings.thread_count
 
     def _build_segments(self, progress_bar: Optional[ProgressBar], reset_bar: bool = True):
         # Compute the scores...
         if(reset_bar and progress_bar is not None):
-            progress_bar.message("Breaking video into segments...")
+            progress_bar.message("Computing frame pose scores...")
             progress_bar.reset(self.num_frames)
 
         segment_size = self.settings.segment_size
@@ -588,6 +575,26 @@ class SegmentedFramePassEngine(Predictor):
         self._segments = self._segments[sort_order]
         self._segment_scores = self._segment_scores[sort_order]
 
+        # We are done building segments, now for each segment we compute the fix frame and copy it back into orig_data...
+        if(progress_bar is not None):
+            progress_bar.message("Finalize segments...")
+            progress_bar.reset(len(self._segments))
+
+        for (si, ei, fi) in self._segments:
+            # Compute the fix frame, and align skeletal connections if they exist...
+            fix_frame = FixFrame.create_fix_frame(
+                self._frame_holder,
+                fi,
+                self._frame_holder.metadata.skeleton if ("skeleton" in self._frame_holder.metadata) else None
+            )
+            self._frame_holder.frames[fi] = fix_frame
+            # The new "fixed" data is now the original data...
+            for frame in self._frame_holder.frames[fi]:
+                frame.orig_data = frame.src_data.shallow_duplicate()
+
+            if(progress_bar is not None):
+                progress_bar.update()
+
     @classmethod
     def _run_segment(
         cls,
@@ -612,13 +619,12 @@ class SegmentedFramePassEngine(Predictor):
             if(progress_bar is not None):
                 progress_bar.update()
 
-        # Compute the fix frame....
-        fix_frame = FixFrame.create_fix_frame(
-            sub_frame,
-            fix_frame_idx,
-            sub_frame.metadata.skeleton if("skeleton" in sub_frame.metadata) else None
-        )
+        # Grab the saved fix frame data and restore it...
+        fix_frame = sub_frame.frames[fix_frame_idx]
+        for frame in fix_frame:
+            frame.src_data = frame.orig_data
 
+        # Restore all data...
         sub_frame = FixFrame.restore_all_except_fix_frame(
             sub_frame,
             fix_frame_idx,
@@ -950,7 +956,7 @@ class SegmentedFramePassEngine(Predictor):
 
         with path.open("wb") as f:
             with cls._get_frame_writer(
-                    frames.num_frames, frames.metadata, video_metadata, file_format, f, export_all
+                frames.num_frames, frames.metadata, video_metadata, file_format, f, export_all
             ) as fw:
                 header = fw.get_header()
 

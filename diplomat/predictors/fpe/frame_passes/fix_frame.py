@@ -243,6 +243,9 @@ class FixFrame(FramePass):
                 else:
                     fb_data.frames[f_i][b_i].src_data = fb_data.frames[f_i][b_i].orig_data
 
+            if(prog_bar is not None):
+                prog_bar.update()
+
         return fb_data
 
     def run_pass(

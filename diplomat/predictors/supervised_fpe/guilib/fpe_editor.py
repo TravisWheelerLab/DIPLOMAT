@@ -329,13 +329,13 @@ class FPEEditor(wx.Frame):
 
         other_entries = [
             (empty_bitmap, (wx.ACCEL_CTRL, None), "Enter Fast Labeling Mode. Hover over the video to label the "
-                                                   "selected point."),
+                                                   "selected point. Hover outside the video to indicate the point is not in the frame."),
             (empty_bitmap, (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, None),
              f"Pressing SHIFT while in fast labeling mode will jump back {PointViewNEdit.JUMP_BACK_AMT} frames."),
-            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_SPACE), "Play/Pause the Video."),
-            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_BACK), "Stop the Video."),
-            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_RIGHT), "Move 1 Frame Forward in the Video."),
-            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_LEFT), "Move 1 Frame Back in the Video."),
+            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_SPACE), "Play/Pause the video."),
+            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_BACK), "Stop the video."),
+            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_RIGHT), "Move 1 frame forward in the video."),
+            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_LEFT), "Move 1 frame back in the video."),
             (empty_bitmap, "Left Click/Drag", "Label the selected point within the video."),
             (empty_bitmap, "Right Click", "Mark the selected point as not being in the current frame of the video.")
         ]
@@ -388,21 +388,21 @@ class FPEEditor(wx.Frame):
                                       self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
 
         self._b_frame = self._toolbar.CreateTool(wx.ID_ANY, "Prior Detected Frame", p_f_bmp,
-                                                 shortHelp="Jump to the Prior Detected Frame.")
+                                                 shortHelp="Jump to the prior detected frame.")
         self._toolbar.AddTool(self._b_frame)
         self._f_frame = self._toolbar.CreateTool(wx.ID_ANY, "Next Detected Frame", n_f_bmp,
-                                                 shortHelp="Jump to the Next Detected Frame.")
+                                                 shortHelp="Jump to the next detected frame.")
         self._toolbar.AddTool(self._f_frame)
         self._toolbar.AddSeparator()
 
-        self._undo = self._toolbar.CreateTool(wx.ID_ANY, "Undo", b_bmp, shortHelp="Undo the last Action.")
+        self._undo = self._toolbar.CreateTool(wx.ID_ANY, "Undo", b_bmp, shortHelp="Undo the last action.")
         self._toolbar.AddTool(self._undo)
-        self._redo = self._toolbar.CreateTool(wx.ID_ANY, "Redo", f_bmp, shortHelp="Redo the last Action.")
+        self._redo = self._toolbar.CreateTool(wx.ID_ANY, "Redo", f_bmp, shortHelp="Redo the last action.")
         self._toolbar.AddTool(self._redo)
         self._toolbar.AddSeparator()
 
-        self._run = self._toolbar.CreateTool(wx.ID_ANY, "Run Forward Backward", run_bmp,
-                                             shortHelp="Rerun Forward Backward on user modified results.")
+        self._run = self._toolbar.CreateTool(wx.ID_ANY, "Run Frame Passes", run_bmp,
+                                             shortHelp="Rerun the frame passes on user modified results.")
         self._toolbar.AddTool(self._run)
         self._save = self._toolbar.CreateTool(wx.ID_ANY, "Save Results", save_bmp,
                                               shortHelp="Save the current results to file.")
@@ -410,7 +410,7 @@ class FPEEditor(wx.Frame):
         self._toolbar.AddSeparator()
 
         self._turtle = self._toolbar.CreateTool(wx.ID_ANY, "Edit CTRL Speed: ", turtle_bmp, turtle_bmp,
-                                                shortHelp="Modify the labeling speed when CTRL Key is pressed.")
+                                                shortHelp="Modify the labeling speed when CTRL Key is pressed (fast labeling mode).")
         self._toolbar.AddTool(self._turtle)
         self._toolbar.EnableTool(self._turtle.GetId(), False)
         self._toolbar.AddControl(spin_ctrl)
@@ -420,7 +420,7 @@ class FPEEditor(wx.Frame):
                                                     shortHelp="Export the current modified frames from the UI.")
         self._toolbar.AddTool(self._export_btn)
 
-        self._help = self._toolbar.CreateTool(wx.ID_ANY, "Help", help_bmp, shortHelp="Display the Help Dialog.")
+        self._help = self._toolbar.CreateTool(wx.ID_ANY, "Help", help_bmp, shortHelp="Display the help dialog.")
         self._toolbar.AddTool(self._help)
 
         self._update_hist_btns(self._history)
@@ -544,8 +544,9 @@ class FPEEditor(wx.Frame):
         PRIVATE: Triggered when user clicks the export frame toolbar button...
         """
         selection = [
-            "Original Frames with User Edits",
-            "Frames after Frame Passes with User Edits."
+            "Original Frames with Latest User Edits",
+            "Frames after Latest Frame Pass Run",
+            "Frames after Latest Frame Pass Run, All Data."
         ]
 
         if(self._frame_exporter is not None):

@@ -223,12 +223,12 @@ def extract_n_pack(
     :param use_dlfs: A boolean. True to use the .dlfs format for export, False to use the .h5 format for export.
     :param threshold: A float between 0 and 1, inclusive. The frame sparsification threshold, any probabilities below
                       the threshold are ignored. If set to 0, sparsification of frames is disabled. Default is 1e6.
-    :param compression_lvl: An integer between 0 and 9, inclusive. The compression level if using the .dlcf format.
+    :param compression_lvl: An integer between 0 and 9, inclusive. The compression level if using the .dlfs format.
                             Default is 6.
     :param on_frames: A function that accepts a TrackingData for each frame. Useful for pretty printing/doing something
                       with the data during rewrite. Defaults to None, meaning it is not called.
 
-    :returns: A bytes object, being a base64 encoded DLCF or HDF5 frame store file.
+    :returns: A bytes object, being a base64 encoded DLFS or HDF5 frame store file.
     """
     out = BytesIO()
     # Dump into the in memory file...

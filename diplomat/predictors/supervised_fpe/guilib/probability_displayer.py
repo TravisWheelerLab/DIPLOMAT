@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import Iterable, NamedTuple
+from typing import Iterable, NamedTuple, Optional
 import wx
 import numpy as np
 
@@ -20,6 +20,8 @@ class DrawingInfo(NamedTuple):
     x_center: float
     y_center: float
     center_draw_mode: DrawMode
+    segment_xs: Iterable[float]
+    segment_fix_xs: Iterable[float]
     draw_commands: Iterable[DrawCommand]
 
 
@@ -80,6 +82,9 @@ class ProbabilityDisplayer(wx.Control):
         self._max_data_point = np.nanmax(self._data)
         self._refresh_bad_locations()
         self._ticks_visible = visible_probs
+
+        self._segment_starts = None
+        self._segment_fix_frames = None
 
         size = wx.Size(self.MIN_PROB_STEP * 5, max(height, (self.TRIANGLE_SIZE * 4) + self.TOP_PADDING))
         self.SetMinSize(size)
@@ -190,6 +195,22 @@ class ProbabilityDisplayer(wx.Control):
         high_bad = np.searchsorted(self._bad_locations, high_val)
         bad_locations = self._bad_locations[low_bad:high_bad] - low_val
 
+        # If there are segments, identify what segments we can see...
+        if(self._segment_starts is not None):
+            seg_low = np.searchsorted(self._segment_starts, low_val)
+            seg_high = np.searchsorted(self._segment_starts, high_val)
+            seg_offsets = (self._segment_starts[seg_low:seg_high] - low_val) * tick_step + offset + (tick_step / 2)
+        else:
+            seg_offsets = []
+
+        # If there are segments, identify what segments we can see...
+        if(self._segment_fix_frames is not None):
+            seg_low = np.searchsorted(self._segment_fix_frames, low_val)
+            seg_high = np.searchsorted(self._segment_fix_frames, high_val)
+            seg_fix_offsets = (self._segment_fix_frames[seg_low:seg_high] - low_val) * tick_step + offset
+        else:
+            seg_fix_offsets = []
+
         x = np.arange(0, high_val - low_val) * tick_step + offset
         y = data[low_val:high_val]
         y = (1 - (y / self._max_data_point)) * (height - ((self.TRIANGLE_SIZE * 2) + self.TOP_PADDING)) + self.TOP_PADDING
@@ -203,6 +224,8 @@ class ProbabilityDisplayer(wx.Control):
             center,
             y[self._current_index - low_val],
             DrawMode(mode[self._current_index - low_val]),
+            seg_offsets,
+            seg_fix_offsets,
             self._get_draw_commands(
                 x, y, mode, low_val, self._bad_locations, self._user_modified_from_last_pass
             )
@@ -228,7 +251,7 @@ class ProbabilityDisplayer(wx.Control):
         highlight_color = wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)
         highlight_color2 = wx.Colour(
             *highlight_color[:3],
-            highlight_color.Alpha() * 0.3
+            int(highlight_color.Alpha() * 0.3)
         )
         # WX widgets doesn't provide an error highlight color. Since the
         # highlight color doesn't typically match the foreground or
@@ -241,16 +264,16 @@ class ProbabilityDisplayer(wx.Control):
             255 - highlight_color.Blue(),
             highlight_color.Alpha()
         )
-        error_color2 = wx.Colour(*error_color[:3], error_color.Alpha() * 0.3)
+        error_color2 = wx.Colour(*error_color[:3], int(error_color.Alpha() * 0.3))
 
         foreground_color = self.GetForegroundColour()
 
-        fixed_error_color = wx.Colour(*((
-            np.asarray(self.GetBackgroundColour(), np.uint16)
-            + np.asarray(foreground_color, np.uint16)
-        ) / 2))
+        fixed_error_color = wx.Colour(*(((
+            np.asarray(self.GetBackgroundColour(), int)
+            + np.asarray(foreground_color, int)
+        ) / 2).astype(int)))
         fixed_error_color2 = wx.Colour(
-            *fixed_error_color[:3], fixed_error_color.Alpha() * 0.3
+            *fixed_error_color[:3], int(fixed_error_color.Alpha() * 0.3)
         )
 
         # All the pens and brushes we will need...
@@ -275,6 +298,21 @@ class ProbabilityDisplayer(wx.Control):
 
         # Compute the center and points to place on the line...
         draw_info = self._compute_points(height, width)
+
+        for seg_x in draw_info.segment_xs:
+            dc.DrawLineList([[seg_x, 0, seg_x, height]], fixed_error_pen)
+            dc.DrawPolygonList([[
+                [seg_x - int(self.TRIANGLE_SIZE / 2), 0],
+                [seg_x + int(self.TRIANGLE_SIZE / 2), 0],
+                [seg_x, int(self.TRIANGLE_SIZE)]
+            ]], fixed_error_pen, fixed_error_brush)
+
+        for seg_x in draw_info.segment_fix_xs:
+            dc.DrawPolygonList([[
+                [seg_x - int(self.TRIANGLE_SIZE / 2), 0],
+                [seg_x + int(self.TRIANGLE_SIZE / 2), 0],
+                [seg_x, int(self.TRIANGLE_SIZE)]
+            ]], indicator_pen2, highlight_brush)
 
         # Plot all of the points the filled-in polygon underneath, and the line connecting the points...
         for draw_command in draw_info.draw_commands:
@@ -445,8 +483,6 @@ class ProbabilityDisplayer(wx.Control):
         view.flags.writeable = False
         return view
 
-
-
     def get_prev_bad_location(self, location: int = None, orig_location = None, moves_done = 0) -> int:
         """
         Get the previous bad location based on the current location in the
@@ -551,6 +587,12 @@ class ProbabilityDisplayer(wx.Control):
         """
         self._text = value
 
+    def set_segment_starts(self, value: Optional[np.ndarray]):
+        self._segment_starts = value
+
+    def set_segment_fix_frames(self, value: Optional[np.ndarray]):
+        self._segment_fix_frames = value
+
 
 def test_demo_displayer():
     app = wx.App()
@@ -563,6 +605,8 @@ def test_demo_displayer():
     data[np.random.randint(0, 100, 5)] = np.nan
 
     prob_display = ProbabilityDisplayer(frame, data, np.flatnonzero(data < 0.1))
+    prob_display.set_segment_starts(np.unique(np.random.randint(0, 100, 5)))
+    prob_display.set_segment_fix_frames(np.unique(np.random.randint(0, 100, 5)))
     layout.Add(prob_display, 1, wx.EXPAND)
     slider = wx.Slider(frame, minValue=0, maxValue=len(data) - 1)
     layout.Add(slider, 0, wx.EXPAND)

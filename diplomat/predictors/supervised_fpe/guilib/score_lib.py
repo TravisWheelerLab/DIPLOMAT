@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional, Iterable
 
 from .labeler_lib import SettingCollection, SettingCollectionWidget
 from .probability_displayer import ProbabilityDisplayer
@@ -14,13 +14,14 @@ class ScoreEngine(ABC):
     """
 
     @abstractmethod
-    def compute_scores(self, poses: Pose, prog_bar: ProgressBar) -> np.ndarray:
+    def compute_scores(self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None) -> np.ndarray:
         """
         Compute the scores for the given set of poses.
 
         :param poses: The predicted locations/probabilities for given body parts.
         :param prog_bar: A progress bar for keeping track of current progress
                          on computing the scores.
+        :param sub_section: Optional slice, passed when only some scores need to be recomputed.
 
         :returns: A numpy array of floats between 1 and 0, being the length of
                   the video...
@@ -59,7 +60,6 @@ class ScoreEngineDisplayer(wx.Control):
         super().__init__(parent, *args, **kwargs)
 
         self._score_engine = score_engine
-
         self._main_layout = wx.BoxSizer(wx.HORIZONTAL)
 
         settings = self._score_engine.get_settings()
@@ -97,6 +97,21 @@ class ScoreEngineDisplayer(wx.Control):
         self._prob_displayer.set_data(new_scores)
         self._prob_displayer.set_bad_locations(new_bad_labels)
 
+    def update_partial(self, poses: Pose, progress_bar: ProgressBar, slices: Iterable[slice]):
+        progress_bar.reset(sum(len(range(*s.indices(poses.get_frame_count()))) for s in slices))
+        progress_bar.message(f"Updating {self._score_engine.get_name()} Scores.")
+
+        data = np.copy(self._prob_displayer.get_data())
+
+        for s in slices:
+            new_scores = self._score_engine.compute_scores(poses, progress_bar, s)
+            data[s] = new_scores
+
+        bad_labels = self._score_engine.compute_bad_indexes(data)
+        self._prob_displayer.set_data(data)
+        self._prob_displayer.set_bad_locations(bad_labels)
+
+
     def update_at(self, frame: int, value: float):
         self._prob_displayer.set_data_at(frame, value)
         # Update errors in display...
@@ -130,5 +145,11 @@ class ScoreEngineDisplayer(wx.Control):
 
     def get_prior_modified_user_locations(self) -> np.ndarray:
         return self._prob_displayer.get_prior_modified_user_locations()
+
+    def set_segment_starts(self, value: np.ndarray):
+        self._prob_displayer.set_segment_starts(value)
+
+    def set_segment_fix_frames(self, value: np.ndarray):
+        self._prob_displayer.set_segment_fix_frames(value)
 
 
