@@ -2,7 +2,7 @@ import os
 from typing import Optional, Tuple, List
 from scipy.sparse import csgraph
 from diplomat.predictors.fpe import fpe_math
-from diplomat.predictors.fpe.frame_pass import FramePass, RangeSlicer
+from diplomat.predictors.fpe.frame_pass import FramePass, RangeSlicer, PassOrderError
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardData, ForwardBackwardFrame, AttributeDict
 from diplomat.processing import ConfigSpec, ProgressBar, Config
 import numpy as np
@@ -35,6 +35,9 @@ class ClusterFrames(FramePass):
         in_place: bool = True,
         reset_bar: bool = True
     ) -> ForwardBackwardData:
+        if("fixed_frame_index" in fb_data.metadata):
+            raise PassOrderError("Can't run clustering again once frame fixing is done!")
+
         if(not in_place):
             raise ValueError("Clustering must be done in place!")
 

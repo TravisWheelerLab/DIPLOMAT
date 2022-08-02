@@ -460,20 +460,34 @@ class SegmentedFramePassEngine(Predictor):
         frame_list: ForwardBackwardData,
         segments: np.ndarray,
         segment_alignments: np.ndarray,
-        progress_bar: ProgressBar,
+        progress_bar: Optional[ProgressBar] = None,
         relaxed_radius: float = 0,
-        segment_indexes: Optional[Sequence[int]] = None
+        old_poses: Optional[Tuple[Pose, Iterable[int]]] = None
     ) -> Pose:
-        # If segment indexes is None, we return maximums for all the frames...
-        if(segment_indexes is None):
-            segment_indexes = range(len(segments))
-            frame_count = frame_list.num_frames
-        else:
-            # Otherwise we return maximums for the segments in order....
-            frame_count = int(np.sum(segments[segment_indexes, 1] - segments[segment_indexes, 0]))
+        """
+        Compute the maximum locations, or the final pose predictions, of a given segmented frame pass engine data.
 
-        # Space to store poses
-        poses = Pose.empty_pose(frame_count, frame_list.num_bodyparts)
+        :param frame_list: The frame data, from frame pass engine computations.
+        :param segments: The segments the frame data was broken into. Numpy array of Num Segments x 3 (start, end, fix frame).
+        :param segment_alignments: The indexes of body parts if actually aligned. Numpy array of Num Segments x Num Body Parts.
+        :param progress_bar: The progress bar used to indicate progress, optional.
+        :param relaxed_radius: The relaxed radius value. If the maximum location in the frame is near a max location in the
+                               original data (less than relaxed_radius), shift the results. Measures in grid cells.
+        :param old_poses: Optional, allows in-place partial maximum updates, if not None, is a tuple being the old poses, and an iterable of integers
+                          being the segments that have undergone modifications. Will only compute maximums for the passed segments, and store them
+                          in the specified pose object instead of creating a new one.
+
+        :return: A Pose object, with the maximum locations.
+        """
+        if(old_poses is None):
+            # No old poses specified, create a Pose object and compute all maximums.
+            frame_count = frame_list.num_frames
+            poses = Pose.empty_pose(frame_count, frame_list.num_bodyparts)
+            segment_indexes = range(len(segments))
+        else:
+            # Old poses passed, we will only recompute maximums for segments that have undergone changes.
+            poses, segment_indexes = old_poses
+            frame_count = int(np.sum(segments[segment_indexes, 1] - segments[segment_indexes, 0]))
 
         if(progress_bar is not None):
             progress_bar.reset(frame_count)

@@ -412,12 +412,27 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         return (new_user_mods, current_dict)
 
-    def _partial_rerun(self, changed_frames: Dict[Tuple[int, int], ForwardBackwardFrame], progress_bar: ProgressBar) -> Tuple[Pose, Iterable[int]]:
+    def _partial_rerun(
+        self,
+        changed_frames: Dict[Tuple[int, int], ForwardBackwardFrame],
+        old_poses: Pose,
+        progress_bar: ProgressBar
+    ) -> Tuple[Pose, Iterable[int]]:
         # Determine what segments have been manipulated...
         segment_indexes = sorted({np.searchsorted(self._segments[:, 1], f_i, "right") for f_i, b_i in changed_frames})
 
+        poses = old_poses.get_all().reshape((old_poses.get_frame_count(), old_poses.get_bodypart_count(), 3))
+        # Restore poses to there original order....
+        for (s_i, e_i, f_i), seg_rev in zip(self._segments, self._reverse_segment_bp_order):
+            poses[s_i:e_i, :] = poses[s_i:e_i, seg_rev]
+
         self._run_segmented_passes(progress_bar, segment_indexes)
         self._resolve_frame_orderings(progress_bar)
+
+        # Now compute new order of poses...
+        for (s_i, e_i, f_i), seg_ord in zip(self._segments, self._segment_bp_order):
+            poses[s_i:e_i, :] = poses[s_i:e_i, seg_ord]
+        old_poses.get_all()[:] = poses.reshape(old_poses.get_frame_count(), old_poses.get_bodypart_count() * 3)
 
         return (
             self.get_maximums(
@@ -425,7 +440,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 self._segments,
                 self._segment_bp_order,
                 progress_bar,
-                relaxed_radius=self.settings.relaxed_maximum_radius
+                relaxed_radius=self.settings.relaxed_maximum_radius,
+                old_poses=(old_poses, segment_indexes)
             ),
             segment_indexes
         )
@@ -457,7 +473,11 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             if(submit_evt):
                 self._fb_editor.history.do(self.RERUN_HIST_EVT, (user_modified_frames, self._changed_frames))
 
-            poses, segments = self._partial_rerun(self._changed_frames, AntiCloseObject(dialog.progress_bar))
+            poses, segments = self._partial_rerun(
+                self._changed_frames,
+                self._fb_editor.video_player.video_viewer.get_all_poses(),
+                AntiCloseObject(dialog.progress_bar)
+            )
             segments = [slice(*self._segments[i, :2]) for i in segments]
 
             self._changed_frames = {}
