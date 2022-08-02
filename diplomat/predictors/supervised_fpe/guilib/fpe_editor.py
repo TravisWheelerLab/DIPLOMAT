@@ -664,6 +664,7 @@ class MultiScoreDisplay(wx.Panel):
 
         self._scroll_panel = ScrolledPanel(self, style=wx.VSCROLL)
         self._scroll_sizer = wx.BoxSizer(wx.VERTICAL)
+        self._scroll_sizer = self._main_sizer
 
         self.displays = [
             ScoreEngineDisplayer(
@@ -675,8 +676,8 @@ class MultiScoreDisplay(wx.Panel):
             self._scroll_sizer.Add(display, 0, wx.EXPAND)
 
         self._scroll_panel.SetSizer(self._scroll_sizer)
-        self._scroll_panel.SetAutoLayout(True)
         self._scroll_panel.SetupScrolling()
+        self._scroll_panel.SetAutoLayout(True)
 
         self._main_sizer.Add(self._scroll_panel, 1, wx.EXPAND)
 

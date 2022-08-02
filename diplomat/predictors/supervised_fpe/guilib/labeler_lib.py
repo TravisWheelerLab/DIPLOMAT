@@ -324,7 +324,7 @@ class SettingCollectionWidget(wx.Control):
             self._collapse_button.GetFont().MakeSmaller()
         )
         w, h = self._collapse_button.GetSize()
-        self._collapse_button.SetMinSize(wx.Size(w, h * 0.8))
+        self._collapse_button.SetMinSize(wx.Size(w, int(h * 0.8)))
 
         self._selected_settings = None
 

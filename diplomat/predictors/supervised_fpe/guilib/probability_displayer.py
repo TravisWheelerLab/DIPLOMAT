@@ -20,8 +20,8 @@ class DrawingInfo(NamedTuple):
     x_center: float
     y_center: float
     center_draw_mode: DrawMode
-    segment_xs: Iterable[float]
-    segment_fix_xs: Iterable[float]
+    segment_xs: Iterable[int]
+    segment_fix_xs: Iterable[int]
     draw_commands: Iterable[DrawCommand]
 
 
@@ -45,13 +45,11 @@ class ProbabilityDisplayer(wx.Control):
         data: np.ndarray = None,
         bad_locations: np.ndarray = None,
         text: str = None,
-        w_id=wx.ID_ANY,
         height: int = DEF_HEIGHT,
         visible_probs: int = VISIBLE_PROBS,
-        pos=wx.DefaultPosition, size=wx.DefaultSize,
         style=wx.BORDER_DEFAULT,
-        validator=wx.DefaultValidator,
-        name="ProbabilityDisplayer"
+        name="ProbabilityDisplayer",
+        **kwargs
     ):
         """
         Construct a new ProbabilityDisplayer....
@@ -68,7 +66,7 @@ class ProbabilityDisplayer(wx.Control):
         :param validator: WX Validator, defaults to
         :param name: WX internal name of widget.
         """
-        super().__init__(parent, w_id, pos, size, style | wx.FULL_REPAINT_ON_RESIZE, validator, name)
+        super().__init__(parent, style=style | wx.FULL_REPAINT_ON_RESIZE, name=name, **kwargs)
         # This tell WX that we are going to handle background painting ourselves, disabling system background clearing
         # and avoiding glitchy rendering and flickering...
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
@@ -86,9 +84,9 @@ class ProbabilityDisplayer(wx.Control):
         self._segment_starts = None
         self._segment_fix_frames = None
 
-        size = wx.Size(self.MIN_PROB_STEP * 5, max(height, (self.TRIANGLE_SIZE * 4) + self.TOP_PADDING))
-        self.SetMinSize(size)
-        self.SetInitialSize(size)
+        self._best_size = wx.Size(self.MIN_PROB_STEP * 5, max(height, (self.TRIANGLE_SIZE * 4) + self.TOP_PADDING))
+        self.SetMinSize(self._best_size)
+        self.SetInitialSize(self._best_size)
 
         self._current_index = 0
 
@@ -98,7 +96,10 @@ class ProbabilityDisplayer(wx.Control):
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt: None)
 
-    def on_paint(self, event):
+    def DoGetBestSize(self):
+        return self._best_size
+
+    def on_paint(self, event: wx.PaintEvent):
         """
         PRIVATE: Triggered on a wx paint event, redraws the probability display...
         """
@@ -199,9 +200,9 @@ class ProbabilityDisplayer(wx.Control):
         if(self._segment_starts is not None):
             seg_low = np.searchsorted(self._segment_starts, low_val)
             seg_high = np.searchsorted(self._segment_starts, high_val)
-            seg_offsets = (self._segment_starts[seg_low:seg_high] - low_val) * tick_step + offset + (tick_step / 2)
+            seg_offsets = (self._segment_starts[seg_low:seg_high] - low_val) * tick_step + offset - (tick_step / 2)
         else:
-            seg_offsets = []
+            seg_offsets = np.array([])
 
         # If there are segments, identify what segments we can see...
         if(self._segment_fix_frames is not None):
@@ -209,7 +210,7 @@ class ProbabilityDisplayer(wx.Control):
             seg_high = np.searchsorted(self._segment_fix_frames, high_val)
             seg_fix_offsets = (self._segment_fix_frames[seg_low:seg_high] - low_val) * tick_step + offset
         else:
-            seg_fix_offsets = []
+            seg_fix_offsets = np.array([])
 
         x = np.arange(0, high_val - low_val) * tick_step + offset
         y = data[low_val:high_val]
@@ -221,11 +222,11 @@ class ProbabilityDisplayer(wx.Control):
         mode[np.isnan(y)] = DrawMode.USER_MODIFIED
 
         return DrawingInfo(
-            center,
+            int(center),
             y[self._current_index - low_val],
             DrawMode(mode[self._current_index - low_val]),
-            seg_offsets,
-            seg_fix_offsets,
+            seg_offsets.astype(int),
+            seg_fix_offsets.astype(int),
             self._get_draw_commands(
                 x, y, mode, low_val, self._bad_locations, self._user_modified_from_last_pass
             )
@@ -296,10 +297,17 @@ class ProbabilityDisplayer(wx.Control):
         indicator_pen = wx.Pen(foreground_color, 5, wx.PENSTYLE_SOLID)
         indicator_pen2 = wx.Pen(foreground_color, 1, wx.PENSTYLE_SOLID)
 
+        # This patches the point drawing for the latest versions of wxWidgets, which don't respect the pen's width correctly...
+        def draw_points(points, pen):
+            top = np.round((np.asarray(points) - pen.GetWidth() / 2)).astype(int)
+            args = np.concatenate([top, np.full(top.shape, pen.GetWidth(), dtype=int)], axis=-1)
+            dc.DrawEllipseList(args, transparent_pen, wx.Brush(pen.GetColour(), wx.BRUSHSTYLE_SOLID))
+
         # Compute the center and points to place on the line...
         draw_info = self._compute_points(height, width)
 
         for seg_x in draw_info.segment_xs:
+            seg_x = int(seg_x)
             dc.DrawLineList([[seg_x, 0, seg_x, height]], fixed_error_pen)
             dc.DrawPolygonList([[
                 [seg_x - int(self.TRIANGLE_SIZE / 2), 0],
@@ -308,6 +316,7 @@ class ProbabilityDisplayer(wx.Control):
             ]], fixed_error_pen, fixed_error_brush)
 
         for seg_x in draw_info.segment_fix_xs:
+            seg_x = int(seg_x)
             dc.DrawPolygonList([[
                 [seg_x - int(self.TRIANGLE_SIZE / 2), 0],
                 [seg_x + int(self.TRIANGLE_SIZE / 2), 0],
@@ -351,18 +360,18 @@ class ProbabilityDisplayer(wx.Control):
             all_points = np.concatenate(
                 ([poly_begin_point], draw_command.points, [poly_end_point])
             )
-            dc.DrawLineList(np.concatenate((all_points[1:], all_points[:-1]), 1), pen)
-            dc.DrawPointList(draw_command.points, pen2)
+            dc.DrawLineList(np.concatenate((all_points[1:], all_points[:-1]), 1).astype(int), pen)
+            draw_points(draw_command.points.astype(int), pen2)
 
         # Draw the current location indicating line, point and arrow, indicates which data point we are currently on.
-        dc.DrawLineList([[draw_info.x_center, 0, draw_info.x_center, height]], indicator_pen2)
+        dc.DrawLineList([[int(draw_info.x_center), 0, int(draw_info.x_center), height]], indicator_pen2)
         dc.DrawPolygonList([[
-            [draw_info.x_center - self.TRIANGLE_SIZE, height],
-            [draw_info.x_center + self.TRIANGLE_SIZE, height],
-            [draw_info.x_center, height - int(self.TRIANGLE_SIZE * 1.5)]
+            [int(draw_info.x_center - self.TRIANGLE_SIZE), height],
+            [int(draw_info.x_center + self.TRIANGLE_SIZE), height],
+            [int(draw_info.x_center), height - int(self.TRIANGLE_SIZE * 1.5)]
         ]], indicator_pen2, indicator_brush)
         if(draw_info.center_draw_mode != DrawMode.USER_MODIFIED):
-            dc.DrawPointList([[draw_info.x_center, draw_info.y_center]], indicator_pen)
+            draw_points([[int(draw_info.x_center), int(draw_info.y_center)]], indicator_pen)
 
         # If the user set the name of this probability display plot, write it to the top-left corner...
         if(self._text is not None):
@@ -604,13 +613,22 @@ def test_demo_displayer():
     data = np.random.rand(100)
     data[np.random.randint(0, 100, 5)] = np.nan
 
-    prob_display = ProbabilityDisplayer(frame, data, np.flatnonzero(data < 0.1))
+    prob_display = ProbabilityDisplayer(frame, data, np.flatnonzero(data < 0.1), text="Test1")
     prob_display.set_segment_starts(np.unique(np.random.randint(0, 100, 5)))
     prob_display.set_segment_fix_frames(np.unique(np.random.randint(0, 100, 5)))
     layout.Add(prob_display, 1, wx.EXPAND)
+
+    prob_display2 = ProbabilityDisplayer(frame, data, np.flatnonzero(data < 0.1), text="Test2")
+    layout.Add(prob_display2, 1, wx.EXPAND)
+
     slider = wx.Slider(frame, minValue=0, maxValue=len(data) - 1)
     layout.Add(slider, 0, wx.EXPAND)
-    slider.Bind(wx.EVT_SLIDER, lambda evt: prob_display.set_location(slider.GetValue()))
+
+    def do(evt):
+        prob_display.set_location(slider.GetValue())
+        prob_display2.set_location(slider.GetValue())
+
+    slider.Bind(wx.EVT_SLIDER, do)
 
     frame.SetSizerAndFit(layout)
     frame.SetSize(500, 100)

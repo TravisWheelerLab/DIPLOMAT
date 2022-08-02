@@ -338,9 +338,9 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
                 dc.SetPen(wx.Pen(wx_color, 1, wx.PENSTYLE_SOLID))
 
             dc.DrawCircle(
-                (x * (nv_w / ov_w)) + x_off,
-                (y * (nv_h / ov_h)) + y_off,
-                self._point_radius * (nv_h / ov_h)
+                int((x * (nv_w / ov_w)) + x_off),
+                int((y * (nv_h / ov_h)) + y_off),
+                int(self._point_radius * (nv_h / ov_h))
             )
 
     def _get_selected_bodypart(self) -> Tuple[float, float, float]:

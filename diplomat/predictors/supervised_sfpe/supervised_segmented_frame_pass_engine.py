@@ -2,7 +2,7 @@ import os
 import traceback
 
 # We first check if this is a headless environment, and if so don't even allow this module to be imported...
-from collections import UserList, MutableMapping
+from collections import UserList
 from pathlib import Path
 
 from diplomat.predictors.supervised_fpe.guilib.progress_dialog import FBProgressDialog

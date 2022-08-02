@@ -1,8 +1,7 @@
 """
 Provides a generic API and some core data structures for frame exporters.
 """
-from collections import MutableMapping
-from typing import Any, Optional, Iterator, List, BinaryIO
+from typing import Any, Optional, Iterator, List, BinaryIO, MutableMapping
 from abc import ABC, abstractmethod
 import numpy as np
 from diplomat.processing import TrackingData
