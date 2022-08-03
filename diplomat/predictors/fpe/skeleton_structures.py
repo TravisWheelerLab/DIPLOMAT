@@ -1,4 +1,3 @@
-from decimal import Decimal
 from typing import NamedTuple, Union, Iterable, Any, Dict, Tuple, ItemsView, List, Callable, Optional
 import numpy as np
 import bisect
@@ -261,33 +260,31 @@ class Histogram:
     LEFT = reversed
     RIGHT = iter
 
-    def __init__(self, bin_size: Decimal = 1, bin_offset: Decimal = 0):
-        self._bins: Dict[Decimal, Tuple[int, Decimal]] = {}
-        self._bin_size = Decimal(bin_size)
-        self._bin_offset = Decimal(bin_offset)
+    def __init__(self, bin_size: float = 1, bin_offset: float = 0):
+        self._bins: Dict[int, Tuple[int, float]] = {}
+        self._bin_size = bin_size
+        self._bin_offset = bin_offset
 
-    def add(self, value: Union[Decimal, float]):
+    def add(self, value: float):
         # Compute the bin the value falls into...
-        value = Decimal(value)
-        val_bin = int((value - self._bin_offset) / self._bin_size) * self._bin_size + self._bin_offset
+        val_bin = int((value - self._bin_offset) / self._bin_size)
 
-        freq, avg = self._bins.get(val_bin, (0, Decimal()))
+        freq, avg = self._bins.get(val_bin, (0, 0.0))
         # Running Average formula, see notebook...
-        self._bins[val_bin] = (freq + 1, avg * (freq / Decimal(freq + 1)) + value * (1 / Decimal(freq + 1)))
+        self._bins[val_bin] = (freq + 1, avg * (freq / (freq + 1)) + value * (1 / (freq + 1)))
 
-    def get_bin_for_value(self, value: Union[Decimal, float]) -> Tuple[Decimal, int, Decimal]:
-        value = Decimal(value)
-        val_bin = int((value - self._bin_offset) / self._bin_size) * self._bin_size + self._bin_offset
-        freq, avg = self._bins.get(val_bin, (0, Decimal()))
-        return (val_bin, freq, avg)
+    def get_bin_for_value(self, value: float) -> Tuple[float, int, float]:
+        val_bin = int((value - self._bin_offset) / self._bin_size)
+        freq, avg = self._bins.get(val_bin, (0, 0.0))
+        return (val_bin * self._bin_size + self._bin_offset, freq, avg)
 
-    def __iter__(self) -> Iterable[Decimal]:
-        return iter(self._bins)
+    def __iter__(self) -> Iterable[float]:
+        return (b * self._bin_size + self._bin_offset for b in self._bins)
 
-    def bins(self) -> ItemsView[Decimal, Tuple[int, Decimal]]:
-        return self._bins.items()
+    def bins(self) -> Iterable[Tuple[float, Tuple[int, float]]]:
+        return ((b * self._bin_size + self._bin_offset, (freq, avg)) for b, (freq, avg) in self._bins.items())
 
-    def get_max(self) -> Tuple[Decimal, int, Decimal]:
+    def get_max(self) -> Tuple[float, int, float]:
         max_info = (0, 0, 0)
 
         for (b, (freq, avg)) in self.bins():
@@ -300,14 +297,14 @@ class Histogram:
 
     def get_quantile(
         self,
-        quant: Decimal,
-        start_bin: Decimal = None,
+        quant: float,
+        start_bin: float = None,
         direction: Callable[[List], List] = RIGHT
-    ) -> Tuple[Decimal, int, Decimal]:
-        ordered_bins = list(direction(sorted(self._bins)))
+    ) -> Tuple[float, int, float]:
+        ordered_bins = list(direction(sorted(self)))
         start_idx = bisect.bisect_left(ordered_bins, start_bin) if(start_bin is not None) else 0
 
-        full_list = [Decimal(self._bins[bin_i][0]) for bin_i in ordered_bins]
+        full_list = [self._bins[int((bin_i - self._bin_offset) / self._bin_size)][0] for bin_i in ordered_bins]
         sub_list = full_list[start_idx:]
 
         bin_num = ordered_bins[min(start_idx + bisect.bisect_right(np.cumsum(sub_list) / np.sum(full_list), quant), len(ordered_bins) - 1)]
@@ -322,21 +319,17 @@ class Histogram:
         mean = np.sum(avgs * freqs) / np.sum(freqs)
         std = np.sqrt(np.sum(freqs * (avgs - mean) ** 2) / np.sum(freqs))
 
-        return (float(mean), float(std))
+        return (mean, std)
 
-    def get_std_using_mean(self, mean: Union[float, Decimal]) -> float:
+    def get_std_using_mean(self, mean: Union[float, float]) -> float:
         # Weighted average of bins...
-        mean = Decimal(mean)
+        mean = mean
         avgs = np.array([avg for (b, (freq, avg)) in self.bins()])
         freqs = np.array([freq for (b, (freq, avg)) in self.bins()])
 
-        std = np.sqrt(np.sum(freqs * (avgs - Decimal(mean)) ** 2) / np.sum(freqs))
+        std = np.sqrt(np.sum(freqs * (avgs - mean) ** 2) / np.sum(freqs))
 
-        return float(std)
-
-    @classmethod
-    def to_floats(cls, lister: Iterable[Any]) -> List[Any]:
-        return [float(val) if(isinstance(val, Decimal)) else val for val in lister]
+        return std
 
     def __repr__(self):
         return self.__str__()

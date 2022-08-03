@@ -37,7 +37,7 @@ class CreateSkeleton(FramePass):
         if(has_skel):
             new_skeleton_info = StorageGraph(fb_data.metadata.bodyparts)
             for edge, hist in self._skeleton.items():
-                new_skeleton_info[edge] = Histogram.to_floats(hist.get_max())
+                new_skeleton_info[edge] = hist.get_max()
 
             new_frame_data.metadata.skeleton = new_skeleton_info
             new_frame_data.metadata.skeleton_config = {

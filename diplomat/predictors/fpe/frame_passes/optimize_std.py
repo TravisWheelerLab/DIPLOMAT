@@ -1,4 +1,3 @@
-from decimal import Decimal
 from typing import Optional
 import numpy as np
 from diplomat.predictors.fpe.frame_pass import FramePass
@@ -26,11 +25,11 @@ class OptimizeStandardDeviation(FramePass):
         reset_bar: bool = True
     ) -> ForwardBackwardData:
         d_scale = fb_data.metadata.down_scaling
-        bin_off = self.config.ignore_bins_below / Decimal(d_scale)
+        bin_off = self.config.ignore_bins_below / d_scale
         self._ignore_below = bin_off
 
         self._histogram = Histogram(
-            self.config.bin_size / Decimal(d_scale),
+            self.config.bin_size / d_scale,
             bin_off
         )
         self._current_frame = 0
@@ -40,9 +39,7 @@ class OptimizeStandardDeviation(FramePass):
         result = super().run_pass(fb_data, prog_bar, in_place, reset_bar)
 
         std = self._histogram.get_std_using_mean(0)
-        result.metadata.optimal_std = Histogram.to_floats(
-            (*self._histogram.get_bin_for_value(std)[:2], std)
-        )
+        result.metadata.optimal_std = (*self._histogram.get_bin_for_value(std)[:2], std)
 
         if(self.config.DEBUG):
             print(f"Optimal STD: {result.metadata.optimal_std}")

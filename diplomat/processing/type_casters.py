@@ -147,10 +147,10 @@ class RoundedDecimal(TypeCaster):
     def __init__(self, precision: int = 5):
         self._precision = precision
 
-    def __call__(self, param: Any) -> decimal.Decimal:
-        return decimal.Decimal(
+    def __call__(self, param: Any) -> float:
+        return float(decimal.Decimal(
             param, context=decimal.Context(prec=self._precision)
-        )
+        ))
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}[precision={self._precision}]"
