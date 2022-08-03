@@ -143,6 +143,10 @@ class FixFrame(FramePass):
 
                     min_dist = min(cls.dist(f1_loc, f2_loc), min_dist)
 
+            if(min_dist == 0):
+                # BAD! We found a frame that failed to cluster properly...
+                return -np.inf
+
             score += min_dist
 
         # If skeleton is implemented...

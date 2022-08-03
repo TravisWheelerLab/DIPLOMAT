@@ -486,8 +486,8 @@ class MITViterbi(FramePass):
 
         # Looks like normal viterbi until domination step...
         for bp_i in group_range:
-            py, px, pprob, __, __ = prior[bp_i].src_data.unpack()
-            cy, cx, cprob, __, __ = current[bp_i].src_data.unpack()
+            py, px, pprob, p_occx, p_occy = prior[bp_i].src_data.unpack()
+            cy, cx, cprob, c_occx, c_occy = current[bp_i].src_data.unpack()
 
             if((cprob is not None) and np.all(cprob <= 0)):
                 current[bp_i].src_data = SparseTrackingData()

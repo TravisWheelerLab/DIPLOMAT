@@ -23,7 +23,13 @@ class ClusterFrames(FramePass):
         self._cluster_dict = {}
 
     def _get_frame(self, index: int):
-        return (self._frame_data.frames[index], self._frame_data.metadata.num_outputs, self._gaussian_table, self.config)
+        return (
+            self._frame_data.frames[index],
+            self._frame_data.metadata.num_outputs,
+            self._gaussian_table,
+            self.config,
+            self._frame_data.metadata.down_scaling
+        )
 
     def _set_frame(self, index: int, frame: List[ForwardBackwardFrame]):
         self._frame_data.frames[index] = frame
@@ -95,6 +101,7 @@ class ClusterFrames(FramePass):
         num_outputs: int,
         gaussian_table: np.ndarray,
         config: Config,
+        down_scaling: int,
         progress_bar: Optional[ProgressBar] = None
     ) -> List[ForwardBackwardFrame]:
         num_groups = len(frame_data) // num_outputs
@@ -110,7 +117,7 @@ class ClusterFrames(FramePass):
 
             if(not frame.ignore_clustering):
                 if(clusters[group_idx] is None):
-                    clusters[group_idx] = cls._compute_cluster(y, x, prob, x_off, y_off, num_outputs, gaussian_table, config)
+                    clusters[group_idx] = cls._compute_cluster(y, x, prob, x_off, y_off, num_outputs, gaussian_table, config, down_scaling)
 
                 frame.src_data = SparseTrackingData()
                 frame.src_data.pack(*(clusters[group_idx][group_offset]))
@@ -127,7 +134,8 @@ class ClusterFrames(FramePass):
         y_off: np.ndarray,
         num_clusters: int,
         gaussian_table: np.ndarray,
-        config: Config
+        config: Config,
+        down_scaling: int
     ) -> List[Tuple[np.ndarray, ...]]:
         # Special case: When cluster size is 1...
         if(num_clusters == 1):
@@ -135,7 +143,11 @@ class ClusterFrames(FramePass):
 
         iteration_count = 0
 
-        trans = fpe_math.table_transition((x, y), (x, y), gaussian_table)
+        # Use offsets to get more accurate clustering results...
+        x_true = (x + 0.5 + x_off / down_scaling).astype(int)
+        y_true = (y + 0.5 + y_off / down_scaling).astype(int)
+
+        trans = fpe_math.table_transition((x_true, y_true), (x_true, y_true), gaussian_table)
         indexes = np.arange(len(prob))
         inv_indexes = np.arange(len(prob))
         graph = (np.expand_dims(prob, 0)) * trans * (np.expand_dims(prob, 1))
@@ -209,7 +221,9 @@ class ClusterFrames(FramePass):
             del self._cluster_dict[(frame_index - 1, bp_group)]
 
         if((not current.ignore_clustering) and ((frame_index, bp_group) not in self._cluster_dict)):
-            self._cluster_dict[(frame_index, bp_group)] = self._compute_cluster(y, x, prob, x_off, y_off, num_out, self._gaussian_table, self.config)
+            self._cluster_dict[(frame_index, bp_group)] = self._compute_cluster(
+                y, x, prob, x_off, y_off, num_out, self._gaussian_table, self.config, metadata.down_scaling
+            )
 
         if(not current.ignore_clustering):
             current.src_data = SparseTrackingData()

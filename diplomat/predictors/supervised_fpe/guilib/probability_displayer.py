@@ -206,9 +206,9 @@ class ProbabilityDisplayer(wx.Control):
 
         # If there are segments, identify what segments we can see...
         if(self._segment_fix_frames is not None):
-            seg_low = np.searchsorted(self._segment_fix_frames[1:], low_val)
-            seg_high = np.searchsorted(self._segment_fix_frames[1:], high_val)
-            seg_fix_offsets = (self._segment_fix_frames[1:][seg_low:seg_high] - low_val) * tick_step + offset
+            seg_low = np.searchsorted(self._segment_fix_frames, low_val)
+            seg_high = np.searchsorted(self._segment_fix_frames, high_val)
+            seg_fix_offsets = (self._segment_fix_frames[seg_low:seg_high] - low_val) * tick_step + offset
         else:
             seg_fix_offsets = np.array([])
 

@@ -548,7 +548,7 @@ class SegmentedFramePassEngine(Predictor):
         visited = np.zeros(len(scores), bool)
         ordered_scores = np.argsort(scores)[::-1]
 
-        self._segments = GrowableNumpyArray(3, np.uint64)
+        self._segments = GrowableNumpyArray(3, np.int64)
 
         # We now iterate through the scores in sorted order, marking off segments...
         for frame_idx in ordered_scores:
@@ -568,6 +568,7 @@ class SegmentedFramePassEngine(Predictor):
             if(np.isneginf(scores[frame_idx])):
                 # We expect this to be very rare, so we iterate all the segments...
                 print("Warning: Found bad segment, appending to another segment...")
+
                 if(len(self._segments) == 0):
                     raise ValueError("This video has no frames where all body parts exist, can't run segmentation!")
 
