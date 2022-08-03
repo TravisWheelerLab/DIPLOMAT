@@ -370,7 +370,7 @@ class SegmentedFramePassEngine(Predictor):
         self._current_frame = 0
 
     def _sparcify_and_store(self, fb_frame: ForwardBackwardFrame, scmap: TrackingData, frame_idx: int, bp_idx: int):
-        fb_frame.orig_data = SparseTrackingData.sparsify(scmap, frame_idx, bp_idx, self.THRESHOLD)
+        fb_frame.orig_data = SparseTrackingData.sparsify(scmap, frame_idx, bp_idx, self.THRESHOLD, SparseTrackingData.SparseModes.OFFSET_DOMINATION)
         fb_frame.src_data = fb_frame.orig_data
 
     def on_frames(self, scmap: TrackingData) -> Optional[Pose]:

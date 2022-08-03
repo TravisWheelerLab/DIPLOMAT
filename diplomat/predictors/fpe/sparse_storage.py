@@ -1,5 +1,6 @@
 import dataclasses
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from enum import IntEnum
 from typing import Tuple, Union, List, Optional, Dict, Any
 
 try:
@@ -17,10 +18,19 @@ from diplomat.utils.extract_frames import pretty_frame_string, FrameStringFormat
 # Represents a valid numpy indexing type.
 Indexer = Union[slice, int, List[int], Tuple[int], None]
 
+class SparseModes(IntEnum):
+    """
+    An enum for encoding the different ways of making frames sparse. See SparseTrackingData.sparsify to see what each of these modes does.
+    """
+    IGNORE_OFFSETS: int = 0
+    OFFSET_DOMINATION: int = 1
+    OFFSET_COMBINATION: int = 2
+
 class SparseTrackingData:
     """
     Represents sparse tracking data. Includes probabilities, offsets, and x/y coordinates in the probability map.
     """
+    SparseModes = SparseModes
     __slots__ = ["_coords", "_offsets_probs", "_coords_access", "_off_access", "_prob_access"]
 
     class NumpyAccessor:
@@ -196,7 +206,14 @@ class SparseTrackingData:
         return new_td
 
     @classmethod
-    def sparsify(cls, track_data: TrackingData, frame: int, bodypart: int, threshold: float) -> "SparseTrackingData":
+    def sparsify(
+        cls,
+        track_data: TrackingData,
+        frame: int,
+        bodypart: int,
+        threshold: float,
+        mode: SparseModes = SparseModes.IGNORE_OFFSETS
+    ) -> "SparseTrackingData":
         """
         Sparsify the TrackingData.
 
@@ -204,11 +221,23 @@ class SparseTrackingData:
         :param frame: The frame of the TrackingData to sparsify
         :param bodypart: The bodypart of the TrackingData to sparsify
         :param threshold: The threshold to use when scarifying. All values below the threshold are removed.
+        :param mode: The mode to utilize when making the data sparse. The following modes currently exist:
+            - SparseModes.IGNORE_OFFSETS: Ignores offsets, placing values based on the grid cell the value is stored in.
+                                          This is the default mode.
+            - SparseModes.OFFSET_DOMINATION: Add on offsets to the initial grid cell to determine what cell the data actually landed in.
+                                             If multiple cells point to the same location, select the maximum of them.
+            - SparseModes.OFFSET_COMBINATION: Add on offsets to the initial grid cell to determine what cell the data actually landed in.
+                                              If multiple cells point to the same location, use the average of their values.
+
         :return: A new SparseTrackingData object containing the data of the TrackingData object.
         """
         new_sparse_data = cls()
 
         y, x = np.nonzero(track_data.get_prob_table(frame, bodypart) > threshold)
+
+        if(len(y) == 0):
+            new_sparse_data.pack(None, None, None, None, None)
+            return new_sparse_data
 
         if (track_data.get_offset_map() is None):
             x_off, y_off = np.zeros(x.shape, dtype=np.float32), np.zeros(y.shape, dtype=np.float32)
@@ -216,6 +245,43 @@ class SparseTrackingData:
             x_off, y_off = np.transpose(track_data.get_offset_map()[frame, y, x, bodypart])
 
         probs = track_data.get_prob_table(frame, bodypart)[y, x]
+
+        if(mode != SparseModes.IGNORE_OFFSETS):
+            full_x = x + 0.5 + x_off / track_data.get_down_scaling()
+            full_y = y + 0.5 + y_off / track_data.get_down_scaling()
+            true_x = full_x.astype(int)
+            true_y = full_y.astype(int)
+
+            # Update x_off and y_off to be in the same square as true_x and true_y...
+            x_off = ((full_x % 1) - 0.5) * track_data.get_down_scaling()
+            y_off = ((full_y % 1) - 0.5) * track_data.get_down_scaling()
+
+            if(mode == SparseModes.OFFSET_COMBINATION):
+                # Combination, we'll use np.unique to get the unique values, and then bincount to get the averages...
+                comb_coords = np.stack(true_x, true_y)
+                __, indexes, inverse, counts = np.unique(comb_coords, return_index=True, return_inverse=True, return_counts=True)
+
+                inv_counts = (1 / counts[inverse])
+                x = true_x[indexes]
+                y = true_y[indexes]
+                probs = np.bincount(inverse, inv_counts * probs)
+                x_off = np.bincount(inverse, inv_counts * x_off)
+                y_off = np.bincount(inverse, inv_counts * y_off)
+            else:
+                # Mode is offset domination, only keep maximums...
+                # We include -probs, as that sorts makes sure the first unique value is always the one with the highest probability...
+                ordered_coords = np.lexsort([-probs, true_y, true_x])
+
+                true_x = true_x[ordered_coords]
+                true_y = true_y[ordered_coords]
+
+                unique_locs = np.concatenate([[True], (true_x[:-1] != true_x[1:]) | (true_y[:-1] != true_y[1:])])
+
+                x = true_x[unique_locs]
+                y = true_y[unique_locs]
+                probs = probs[ordered_coords][unique_locs]
+                x_off = x_off[ordered_coords][unique_locs]
+                y_off = y_off[ordered_coords][unique_locs]
 
         new_sparse_data.pack(y, x, probs, x_off, y_off)
 
