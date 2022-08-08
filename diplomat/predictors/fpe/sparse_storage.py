@@ -258,8 +258,8 @@ class SparseTrackingData:
 
             if(mode == SparseModes.OFFSET_COMBINATION):
                 # Combination, we'll use np.unique to get the unique values, and then bincount to get the averages...
-                comb_coords = np.stack(true_x, true_y)
-                __, indexes, inverse, counts = np.unique(comb_coords, return_index=True, return_inverse=True, return_counts=True)
+                comb_coords = np.stack((true_x, true_y))
+                __, indexes, inverse, counts = np.unique(comb_coords, return_index=True, return_inverse=True, return_counts=True, axis=-1)
 
                 inv_counts = (1 / counts[inverse])
                 x = true_x[indexes]

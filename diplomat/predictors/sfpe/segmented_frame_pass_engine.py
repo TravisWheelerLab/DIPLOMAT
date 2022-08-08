@@ -370,7 +370,13 @@ class SegmentedFramePassEngine(Predictor):
         self._current_frame = 0
 
     def _sparcify_and_store(self, fb_frame: ForwardBackwardFrame, scmap: TrackingData, frame_idx: int, bp_idx: int):
-        fb_frame.orig_data = SparseTrackingData.sparsify(scmap, frame_idx, bp_idx, self.THRESHOLD, SparseTrackingData.SparseModes.OFFSET_DOMINATION)
+        fb_frame.orig_data = SparseTrackingData.sparsify(
+            scmap,
+            frame_idx,
+            bp_idx,
+            self.THRESHOLD,
+            SparseTrackingData.SparseModes[self.settings.sparsification_mode]
+        )
         fb_frame.src_data = fb_frame.orig_data
 
     def on_frames(self, scmap: TrackingData) -> Optional[Pose]:
@@ -916,6 +922,7 @@ class SegmentedFramePassEngine(Predictor):
             )
 
             dest_frame.get_prob_table(*dst_idx)[start:end, start:end] = res.get_prob_table(0, 0)
+            dest_frame.get_offset_map()[dst_idx[0], start:end, start:end, dst_idx[1]] = res.get_offset_map()[0, :, :, 0]
         elif(selected_field == cls.ExportableFields.FRAME):
             data = src_frame.src_data.unpack()
             probs = src_frame.frame_probs
@@ -927,6 +934,7 @@ class SegmentedFramePassEngine(Predictor):
             res = res.desparsify(header.frame_width - spc, header.frame_height - spc, header.stride)
 
             dest_frame.get_prob_table(*dst_idx)[start:end, start:end] = res.get_prob_table(0, 0)
+            dest_frame.get_offset_map()[dst_idx[0], start:end, start:end, dst_idx[1]] = res.get_offset_map()[0, :, :, 0]
         elif(selected_field == cls.ExportableFields.OCCLUDED_AND_EDGES):
             if(padding < 1):
                 raise ValueError("Padding must be included to export edges and the occluded state!")
@@ -947,6 +955,7 @@ class SegmentedFramePassEngine(Predictor):
             new_end = end + 1 if(end + 1 < 0) else None
 
             dest_frame.get_prob_table(*dst_idx)[new_start:new_end, new_start:new_end] = res.get_prob_table(0, 0)
+            dest_frame.get_offset_map()[dst_idx[0], new_start:new_end, new_start:new_end, dst_idx[1]] = res.get_offset_map()[0, :, :, 0]
 
     @classmethod
     def _export_frames(
@@ -1146,6 +1155,11 @@ class SegmentedFramePassEngine(Predictor):
                 "Determines the radius of relaxed maximum selection."
                 "Set to 0 to disable relaxed maximum selection. This value is "
                 "measured in cell units, not video units."
+            ),
+            "sparsification_mode": (
+                SparseTrackingData.SparseModes.OFFSET_DOMINATION.name,
+                type_casters.Literal(*[mode.name for mode in SparseTrackingData.SparseModes]),
+                "The mode to utilize during sparsification."
             )
         }
 
