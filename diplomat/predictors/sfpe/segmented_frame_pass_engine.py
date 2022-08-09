@@ -263,6 +263,8 @@ class PoolWithProgress:
         self._refresh_rate = refresh_rate_seconds
         self._sub_ticks = int(sub_ticks)
 
+        self._current_value = 0
+
     @staticmethod
     def get_optimal_ctx():
         try:
@@ -274,6 +276,8 @@ class PoolWithProgress:
         self._progress_bar.reset(total_expected * self._sub_ticks)
         for bar in self._sub_progress_bars:
             bar.reset_rerun_counter()
+        self._current_value = 0
+
 
     def fast_map(
         self,
@@ -286,7 +290,7 @@ class PoolWithProgress:
         if(reset_progress):
             self.reset_bar_to(total)
 
-        current_value = 0
+        current_value = self._current_value
         last_update = time.monotonic()
 
         def full_getter(i):
@@ -313,7 +317,13 @@ class PoolWithProgress:
             current_value = new_progress_val
 
         self._pool.fast_map(full_getter, setter, total, update)
-        self._progress_bar.update((total * self._sub_ticks) - current_value)
+
+        if(reset_progress):
+            self._progress_bar.update((total * self._sub_ticks) - current_value)
+        else:
+            update()
+        self._current_value = current_value
+
         return
 
     def __enter__(self) -> "PoolWithProgress":
@@ -801,9 +811,11 @@ class SegmentedFramePassEngine(Predictor):
 
         for i, val in enumerate(good_segments):
             if(val):
-                for j in range(0) if(counter == np.inf) else range(1, counter + 1):
-                    before[i] = j > run_levels[i - j]
-                    run_levels[i - j] = min(run_levels[i - j], j)
+                for j in (range(1, i + 1) if(counter == np.inf) else range(1, counter + 1)):
+                    if(run_levels[i - j] < j):
+                        break
+                    before[i - j] = False
+                    run_levels[i - j] = j
                 counter = 0
             run_levels[i] = counter
             before[i] = True
