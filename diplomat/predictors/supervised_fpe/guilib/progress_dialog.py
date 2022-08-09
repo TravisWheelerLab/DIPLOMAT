@@ -33,7 +33,7 @@ class FBProgressDialog(wx.Dialog):
 
         self.SetSizerAndFit(self._sizer)
         min_size = self.GetMinSize()
-        self.SetMinSize(wx.Size(min_size.GetWidth() * 2, min_size.GetHeight()))
+        self._sizer.SetMinSize(wx.Size(self.progress_bar.GetTextExtent("0" * 80).GetWidth(), min_size.GetHeight()))
         self.SetSize(self.GetMinSize())
         self.SendSizeEvent()
 

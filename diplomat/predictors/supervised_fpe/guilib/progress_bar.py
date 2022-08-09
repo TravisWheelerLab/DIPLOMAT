@@ -124,6 +124,9 @@ class TqdmWxPanel(wx.Panel):
         self._total = total
         self._display()
 
+    def GetTextExtent(self, string):
+        return self.__text.GetTextExtent(string)
+
     def _display(self):
         """
         Displays the wx progress bar. Internal, should not be called directly!
@@ -189,8 +192,10 @@ if(__name__ == "__main__"):
 
             self.SetSizerAndFit(self._sizer)
             size: wx.Size = self.GetMinSize()
-            self.SetMinSize(wx.Size(size.GetWidth() * 2, size.GetHeight()))
-            self.SetSize(self.GetMinSize())
+
+            self._sizer.SetMinSize(wx.Size(self._tqdm.GetTextExtent("0" * 80).GetWidth(), size.GetHeight()))
+            self.SetSize(wx.Size(self._tqdm.GetTextExtent("0" * 80).GetWidth(), size.GetHeight()))
+
             self.SendSizeEvent()
             self.Bind(wx.EVT_BUTTON, self.on_btn)
             self.Bind(wx.EVT_CLOSE, lambda evt: None)

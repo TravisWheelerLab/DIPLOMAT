@@ -9,7 +9,7 @@ from multiprocessing import get_context, Queue
 from multiprocessing.context import BaseContext
 import time
 import diplomat.utils.frame_store_api as frame_store_api
-
+from diplomat.predictors.sfpe.segmentation import MidpointSegmentor
 
 try:
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -98,6 +98,11 @@ class InternalProgressIndicator(ProgressBar):
 
     def inc_rerun_counter(self):
         self._internal_prog_data[self.RERUNS] += 1
+        self._internal_prog_data[self.IN_USE] = False
+        self.update_shared_mem(self._internal_prog_data)
+
+    def reset_rerun_counter(self):
+        self._internal_prog_data[self.RERUNS] = 0
         self._internal_prog_data[self.IN_USE] = False
         self.update_shared_mem(self._internal_prog_data)
 
@@ -265,8 +270,22 @@ class PoolWithProgress:
         except ValueError:
             return get_context("spawn")
 
-    def fast_map(self, do_work: Callable, getter: Callable[[int], Iterable[Any]], setter: Callable[[int, Any], None], total: int) -> None:
-        self._progress_bar.reset(total * self._sub_ticks)
+    def reset_bar_to(self, total_expected: int):
+        self._progress_bar.reset(total_expected * self._sub_ticks)
+        for bar in self._sub_progress_bars:
+            bar.reset_rerun_counter()
+
+    def fast_map(
+        self,
+        do_work: Callable,
+        getter: Callable[[int], Iterable[Any]],
+        setter: Callable[[int, Any], None],
+        total: int,
+        reset_progress: bool = True
+    ) -> None:
+        if(reset_progress):
+            self.reset_bar_to(total)
+
         current_value = 0
         last_update = time.monotonic()
 
@@ -551,48 +570,18 @@ class SegmentedFramePassEngine(Predictor):
             thread_count=self._get_thread_count()
         )
 
-        visited = np.zeros(len(scores), bool)
-        ordered_scores = np.argsort(scores)[::-1]
+        segmentor = MidpointSegmentor(segment_size)
 
-        self._segments = GrowableNumpyArray(3, np.int64)
+        if(reset_bar and progress_bar is not None):
+            progress_bar.message("Determining Optimal Segments...")
+            progress_bar.reset(self.num_frames)
 
-        # We now iterate through the scores in sorted order, marking off segments...
-        for frame_idx in ordered_scores:
-            if(visited[frame_idx]):
-                continue
-
-            search_start = max(0, int(frame_idx - segment_size / 2))
-            search_end = min(len(ordered_scores), int(frame_idx + segment_size / 2))
-            section = slice(search_start, search_end)
-            rev_section = slice(search_end - 1, search_start - 1 if(search_start > 0) else None, -1)
-
-            start_idx = search_start + np.argmin(visited[section])
-            end_idx = search_end - np.argmin(visited[rev_section])
-            visited[section] = True
-
-            # If the fix frame is missing body parts, resolve the segment by extending the nearest segment instead...
-            if(np.isneginf(scores[frame_idx])):
-                # We expect this to be very rare, so we iterate all the segments...
-                print("Warning: Found bad segment, appending to another segment...")
-
-                if(len(self._segments) == 0):
-                    raise ValueError("This video has no frames where all body parts exist, can't run segmentation!")
-
-                closest_idx = np.argmin(np.abs(self._segments.view[:, 2] - frame_idx))
-                start, end, fixed = self._segments.view[closest_idx]
-                self._segments.view[closest_idx] = [min(start, start_idx), max(end, end_idx), fixed]
-                continue
-
-            # Start of the segment, end of the segment, the fix frame index...
-            self._segments.add([start_idx, end_idx, frame_idx])
-
-            if(progress_bar is not None):
-                progress_bar.update()
+        self._segments = segmentor.segment(scores, progress_bar)
 
         # Sort the segments by the start of the segment...
-        self._segments = self._segments.finalize()
         self._segment_scores = scores[self._segments[:, 2]]
-        sort_order = self._segments[:, 2].argsort()
+        self._segment_scores[self._segments[:, 2] == -1] = -np.inf
+        sort_order = self._segments[:, 0].argsort()
         self._segments = self._segments[sort_order]
         self._segment_scores = self._segment_scores[sort_order]
 
@@ -602,6 +591,8 @@ class SegmentedFramePassEngine(Predictor):
             progress_bar.reset(len(self._segments))
 
         for (si, ei, fi) in self._segments:
+            if(fi == -1):
+                continue
             # Compute the fix frame, and align skeletal connections if they exist...
             fix_frame = FixFrame.create_fix_frame(
                 self._frame_holder,
@@ -675,6 +666,7 @@ class SegmentedFramePassEngine(Predictor):
         start, end, fix_frame = self._segments[index]
 
         sub_frame = ForwardBackwardData(0, 0)
+
         sub_frame.frames = self._frame_holder.frames[start:end]
         sub_frame.metadata = self._frame_holder.metadata
 
@@ -684,10 +676,72 @@ class SegmentedFramePassEngine(Predictor):
         start, end, fix_frame = self._segments[index]
         self._frame_holder.frames[start:end] = frame_data.frames
 
+    def _iter_run_levels(self, segment_idxs: np.ndarray, run_level_data: Optional[Tuple[np.ndarray, np.ndarray, int]]) -> Iterable[Sequence[int]]:
+        segment_idxs = np.asarray(segment_idxs)
+
+        if(run_level_data is None):
+            d = np.zeros(len(segment_idxs), int)
+            run_level_data = (d, d, 0)
+
+        level_vals, is_before, max_levels = run_level_data
+
+        for i in range(max_levels + 1):
+            locs = segment_idxs[level_vals == i]
+
+            if(i == 0):
+                yield locs
+                continue
+
+            # Before the run: Fix the segments to basically patch the rest of MIT-Viterbi...
+            is_before_level = is_before[level_vals == i]
+            for loc, is_b in zip(locs, is_before_level):
+                si, ei, fi = self._segments[loc]
+                d_scale = self._frame_holder.metadata.down_scaling
+                num_out = self._frame_holder.metadata.num_outputs
+                # Correct the fix frame issues,
+                idx1, idx2 = (si - 1, si) if(is_b) else (ei, ei - 1)
+
+                for bp_grp in range(self._frame_holder.num_bodyparts // num_out):
+                    group_slice = slice(bp_grp * num_out, (bp_grp + 1) * num_out)
+                    y, x, p, x_off, y_off = self._frame_holder.frames[idx2][group_slice.start].orig_data.unpack()
+
+                    if(y is None):
+                        for frm, frm_nxt in zip(self._frame_holder.frames[idx1][group_slice], self._frame_holder.frames[idx2][group_slice]):
+                            x, y, p, x_off, y_off = self.get_maximum(frm)
+                            frm_nxt.orig_data.pack(*[np.array([v]) for v in [y, x, p, x_off, y_off]])
+                            frm_nxt.src_data = frm_nxt.orig_data
+                    else:
+                        dists = []
+
+                        for frm, frm_nxt in zip(self._frame_holder.frames[idx1][group_slice], self._frame_holder.frames[idx2][group_slice]):
+                            xp, yp, __, x_offp, y_offp = self.get_maximum(frm)
+                            dists.append(FixFrame.dist(
+                                (xp + 0.5 + x_offp / d_scale, yp + 0.5 + y_offp / d_scale),
+                                (x + 0.5 + x_off / d_scale, y + 0.5 + y_off / d_scale)
+                            ))
+
+                        doms = np.minimum.reduce(dists)
+                        for dist, frm_nxt in zip(dists, self._frame_holder.frames[idx2][group_slice]):
+                            keep = dist <= doms
+                            if(np.all(~keep)):
+                                best_idx = np.argmin(dist)
+                                doms[best_idx] = 0
+                                frm_nxt.orig_data.pack(*[np.array([v]) for v in [y[best_idx], x[best_idx], 1, x_off[best_idx], y_off[best_idx]]])
+                                frm_nxt.src_data = frm_nxt.orig_data
+                            else:
+                                frm_nxt.orig_data.pack(y[keep], x[keep], p[keep], x_off[keep], y_off[keep])
+                                frm_nxt.src_data = frm_nxt.orig_data
+
+                self._segments[loc, 2] = idx2
+
+            yield locs
+
+
     def _run_segmented_passes(
         self,
         progress_bar: ProgressBar,
         segment_idxs: Sequence[int],
+        run_level_data: Optional[Tuple[np.ndarray, np.ndarray, int]] = None
     ):
         cls = type(self)
         thread_count = self._get_thread_count()
@@ -711,27 +765,54 @@ class SegmentedFramePassEngine(Predictor):
             if(passes_can_use_pool and allow_multithread):
                 with PoolWithProgress.get_optimal_ctx().Pool(processes=os.cpu_count()) as pool:
                     FramePass.GLOBAL_POOL = AntiCloseObject(pool)
-                    for idx in segment_idxs:
+                    for segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
+                        for idx in segment_idx:
+                            frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
+                            self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar)
+            else:
+                for segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
+                    for idx in segment_idx:
                         frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
                         self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar)
-            else:
-                for idx in segment_idxs:
-                    frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
-                    self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar)
 
             FramePass.GLOBAL_POOL = None
         else:
             with PoolWithProgress(progress_bar, thread_count, sub_ticks=int(self._frame_holder.num_frames / len(self._segments))) as pool:
                 progress_bar.message("Running on Segments...")
-                pool.fast_map(
-                    cls._run_segment,
-                    lambda i: self._get_segment(segment_idxs[i]),
-                    lambda i, r: self._set_segment(segment_idxs[i], r),
-                    total_segments
-                )
+                pool.reset_bar_to(total_segments)
+                for segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
+                    pool.fast_map(
+                        cls._run_segment,
+                        lambda i: self._get_segment(segment_idx[i]),
+                        lambda i, r: self._set_segment(segment_idx[i], r),
+                        len(segment_idx),
+                        False
+                    )
 
+    def compute_segment_run_levels(self):
+        """
+        PRIVATE: Get the level each run needs to be performed on...
+        """
+        # We now need to determine what segments are ready to go...
+        good_segments = self._segments[:, 2] != -1
+        run_levels = np.zeros(len(good_segments), dtype=float)
+        before = np.zeros(len(good_segments), dtype=bool)
+        counter = np.inf
 
-    def _run_all_segmented_passes(
+        for i, val in enumerate(good_segments):
+            if(val):
+                for j in range(0) if(counter == np.inf) else range(1, counter + 1):
+                    before[i] = j > run_levels[i - j]
+                    run_levels[i - j] = min(run_levels[i - j], j)
+                counter = 0
+            run_levels[i] = counter
+            before[i] = True
+            counter += 1
+
+        run_levels = run_levels.astype(int)
+        return run_levels, before, np.max(run_levels)
+
+    def _init_segmented_passes_run(
         self,
         progress_bar: ProgressBar,
         reset_bar: bool = True
@@ -740,7 +821,8 @@ class SegmentedFramePassEngine(Predictor):
             progress_bar.message("Running Segmented Passes...")
             progress_bar.reset(len(self._segments))
 
-        self._run_segmented_passes(progress_bar, range(len(self._segments)))
+        # For every bad segment, determine their nearest touching segment.
+        self._run_segmented_passes(progress_bar, range(len(self._segments)), self.compute_segment_run_levels())
 
         if(progress_bar is not None):
             progress_bar.update()
@@ -846,7 +928,7 @@ class SegmentedFramePassEngine(Predictor):
     def _run_frame_passes(self, progress_bar: Optional[ProgressBar]):
         self._run_full_passes(progress_bar)
         self._build_segments(progress_bar)
-        self._run_all_segmented_passes(progress_bar)
+        self._init_segmented_passes_run(progress_bar)
         self._resolve_frame_orderings(progress_bar)
 
 

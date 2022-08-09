@@ -110,6 +110,10 @@ class EntropyOfTransitions(ScoreEngine):
         if(py is None or cy is None):
             return 0
 
+        print(px, py, cx, cy)
+        print(current_frame.frame_probs)
+        print(prior_frame.frame_probs)
+
         return float(np.sum(
             np.expand_dims(current_frame.frame_probs, 1)
             * fpe_math.table_transition((px, py), (cx, cy), trans_matrix)
