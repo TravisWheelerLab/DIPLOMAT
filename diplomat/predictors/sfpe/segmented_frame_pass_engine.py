@@ -435,7 +435,8 @@ class SegmentedFramePassEngine(Predictor):
     def get_maximum(
         cls,
         frame: ForwardBackwardFrame,
-        relaxed_radius: float = 0
+        relaxed_radius: float = 0,
+        force_occluded: bool = False
     ) -> Tuple[int, int, float, float, float]:
         """
         PRIVATE: Get the maximum location of a single forward backward frame.
@@ -443,8 +444,13 @@ class SegmentedFramePassEngine(Predictor):
         and y offset in order.
         """
         if (frame.frame_probs is None or frame.src_data.unpack()[0] is None):
-            # No frame data, return 3 for no probability and 0 probability...
-            return (-1, -1, 0, 0, 0)
+            # No frame data or occluded data, return 3 for no probability and 0 probability...
+            if(frame.occluded_probs is None):
+                return (-1, -1, 0, 0, 0)
+            # No frame data, but the item is in the occluded state, so return that...
+            max_occluded_loc = np.argmax(frame.occluded_probs)
+            m_occ_x, m_occ_y = frame.occluded_coords[max_occluded_loc]
+            return (m_occ_x, m_occ_y, 0, 0, 0)
         else:
             # Get the max location in the frame....
             y_coords, x_coords, orig_probs, x_offsets, y_offsets = frame.src_data.unpack()
@@ -717,8 +723,8 @@ class SegmentedFramePassEngine(Predictor):
 
                     if(y is None):
                         for frm, frm_nxt in zip(self._frame_holder.frames[idx1][group_slice], self._frame_holder.frames[idx2][group_slice]):
-                            x, y, p, x_off, y_off = self.get_maximum(frm)
-                            frm_nxt.orig_data.pack(*[np.array([v]) for v in [y, x, p, x_off, y_off]])
+                            xp, yp, pp, x_offp, y_offp = self.get_maximum(frm)
+                            frm_nxt.orig_data.pack(*[np.array([v]) for v in [yp, xp, pp, x_offp, y_offp]])
                             frm_nxt.src_data = frm_nxt.orig_data
                     else:
                         dists = []
