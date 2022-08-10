@@ -253,7 +253,7 @@ def _analyze_frame_store(
                 "orig-video-path": str(video_name) if (video_name is not None) else None,  # This may be None if we were unable to find the video...
                 "cropping-offset": None if (off_x is None or off_y is None) else (off_y, off_x),
                 "dotsize": cfg["dotsize"],
-                "colormap": cfg["colormap"],
+                "colormap": cfg.get("diplomat_colormap", cfg["colormap"]),
                 "alphavalue": cfg["alphavalue"],
                 "pcutoff": cfg["pcutoff"],
                 "line_thickness": cfg.get("line_thickness", 1)

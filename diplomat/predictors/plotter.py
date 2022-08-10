@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib import pyplot
 import matplotlib
 from matplotlib import colors as mpl_colors
+from diplomat.utils.colormaps import to_colormap
 from pathlib import Path
 import cv2
 
@@ -262,7 +263,7 @@ class PlotterArgMax(Predictor):
             ),
             "colormap": (
                 "Blues",
-                str,
+                to_colormap,
                 "String, determines the underlying colormap to be passed to "
                 "matplotlib while plotting the heatmap or mesh."
             ),

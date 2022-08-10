@@ -11,7 +11,7 @@ from deeplabcut import auxiliaryfunctions
 import pandas as pd
 
 from diplomat.processing import *
-from matplotlib import pyplot as plt
+from diplomat.utils.colormaps import to_colormap, iter_colormap
 from matplotlib import colors as mpl_colors
 
 def cv2_fourcc_string(val) -> int:
@@ -24,7 +24,7 @@ LABELED_VIDEO_SETTINGS = {
     "pcutoff": (0.1, type_casters.RangedFloat(0, 1), "The probability to cutoff results below."),
     "dotsize": (4, int, "The size of the dots."),
     "alphavalue": (0.7, type_casters.RangedFloat(0, 1), "The alpha value of the dots."),
-    "colormap": (plt.get_cmap(), plt.get_cmap, "The colormap to use for tracked points in the video."),
+    "colormap": (None, to_colormap, "The colormap to use for tracked points in the video. Can be a matplotlib colormap or a list of matplotlib colors."),
     "line_thickness": (1, int, "Thickness of lines drawn."),
     "antialiasing": (True, bool, "Use antialiasing when drawing points."),
     "draw_hidden_tracks": (True, bool, "Whether or not to draw locations under the pcutoff value."),
@@ -53,6 +53,7 @@ def create_labeled_videos(
 
     plotting_settings = Config({}, LABELED_VIDEO_SETTINGS)
     plotting_settings.extract(cfg)
+    plotting_settings.colormap = cfg.get("diplomat_colormap", cfg["colormap"])
     plotting_settings.update(kwargs)
 
     video_list = auxiliaryfunctions.get_list_of_videos(videos, video_type)
@@ -148,9 +149,10 @@ def _create_video_single(
         frame = frame[y_off:y_off2, x_off:x_off2]
         overlay = frame.copy()
 
-        for bp_idx, (bp_x, bp_y, bp_p) in enumerate(body_part_data):
+        colors = iter_colormap(plotting_settings.colormap, len(body_part_data))
+
+        for bp_idx, ((bp_x, bp_y, bp_p), color) in enumerate(zip(body_part_data, colors)):
             if(bp_p[i] > plotting_settings.pcutoff):
-                color = plotting_settings.colormap(bp_idx / max(1, len(body_part_data) - 1))
                 cv2.circle(
                     overlay,
                     (int(bp_x[i]), int(bp_y[i])),
@@ -160,7 +162,6 @@ def _create_video_single(
                     cv2.LINE_AA if(plotting_settings.antialiasing) else None
                 )
             elif(plotting_settings.draw_hidden_tracks):
-                color = plotting_settings.colormap(bp_idx / max(1, len(body_part_data) - 1))
                 cv2.circle(
                     overlay,
                     (int(bp_x[i]), int(bp_y[i])),

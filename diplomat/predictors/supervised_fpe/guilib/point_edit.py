@@ -4,10 +4,10 @@ from diplomat.processing import *
 from .labeler_lib import PoseLabeler, SettingCollectionWidget
 from .video_player import VideoPlayer
 import cv2
-import matplotlib.pyplot as plt
 from matplotlib.colors import Colormap
 from wx.lib.newevent import NewCommandEvent
 from wx.lib.scrolledpanel import ScrolledPanel
+from diplomat.utils.colormaps import to_colormap, iter_colormap
 
 # Represents a cropping box, using x, y, width, height....
 Box = Optional[Tuple[int, int, int, int]]
@@ -86,7 +86,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
     DEF_FAST_MODE_SPEED_FRACTION = 3
     JUMP_BACK_DELAY = 200
     METHOD_LIST = [
-        ("colormap", "_colormap", plt.get_cmap),
+        ("colormap", "_colormap", to_colormap),
         ("plot_threshold", "_plot_threshold", _bounded_float(0, 1)),
         ("point_radius", "_point_radius", int),
         ("point_alpha", "_point_alpha", _bounded_float(0, 1)),
@@ -105,7 +105,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         video_hdl: cv2.VideoCapture,
         crop_box: Box,
         poses: Pose,
-        colormap: Union[str, Colormap] = DEF_MAP,
+        colormap: Union[str, list, Colormap] = DEF_MAP,
         plot_threshold: float = 0.1,
         point_radius: int = 5,
         point_alpha: float = 0.7,
@@ -234,7 +234,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
 
             self._shift_delay = max(0, self._shift_delay - (1000 / self._fps))
             self.Refresh()
-            self._core_timer.StartOnce(1000 / self._fps)
+            self._core_timer.StartOnce(int(1000 / self._fps))
         else:
             self._on_key_up()
 
@@ -250,7 +250,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
                     self._step_counter = 0
                     self._old_location = self._get_selected_bodypart()
                     self._push_point_init_event(self._old_location)
-                    self._core_timer.StartOnce(1000 / self._fps)
+                    self._core_timer.StartOnce(int(1000 / self._fps))
 
         event.Skip()
 
@@ -319,15 +319,14 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         x_off, y_off, nv_w, nv_h = self._get_video_bbox(frame, width, height)
 
         num_out = self._poses.get_bodypart_count()
-        colormap = plt.get_cmap(self._colormap)
+        colors = iter_colormap(self._colormap, num_out, bytes=True)
         frame = self.get_offset_count()
 
-        for bp_idx in range(num_out):
+        for bp_idx, color in zip(range(num_out), colors):
             x = self._poses.get_x_at(frame, bp_idx)
             y = self._poses.get_y_at(frame, bp_idx)
             prob = self._poses.get_prob_at(frame, bp_idx)
 
-            color = colormap(bp_idx / max(1, num_out - 1), bytes=True)
             wx_color = wx.Colour(*color)
 
             if(prob < self._plot_threshold):
@@ -740,7 +739,7 @@ class ColoredRadioBox(wx.Panel):
     ColoredRadioEvent, EVT_COLORED_RADIO = ColoredRadioButton.ColoredRadioEvent, ColoredRadioButton.EVT_COLORED_RADIO
     PADDING = 20
 
-    def __init__(self, parent, colormap: Union[str, Colormap], labels: List[str], w_id = wx.ID_ANY,
+    def __init__(self, parent, colormap: Union[str, list, Colormap], labels: List[str], w_id = wx.ID_ANY,
                  pos = wx.DefaultPosition, size = wx.DefaultSize, style = wx.TAB_TRAVERSAL | wx.BORDER_DEFAULT,
                  name = "ColoredRadioBox"):
         """
@@ -765,13 +764,12 @@ class ColoredRadioBox(wx.Panel):
         self._buttons = []
         self._selected = None
 
-        self._colormap = plt.get_cmap(colormap)
+        self._colormap = to_colormap(colormap)
+        colors = iter_colormap(self._colormap, len(labels), bytes=True)
 
-        for i, label in enumerate(labels):
-            color = self._colormap(i / max(1, len(labels) - 1), bytes=True)
+        for i, (label, color) in enumerate(zip(labels, colors)):
             wx_color = wx.Colour(*color)
-
-            radio_button =  ColoredRadioButton(self._scroller, i, wx_color, label)
+            radio_button = ColoredRadioButton(self._scroller, i, wx_color, label)
             radio_button.Bind(ColoredRadioButton.EVT_COLORED_RADIO, self._enforce_single_select)
             self._inner_sizer.Add(radio_button, 0, wx.EXPAND, self.PADDING)
             self._buttons.append(radio_button)
@@ -865,16 +863,16 @@ class ColoredRadioBox(wx.Panel):
         """
         return self._colormap
 
-    def set_colormap(self, value: Union[str, Colormap]):
+    def set_colormap(self, value: Union[str, list, Colormap]):
         """
         Set the colormap.
 
         :param value: A matplotlib colormap, or string which refers to a valid matplotlib colormap.
         """
-        self._colormap = plt.get_cmap(value)
+        self._colormap = to_colormap(value)
+        colors = iter_colormap(self._colormap, len(self._buttons), bytes=True)
 
-        for i, button in enumerate(self._buttons):
-            color = self._colormap(i / len(self._buttons), bytes=True)
+        for i, (button, color) in enumerate(zip(self._buttons, colors)):
             wx_color = wx.Colour(*color)
             button.circle.set_circle_color(wx_color)
 

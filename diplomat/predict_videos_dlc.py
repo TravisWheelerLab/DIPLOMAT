@@ -201,7 +201,7 @@ def _analyze_video(
         if (config.get("cropping", False))
         else None,
         "dotsize": config["dotsize"],
-        "colormap": config["colormap"],
+        "colormap": config.get("diplomat_colormap", config["colormap"]),
         "alphavalue": config["alphavalue"],
         "pcutoff": config["pcutoff"],
         "line_thickness": config.get("line_thickness", 1),
