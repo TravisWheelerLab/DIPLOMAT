@@ -54,3 +54,49 @@ class MidpointSegmentor(Segmentor):
                 progress_bar.update()
 
         return segments.finalize()
+
+
+class EndPointSegmentor(Segmentor):
+    def __init__(self, size: int):
+        self._size = size
+
+    def segment(self, scores: np.ndarray, progress_bar: Optional[ProgressBar]) -> np.ndarray:
+        location_ids = np.zeros(len(scores), np.uint8)
+        ordered_scores = np.argsort(scores, kind="stable")[::-1]
+
+        for frame_idx in ordered_scores:
+            if(np.isneginf(scores[frame_idx])):
+                continue
+
+            if(location_ids[frame_idx] != 0):
+                continue
+
+            search_start = max(0, int(frame_idx - self._size / 2))
+            search_end = min(len(ordered_scores), int(frame_idx + self._size / 2))
+            section = slice(search_start, search_end)
+
+            location_ids[section] = 1
+            location_ids[frame_idx] = 2
+
+            if(progress_bar is not None):
+                progress_bar.update()
+
+        segments = GrowableNumpyArray(3, np.int64)
+
+        prior_border = 0
+        fix_frames = np.flatnonzero(location_ids == 2)
+
+        if(len(fix_frames) <= 0):
+            raise ValueError("No fix frame found over the entire video!")
+
+        for next_border in np.append(fix_frames, len(ordered_scores)):
+            while((next_border - prior_border) > self._size):
+                segments.add([prior_border, prior_border + self._size, -1])
+                prior_border += self._size
+            segments.add([prior_border, next_border, prior_border if(prior_border != 0) else -1])
+            prior_border = next_border
+
+        return segments.finalize()
+
+
+

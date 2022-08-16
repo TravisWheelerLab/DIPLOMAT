@@ -156,7 +156,7 @@ class TqdmWxPanel(wx.Panel):
 
         if(self._speed != 0):
             it_sec = f"{1 / (self._speed * 1e-9):.02f}"
-            est_time = None if(total is None) else int(((total - n) * ((self._old_time - self._start_time) / n)) / 1e9)
+            est_time = None if(total is None) else int(((total - n) * ((self._old_time - self._start_time) / (n if(n != 0) else 1))) / 1e9)
             est_time = "?" if (est_time is None) else str(timedelta(seconds=est_time))
         else:
             it_sec = "?"

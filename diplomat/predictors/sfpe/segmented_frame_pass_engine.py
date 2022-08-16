@@ -9,7 +9,7 @@ from multiprocessing import get_context, Queue
 from multiprocessing.context import BaseContext
 import time
 import diplomat.utils.frame_store_api as frame_store_api
-from diplomat.predictors.sfpe.segmentation import MidpointSegmentor
+from diplomat.predictors.sfpe.segmentation import EndPointSegmentor
 
 try:
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -588,7 +588,7 @@ class SegmentedFramePassEngine(Predictor):
             thread_count=self._get_thread_count()
         )
 
-        segmentor = MidpointSegmentor(segment_size)
+        segmentor = EndPointSegmentor(segment_size)
 
         if(reset_bar and progress_bar is not None):
             progress_bar.message("Determining Optimal Segments...")
