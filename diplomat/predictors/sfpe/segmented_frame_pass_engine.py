@@ -17,6 +17,7 @@ try:
     from ..fpe.sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
     from .growable_numpy_array import GrowableNumpyArray
     from ..fpe.frame_passes.fix_frame import FixFrame
+    from ..fpe.skeleton_structures import StorageGraph
 except ImportError:
     __package__ = "diplomat.predictors.sfpe"
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -24,6 +25,7 @@ except ImportError:
     from ..fpe.sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
     from .growable_numpy_array import GrowableNumpyArray
     from ..fpe.frame_passes.fix_frame import FixFrame
+    from ..fpe.skeleton_structures import StorageGraph
 
 
 class NestedProgressIndicator(ProgressBar):
@@ -849,15 +851,25 @@ class SegmentedFramePassEngine(Predictor):
         self,
         current_frame: List[ForwardBackwardFrame],
         prior_frame: List[ForwardBackwardFrame],
-        prior_frame_indexes: np.ndarray
+        prior_frame_indexes: np.ndarray,
+        skeleton: Optional[StorageGraph] = None
     ) -> np.ndarray:
         num_groups = self._frame_holder.num_bodyparts // self.num_outputs
         num_in_group = self.num_outputs
 
         out_list = np.zeros(len(current_frame), np.uint16)
 
+        if(skeleton is None):
+            components = np.arange(num_groups)
+            labels = components
+        else:
+            components = np.asarray(skeleton.dfs())
+            labels = np.unique(components)
+
+        full_score_matrix = np.zeros((num_groups, num_in_group, num_in_group), np.float32)
+
         for bp_group in range(num_groups):
-            score_matrix = np.zeros((num_in_group, num_in_group), np.float32)
+            score_matrix = full_score_matrix[bp_group]
 
             for coff in range(num_in_group):
                 for poff in range(num_in_group):
@@ -886,15 +898,19 @@ class SegmentedFramePassEngine(Predictor):
                         )
                     )
 
+        for label in labels:
+            component_locs = np.flatnonzero(components == label)
+            offsets = component_locs * num_in_group
+            score_matrix = np.sum(full_score_matrix[component_locs], axis=0)
+
             for i in range(num_in_group):
-                off = bp_group * num_in_group
                 p_max_i, c_max_i = np.unravel_index(np.argmin(score_matrix), score_matrix.shape)
                 score_matrix[p_max_i, :] = np.inf
                 score_matrix[:, c_max_i] = np.inf
-
-                out_list[off + c_max_i] = prior_frame_indexes[off + p_max_i]
+                out_list[offsets + c_max_i] = prior_frame_indexes[offsets + p_max_i]
 
         return out_list
+
 
     def _resolve_frame_orderings(
         self,
@@ -921,7 +937,8 @@ class SegmentedFramePassEngine(Predictor):
             self._segment_bp_order[i, :] = self._get_frame_links(
                 self._frame_holder.frames[end - 1],
                 self._frame_holder.frames[end],
-                self._segment_bp_order[i + 1]
+                self._segment_bp_order[i + 1],
+                self._frame_holder.metadata.get("skeleton", None)
             )
             if(reverse_arr is not None):
                 reverse_arr[i, self._segment_bp_order[i, :]] = np.arange(self._frame_holder.num_bodyparts)
@@ -934,7 +951,8 @@ class SegmentedFramePassEngine(Predictor):
             self._segment_bp_order[i, :] = self._get_frame_links(
                 self._frame_holder.frames[start],
                 self._frame_holder.frames[start - 1],
-                self._segment_bp_order[i - 1]
+                self._segment_bp_order[i - 1],
+                self._frame_holder.metadata.get("skeleton", None)
             )
             if(reverse_arr is not None):
                 reverse_arr[i, self._segment_bp_order[i, :]] = np.arange(self._frame_holder.num_bodyparts)
@@ -1257,7 +1275,7 @@ class SegmentedFramePassEngine(Predictor):
                 "measured in cell units, not video units."
             ),
             "sparsification_mode": (
-                SparseTrackingData.SparseModes.OFFSET_DOMINATION.name,
+                SparseTrackingData.SparseModes.OFFSET_SUMMATION.name,
                 type_casters.Literal(*[mode.name for mode in SparseTrackingData.SparseModes]),
                 "The mode to utilize during sparsification."
             )

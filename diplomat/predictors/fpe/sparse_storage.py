@@ -25,6 +25,8 @@ class SparseModes(IntEnum):
     IGNORE_OFFSETS: int = 0
     OFFSET_DOMINATION: int = 1
     OFFSET_COMBINATION: int = 2
+    OFFSET_SUMMATION: int = 3
+
 
 class SparseTrackingData:
     """
@@ -228,6 +230,8 @@ class SparseTrackingData:
                                              If multiple cells point to the same location, select the maximum of them.
             - SparseModes.OFFSET_COMBINATION: Add on offsets to the initial grid cell to determine what cell the data actually landed in.
                                               If multiple cells point to the same location, use the average of their values.
+            - SparseModes.OFFSET_SUMMATION: Same as OFFSET_DOMINATION, except cell probabilities are determined by adding all the cells that
+                                            point to a cell and then normalizing this sum array.
 
         :return: A new SparseTrackingData object containing the data of the TrackingData object.
         """
@@ -267,6 +271,23 @@ class SparseTrackingData:
                 probs = np.bincount(inverse, inv_counts * probs)
                 x_off = np.bincount(inverse, inv_counts * x_off)
                 y_off = np.bincount(inverse, inv_counts * y_off)
+            elif(mode == SparseModes.OFFSET_SUMMATION):
+                # Mode is offset summation, we use domination for offsets, summation for probabilities...
+                ordered_coords = np.lexsort([-probs, true_y, true_x])
+
+                true_x = true_x[ordered_coords]
+                true_y = true_y[ordered_coords]
+
+                changes = (true_x[:-1] != true_x[1:]) | (true_y[:-1] != true_y[1:])
+                unique_locs = np.concatenate([[True], changes])
+                ids = np.cumsum(np.concatenate([[False], changes]))
+
+                x = true_x[unique_locs]
+                y = true_y[unique_locs]
+                probs = np.bincount(ids, probs[ordered_coords])
+                probs /= np.sum(probs)
+                x_off = x_off[ordered_coords][unique_locs]
+                y_off = y_off[ordered_coords][unique_locs]
             else:
                 # Mode is offset domination, only keep maximums...
                 # We include -probs, as that sorts makes sure the first unique value is always the one with the highest probability...
