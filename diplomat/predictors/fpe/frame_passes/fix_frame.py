@@ -83,6 +83,7 @@ class FixFrame(FramePass):
                     cls.get_max_location(frame2, down_scaling)
                 ))
 
+            available = [True] * len(fb_data.frames)
             # Our traversal function, run for each edge in the skeleton graph.
             def on_traversal(dfs_edge, value):
                 prior_n, current_n = dfs_edge
@@ -97,11 +98,12 @@ class FixFrame(FramePass):
                                 avg,
                                 fixed_frame[prior_n_exact],
                                 fb_data.frames[frame_idx][current_n * num_outputs + i]
-                            ) for i in range(num_outputs)
+                            ) if(available[current_n * num_outputs + i]) else np.inf for i in range(num_outputs)
                     ])
 
                     fixed_frame[current_n_exact] = fb_data.frames[frame_idx][current_n_best].copy()
                     fixed_frame[current_n_exact].disable_occluded = True
+                    available[current_n_best] = False
 
             # Run the dfs to find the best indexes for each cluster and rearrange them...
             skeleton.dfs(on_traversal)

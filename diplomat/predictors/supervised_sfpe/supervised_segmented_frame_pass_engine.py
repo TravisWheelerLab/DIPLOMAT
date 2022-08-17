@@ -258,6 +258,56 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         return bitmap
 
+    def _custom_multicluster_plot(self, figsize: Tuple[float, float], dpi: int, title: str, track_datas: List[SparseTrackingData]) -> wx.Bitmap:
+        # Get the frame...
+        import matplotlib
+        matplotlib.use("agg")
+        import matplotlib.pyplot as plt
+
+        cmaps = ['Blues', 'Reds', 'Greys', 'Oranges', 'Purples', 'Greens']
+        overlap_color = [0.224, 1, 0.078, 1] # None of the cmaps use neon green, for good reason...
+
+        figure = plt.figure(figsize=figsize, dpi=dpi)
+        axes = figure.gca()
+        axes.set_title(title)
+
+        h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
+        down_scaling = self.frame_data.metadata.down_scaling
+
+        counts = 0
+        img = 0
+
+        for track_data, cmap in zip(track_datas, cmaps * int(np.ceil(len(track_datas) / len(cmaps)))):
+            cmap = plt.get_cmap(cmap).copy()
+            cmap.set_extremes(bad=(0, 0, 0, 0), under=(0, 0, 0, 0), over=(0, 0, 0, 0))
+
+            track_data = track_data.desparsify(w, h, down_scaling).get_prob_table(0, 0)
+
+            track_data /= np.nanmax(track_data)
+            track_data *= 0.75
+
+            counts += (track_data != 0)
+            track_data[track_data == 0] = -np.inf
+
+            img += cmap(track_data)
+
+
+        img[counts > 1] = overlap_color
+        axes.imshow(img)
+        if(np.any(counts > 1)):
+            axes.set_title(title + "\n(OVERLAP!)")
+
+        figure.tight_layout()
+        figure.canvas.draw()
+
+        w, h = figure.canvas.get_width_height()
+        bitmap = wx.Bitmap.FromBufferRGBA(w, h, figure.canvas.buffer_rgba())
+
+        axes.cla()
+        figure.clf()
+        plt.close(figure)
+
+        return bitmap
 
     def _make_plots(self, evt = None):
         """
@@ -267,7 +317,10 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         new_bitmap_list = []
         figsize = (3.6, 2.8)
-        dpi = 100
+        dpi = 200
+
+        is_fix_frame = np.any(frame_idx == self._segments[:, 2])
+        fix_frame_data = []
 
         # For every body part...
         for bp_idx in range(self._num_total_bp):
@@ -290,11 +343,17 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
             # Plot Pre-MIT-Viterbi frame data, or the original suggested probability frame...
             new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Original Source Frame", orig_data))
+            if(is_fix_frame):
+                fix_frame_data.append(orig_data)
 
             # If user edited, show user edited frame...
             if ((frame_idx, bp_idx) in self._changed_frames):
                 track_data = all_data.orig_data
                 new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Modified Source Frame", track_data))
+
+            if(len(fix_frame_data) >= self.num_outputs):
+                new_bitmap_list.append(self._custom_multicluster_plot(figsize, dpi, bp_name + " Fix Frame Clustering", fix_frame_data))
+                fix_frame_data.clear()
 
         # Now that we have appended all the above bitmaps to a list, update the ScrollImageList widget of the editor
         # with the new images.
