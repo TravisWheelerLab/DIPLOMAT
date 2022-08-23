@@ -72,21 +72,21 @@ def load_plugin_classes(
             plugins = plugins | load_plugin_classes(
                 sub_module, plugin_metaclass, do_reload
             )
-        else:
-            # Otherwise we begin looking for plugin classes
-            for item in dir(sub_module):
-                field = getattr(sub_module, item)
 
-                try: # Some classes throw an error when passed to issubclass...
-                    # Checking if the field is a class, and if the field is a direct child of the plugin class
-                    if (
-                        isinstance(field, type)
-                        and issubclass(field, plugin_metaclass)
-                        and (field != plugin_metaclass)
-                    ):
-                        # It is a plugin, add it to the list...
-                        plugins.add(field)
-                except Exception:
-                    pass
+        # We begin looking for plugin classes
+        for item in dir(sub_module):
+            field = getattr(sub_module, item)
+
+            try: # Some classes throw an error when passed to issubclass...
+                # Checking if the field is a class, and if the field is a direct child of the plugin class
+                if (
+                    isinstance(field, type)
+                    and issubclass(field, plugin_metaclass)
+                    and (field != plugin_metaclass)
+                ):
+                    # It is a plugin, add it to the list...
+                    plugins.add(field)
+            except Exception:
+                pass
 
     return plugins

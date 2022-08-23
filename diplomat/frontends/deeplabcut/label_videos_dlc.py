@@ -2,14 +2,10 @@ import pickle
 from os import PathLike
 from pathlib import Path
 from typing import List, Union, Optional, Dict, Any, Tuple
-
 import cv2
-import numpy as np
 import tqdm
 from deeplabcut import auxiliaryfunctions
-
 import pandas as pd
-
 from diplomat.processing import *
 from diplomat.utils.colormaps import to_colormap, iter_colormap
 from matplotlib import colors as mpl_colors

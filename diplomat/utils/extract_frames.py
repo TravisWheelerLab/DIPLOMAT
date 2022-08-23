@@ -16,7 +16,7 @@ def extract_frames(
     on_frames: Optional[Callable[[TrackingData], None]] = None
 ):
     """
-    Extract frames from a DeepLabCut Framestore and Store them in another framestore.
+    Extract frames from a DIPLOMAT Framestore and Store them in another framestore.
 
     :param dlfs_in: A binary file, the input DeepLabCut frame store file. Frames will be extracted from this file.
     :param dlfs_out: A binary file, the file to write a DeepLabCut frame store to. This will contain the extracted

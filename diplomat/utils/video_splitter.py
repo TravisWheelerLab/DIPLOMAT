@@ -2,7 +2,7 @@ from typing import Union, Sequence, Tuple, List, Optional
 import cv2
 from os import PathLike as Pl
 from pathlib import Path
-from diplomat.predict_frames_dlc import _sanitize_path_arg
+from diplomat.frontends.deeplabcut.predict_frames_dlc import _sanitize_path_arg
 import tqdm
 import math
 
