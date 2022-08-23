@@ -1,5 +1,5 @@
-from typing import List, Optional, Tuple
-
+import heapq
+from typing import List, Optional, Tuple, Dict, Set
 from diplomat.predictors.fpe.frame_pass import FramePass, PassOrderError
 from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
@@ -58,11 +58,81 @@ class FixFrame(FramePass):
         return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
 
     @classmethod
+    def skel_score(
+        cls,
+        avg: float,
+        frame1: ForwardBackwardFrame,
+        frame2: ForwardBackwardFrame,
+        down_scaling: int
+    ) -> float:
+        return np.abs((avg - cls.dist(
+            cls.get_max_location(frame1, down_scaling),
+            cls.get_max_location(frame2, down_scaling)
+        )) ** 2)
+
+    @classmethod
+    def to_bidirectional_score_graph(
+        cls,
+        storage_graph: StorageGraph,
+        frame_list: List[ForwardBackwardFrame],
+        num_outputs: int,
+        down_scaling: int
+    ):
+        # Construct a graph...
+        graph = [{} for __ in range(len(storage_graph) * num_outputs)]
+
+        # Now traverse the storage graph making connection between things...
+        for node_group1 in range(len(storage_graph)):
+            for node_group2, (__, __, avg) in storage_graph[node_group1]:
+                for node_off1 in range(num_outputs):
+                    idx1 = node_group1 * num_outputs + node_off1
+
+                    for node_off2 in range(num_outputs):
+                        idx2 = node_group2 * num_outputs + node_off2
+
+                        graph[idx1][idx2] = cls.skel_score(
+                            avg, frame_list[idx1], frame_list[idx2], down_scaling
+                        )
+
+        return graph
+
+    @classmethod
+    def _shortest_paths(
+        cls,
+        score_graph: List[Dict[int, float]],
+        ignore_nodes: Set[int],
+        start_node: int
+    ):
+        visited = [False] * len(score_graph)
+        node_scores = [np.inf] * len(score_graph)
+
+        next_nodes = [(0.0, start_node)]
+        visited[start_node] = True
+        node_scores[start_node] = 0
+
+        while(len(next_nodes) > 0):
+            __, node = heapq.heappop(next_nodes)
+
+            for sub_node in score_graph[node]:
+                if(sub_node in ignore_nodes):
+                    continue
+
+                proposed_score = node_scores[node] + score_graph[node][sub_node]
+
+                node_scores[sub_node] = min(node_scores[sub_node], proposed_score)
+
+                if(not visited[sub_node]):
+                    visited[sub_node] = True
+                    heapq.heappush(next_nodes, (node_scores[sub_node], sub_node))
+
+        return node_scores
+
+    @classmethod
     def create_fix_frame(
         cls,
         fb_data: ForwardBackwardData,
         frame_idx: int,
-        skeleton: Optional[StorageGraph] = None
+        skeleton: Optional[StorageGraph]
     ) -> List[ForwardBackwardFrame]:
         fixed_frame = [None] * fb_data.num_bodyparts
         num_outputs = fb_data.metadata.num_outputs
@@ -74,39 +144,48 @@ class FixFrame(FramePass):
             fixed_frame[bp_i].disable_occluded = True
 
         if(skeleton is not None):
-            # For skeletal info, we need to swap order all clusters to get the minimum score with the skeleton...
+            score_graph = cls.to_bidirectional_score_graph(skeleton, fb_data.frames[frame_idx], num_outputs, down_scaling)
 
-            # Returns the skeleton score between two body parts, lower is better. (Gets absolute distance from average)
-            def score(avg, frame1, frame2):
-                return np.abs(avg - cls.dist(
-                    cls.get_max_location(frame1, down_scaling),
-                    cls.get_max_location(frame2, down_scaling)
-                ))
+            # Compute the shortest node paths for every skeleton...
+            shortest_paths = [
+                cls._shortest_paths(score_graph, set(o for o in range(num_outputs) if(o != off)), off)
+                for off in range(num_outputs)
+            ]
 
-            available = [True] * len(fb_data.frames)
-            # Our traversal function, run for each edge in the skeleton graph.
-            def on_traversal(dfs_edge, value):
-                prior_n, current_n = dfs_edge
-                __, __, avg = value
+            best_skeleton_scores = []
 
-                for offset in range(num_outputs):
-                    prior_n_exact = prior_n * num_outputs + offset
-                    current_n_exact = current_n * num_outputs + offset
+            # Now compute skeleton scores....
+            for best_path_scores in shortest_paths:
+                best_skel_scores = [0] * len(best_path_scores)
+                for i, score in enumerate(best_path_scores):
+                    if(np.isinf(score)):
+                        best_skel_scores[i] = np.inf
+                        continue
 
-                    current_n_best = current_n * num_outputs + np.argmin([
-                            score(
-                                avg,
-                                fixed_frame[prior_n_exact],
-                                fb_data.frames[frame_idx][current_n * num_outputs + i]
-                            ) if(available[current_n * num_outputs + i]) else np.inf for i in range(num_outputs)
-                    ])
+                    for other_group, __ in skeleton[int(i / num_outputs)]:
+                        score = np.inf
 
-                    fixed_frame[current_n_exact] = fb_data.frames[frame_idx][current_n_best].copy()
-                    fixed_frame[current_n_exact].disable_occluded = True
-                    available[current_n_best] = False
+                        for other_off in range(num_outputs):
+                            other_idx = other_group * num_outputs + other_off
+                            score = min(score, best_path_scores[other_idx] + score_graph[i][other_idx])
 
-            # Run the dfs to find the best indexes for each cluster and rearrange them...
-            skeleton.dfs(on_traversal)
+                        best_skel_scores[i] += score
+
+                best_skeleton_scores.append(best_skel_scores)
+
+            options = np.array(best_skeleton_scores).T
+
+            for __ in range(num_outputs):
+                for part in range(int(options.shape[0] / num_outputs)):
+                    block = options[part * num_outputs:(part + 1) * num_outputs]
+
+                    pull_from, dest = np.unravel_index(np.argmin(block), block.shape)
+
+                    fixed_frame[part * num_outputs + dest] = fb_data.frames[frame_idx][part * num_outputs + pull_from].copy()
+                    fixed_frame[part * num_outputs + dest].disable_occluded = True
+
+                    block[pull_from, :] = np.inf
+                    block[:, dest] = np.inf
 
         return fixed_frame
 

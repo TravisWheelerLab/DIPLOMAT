@@ -1,4 +1,4 @@
-from typing import NamedTuple, Union, Iterable, Any, Dict, Tuple, ItemsView, List, Callable, Optional
+from typing import NamedTuple, Union, Iterable, Any, Dict, Tuple, ItemsView, List, Callable, Optional, Sequence
 import numpy as np
 import bisect
 
@@ -11,7 +11,7 @@ class Edge(NamedTuple):
     As a named tuple, it also supports all of the operations of a regular tuple.
 
     This is a bi-directional edge, so swapping the order of the edges in the tuple does nothing, it will still hash to
-    the same value, and edges with there nodes swapped will equal each other. (Edge(a, b) == Edge(b, a))
+    the same value, and edges with their nodes swapped will equal each other. (Edge(a, b) == Edge(b, a))
     """
     node1: Union[str, int]
     node2: Union[str, int]
@@ -222,7 +222,7 @@ class StorageGraph:
 
     def name_to_index(self, idx: Union[str, int]) -> int:
         """
-        Convert a node name string to it's integer index in the graph.
+        Convert a node name string to its integer index in the graph.
 
         :param idx: A string, being the node name. Can be an integer, in which case the index is simply validated.
 
@@ -246,12 +246,13 @@ class StorageGraph:
         """
         Get the names of all of the nodes, in order...
 
-        :returns: A list of strings, the names of all of the nodes, in order as in the graph.
+        :returns: A list of strings, the names of all the nodes, in order as in the graph.
         """
         return self._node_names
 
     def __str__(self):
         return f"Skeleton({str(dict(self.items()))}"
+
 
 
 class Histogram:
