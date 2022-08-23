@@ -1,4 +1,4 @@
-from typing import NamedTuple, Union, Iterable, Any, Dict, Tuple, ItemsView, List, Callable, Optional, Sequence
+from typing import NamedTuple, Union, Iterable, Any, Dict, Tuple, List, Callable, Optional
 import numpy as np
 import bisect
 
