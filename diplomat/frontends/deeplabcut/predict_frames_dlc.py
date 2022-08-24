@@ -7,7 +7,7 @@ https://github.com/AlexEMG/DeepLabCut/blob/master/AUTHORS
 Licensed under GNU Lesser General Public License v3.0
 
 """
-from typing import Iterable, Union, Optional, List, Type, Dict, Any
+from typing import Iterable, Union, Optional, List, Type, Dict, Any, Literal
 from os import PathLike
 from deeplabcut.utils import auxiliaryfunctions
 from diplomat.processing import Predictor, TQDMProgressBar, Config
@@ -26,11 +26,11 @@ Pathy = Union[PathLike, str]
 
 def analyze_frame_store(
     config_path: Pathy,
-    frame_stores: Union[Iterable[Pathy], Pathy],
+    frame_stores: Union[List[Pathy], Pathy],
     predictor: Optional[str] = None,
     save_as_csv: bool = False,
-    multi_output_format: str = "default",
-    video_folders: Union[None, Pathy, Iterable[Pathy]] = None,
+    multi_output_format: Literal["default", "separate-bodyparts"] = "default",
+    video_folders: Union[None, Pathy, List[Pathy]] = None,
     num_outputs: Optional[int] = None,
     shuffle: int = 1,
     training_set_index: int = 0,

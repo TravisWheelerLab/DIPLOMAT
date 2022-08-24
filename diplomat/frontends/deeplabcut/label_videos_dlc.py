@@ -8,7 +8,9 @@ from deeplabcut import auxiliaryfunctions
 import pandas as pd
 from diplomat.processing import *
 from diplomat.utils.colormaps import to_colormap, iter_colormap
+from diplomat.utils.cli_tools import extra_cli_args
 from matplotlib import colors as mpl_colors
+
 
 def cv2_fourcc_string(val) -> int:
     return int(cv2.VideoWriter_fourcc(*val))
@@ -31,6 +33,7 @@ class EverythingSet:
     def __contains__(self, item):
         return True
 
+@extra_cli_args(LABELED_VIDEO_SETTINGS)
 def create_labeled_videos(
     config: Pathy,
     videos: List[Pathy],

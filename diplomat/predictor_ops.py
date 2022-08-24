@@ -1,3 +1,5 @@
+from typing import List, Union
+
 from diplomat import processing
 
 def list_predictor_plugins():
@@ -17,7 +19,7 @@ def list_predictor_plugins():
         print()
 
 
-def get_predictor_settings(predictor_name=None):
+def get_predictor_settings(predictor_name: Union[None, str, List[str]] = None):
     """
     Gets the available/modifiable settings for a specified predictor plugin...
     :param predictor_name: The string or list of strings being the names of the predictor plugins to view customizable
@@ -56,11 +58,11 @@ def get_predictor_settings(predictor_name=None):
         print()
 
 
-def test_predictor_plugin(predictor_name=None, interactive=False):
+def test_predictor_plugin(predictor_name: Union[None, str, List[str]] = None, interactive: bool = False):
     """
     Run the tests for a predictor plugin.
     :param predictor_name: The name of the predictor or to run tests for, or a list of names of the predictors to run.
-                           If the predictor_name is not specified or set to None, then run tests for all of the
+                           If the predictor_name is not specified or set to None, then run tests for all the
                            predictor plugins...
                            Note: names are strings...
     :param interactive: A boolean. If True, the program will wait for user input after every test, to allow the user

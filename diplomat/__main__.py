@@ -1,13 +1,22 @@
-from argparse import ArgumentParser
 import sys
 
-parser = ArgumentParser(description="CLI Interface for DIPLOMAT")
-sub_parsers = parser.add_subparsers(required=True)
+import diplomat
+from diplomat.utils.cli_tools import build_full_parser
+from argparse import ArgumentParser
+from dataclasses import asdict
 
-predictors = sub_parsers.add_parser("predictors", help="Perform operations on predictors.")
-sub_pred_commands = predictors.add_subparsers(required=True)
-list_predictors = sub_pred_commands.add_parser("list", help="List available predictor plugins included with this version of DIPLOMAT.")
+function_tree = {
+    "predictors": {
+        "list": diplomat.list_predictor_plugins,
+        "test": diplomat.test_predictor_plugin,
+        "list_settings": diplomat.get_predictor_settings
+    }
+}
 
+for frontend_name, funcs in diplomat._LOADED_FRONTENDS.items():
+    function_tree[frontend_name] = {
+        name: func for name, func in asdict(funcs).items()
+    }
 
-results = parser.parse_args(sys.argv[1:])
-print(results)
+parser = build_full_parser(function_tree, ArgumentParser(prog="DIPLOMAT", description="A tool for multi-animal tracking."))
+parser(sys.argv[1:])

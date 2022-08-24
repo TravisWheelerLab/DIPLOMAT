@@ -1,10 +1,10 @@
 import decimal
 from typing import Any, Callable, TypeVar
-from typing_extensions import Protocol
+from typing_extensions import Protocol, runtime_checkable
 
 T = TypeVar("T")
 
-
+@runtime_checkable
 class TypeCaster(Protocol[T]):
     """
     Protocol for a type casting method.
