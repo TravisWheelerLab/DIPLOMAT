@@ -25,7 +25,7 @@ Pathy = Union[PathLike, str]
 
 
 def analyze_frame_store(
-    config_path: Pathy,
+    config: Pathy,
     frame_stores: Union[List[Pathy], Pathy],
     predictor: Optional[str] = None,
     save_as_csv: bool = False,
@@ -37,12 +37,12 @@ def analyze_frame_store(
     predictor_settings: Optional[Dict[str, Any]] = None,
 ):
     """
-    Takes a DeepLabCut Frame Store file (.dlfs) and makes predictions for the stored frames, using whatever predictor
+    Takes a DIPLOMAT Frame Store file (.dlfs) and makes predictions for the stored frames, using whatever predictor
     plugin is selected. This allows for the video to be run through the Deep Neural Network once, and then run through
     several prediction algorithms as many times as desired, saving time. It also allows for frames to be processed
     on one computer to be transferred to another computer for post-processing and predictions.
 
-    :param config_path: The path to the DLC config to use to interpret this data. The .DLFS will inherit the neural
+    :param config: The path to the DLC config to use to interpret this data. The .DLFS will inherit the neural
                         network of this project, allowing for frame labeling using this project.
     :param frame_stores: The paths to the frame stores (.dlfs files), string or list of strings.
     :param predictor: A String, the name of the predictor plugin to be used to make predictions.
@@ -73,7 +73,7 @@ def analyze_frame_store(
     # Grab the name of the current DLC Scorer, hack as DLCs Plot functions require a scorer, which is dumb. If it fails,
     # we just call the model 'Unknown' :). Simply means user won't be able to use create_labeled_video, data is still
     # 100% valid.
-    cfg = auxiliaryfunctions.read_config(config_path)
+    cfg = auxiliaryfunctions.read_config(config)
     train_frac = cfg["TrainingFraction"][training_set_index]
 
     try:

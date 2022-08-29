@@ -7,6 +7,8 @@ from dataclasses import asdict
 
 function_tree = {
     "predictors": {
+        "__description": "Contains subcommands for listing, testing, and printing information "
+                         "for the currently installed predictor plugins in this version of DIPLOMAT.",
         "list": diplomat.list_predictor_plugins,
         "test": diplomat.test_predictor_plugin,
         "list_settings": diplomat.get_predictor_settings
@@ -18,5 +20,8 @@ for frontend_name, funcs in diplomat._LOADED_FRONTENDS.items():
         name: func for name, func in asdict(funcs).items()
     }
 
-parser = build_full_parser(function_tree, ArgumentParser(prog="DIPLOMAT", description="A tool for multi-animal tracking."))
+parser = build_full_parser(
+    function_tree,
+    ArgumentParser(prog="DIPLOMAT", description="A tool for multi-animal tracking.")
+)
 parser(sys.argv[1:])

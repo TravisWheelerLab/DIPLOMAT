@@ -62,7 +62,10 @@ def _func_arg_to_cmd_arg(annotation: Type, default: Any) -> Tuple[dict, Optional
     elif(get_origin(annotation) == Union):
         args = dict(nargs="+", type=str)
         arg_corrector = _yaml_union(annotation)
-    elif((get_origin(annotation) is not None and issubclass(get_origin(annotation), List)) or issubclass(annotation, List)):
+    elif(isinstance(annotation, TypeCaster)):
+        args = dict(nargs="+", type=str)
+        arg_corrector = _yaml_typecaster(annotation)
+    elif((get_origin(annotation) is not None and issubclass(get_origin(annotation), (List, Tuple))) or issubclass(annotation, List)):
         # List uses the odd yaml parsing...
         args = dict(nargs="+", type=str)
         arg_corrector = _yaml_list
@@ -71,9 +74,6 @@ def _func_arg_to_cmd_arg(annotation: Type, default: Any) -> Tuple[dict, Optional
         arg_corrector = _yaml_dict
     elif(issubclass(annotation, bool)):
         args = dict(choices=(False, True), type=bool)
-    elif(isinstance(annotation, TypeCaster)):
-        args = dict(nargs="+", type=str)
-        arg_corrector = _yaml_typecaster(annotation)
     else:
         if(not issubclass(annotation, Callable)):
             raise ValueError("Auto-CMD functions must have callable annotations if they are not of type list, dict, union, or literal.")
@@ -109,9 +109,11 @@ def func_to_command(func: Callable, parser: ArgumentParser) -> ArgumentParser:
 
     # Extract params from the doc string...
     doc_str = inspect.getdoc(func)
+
     if(doc_str is None):
         help_messages = {}
     else:
+        parser.description = "".join(doc_str.split(":param ")[:1])
         help_messages = {name: info for name, info in re.findall(":param +([a-zA-Z0-9_]+):([^:]*)", doc_str)}
 
     for name, param in signature.parameters.items():
@@ -128,7 +130,7 @@ def func_to_command(func: Callable, parser: ArgumentParser) -> ArgumentParser:
         if(name in help_messages):
             args["help"] = help_messages[name]
 
-        parser.add_argument("--" + name, **args)
+        parser.add_argument("--" + name, "-" + "".join(s[:1] for s in name.split("_")), **args)
         if(corrector is not None):
             arg_correctors[name] = corrector
 
@@ -161,15 +163,23 @@ class CLIEngine:
             self._parser.print_usage()
 
 
-def build_full_parser(function_tree: dict, parent_parser: ArgumentParser) -> CLIEngine:
-    sub_commands = parent_parser.add_subparsers()
+def build_full_parser(function_tree: dict, parent_parser: ArgumentParser, name: Optional[str] = None) -> CLIEngine:
+    name = parent_parser.prog if(name is None) else name
+    sub_commands = parent_parser.add_subparsers(title=f"Subcommands and namespaces of '{name}'", required=True)
 
     for command_name, sub_actions in function_tree.items():
-        sub_parser = sub_commands.add_parser(command_name)
+        if(command_name.startswith("__")):
+            continue
 
         if(isinstance(sub_actions, dict)):
-            build_full_parser(sub_actions, sub_parser)
+            sub_cmd_args = {key[2:]: value for key, value in sub_actions.items() if (key.startswith("__"))}
+            if("description" in sub_cmd_args):
+                sub_cmd_args["help"] = sub_cmd_args["description"]
+
+            sub_parser = sub_commands.add_parser(command_name, **sub_cmd_args)
+            build_full_parser(sub_actions, sub_parser, name + " " + command_name)
         else:
+            sub_parser = sub_commands.add_parser(command_name, conflict_handler="resolve")
             func_to_command(sub_actions, sub_parser)
 
     return CLIEngine(parent_parser)

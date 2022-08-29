@@ -1,8 +1,9 @@
 import decimal
-from typing import Any, Callable, TypeVar
+from abc import ABC, abstractmethod
+import typing
 from typing_extensions import Protocol, runtime_checkable
 
-T = TypeVar("T")
+T = typing.TypeVar("T")
 
 @runtime_checkable
 class TypeCaster(Protocol[T]):
@@ -10,12 +11,12 @@ class TypeCaster(Protocol[T]):
     Protocol for a type casting method.
 
     A type caster must be able to be called with a single value, and return
-    a single value, being the value coarsed into to the correct type.
+    a single value, being the value coursed into to the correct type.
 
     Casting methods are also allowed to throw an exception when the value
     received can't be handled.
     """
-    def __call__(self, param: Any) -> T:
+    def __call__(self, param: typing.Any) -> T:
         pass
 
     def __str__(self) -> str:
@@ -25,12 +26,35 @@ class TypeCaster(Protocol[T]):
         return type(self).__name__
 
 
-class RangedInteger(TypeCaster):
+class DictConstructable(type):
+    def __getitem__(cls, item):
+        return cls.__call__(*item)
+
+
+class ConvertibleTypeCaster(TypeCaster, ABC, metaclass=DictConstructable):
+    @abstractmethod
+    def __call__(self, arg: typing.Any) -> T:
+        pass
+
+    @abstractmethod
+    def to_type_hint(self) -> typing.Type:
+        pass
+
+
+def to_hint(t: TypeCaster) -> typing.Type:
+    if(isinstance(t, ConvertibleTypeCaster)):
+        return t.to_type_hint()
+    if(isinstance(t, type)):
+        return t
+    raise ValueError(f"Unable to convert '{t}' to a python type hint!")
+
+
+class RangedInteger(ConvertibleTypeCaster):
     def __init__(self, minimum: float, maximum: float):
         self._min = float(minimum)
         self._max = float(maximum)
 
-    def __call__(self, param: Any) -> int:
+    def __call__(self, param: typing.Any) -> int:
         param = int(param)
 
         if(not (self._min <= param <= self._max)):
@@ -41,13 +65,16 @@ class RangedInteger(TypeCaster):
     def __repr__(self) -> str:
         return f"{type(self).__name__}[min={self._min}, max={self._max}]"
 
+    def to_type_hint(self) -> typing.Type:
+        return int
 
-class RangedFloat(TypeCaster):
+
+class RangedFloat(ConvertibleTypeCaster):
     def __init__(self, minimum: float, maximum: float):
         self._min = float(minimum)
         self._max = float(maximum)
 
-    def __call__(self, param: Any) -> float:
+    def __call__(self, param: typing.Any) -> float:
         param = float(param)
 
         if(not (self._min <= param <= self._max)):
@@ -58,12 +85,15 @@ class RangedFloat(TypeCaster):
     def __repr__(self) -> str:
         return f"{type(self).__name__}[min={self._min}, max={self._max}]"
 
+    def to_type_hint(self) -> typing.Type:
+        return float
 
-class Sequence(TypeCaster):
-    def __init__(self, item_type: Callable[[Any], Any]):
+
+class Sequence(ConvertibleTypeCaster):
+    def __init__(self, item_type: typing.Callable[[typing.Any], typing.Any]):
         self._item_type = item_type
 
-    def __call__(self, params: Any) -> Any:
+    def __call__(self, params: typing.Any) -> typing.Any:
         vals = []
 
         for param in params:
@@ -76,15 +106,18 @@ class Sequence(TypeCaster):
 
         return vals
 
+    def to_type_hint(self) -> typing.Type:
+        return typing.List[to_hint(self._item_type)]
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}[{self._item_type}]"
 
 
-class Tuple(TypeCaster):
-    def __init__(self, *type_list: Callable[[Any], Any]):
+class Tuple(ConvertibleTypeCaster):
+    def __init__(self, *type_list: typing.Callable[[typing.Any], typing.Any]):
         self._valid_type_list = type_list
 
-    def __call__(self, params: Any) -> Any:
+    def __call__(self, params: typing.Any) -> typing.Any:
         vals = []
 
         if(len(params) != len(self._valid_type_list)):
@@ -101,15 +134,18 @@ class Tuple(TypeCaster):
 
         return tuple(vals)
 
+    def to_type_hint(self) -> typing.Type:
+        return typing.Tuple[tuple(to_hint(t) for t in self._valid_type_list)]
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}{self._valid_type_list}"
 
 
-class Literal(TypeCaster):
-    def __init__(self, *objects: Any):
+class Literal(ConvertibleTypeCaster):
+    def __init__(self, *objects: typing.Any):
         self._valid_objs = objects
 
-    def __call__(self, param: Any) -> Any:
+    def __call__(self, param: typing.Any) -> typing.Any:
         for obj in self._valid_objs:
             if(param == obj):
                 return param
@@ -119,15 +155,21 @@ class Literal(TypeCaster):
             f"\n{self._valid_objs}"
         )
 
+    def to_type_hint(self) -> typing.Type:
+        return typing.Literal[tuple(self._valid_objs)]
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}{self._valid_objs}"
 
 
-class Union(TypeCaster):
-    def __init__(self, *types: Callable[[Any], Any]):
-        self._valid_types = types
+NoneType = Literal[None]
 
-    def __call__(self, param: Any) -> Any:
+
+class Union(ConvertibleTypeCaster):
+    def __init__(self, *types: typing.Callable[[typing.Any], typing.Any]):
+        self._valid_types = list(types)
+
+    def __call__(self, param: typing.Any) -> typing.Any:
         for t in self._valid_types:
             try:
                 return t(param)
@@ -139,18 +181,52 @@ class Union(TypeCaster):
             f"types:\n{self._valid_types}"
         )
 
+    def to_type_hint(self) -> typing.Type:
+        return Union[tuple(to_hint(t) for t in self._valid_types)]
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}{self._valid_types}"
 
 
-class RoundedDecimal(TypeCaster):
+class Optional(Union):
+    def __init__(self, t: typing.Callable[[typing.Any], typing.Any]):
+        super().__init__(t, NoneType)
+
+    def to_type_hint(self) -> typing.Type:
+        return typing.Optional[tuple(to_hint(t) for t in self._valid_types)]
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}[{self._valid_types[0]}]"
+
+
+class RoundedDecimal(ConvertibleTypeCaster):
     def __init__(self, precision: int = 5):
         self._precision = precision
 
-    def __call__(self, param: Any) -> float:
+    def __call__(self, param: typing.Any) -> float:
         return float(decimal.Decimal(
             param, context=decimal.Context(prec=self._precision)
         ))
 
+    def to_type_hint(self) -> typing.Type:
+        return float
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}[precision={self._precision}]"
+
+
+class Dict(ConvertibleTypeCaster):
+    def __init__(self, key: typing.Callable[[typing.Any], typing.Any], value: typing.Callable[[typing.Any], typing.Any]):
+        self._key = key
+        self._value = value
+
+    def __call__(self, param: typing.Any) -> dict:
+        return {
+            self._key(k): self._value(v) for k, v in dict(param).items()
+        }
+
+    def to_type_hint(self) -> typing.Type:
+        return typing.Dict[to_hint(self._key), to_hint(self._value)]
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}[{self._key}, {self._value}]"
