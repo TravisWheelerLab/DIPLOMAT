@@ -1,8 +1,7 @@
-from typing import Union, Sequence, Tuple, List, Optional
+from typing import Union, Sequence, Tuple, List, Optional, Iterable
 import cv2
 from os import PathLike as Pl
 from pathlib import Path
-from diplomat.frontends.deeplabcut.predict_frames_dlc import _sanitize_path_arg
 import tqdm
 import math
 
@@ -135,6 +134,25 @@ def _split_single_video(
 def _list_access(list1, list2, index):
     comb = (list1, list2)
     return comb[index // len(list1)][index % len(list1)]
+
+
+def _sanitize_path_arg(
+    paths: Union[None, Iterable[PathLike], PathLike]
+) -> Optional[List[Path]]:
+    """
+    Sanitizes a pathlike or list of pathlike argument and returns a list of Path, or None if rogue data was passed...
+    """
+    if isinstance(paths, (PathLike, str)):
+        return [Path(str(paths)).resolve()]
+    elif isinstance(paths, Iterable):
+        paths = list(paths)
+        if len(paths) > 0:
+            return [Path(str(path)).resolve() for path in paths]
+        else:
+            return None
+    else:
+        return None
+
 
 def _new_video_writer(
     video_path: Path,

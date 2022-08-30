@@ -7,12 +7,14 @@ https://github.com/AlexEMG/DeepLabCut/blob/master/AUTHORS
 Licensed under GNU Lesser General Public License v3.0
 
 """
-from typing import Iterable, Union, Optional, List, Type, Dict, Any, Literal
+from typing import Union, Optional, List, Type, Dict, Any, Literal
 from os import PathLike
 from deeplabcut.utils import auxiliaryfunctions
 from diplomat.processing import Predictor, TQDMProgressBar, Config
+import diplomat.processing.type_casters as tc
 from diplomat import processing
 from diplomat.frontends.deeplabcut.predict_videos_dlc import _get_predictor_settings, _get_pandas_header
+from diplomat.utils.video_splitter import _sanitize_path_arg
 from pathlib import Path
 import numpy as np
 import diplomat.utils.frame_store_fmt as frame_store_fmt
@@ -23,18 +25,18 @@ import time
 # Represents a string or any filesystem path-like type....
 Pathy = Union[PathLike, str]
 
-
-def analyze_frame_store(
-    config: Pathy,
-    frame_stores: Union[List[Pathy], Pathy],
-    predictor: Optional[str] = None,
+@tc.typecaster_function
+def analyze_frames(
+    config: tc.PathLike,
+    frame_stores: tc.Union[tc.Sequence[tc.PathLike], tc.PathLike],
+    predictor: tc.Optional[str] = None,
     save_as_csv: bool = False,
-    multi_output_format: Literal["default", "separate-bodyparts"] = "default",
-    video_folders: Union[None, Pathy, List[Pathy]] = None,
-    num_outputs: Optional[int] = None,
+    multi_output_format: tc.Literal["default", "separate-bodyparts"] = "default",
+    video_folders: tc.Union[tc.NoneType, tc.Sequence[tc.PathLike], tc.PathLike] = None,
+    num_outputs: tc.Optional[int] = None,
     shuffle: int = 1,
     training_set_index: int = 0,
-    predictor_settings: Optional[Dict[str, Any]] = None,
+    predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None,
 ):
     """
     Takes a DIPLOMAT Frame Store file (.dlfs) and makes predictions for the stored frames, using whatever predictor
@@ -63,12 +65,6 @@ def analyze_frame_store(
     :param predictor_settings: Optional dictionary of strings to any. This will specify what settings a predictor should use,
                         completely ignoring any settings specified in the config.yaml. Default value is None, which
                         tells this method to use the settings specified in the config.yaml.
-
-    :return: The labels are stored as MultiIndex Pandas Array, which contains the name of the network, body part name,
-            (x, y) label position in pixels, and the likelihood for each frame per body part. These arrays are stored
-            in an efficient Hierarchical Data Format (HDF) in the same directory, where the video is stored. However,
-            if the flag save_as_csv is set to True, the data can also be exported in comma-separated values format
-            (.csv), which in turn can be imported in many programs, such as MATLAB, R, Prism, etc.
     """
     # Grab the name of the current DLC Scorer, hack as DLCs Plot functions require a scorer, which is dumb. If it fails,
     # we just call the model 'Unknown' :). Simply means user won't be able to use create_labeled_video, data is still
@@ -128,7 +124,6 @@ def analyze_frame_store(
         )
 
     print("Analysis and Predictions are Done! Now your research can truly start!")
-    return dlc_scorer
 
 
 def _resolve_videos(
@@ -167,24 +162,6 @@ def _resolve_videos(
                 video_paths[idx] = suspect_video
 
     return video_paths
-
-
-def _sanitize_path_arg(
-    paths: Union[None, Iterable[Pathy], Pathy]
-) -> Optional[List[Path]]:
-    """
-    Sanitizes a pathlike or list of pathlike argument and returns a list of Path, or None if rogue data was passed...
-    """
-    if isinstance(paths, (PathLike, str)):
-        return [Path(str(paths)).resolve()]
-    elif isinstance(paths, Iterable):
-        paths = list(paths)
-        if len(paths) > 0:
-            return [Path(str(path)).resolve() for path in paths]
-        else:
-            return None
-    else:
-        return None
 
 
 def _analyze_frame_store(

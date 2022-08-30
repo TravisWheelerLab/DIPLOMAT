@@ -1,13 +1,11 @@
-import argparse
-import sys
 from argparse import ArgumentParser, Namespace
-from typing import Callable, Literal, Type, Any, Union, Tuple, List, Dict, Optional
+from typing import Callable, Any, Tuple, List, Dict, Optional
 import inspect
 import re
 import yaml
 from io import StringIO
-from typing import get_origin, get_args
-from diplomat.processing import ConfigSpec, TypeCaster
+from diplomat.processing import ConfigSpec
+from diplomat.processing.type_casters import TypeCaster, TypeCasterFunction, get_typecaster_annotations
 
 
 def _yaml_arg_load(str_list: List[str]) -> dict:
@@ -16,30 +14,6 @@ def _yaml_arg_load(str_list: List[str]) -> dict:
     res = yaml.safe_load(StringIO(" ".join(str_list)))
     return res
 
-def _yaml_dict(name: str, str_list: List[str]) -> dict:
-    res = _yaml_arg_load(str_list)
-    if(not isinstance(res, dict)):
-        raise ValueError(f"Argument {name} specified is not a dict!")
-    return res
-
-def _yaml_list(name: str, str_list: List[str]):
-    res = _yaml_arg_load(str_list)
-    if(not isinstance(res, list)):
-        raise ValueError(f"Argument {name} specified is not a list!")
-    return res
-
-def _yaml_union(union_type: Type):
-    def checker(name: str, str_list: List[str]):
-        res = _yaml_arg_load(str_list)
-        valid_types = [t if(get_origin(t) is None) else get_origin(t) for t in get_args(union_type)]
-
-        for t in valid_types:
-            if(isinstance(res, t)):
-                return res
-
-        raise ValueError(f"Argument {name} is not of the type {union_type}")
-
-    return checker
 
 def _yaml_typecaster(caster: TypeCaster):
     def checker(name: str, str_list: List[str]):
@@ -52,33 +26,9 @@ def _yaml_typecaster(caster: TypeCaster):
     return checker
 
 
-def _func_arg_to_cmd_arg(annotation: Type, default: Any) -> Tuple[dict, Optional[Callable]]:
-    arg_corrector = None
-
-    if(Literal == get_origin(annotation)):
-        # If the type is a literal, add choices...
-        options = get_args(annotation)
-        args = dict(choices=options, type=type(options[0]))
-    elif(get_origin(annotation) == Union):
-        args = dict(nargs="+", type=str)
-        arg_corrector = _yaml_union(annotation)
-    elif(isinstance(annotation, TypeCaster)):
-        args = dict(nargs="+", type=str)
-        arg_corrector = _yaml_typecaster(annotation)
-    elif((get_origin(annotation) is not None and issubclass(get_origin(annotation), (List, Tuple))) or issubclass(annotation, List)):
-        # List uses the odd yaml parsing...
-        args = dict(nargs="+", type=str)
-        arg_corrector = _yaml_list
-    elif((get_origin(annotation) is not None and issubclass(get_origin(annotation), Dict)) or issubclass(annotation, Dict)):
-        args = dict(nargs="+", type=str)
-        arg_corrector = _yaml_dict
-    elif(issubclass(annotation, bool)):
-        args = dict(choices=(False, True), type=bool)
-    else:
-        if(not issubclass(annotation, Callable)):
-            raise ValueError("Auto-CMD functions must have callable annotations if they are not of type list, dict, union, or literal.")
-        args = dict(type=annotation)
-
+def _func_arg_to_cmd_arg(annotation: TypeCaster, default: Any) -> Tuple[dict, Optional[Callable]]:
+    args = dict(nargs="+", type=str)
+    arg_corrector = _yaml_typecaster(annotation)
 
     if(default == inspect.Parameter.empty):
         args["required"] = False
@@ -102,8 +52,12 @@ class ComplexParsingWrapper:
         return self._func(**result)
 
 
-def func_to_command(func: Callable, parser: ArgumentParser) -> ArgumentParser:
+def get_summary_from_doc_str(doc_str: str) -> str:
+    return "".join(re.split(":param |:return|:throw", doc_str)[:1])
+
+def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> ArgumentParser:
     signature = inspect.signature(func)
+    cmd_args = get_typecaster_annotations(func)
 
     arg_correctors = {}
 
@@ -113,19 +67,14 @@ def func_to_command(func: Callable, parser: ArgumentParser) -> ArgumentParser:
     if(doc_str is None):
         help_messages = {}
     else:
-        parser.description = "".join(doc_str.split(":param ")[:1])
+        parser.description = get_summary_from_doc_str(doc_str)
         help_messages = {name: info for name, info in re.findall(":param +([a-zA-Z0-9_]+):([^:]*)", doc_str)}
 
-    for name, param in signature.parameters.items():
-        if(param.kind == inspect.Parameter.POSITIONAL_ONLY):
-            raise ValueError("Function can only be turned into command if it has 0 positional only arguments!")
-        if(param.kind in [inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD]):
+    for name, caster in cmd_args.items():
+        if(name == "return"):
             continue
 
-        if(param.annotation == inspect.Parameter.empty):
-            raise ValueError("Auto-CLI function must annotate ALL variables!")
-
-        args, corrector = _func_arg_to_cmd_arg(param.annotation, param.default)
+        args, corrector = _func_arg_to_cmd_arg(caster, signature.parameters[name].default)
 
         if(name in help_messages):
             args["help"] = help_messages[name]
@@ -179,7 +128,13 @@ def build_full_parser(function_tree: dict, parent_parser: ArgumentParser, name: 
             sub_parser = sub_commands.add_parser(command_name, **sub_cmd_args)
             build_full_parser(sub_actions, sub_parser, name + " " + command_name)
         else:
-            sub_parser = sub_commands.add_parser(command_name, conflict_handler="resolve")
+            doc_str = inspect.getdoc(sub_actions)
+            if(doc_str is not None):
+                desc = get_summary_from_doc_str(doc_str)
+                sub_parser = sub_commands.add_parser(command_name, conflict_handler="resolve", description=desc, help=desc)
+            else:
+                sub_parser = sub_commands.add_parser(command_name, conflict_handler="resolve")
+
             func_to_command(sub_actions, sub_parser)
 
     return CLIEngine(parent_parser)
@@ -195,6 +150,13 @@ def extra_cli_args(config_spec: ConfigSpec) -> Callable[[Callable], Callable]:
     """
     def attach_extra(func: Callable):
         func.__extra_args = config_spec
+
+        if(hasattr(func, "__doc__")):
+            extra_doc = "\n        ".join(
+                f" - {name} (Type: {caster}, Default: {default}): {desc}" for name, (default, caster, desc) in config_spec.items()
+            )
+            func.__doc__ = func.__doc__.format(extra_cli_args=extra_doc)
+
         return func
     return attach_extra
 

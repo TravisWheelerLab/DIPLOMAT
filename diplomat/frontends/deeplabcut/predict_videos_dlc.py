@@ -1,6 +1,5 @@
 import time
-from typing import List, Dict, Any, Type, Tuple, Optional, Literal, Union, \
-    Callable
+from typing import List, Dict, Any, Type, Tuple, Optional, Union, Callable
 
 import cv2
 import pandas as pd
@@ -13,6 +12,7 @@ from diplomat.processing import *
 from diplomat import processing
 from diplomat.utils import video_info
 from pathlib import Path
+import diplomat.processing.type_casters as tc
 
 # DLC Imports
 from deeplabcut.pose_estimation_tensorflow.core import predict
@@ -22,9 +22,10 @@ from deeplabcut.pose_estimation_tensorflow import auxiliaryfunctions
 
 Pathy = Union[os.PathLike, str]
 
+@tc.typecaster_function
 def analyze_videos(
-    config: str,
-    videos: List[Pathy],
+    config: tc.PathLike,
+    videos: tc.Union[tc.Sequence[tc.PathLike], tc.PathLike],
     video_type: str = "",
     shuffle: int = 1,
     training_set_index: int = 0,
@@ -32,13 +33,33 @@ def analyze_videos(
     save_as_csv: bool = False,
     destination_folder: str = None,
     batch_size: int = None,
-    cropping: Tuple[int, int, int, int] = None,
+    cropping: tc.Tuple[int, int, int, int] = None,
     model_prefix: str = "",
     num_outputs: int = None,
-    multi_output_format: Literal["default", "separate"] = "default",
-    predictor: Optional[str] = None,
-    predictor_settings: Optional[Dict[str, Any]] = None
-) -> str:
+    multi_output_format: tc.Literal["default", "separate"] = "default",
+    predictor: tc.Optional[str] = None,
+    predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None
+):
+    """
+    Run DIPLOMAT tracking on videos using a DEEPLABCUT project.
+
+    :param config: The path to the DLC config for the DEEPLABCUT project.
+    :param videos: A single path or list of paths, to the location of video files to run analysis on. Can also be a directory.
+    :param video_type: Optional
+    :param shuffle:
+    :param training_set_index:
+    :param gpu_index:
+    :param save_as_csv:
+    :param destination_folder:
+    :param batch_size:
+    :param cropping:
+    :param model_prefix:
+    :param num_outputs:
+    :param multi_output_format:
+    :param predictor:
+    :param predictor_settings:
+    :return:
+    """
     if("TF_CUDNN_USE_AUTOTUNE" in os.environ):
         del os.environ["TF_CUDNN_USE_AUTOTUNE"]
 
@@ -142,7 +163,7 @@ def analyze_videos(
 
     print("Analysis is done!")
 
-    return dlc_scorer
+    return None
 
 
 def _analyze_video(

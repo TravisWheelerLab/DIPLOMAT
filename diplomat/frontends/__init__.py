@@ -1,52 +1,50 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Callable, Optional, Type, Union, List
-import inspect
-import os
-
-Pathy = Union[os.PathLike, str]
+from dataclasses import dataclass, asdict
+from inspect import get_annotations
+from diplomat.processing.type_casters import StrictCallable, PathLike, Union, Sequence, Dict, Any, Optional, TypeCaster, NoneType
+import typing
 
 
-class ArgumentMatchingFunction:
-    def __init__(self, **kwargs: Type):
-        self._params = kwargs
+AnalyzeVideosFunction = lambda ret: StrictCallable(
+    config=PathLike,
+    videos=Union[Sequence[PathLike], PathLike],
+    predictor=Optional[str],
+    predictor_settings=Optional[Dict[str, Any]],
+    _return=ret
+)
+AnalyzeFramesFunction = lambda ret: StrictCallable(
+    config=PathLike,
+    frame_stores=Union[Sequence[PathLike], PathLike],
+    predictor=Optional[str],
+    predictor_settings=Optional[Dict[str, Any]],
+    _return=ret
+)
+LabelVideosFunction = lambda ret: StrictCallable(config=PathLike, videos=Union[Sequence[PathLike], PathLike], _return=ret)
 
-    def enforce(self, callable):
-        sig = inspect.signature(callable)
-        for name in sig.parameters.items():
-            pass
 
-
-def function_enforcing_dataclass(clazz):
-    enforcers = {}
-
-    for name, t in inspect.get_annotations(clazz).items():
-        if(isinstance(t, ArgumentMatchingFunction)):
-            clazz.__annotations__[name] = Callable
-            enforcers[name] = t
-
-    # Insert our custom post-init method...
-    def pi(self):
-        for name, enf in self._enforcers:
-            enf.enforce(getattr(self, name))
-
-    clazz.__post_init__ = pi
-    clazz = dataclass(frozen=True)(clazz)
-    clazz._enforcers = enforcers
-
-    return clazz
-
-@function_enforcing_dataclass
+@dataclass(frozen=False)
 class DIPLOMATBaselineCommands:
     """
     The baseline set of functions each DIPLOMAT backend must implement. Backends can add additional commands
     by extending this base class...
     """
-    description: str
-    analyze_video: ArgumentMatchingFunction(config=Pathy, videos=Union[Pathy, List[Pathy]])
-    analyze_frames: Callable
-    label_video: Callable
+    _verify_analyze_videos: AnalyzeVideosFunction(bool)
+    analyze_videos: AnalyzeVideosFunction(NoneType)
+    _verify_analyze_frames: AnalyzeFramesFunction(bool)
+    analyze_frames: AnalyzeFramesFunction(NoneType)
+    _verify_label_videos: LabelVideosFunction(bool)
+    label_videos: LabelVideosFunction(NoneType)
 
+    def __post_init__(self):
+        annotations = get_annotations(type(self))
+
+        for name, value in asdict(self).items():
+            annot = annotations.get(name, None)
+
+            if(annot is None or (not isinstance(annot, TypeCaster))):
+                raise TypeError("DIPLOMAT Command Struct can only contain typecaster types.")
+
+            setattr(self, name, annot(value))
 
 
 class DIPLOMATFrontend(ABC):
@@ -55,7 +53,7 @@ class DIPLOMATFrontend(ABC):
     """
     @classmethod
     @abstractmethod
-    def init(cls) -> Optional[DIPLOMATBaselineCommands]:
+    def init(cls) -> typing.Optional[DIPLOMATBaselineCommands]:
         """
         Attempt to initialize the frontend, returning a list of api functions. If the backend can't initialize due to missing imports/requirements,
         this function should return None.

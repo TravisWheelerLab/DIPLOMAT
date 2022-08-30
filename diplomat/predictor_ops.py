@@ -1,7 +1,7 @@
-from typing import List, Union
-
 from diplomat import processing
+from diplomat.processing.type_casters import typecaster_function, Union, Sequence, NoneType
 
+@typecaster_function
 def list_predictor_plugins():
     """
     Retrieve and print all currently installed and available predictor plugins that can be used with deeplabcut to
@@ -19,7 +19,8 @@ def list_predictor_plugins():
         print()
 
 
-def get_predictor_settings(predictor_name: Union[None, str, List[str]] = None):
+@typecaster_function
+def get_predictor_settings(predictor_name: Union[Sequence[str], NoneType, str] = None):
     """
     Gets the available/modifiable settings for a specified predictor plugin...
     :param predictor_name: The string or list of strings being the names of the predictor plugins to view customizable
@@ -58,7 +59,8 @@ def get_predictor_settings(predictor_name: Union[None, str, List[str]] = None):
         print()
 
 
-def test_predictor_plugin(predictor_name: Union[None, str, List[str]] = None, interactive: bool = False):
+@typecaster_function
+def test_predictor_plugin(predictor_name: Union[Sequence[str], NoneType, str] = None, interactive: bool = False):
     """
     Run the tests for a predictor plugin.
     :param predictor_name: The name of the predictor or to run tests for, or a list of names of the predictors to run.

@@ -7,7 +7,7 @@ __version__ = "0.0.1"
 from diplomat.predictor_ops import list_predictor_plugins, get_predictor_settings, test_predictor_plugin
 from diplomat.utils.video_splitter import split_videos
 
-# Attempt to load all
+# Attempt to load all frontends, putting their public functions into submodules of diplomat.
 def load_frontends():
     from diplomat import frontends
     from diplomat.frontends import DIPLOMATFrontend
@@ -21,7 +21,7 @@ def load_frontends():
     for frontend in frontends:
         try:
             res = frontend.init()
-        except Exception:
+        except Exception as e:
             res = None
 
         if(res is not None):
@@ -31,8 +31,12 @@ def load_frontends():
             globals()[name] = mod
             loaded_funcs[name] = res
 
+            if(hasattr(frontend, "__doc__")):
+                mod.__doc__ = frontend.__doc__
+
             for (name, func) in asdict(res).items():
-                setattr(mod, name, func)
+                if(not name.startswith("_")):
+                    setattr(mod, name, func)
 
     return frontends, loaded_funcs
 
