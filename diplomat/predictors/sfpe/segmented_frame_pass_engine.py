@@ -1202,7 +1202,7 @@ class SegmentedFramePassEngine(Predictor):
                     "ClusterFrames",
                     "OptimizeStandardDeviation"
                 ],
-                type_casters.Sequence(
+                type_casters.List(
                     type_casters.Union(
                         type_casters.Tuple(str, dict),
                         type_casters.Tuple(str),
@@ -1218,7 +1218,7 @@ class SegmentedFramePassEngine(Predictor):
                 [
                     "MITViterbi"
                 ],
-                type_casters.Sequence(
+                type_casters.List(
                     type_casters.Union(
                         type_casters.Tuple(str, dict),
                         type_casters.Tuple(str),

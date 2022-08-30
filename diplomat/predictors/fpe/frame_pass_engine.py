@@ -429,7 +429,7 @@ class FramePassEngine(Predictor):
                     "FixFrame",
                     "MITViterbi",
                 ],
-                type_casters.Sequence(
+                type_casters.List(
                     type_casters.Union(
                         type_casters.Tuple(str, dict),
                         type_casters.Tuple(str),

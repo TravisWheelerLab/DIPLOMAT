@@ -139,7 +139,7 @@ class FrameExporter(Predictor):
             ),
             "bodyparts_to_keep": (
                 None,
-                type_casters.Union(type_casters.Literal(None), type_casters.Sequence(str)),
+                type_casters.Union(type_casters.Literal(None), type_casters.List(str)),
                 "A list of body parts to store. None means keep all the body parts."
             )
         }

@@ -22,43 +22,59 @@ from deeplabcut.pose_estimation_tensorflow import auxiliaryfunctions
 
 Pathy = Union[os.PathLike, str]
 
+def _to_str_list(path_list):
+    if(isinstance(path_list, (list, tuple))):
+        return [str(path) for path in path_list]
+    return str(path_list)
+
 @tc.typecaster_function
 def analyze_videos(
     config: tc.PathLike,
-    videos: tc.Union[tc.Sequence[tc.PathLike], tc.PathLike],
+    videos: tc.Union[tc.List[tc.PathLike], tc.PathLike],
     video_type: str = "",
     shuffle: int = 1,
     training_set_index: int = 0,
-    gpu_index: int = None,
+    gpu_index: tc.Optional[int] = None,
     save_as_csv: bool = False,
-    destination_folder: str = None,
-    batch_size: int = None,
-    cropping: tc.Tuple[int, int, int, int] = None,
+    destination_folder: tc.Optional[str] = None,
+    batch_size: tc.Optional[int] = None,
+    cropping: tc.Optional[tc.Tuple[int, int, int, int]] = None,
     model_prefix: str = "",
-    num_outputs: int = None,
+    num_outputs: tc.Optional[int] = None,
     multi_output_format: tc.Literal["default", "separate"] = "default",
     predictor: tc.Optional[str] = None,
     predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None
 ):
     """
-    Run DIPLOMAT tracking on videos using a DEEPLABCUT project.
+    Run DIPLOMAT tracking on videos using a DEEPLABCUT project and trained network.
 
     :param config: The path to the DLC config for the DEEPLABCUT project.
     :param videos: A single path or list of paths, to the location of video files to run analysis on. Can also be a directory.
-    :param video_type: Optional
-    :param shuffle:
-    :param training_set_index:
-    :param gpu_index:
-    :param save_as_csv:
-    :param destination_folder:
-    :param batch_size:
-    :param cropping:
-    :param model_prefix:
-    :param num_outputs:
-    :param multi_output_format:
-    :param predictor:
-    :param predictor_settings:
-    :return:
+    :param video_type: Optional string, the video extension to search for if the 'videos' argument is a directory
+                       to search inside ('.avi', '.mp4', ...).
+    :param shuffle: int, optional. Integer specifying which TrainingsetFraction to use. By default, the first
+                    (note that TrainingFraction is a list in config.yaml).
+    :param training_set_index: int, optional. Integer specifying which TrainingsetFraction to use. By default the first
+                               (note that TrainingFraction is a list in config.yaml).
+    :param gpu_index: Integer index of the GPU to use for inference (in tensorflow) defaults to 0, or selecting the first detected GPU if available.
+    :param save_as_csv: Boolean, if true save the results to both a HDF5 file (".h5") and also a CSV file, otherwise only save results to a HDF5.
+    :param destination_folder: The destination folder to save the resulting HDF5 track files to. Defaults to None, meaning save the HDF5 in the same
+                               folder as the video file it was generated from.
+    :param batch_size: The batch size to use while processing. Defaults to None, which uses the default batch size for the project.
+    :param cropping: A tuple of 4 integers in the format (x1, x2, y1, y2), specifying the boundaries of the cropping box analyze in the video.
+                     Defaults to None, which uses the cropping settings in the DLC config file.
+    :param model_prefix: The string prefix of the DEEPLABCUT model to use defaults to no prefix (the default model).
+    :param num_outputs: The number of outputs, or bodies to track in the video. Defaults to the value specified in the DLC config, or None if one
+                        is not specified.
+    :param multi_output_format: The format to use when tracking multiple body parts of the same type (multiple bodies, or num_outputs > 1).
+                                Defaults to "default", which uses DLC's original multi-output format. Passing "separate" saves additional
+                                bodies by tacking on an index onto to body part name (Nose, Nose2, Nose3, ...) instead of storing tracks
+                                for the same body part type together.
+    :param predictor: A String, the name of the predictor plugin to be used to make predictions. If not specified, defaults to the segmented frame
+                  pass engine ("SegmentedFramePassEngine").
+    :param predictor_settings: Optional dictionary of strings to any. This will specify what settings a predictor should use,
+                    completely ignoring any settings specified in the config.yaml. Default value is None, which
+                    tells this method to use the settings specified in the config.yaml.
     """
     if("TF_CUDNN_USE_AUTOTUNE" in os.environ):
         del os.environ["TF_CUDNN_USE_AUTOTUNE"]
@@ -107,15 +123,12 @@ def analyze_videos(
         config["cropping"] = True
         config["x1"], config["x2"], config["y1"], config["y2"] = cropping
 
-    if(predictor is not None):
-        # If predictor plugin was selected, disable dynamic mode and GPU predictions.
-        predictor_cls = processing.get_predictor(predictor)
-        print(f"Predictor '{predictor}' selected, disabling GPU predictions and dynamic cropping as both of these are not supported.")
+    if(predictor is None):
+        predictor = "SegmentedFramePassEngine"
+    predictor_cls = processing.get_predictor(predictor)
 
-        if model_config["num_outputs"] > 1 and (not predictor_cls.supports_multi_output()):
-            raise NotImplementedError("Predictor plugin does not support num_outputs greater than 1!")
-    else:
-        predictor_cls = processing.get_predictor("ArgMax")
+    if model_config["num_outputs"] > 1 and (not predictor_cls.supports_multi_output()):
+        raise NotImplementedError("Predictor plugin does not support num_outputs greater than 1!")
 
     dlc_scorer, __ = auxiliaryfunctions.GetScorerName(
         config,
@@ -134,7 +147,7 @@ def analyze_videos(
         dlc_scorer,
     )
 
-    video_list = auxiliaryfunctions.get_list_of_videos(videos, video_type)
+    video_list = auxiliaryfunctions.get_list_of_videos(_to_str_list(videos), video_type)
 
     this_dir = Path.cwd()
 

@@ -26,9 +26,9 @@ def _yaml_typecaster(caster: TypeCaster):
     return checker
 
 
-def _func_arg_to_cmd_arg(annotation: TypeCaster, default: Any) -> Tuple[dict, Optional[Callable]]:
+def _func_arg_to_cmd_arg(annotation: TypeCaster, default: Any, auto_cast: bool = True) -> Tuple[dict, Optional[Callable]]:
     args = dict(nargs="+", type=str)
-    arg_corrector = _yaml_typecaster(annotation)
+    arg_corrector = _yaml_typecaster(annotation) if(auto_cast) else _yaml_typecaster(lambda a: a)
 
     if(default == inspect.Parameter.empty):
         args["required"] = False
@@ -39,12 +39,19 @@ def _func_arg_to_cmd_arg(annotation: TypeCaster, default: Any) -> Tuple[dict, Op
 
 
 class ComplexParsingWrapper:
+    DELETE = object()
+
     def __init__(self, run_func: Callable, correctors: Dict[str, Callable]):
         self._func = run_func
         self._correctors = correctors
 
     def __call__(self, parsed_args: Namespace) -> Any:
         result = vars(parsed_args)
+
+        for var, value in list(result.items()):
+            if(value is self.DELETE):
+                del result[var]
+                del self._correctors[var]
 
         for var, corrector in self._correctors.items():
             result[var] = corrector(var, result[var])
@@ -70,6 +77,8 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> Argumen
         parser.description = get_summary_from_doc_str(doc_str)
         help_messages = {name: info for name, info in re.findall(":param +([a-zA-Z0-9_]+):([^:]*)", doc_str)}
 
+    abbr_set = set()
+
     for name, caster in cmd_args.items():
         if(name == "return"):
             continue
@@ -79,14 +88,21 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> Argumen
         if(name in help_messages):
             args["help"] = help_messages[name]
 
-        parser.add_argument("--" + name, "-" + "".join(s[:1] for s in name.split("_")), **args)
+        abbr_cmd = "-" + "".join(s[:1] for s in name.split("_"))
+        if(abbr_cmd in abbr_set):
+            parser.add_argument("--" + name, **args)
+        else:
+            parser.add_argument("--" + name, abbr_cmd, **args)
+            abbr_set.add(abbr_cmd)
+
         if(corrector is not None):
             arg_correctors[name] = corrector
 
     extra_args = getattr(func, "__extra_args", {})
+    auto_cast = getattr(func, "__auto_cast", True)
 
     for name, (default, caster, desc) in extra_args.items():
-        args, corrector = _func_arg_to_cmd_arg(caster, default)
+        args, corrector = _func_arg_to_cmd_arg(caster, ComplexParsingWrapper.DELETE, auto_cast=auto_cast)
         args["help"] = desc
 
         parser.add_argument("--" + name, **args)
@@ -131,25 +147,28 @@ def build_full_parser(function_tree: dict, parent_parser: ArgumentParser, name: 
             doc_str = inspect.getdoc(sub_actions)
             if(doc_str is not None):
                 desc = get_summary_from_doc_str(doc_str)
-                sub_parser = sub_commands.add_parser(command_name, conflict_handler="resolve", description=desc, help=desc)
+                sub_parser = sub_commands.add_parser(command_name, description=desc, help=desc)
             else:
-                sub_parser = sub_commands.add_parser(command_name, conflict_handler="resolve")
+                sub_parser = sub_commands.add_parser(command_name)
 
             func_to_command(sub_actions, sub_parser)
 
     return CLIEngine(parent_parser)
 
 
-def extra_cli_args(config_spec: ConfigSpec) -> Callable[[Callable], Callable]:
+def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True) -> Callable[[Callable], Callable]:
     """
     A decorator for attaching additional CLI arguments to an auto-cli function...
 
     :param config_spec: The additional arguments to attach to the function, using config-spec format.
+    :param auto_cast: Boolean flag, if true don't automatically convert extra cli args to their correct types.
+                      This means the method needs to do the conversion itself.
 
     :return: A decorator which attaches these arguments to the function, so they are included when turning it into a CLI function...
     """
     def attach_extra(func: Callable):
         func.__extra_args = config_spec
+        func.__auto_cast = auto_cast
 
         if(hasattr(func, "__doc__")):
             extra_doc = "\n        ".join(

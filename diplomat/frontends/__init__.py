@@ -1,25 +1,27 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from inspect import get_annotations
-from diplomat.processing.type_casters import StrictCallable, PathLike, Union, Sequence, Dict, Any, Optional, TypeCaster, NoneType
+from diplomat.processing.type_casters import StrictCallable, PathLike, Union, List, Dict, Any, Optional, TypeCaster, NoneType
 import typing
 
 
 AnalyzeVideosFunction = lambda ret: StrictCallable(
     config=PathLike,
-    videos=Union[Sequence[PathLike], PathLike],
+    videos=Union[List[PathLike], PathLike],
     predictor=Optional[str],
     predictor_settings=Optional[Dict[str, Any]],
+    num_outputs=Optional[int],
     _return=ret
 )
 AnalyzeFramesFunction = lambda ret: StrictCallable(
     config=PathLike,
-    frame_stores=Union[Sequence[PathLike], PathLike],
+    frame_stores=Union[List[PathLike], PathLike],
     predictor=Optional[str],
     predictor_settings=Optional[Dict[str, Any]],
+    num_outputs=Optional[int],
     _return=ret
 )
-LabelVideosFunction = lambda ret: StrictCallable(config=PathLike, videos=Union[Sequence[PathLike], PathLike], _return=ret)
+LabelVideosFunction = lambda ret: StrictCallable(config=PathLike, videos=Union[List[PathLike], PathLike], _return=ret)
 
 
 @dataclass(frozen=False)

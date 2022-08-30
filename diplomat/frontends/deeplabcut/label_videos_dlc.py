@@ -34,12 +34,17 @@ class EverythingSet:
     def __contains__(self, item):
         return True
 
-@extra_cli_args(LABELED_VIDEO_SETTINGS)
+def _to_str_list(path_list):
+    if(isinstance(path_list, (list, tuple))):
+        return [str(path) for path in path_list]
+    return str(path_list)
+
+@extra_cli_args(LABELED_VIDEO_SETTINGS, auto_cast=False)
 @tc.typecaster_function
 def label_videos(
     config: tc.PathLike,
-    videos: tc.Union[tc.Sequence[tc.PathLike], tc.PathLike],
-    body_parts_to_plot: tc.Optional[tc.Sequence[str]] = None,
+    videos: tc.Union[tc.List[tc.PathLike], tc.PathLike],
+    body_parts_to_plot: tc.Optional[tc.List[str]] = None,
     shuffle: int = 1,
     training_set_index: int = 0,
     video_type: str = "",
@@ -55,7 +60,8 @@ def label_videos(
                     the network. The default is 1.
     :param training_set_index: int, optional. Integer specifying which TrainingsetFraction to use. By default, the first
                                (note that TrainingFraction is a list in config.yaml).
-    :param video_type: Optional string, the video extension to search for if the 'videos' argument is a directory to search inside.
+    :param video_type: Optional string, the video extension to search for if the 'videos' argument is a directory
+                       to search inside ('.avi', '.mp4', ...).
     :param kwargs: The following additional arguments are supported:
         {extra_cli_args}
     """
@@ -71,7 +77,7 @@ def label_videos(
     plotting_settings.colormap = cfg.get("diplomat_colormap", cfg["colormap"])
     plotting_settings.update(kwargs)
 
-    video_list = auxiliaryfunctions.get_list_of_videos(videos, video_type)
+    video_list = auxiliaryfunctions.get_list_of_videos(_to_str_list(videos), video_type)
 
     for video in video_list:
         try:

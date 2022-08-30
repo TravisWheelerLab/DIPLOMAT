@@ -9,7 +9,7 @@ def to_colormap(cmap: Union[None, str, list, Colormap] = None) -> Colormap:
     if(isinstance(cmap, Colormap)):
         return cmap
     if(cmap is None):
-        return mpl.rcParams["image.cmap"]
+        return mpl.colormaps[mpl.rcParams["image.cmap"]]
     if(isinstance(cmap, str)):
         return mpl.colormaps[cmap]
     if(isinstance(cmap, list)):

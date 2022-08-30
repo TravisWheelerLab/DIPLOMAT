@@ -28,11 +28,11 @@ Pathy = Union[PathLike, str]
 @tc.typecaster_function
 def analyze_frames(
     config: tc.PathLike,
-    frame_stores: tc.Union[tc.Sequence[tc.PathLike], tc.PathLike],
+    frame_stores: tc.Union[tc.List[tc.PathLike], tc.PathLike],
     predictor: tc.Optional[str] = None,
     save_as_csv: bool = False,
     multi_output_format: tc.Literal["default", "separate-bodyparts"] = "default",
-    video_folders: tc.Union[tc.NoneType, tc.Sequence[tc.PathLike], tc.PathLike] = None,
+    video_folders: tc.Union[tc.NoneType, tc.List[tc.PathLike], tc.PathLike] = None,
     num_outputs: tc.Optional[int] = None,
     shuffle: int = 1,
     training_set_index: int = 0,
@@ -47,7 +47,8 @@ def analyze_frames(
     :param config: The path to the DLC config to use to interpret this data. The .DLFS will inherit the neural
                         network of this project, allowing for frame labeling using this project.
     :param frame_stores: The paths to the frame stores (.dlfs files), string or list of strings.
-    :param predictor: A String, the name of the predictor plugin to be used to make predictions.
+    :param predictor: A String, the name of the predictor plugin to be used to make predictions. If not specified, defaults to the segmented frame
+                      pass engine ("SegmentedFramePassEngine").
     :param save_as_csv: A Boolean, True to save the results to the human readable .csv format, otherwise false.
     :param multi_output_format: A string. Determines the multi output format used. "default" uses the default format,
                                 while "separate-bodyparts" separates the multi output predictions such that each is its
@@ -99,7 +100,7 @@ def analyze_frames(
 
     # Loading the predictor plugin
     if predictor is None:
-        predictor = "ArgMax"
+        predictor = "SegmentedFramePassEngine"
     predictor_cls = processing.get_predictor(predictor)
 
     # Check and make sure that this predictor supports multi output if we are currently in that mode...

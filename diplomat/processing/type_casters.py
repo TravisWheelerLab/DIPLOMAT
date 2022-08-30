@@ -207,7 +207,7 @@ class RangedFloat(ConvertibleTypeCaster):
         return float
 
 
-class Sequence(ConvertibleTypeCaster):
+class List(ConvertibleTypeCaster):
     """
     A type which represents a sequence, or list.
     """
@@ -215,6 +215,9 @@ class Sequence(ConvertibleTypeCaster):
         self._item_type = item_type
 
     def __call__(self, params: typing.Any) -> typing.Any:
+        if(not isinstance(params, (list, tuple))):
+            raise ValueError(f"Argument '{params}' is not a tuple or list!")
+
         vals = []
 
         for param in params:
@@ -228,7 +231,7 @@ class Sequence(ConvertibleTypeCaster):
         return vals
 
     def __eq__(self, other):
-        if(isinstance(other, Sequence)):
+        if(isinstance(other, List)):
             return self._item_type == other._item_type
         return super().__eq__(other)
 
