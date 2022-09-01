@@ -1,14 +1,9 @@
-from deeplabcut import auxiliaryfunctions
-from diplomat.processing.type_casters import PathLike, Union, Optional, List, Dict, Any, typecaster_function
+from .dlc_importer import auxiliaryfunctions
+from diplomat.processing.type_casters import PathLike, typecaster_function
 
 @typecaster_function
 def _verify_dlc_like(
     config: PathLike,
-    videos: Union[List[PathLike], PathLike] = None,
-    frame_stores: Union[List[PathLike], PathLike] = None,
-    predictor: Optional[str] = None,
-    predictor_settings: Optional[Dict[str, Any]] = None,
-    num_outputs: Optional[int] = None,
     **kwargs
 ) -> bool:
     try:

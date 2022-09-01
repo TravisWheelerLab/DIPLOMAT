@@ -397,6 +397,7 @@ class FramePassEngine(Predictor):
 
     @classmethod
     def get_settings(cls) -> ConfigSpec:
+        from diplomat.processing.type_casters import get_type_name
         desc_lst = []
 
         for fp in FramePass.get_subclasses():
@@ -408,7 +409,7 @@ class FramePassEngine(Predictor):
                 for name, (def_val, caster, desc) in options.items():
                     desc_lst.append(f"     Setting Name: '{name}':")
                     desc_lst.append(f"     Default Value: {def_val}")
-                    desc_lst.append(f"     Value Type: {caster}")
+                    desc_lst.append(f"     Value Type: {get_type_name(caster)}")
                     desc_lst.append(f"     Description:\n           {desc}\n")
 
             desc_lst.append("]]]\n")

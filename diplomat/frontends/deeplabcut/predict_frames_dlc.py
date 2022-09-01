@@ -1,15 +1,8 @@
-"""
-DeepLabCut2.0 Toolbox (deeplabcut.org)
-© A. & M. Mathis Labs
-https://github.com/AlexEMG/DeepLabCut
-Please see AUTHORS for contributors.
-https://github.com/AlexEMG/DeepLabCut/blob/master/AUTHORS
-Licensed under GNU Lesser General Public License v3.0
-
-"""
-from typing import Union, Optional, List, Type, Dict, Any, Literal
+from typing import Union, Optional, List, Type, Dict, Any
 from os import PathLike
-from deeplabcut.utils import auxiliaryfunctions
+
+from .dlc_importer import auxiliaryfunctions
+
 from diplomat.processing import Predictor, TQDMProgressBar, Config
 import diplomat.processing.type_casters as tc
 from diplomat import processing

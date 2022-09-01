@@ -12,6 +12,18 @@ function_tree = {
         "list": diplomat.list_predictor_plugins,
         "test": diplomat.test_predictor_plugin,
         "list_settings": diplomat.get_predictor_settings
+    },
+    "track": diplomat.track,
+    "supervised": diplomat.supervised,
+    "unsupervised": diplomat.unsupervised,
+    "annotate": diplomat.annotate,
+    "frontends": {
+        "__description": "Contains subcommands for listing available frontends and inspecting the functions each frontend supports.",
+        "list": {
+            "__description": "List DIPLOMAT frontends and their descriptions.",
+            "all": diplomat.list_all_frontends,
+            "loaded": diplomat.list_loaded_frontends
+        }
     }
 }
 
@@ -31,4 +43,5 @@ parser = build_full_parser(
     function_tree,
     ArgumentParser(prog="DIPLOMAT", description="A tool for multi-animal tracking.")
 )
+diplomat.CLI_RUN = True
 parser(sys.argv[1:])

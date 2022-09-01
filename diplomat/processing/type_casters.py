@@ -69,6 +69,21 @@ class ConvertibleTypeCaster(TypeCaster):
         raise NotImplementedError()
 
 
+def get_type_name(caster: TypeCaster) -> str:
+    """
+    Get the underlying name of a typecaster or type for printing...
+
+    :param caster: The typecaster to get the string representation of.
+
+    :return: A string, the representation of the type for display.
+    """
+    if(isinstance(caster, type)):
+        return caster.__name__
+    if(isinstance(caster, ConvertibleTypeCaster)):
+        return repr(caster)
+    return getattr(caster, "__name__", repr(caster))
+
+
 def typecaster_function(func: typing.Callable) -> TypeCasterFunction:
     """
     Turns a function annotated with typecaster objects into a regular function
@@ -87,13 +102,17 @@ def typecaster_function(func: typing.Callable) -> TypeCasterFunction:
 
     new_annotations = {}
     tc_config = {}
+    wild_kwd_name = None
 
     # We assume all values are typecaster types...
     for name, param in sig.parameters.items():
         # We don't require type hints on **kwargs...
         if(param.kind == inspect.Parameter.POSITIONAL_ONLY):
             raise ValueError("Typecaster functions don't support positional only arguments!")
-        if(param.kind == inspect.Parameter.VAR_POSITIONAL or param.kind == inspect.Parameter.VAR_KEYWORD):
+        if(param.kind == inspect.Parameter.VAR_POSITIONAL):
+            raise ValueError("Typecaster functions don't support variable position arguments!")
+        if(param.kind == inspect.Parameter.VAR_KEYWORD):
+            wild_kwd_name = name
             continue
         if(param.annotation == inspect.Parameter.empty):
             raise ValueError("Typecaster annotated functions must annotate all input arguments!")
@@ -109,6 +128,7 @@ def typecaster_function(func: typing.Callable) -> TypeCasterFunction:
     # This can be used by other code
     func.__annotations__ = new_annotations
     func._type_casters = tc_config
+    func._type_caster_kwd_name = wild_kwd_name
 
     return func
 
@@ -121,6 +141,8 @@ def get_typecaster_annotations(func: TypeCasterFunction) -> typing.Dict[str, Typ
 
     return res
 
+def get_typecaster_kwd_arg_name(func: TypeCasterFunction) -> typing.Optional[str]:
+    return getattr(func, "_type_caster_kwd_name", None)
 
 def to_hint(t: TypeCaster) -> typing.Type:
     if(isinstance(t, ConvertibleTypeCaster)):
@@ -242,12 +264,12 @@ class List(ConvertibleTypeCaster):
         return hash(self._item_type)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}[{self._item_type}]"
+        return f"{type(self).__name__}[{get_type_name(self._item_type)}]"
 
 
 class Tuple(ConvertibleTypeCaster):
     def __init__(self, *type_list: TypeCaster):
-        self._valid_type_list = list(type_list)
+        self._valid_type_list = type_list
 
     def __call__(self, params: typing.Any) -> typing.Any:
         vals = []
@@ -278,7 +300,7 @@ class Tuple(ConvertibleTypeCaster):
         return hash(self._valid_type_list)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}{self._valid_type_list}"
+        return f"{type(self).__name__}[{', '.join([get_type_name(t) for t in self._valid_type_list])}]"
 
 
 class Literal(ConvertibleTypeCaster):
@@ -327,7 +349,7 @@ NoneType = NoneType()
 
 class Union(ConvertibleTypeCaster):
     def __init__(self, *types: TypeCaster):
-        self._valid_types = list(types)
+        self._valid_types = types
 
     def __call__(self, param: typing.Any) -> typing.Any:
         for t in self._valid_types:
@@ -353,7 +375,7 @@ class Union(ConvertibleTypeCaster):
         return typing.Union[tuple(to_hint(t) for t in self._valid_types)]
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}{self._valid_types}"
+        return f"{type(self).__name__}[{', '.join([get_type_name(t) for t in self._valid_types])}]"
 
 
 class Optional(Union):
@@ -364,7 +386,7 @@ class Optional(Union):
         return typing.Optional[to_hint(self._valid_types[1])]
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}[{self._valid_types[1]}]"
+        return f"{type(self).__name__}[{get_type_name(self._valid_types[1])}]"
 
 
 class RoundedDecimal(ConvertibleTypeCaster):
@@ -413,19 +435,24 @@ class Dict(ConvertibleTypeCaster):
         return hash((self._key, self._value))
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}[{self._key}, {self._value}]"
+        return f"{type(self).__name__}[{get_type_name(self._key)}, {get_type_name(self._value)}]"
 
 
 class StrictCallable(ConvertibleTypeCaster):
-    def __init__(self, *, _return: TypeCaster = NoneType, **kwargs: TypeCaster):
+    def __init__(self, *, _return: TypeCaster = NoneType, _kwargs: bool = False, **kwargs: TypeCaster):
         self._return_type = _return
         self._required_args = kwargs
+        self._wild_kwargs_req = _kwargs
 
     def __call__(self, arg: typing.Any) -> typing.Callable:
         if(not callable(arg)):
             raise TypeError("Passed argument a callable!")
         # Check for the argument values....
         annots = get_typecaster_annotations(arg)
+
+        if(self._wild_kwargs_req):
+            if(get_typecaster_kwd_arg_name(arg) is None):
+                raise ValueError("Passed callable does not specify a variable keyword argument (**kwargs), which is required by this callable.")
 
         for name, expected_annot in self._required_args.items():
             if(name not in annots):
@@ -450,7 +477,7 @@ class StrictCallable(ConvertibleTypeCaster):
         return typing.Callable
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({', '.join(k + ': ' + repr(v) for k, v in self._required_args.items())})"
+        return f"{type(self).__name__}({', '.join(k + ': ' + get_type_name(v) for k, v in self._required_args.items())})"
 
 
 PathLike = Union[Path, str]

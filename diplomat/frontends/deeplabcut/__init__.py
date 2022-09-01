@@ -1,9 +1,10 @@
 from typing import Optional
 from diplomat.frontends import DIPLOMATFrontend, DIPLOMATBaselineCommands
 
+
 class DEEPLABCUTFrontend(DIPLOMATFrontend):
     """
-    The DEEPLABCUT frontend for DIPLOMAT.
+    The DEEPLABCUT frontend for DIPLOMAT. Contains functions for running DIPLOMAT on DEEPLABCUT projects.
     """
     @classmethod
     def init(cls) -> Optional[DIPLOMATBaselineCommands]:
@@ -16,14 +17,14 @@ class DEEPLABCUTFrontend(DIPLOMATFrontend):
             return None
 
         return DIPLOMATBaselineCommands(
-            _verify_analyze_videos=_verify_dlc_like,
+            _verifier=_verify_dlc_like,
             analyze_videos=analyze_videos,
-            _verify_analyze_frames=_verify_dlc_like,
             analyze_frames=analyze_frames,
-            _verify_label_videos=_verify_dlc_like,
             label_videos=label_videos
         )
 
     @classmethod
     def get_package_name(cls) -> str:
         return "deeplabcut"
+
+

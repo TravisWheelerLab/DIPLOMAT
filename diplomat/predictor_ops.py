@@ -1,5 +1,5 @@
 from diplomat import processing
-from diplomat.processing.type_casters import typecaster_function, Union, List, NoneType
+from diplomat.processing.type_casters import typecaster_function, Union, List, NoneType, get_type_name
 
 @typecaster_function
 def list_predictor_plugins():
@@ -20,10 +20,10 @@ def list_predictor_plugins():
 
 
 @typecaster_function
-def get_predictor_settings(predictor_name: Union[List[str], NoneType, str] = None):
+def get_predictor_settings(predictor: Union[List[str], NoneType, str] = None):
     """
     Gets the available/modifiable settings for a specified predictor plugin...
-    :param predictor_name: The string or list of strings being the names of the predictor plugins to view customizable
+    :param predictor: The string or list of strings being the names of the predictor plugins to view customizable
                            settings for. If None, will print settings for all currently available predictors.
                            Defaults to None.
 
@@ -32,12 +32,12 @@ def get_predictor_settings(predictor_name: Union[List[str], NoneType, str] = Non
     from typing import Iterable
 
     # Convert whatever the predictor_name argument is to a list of predictor plugins
-    if predictor_name is None:
+    if predictor is None:
         predictors = processing.get_predictor_plugins()
-    elif isinstance(predictor_name, str):
-        predictors = [processing.get_predictor(predictor_name)]
-    elif isinstance(predictor_name, Iterable):
-        predictors = [processing.get_predictor(name) for name in predictor_name]
+    elif isinstance(predictor, str):
+        predictors = [processing.get_predictor(predictor)]
+    elif isinstance(predictor, Iterable):
+        predictors = [processing.get_predictor(name) for name in predictor]
     else:
         raise ValueError(
             "Argument 'predictor_name' not of type Iterable[str], string, or None!!!"
@@ -52,7 +52,7 @@ def get_predictor_settings(predictor_name: Union[List[str], NoneType, str] = Non
         else:
             for name, (def_val, val_type, desc) in predictor.get_settings().items():
                 print(f"Name: '{name}'")
-                print(f"Type: {val_type}")
+                print(f"Type: {get_type_name(val_type)}")
                 print(f"Default Value: {def_val}")
                 print(f"Description: \n\t{desc}\n")
 
@@ -60,13 +60,12 @@ def get_predictor_settings(predictor_name: Union[List[str], NoneType, str] = Non
 
 
 @typecaster_function
-def test_predictor_plugin(predictor_name: Union[List[str], NoneType, str] = None, interactive: bool = False):
+def test_predictor_plugin(predictor: Union[List[str], NoneType, str] = None, interactive: bool = False):
     """
     Run the tests for a predictor plugin.
-    :param predictor_name: The name of the predictor or to run tests for, or a list of names of the predictors to run.
+    :param predictor: The name of the predictor or to run tests for, or a list of names of the predictors to run.
                            If the predictor_name is not specified or set to None, then run tests for all the
                            predictor plugins...
-                           Note: names are strings...
     :param interactive: A boolean. If True, the program will wait for user input after every test, to allow the user
                         to easily read tests one by one... If false, all tests will be run at once with no user
                         interaction. Defaults to false.
@@ -76,12 +75,12 @@ def test_predictor_plugin(predictor_name: Union[List[str], NoneType, str] = None
     import traceback
 
     # Convert whatever the predictor_name argument is to a list of predictor plugins
-    if predictor_name is None:
+    if predictor is None:
         predictors = processing.get_predictor_plugins()
-    elif isinstance(predictor_name, str):
-        predictors = [processing.get_predictor(predictor_name)]
-    elif isinstance(predictor_name, Iterable):
-        predictors = [processing.get_predictor(name) for name in predictor_name]
+    elif isinstance(predictor, str):
+        predictors = [processing.get_predictor(predictor)]
+    elif isinstance(predictor, Iterable):
+        predictors = [processing.get_predictor(name) for name in predictor]
     else:
         raise ValueError(
             "Argument 'predictor_name' not of type Iterable[str], string, or None!!!"

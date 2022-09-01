@@ -15,10 +15,7 @@ from pathlib import Path
 import diplomat.processing.type_casters as tc
 
 # DLC Imports
-from deeplabcut.pose_estimation_tensorflow.core import predict
-from deeplabcut.pose_estimation_tensorflow.predict_videos import checkcropping
-from deeplabcut.pose_estimation_tensorflow.config import load_config
-from deeplabcut.pose_estimation_tensorflow import auxiliaryfunctions
+from .dlc_importer import predict, checkcropping, load_config, auxiliaryfunctions
 
 Pathy = Union[os.PathLike, str]
 

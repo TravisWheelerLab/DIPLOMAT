@@ -1,11 +1,22 @@
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, Namespace, HelpFormatter, Action, ONE_OR_MORE
 from typing import Callable, Any, Tuple, List, Dict, Optional
 import inspect
+import copy
 import re
 import yaml
 from io import StringIO
 from diplomat.processing import ConfigSpec
-from diplomat.processing.type_casters import TypeCaster, TypeCasterFunction, get_typecaster_annotations
+from diplomat.processing.type_casters import TypeCaster, TypeCasterFunction, get_typecaster_annotations, get_type_name, get_typecaster_kwd_arg_name
+
+
+class YAMLArgHelpFormatter(HelpFormatter):
+    def _format_args(self, action: Action, default_metavar: str) -> str:
+        get_metavar = self._metavar_formatter(action, default_metavar)
+
+        if(action.nargs == ONE_OR_MORE):
+            return f"YAML[{get_metavar(1)[0]}]"
+
+        super()._format_args(action, default_metavar)
 
 
 def _yaml_arg_load(str_list: List[str]) -> dict:
@@ -27,11 +38,11 @@ def _yaml_typecaster(caster: TypeCaster):
 
 
 def _func_arg_to_cmd_arg(annotation: TypeCaster, default: Any, auto_cast: bool = True) -> Tuple[dict, Optional[Callable]]:
-    args = dict(nargs="+", type=str)
+    args = dict(nargs="+", type=str, metavar=get_type_name(annotation))
     arg_corrector = _yaml_typecaster(annotation) if(auto_cast) else _yaml_typecaster(lambda a: a)
 
     if(default == inspect.Parameter.empty):
-        args["required"] = False
+        args["required"] = True
     else:
         args["default"] = default
 
@@ -41,9 +52,22 @@ def _func_arg_to_cmd_arg(annotation: TypeCaster, default: Any, auto_cast: bool =
 class ComplexParsingWrapper:
     DELETE = object()
 
-    def __init__(self, run_func: Callable, correctors: Dict[str, Callable]):
+    def __init__(self, run_func: Callable, correctors: Dict[str, Callable], parser: ArgumentParser):
         self._func = run_func
         self._correctors = correctors
+        self._parser = parser
+
+    @property
+    def parser(self) -> ArgumentParser:
+        return self._parser
+
+    @property
+    def accepts_extra_flags(self) -> bool:
+        return getattr(self._func, "__allow_arbitrary_flags", False)
+
+    @property
+    def correctors(self) -> Dict[str, Callable]:
+        return self._correctors
 
     def __call__(self, parsed_args: Namespace) -> Any:
         result = vars(parsed_args)
@@ -63,6 +87,7 @@ def get_summary_from_doc_str(doc_str: str) -> str:
     return "".join(re.split(":param |:return|:throw", doc_str)[:1])
 
 def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> ArgumentParser:
+    parser.formatter_class = YAMLArgHelpFormatter
     signature = inspect.signature(func)
     cmd_args = get_typecaster_annotations(func)
 
@@ -78,6 +103,11 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> Argumen
         help_messages = {name: info for name, info in re.findall(":param +([a-zA-Z0-9_]+):([^:]*)", doc_str)}
 
     abbr_set = set()
+
+    if(getattr(func, "__allow_arbitrary_flags", False)):
+        name = get_typecaster_kwd_arg_name(func)
+        if(name is not None and name in help_messages):
+            parser.epilog = help_messages[name]
 
     for name, caster in cmd_args.items():
         if(name == "return"):
@@ -109,7 +139,7 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> Argumen
         if(corrector is not None):
             arg_correctors[name] = corrector
 
-    parser.set_defaults(_func=ComplexParsingWrapper(func, arg_correctors))
+    parser.set_defaults(_func=ComplexParsingWrapper(func, arg_correctors, parser))
 
     return parser
 
@@ -118,10 +148,28 @@ class CLIEngine:
     def __init__(self, parent_parser: ArgumentParser):
         self._parser = parent_parser
 
+    def _reparse(self, args: List[str], extra: List[str], arg_handler: ComplexParsingWrapper) -> Namespace:
+        if(not arg_handler.accepts_extra_flags):
+            return self._parser.parse_args(args)
+
+        for op in extra:
+            if(op.startswith("--")):
+                name = op.split('=')[0]
+                if(len(name) == 2):
+                    continue
+                arg_handler.parser.add_argument(name, type=str, nargs="+", metavar="Unknown")
+                arg_handler.correctors[name[2:]] = _yaml_typecaster(lambda a: a)
+
+        return self._parser.parse_args(args)
+
     def __call__(self, arg_list: List[str]) -> Any:
-        res = self._parser.parse_args(arg_list)
+        res, extra = self._parser.parse_known_args(arg_list)
         func = getattr(res, "_func", None)
+
         if(func is not None):
+            if(extra):
+                # Attempt to reparse after adding the extra arguments in (if this is a function that accepts arbitrary flags)...
+                res = self._reparse(arg_list, extra, func)
             del res._func
             return func(res)
         else:
@@ -172,12 +220,16 @@ def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True) -> Callable[
 
         if(hasattr(func, "__doc__")):
             extra_doc = "\n        ".join(
-                f" - {name} (Type: {caster}, Default: {default}): {desc}" for name, (default, caster, desc) in config_spec.items()
+                f" - {name} (Type: {get_type_name(caster)}, Default: {default}): {desc}" for name, (default, caster, desc) in config_spec.items()
             )
             func.__doc__ = func.__doc__.format(extra_cli_args=extra_doc)
 
         return func
     return attach_extra
 
+
+def allow_arbitrary_flags(func: Callable) -> Callable:
+    func.__allow_arbitrary_flags = True
+    return func
 
 

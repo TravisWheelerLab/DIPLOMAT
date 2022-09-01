@@ -5,6 +5,12 @@ from diplomat.processing.type_casters import StrictCallable, PathLike, Union, Li
 import typing
 
 
+VerifierFunction = StrictCallable(
+    config=PathLike,
+    _kwargs=True,
+    _return=bool
+)
+
 AnalyzeVideosFunction = lambda ret: StrictCallable(
     config=PathLike,
     videos=Union[List[PathLike], PathLike],
@@ -21,6 +27,7 @@ AnalyzeFramesFunction = lambda ret: StrictCallable(
     num_outputs=Optional[int],
     _return=ret
 )
+
 LabelVideosFunction = lambda ret: StrictCallable(config=PathLike, videos=Union[List[PathLike], PathLike], _return=ret)
 
 
@@ -30,11 +37,9 @@ class DIPLOMATBaselineCommands:
     The baseline set of functions each DIPLOMAT backend must implement. Backends can add additional commands
     by extending this base class...
     """
-    _verify_analyze_videos: AnalyzeVideosFunction(bool)
+    _verifier: VerifierFunction
     analyze_videos: AnalyzeVideosFunction(NoneType)
-    _verify_analyze_frames: AnalyzeFramesFunction(bool)
     analyze_frames: AnalyzeFramesFunction(NoneType)
-    _verify_label_videos: LabelVideosFunction(bool)
     label_videos: LabelVideosFunction(NoneType)
 
     def __post_init__(self):

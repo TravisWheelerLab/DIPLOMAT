@@ -4,7 +4,9 @@ from pathlib import Path
 from typing import List, Union, Optional, Dict, Any, Tuple
 import cv2
 import tqdm
-from deeplabcut import auxiliaryfunctions
+
+from .dlc_importer import auxiliaryfunctions
+
 import pandas as pd
 from diplomat.processing import *
 import diplomat.processing.type_casters as tc

@@ -3,9 +3,13 @@ A tool providing multi-animal tracking capabilities on top of DeepLabCut.
 """
 
 __version__ = "0.0.1"
+# Can be used by functions to determine if diplomat was invoked through it's CLI interface.
+CLI_RUN = False
 
 from diplomat.predictor_ops import list_predictor_plugins, get_predictor_settings, test_predictor_plugin
+from diplomat.frontend_ops import list_all_frontends, list_loaded_frontends
 from diplomat.utils.video_splitter import split_videos
+from diplomat.core_ops import track, supervised, unsupervised, annotate
 
 # Attempt to load all frontends, putting their public functions into submodules of diplomat.
 def load_frontends():
@@ -19,10 +23,7 @@ def load_frontends():
     loaded_funcs = {}
 
     for frontend in frontends:
-        try:
-            res = frontend.init()
-        except Exception as e:
-            res = None
+        res = frontend.init()
 
         if(res is not None):
             name = frontend.get_package_name()
