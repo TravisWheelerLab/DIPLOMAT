@@ -36,6 +36,8 @@ def list_loaded_frontends():
         print(f"\t{frontend_docs[name]}")
         print("Supported Functions:")
         for k, v in asdict(funcs).items():
+            if(k.startswith("_")):
+                continue
             print(f"\t{k} -> {str(v)}")
             print("\t\t" + " ".join(get_summary_from_doc_str(str(inspect.getdoc(v))).split()))
         print("\n")
