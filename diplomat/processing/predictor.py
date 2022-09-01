@@ -63,6 +63,7 @@ class Predictor(ABC):
                                                if the point in the data falls below this threshold. A float between 0
                                                and 1.
                                     "line_thickness": The thickness of the outline to plot occluded predictions with, an integer.
+                                    "skeleton": None or a list of tuples, specifying body parts to connect in a skeleton.
         """
         self.__bodyparts = [str(b) for b in bodyparts]
         self.__num_outputs = int(num_outputs)

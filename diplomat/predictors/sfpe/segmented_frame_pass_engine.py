@@ -393,6 +393,7 @@ class SegmentedFramePassEngine(Predictor):
         self._frame_holder.metadata.threshold = self.THRESHOLD
         self._frame_holder.metadata.bodyparts = bodyparts
         self._frame_holder.metadata.num_outputs = num_outputs
+        self._frame_holder.metadata.project_skeleton = self.video_metadata.get("skeleton", None)
 
         self._segments = None
         self._segment_scores = None
@@ -1201,7 +1202,8 @@ class SegmentedFramePassEngine(Predictor):
             "full_passes": (
                 [
                     "ClusterFrames",
-                    "OptimizeStandardDeviation"
+                    "OptimizeStandardDeviation",
+                    "CreateSkeleton"
                 ],
                 type_casters.List(
                     type_casters.Union(

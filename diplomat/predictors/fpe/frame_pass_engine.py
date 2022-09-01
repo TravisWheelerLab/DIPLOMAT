@@ -54,6 +54,7 @@ class FramePassEngine(Predictor):
         self._frame_holder.metadata.threshold = self.THRESHOLD
         self._frame_holder.metadata.bodyparts = bodyparts
         self._frame_holder.metadata.num_outputs = num_outputs
+        self._frame_holder.metadata.project_skeleton = self.video_metadata.get("skeleton", None)
 
         self._current_frame = 0
 
@@ -427,6 +428,7 @@ class FramePassEngine(Predictor):
                 [
                     "ClusterFrames",
                     "OptimizeStandardDeviation",
+                    "CreateSkeleton",
                     "FixFrame",
                     "MITViterbi",
                 ],

@@ -8,8 +8,8 @@ from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 from diplomat.predictors.fpe.frame_pass import type_casters as tc
 from diplomat.predictors.fpe import arr_utils
+import warnings
 
-from multiprocessing import Pool
 
 # Used when the body part count is <= 2, or multi-threading is disabled...
 class NotAPool:
@@ -121,48 +121,49 @@ class MITViterbi(FramePass):
         in_place: bool = True,
         reset_bar: bool = True
     ) -> ForwardBackwardData:
-        if("fixed_frame_index" not in fb_data.metadata):
-            raise PassOrderError(f"Must run FixFrame before this pass!")
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            if("fixed_frame_index" not in fb_data.metadata):
+                raise PassOrderError(f"Must run FixFrame before this pass!")
 
-        self._init_gaussian_table(fb_data.metadata)
-        self._init_skeleton(fb_data)
-        self._init_obscured_state(fb_data.metadata)
+            self._init_gaussian_table(fb_data.metadata)
+            self._init_skeleton(fb_data)
+            self._init_obscured_state(fb_data.metadata)
 
-        fix_frame = fb_data.metadata.fixed_frame_index
+            fix_frame = fb_data.metadata.fixed_frame_index
 
-        if(reset_bar and prog_bar is not None):
-            prog_bar.reset(fb_data.num_frames * 3)
+            if(reset_bar and prog_bar is not None):
+                prog_bar.reset(fb_data.num_frames * 3)
 
-        # Initialize fixed frame...
-        for bp_i in range(fb_data.num_bodyparts):
-            self._compute_init_frame(
-                fb_data.frames[fb_data.metadata.fixed_frame_index][bp_i],
-                fb_data.metadata
-            )
-
-        fb_data = fb_data if(in_place) else fb_data.copy()
-
-        # Viterbi
-        super()._set_step_controls(fix_frame + 1, None, 1, -1)
-        self._run_forward(fb_data, prog_bar, True, False)
-        super()._set_step_controls(None, fix_frame, -1, 1)
-        self._run_backtrace(fb_data, prog_bar)
-
-        super()._set_step_controls(fix_frame - 1, None, -1, 1)
-        self._run_forward(fb_data, prog_bar, True, False)
-        super()._set_step_controls(None, fix_frame, 1, -1)
-        self._run_backtrace(fb_data, prog_bar)
-
-        for f_i in range(fb_data.num_frames):
+            # Initialize fixed frame...
             for bp_i in range(fb_data.num_bodyparts):
-                fix_frame = fb_data.frames[f_i][bp_i]
-                fix_frame.frame_probs = from_log_space(fix_frame.frame_probs)
-                fix_frame.occluded_probs = from_log_space(fix_frame.occluded_probs)
-            if(prog_bar is not None):
-                prog_bar.update()
+                self._compute_init_frame(
+                    fb_data.frames[fb_data.metadata.fixed_frame_index][bp_i],
+                    fb_data.metadata
+                )
 
-        return fb_data
+            fb_data = fb_data if(in_place) else fb_data.copy()
 
+            # Viterbi
+            super()._set_step_controls(fix_frame + 1, None, 1, -1)
+            self._run_forward(fb_data, prog_bar, True, False)
+            super()._set_step_controls(None, fix_frame, -1, 1)
+            self._run_backtrace(fb_data, prog_bar)
+
+            super()._set_step_controls(fix_frame - 1, None, -1, 1)
+            self._run_forward(fb_data, prog_bar, True, False)
+            super()._set_step_controls(None, fix_frame, 1, -1)
+            self._run_backtrace(fb_data, prog_bar)
+
+            for f_i in range(fb_data.num_frames):
+                for bp_i in range(fb_data.num_bodyparts):
+                    fix_frame = fb_data.frames[f_i][bp_i]
+                    fix_frame.frame_probs = from_log_space(fix_frame.frame_probs)
+                    fix_frame.occluded_probs = from_log_space(fix_frame.occluded_probs)
+                if(prog_bar is not None):
+                    prog_bar.update()
+
+            return fb_data
 
     def _run_backtrace(
         self,

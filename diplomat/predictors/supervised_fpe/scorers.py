@@ -6,6 +6,7 @@ from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, Forward
 from diplomat.predictors.supervised_fpe.guilib import labeler_lib
 from diplomat.predictors.supervised_fpe.guilib.score_lib import ScoreEngine
 from diplomat.processing import *
+import warnings
 
 
 class ScoreAbleFramePassEngine(Protocol):
@@ -58,45 +59,48 @@ class EntropyOfTransitions(ScoreEngine):
             )
 
     def compute_scores(self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None) -> np.ndarray:
-        frames = self._frame_engine.frame_data
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
 
-        if(sub_section is None):
-            sub_section = slice(None)
+            frames = self._frame_engine.frame_data
 
-        s, e, j = sub_section.indices(frames.num_frames)
-        sub_section = range(s + 1, e, j)
+            if(sub_section is None):
+                sub_section = slice(None)
 
-        scores = np.zeros(len(sub_section) + 2, dtype=np.float32)
-        num_in_group = frames.metadata.num_outputs
-        num_groups = poses.get_bodypart_count() // num_in_group
+            s, e, j = sub_section.indices(frames.num_frames)
+            sub_section = range(s + 1, e, j)
 
-        for f_i in sub_section:
-            f_list_p = frames.frames[f_i - 1]
-            f_list_c = frames.frames[f_i]
+            scores = np.zeros(len(sub_section) + 2, dtype=np.float32)
+            num_in_group = frames.metadata.num_outputs
+            num_groups = poses.get_bodypart_count() // num_in_group
 
-            for b_g_i in range(num_groups):
-                matrix = np.zeros((num_in_group, num_in_group), dtype=np.float32)
+            for f_i in sub_section:
+                f_list_p = frames.frames[f_i - 1]
+                f_list_c = frames.frames[f_i]
 
-                for b_off_i in range(num_in_group):
-                    bp_i = b_g_i * num_in_group + b_off_i
-                    for b_off_j in range(num_in_group):
-                        bp_j = b_g_i * num_in_group + b_off_j
-                        matrix[b_off_i, b_off_j] = self._compute_transition_score(
-                            f_list_p[bp_j],
-                            f_list_c[bp_i],
-                            self._gaussian_table
-                        )
+                for b_g_i in range(num_groups):
+                    matrix = np.zeros((num_in_group, num_in_group), dtype=np.float32)
 
-                k = np.nanmax(normalized_shanon_entropy(matrix))
-                scores[f_i - sub_section.start + 1] = max(scores[f_i - sub_section.start + 1], k)
+                    for b_off_i in range(num_in_group):
+                        bp_i = b_g_i * num_in_group + b_off_i
+                        for b_off_j in range(num_in_group):
+                            bp_j = b_g_i * num_in_group + b_off_j
+                            matrix[b_off_i, b_off_j] = self._compute_transition_score(
+                                f_list_p[bp_j],
+                                f_list_c[bp_i],
+                                self._gaussian_table
+                            )
 
-            prog_bar.update()
+                    k = np.nanmax(normalized_shanon_entropy(matrix))
+                    scores[f_i - sub_section.start + 1] = max(scores[f_i - sub_section.start + 1], k)
 
-        scores[0] = scores[1]
-        scores[-1] = scores[-2]
-        scores = (scores[:-1] + scores[1:]) / 2
+                prog_bar.update()
 
-        return scores
+            scores[0] = scores[1]
+            scores[-1] = scores[-2]
+            scores = (scores[:-1] + scores[1:]) / 2
+
+            return scores
 
     @staticmethod
     def _compute_transition_score(

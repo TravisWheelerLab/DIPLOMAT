@@ -225,7 +225,8 @@ def _analyze_frame_store(
                 "colormap": cfg.get("diplomat_colormap", cfg["colormap"]),
                 "alphavalue": cfg["alphavalue"],
                 "pcutoff": cfg["pcutoff"],
-                "line_thickness": cfg.get("line_thickness", 1)
+                "line_thickness": cfg.get("line_thickness", 1),
+                "skeleton": cfg.get("skeleton", None)
             })
 
             # Create the plugin instance...

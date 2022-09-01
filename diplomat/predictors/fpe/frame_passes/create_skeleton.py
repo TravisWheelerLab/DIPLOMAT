@@ -22,6 +22,7 @@ class CreateSkeleton(FramePass):
         reset_bar: bool = True
     ) -> ForwardBackwardData:
         # Construct a graph to store skeleton values...
+        self._frame_data = fb_data
         self._skeleton = StorageGraph(fb_data.metadata.bodyparts)
         self._max_locations = [None] * (fb_data.metadata.num_outputs * len(fb_data.metadata.bodyparts))
         self._prior_max_locations = None
@@ -55,6 +56,9 @@ class CreateSkeleton(FramePass):
 
     def _build_skeleton_graph(self) -> bool:
         lnk_parts = self.config.linked_parts
+
+        if(lnk_parts is None):
+            lnk_parts = self._frame_data.metadata.project_skeleton
 
         if((lnk_parts is not None) and (lnk_parts != False)):
             if(lnk_parts == True):
@@ -152,9 +156,10 @@ class CreateSkeleton(FramePass):
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
-            "linked_parts": (True, cls.cast_skeleton, "None, a boolean, a list of strings, or a list of strings "
+            "linked_parts": (None, cls.cast_skeleton, "None, a boolean, a list of strings, or a list of strings "
                                                       "to strings (as tuples). Determines what parts should be linked together. "
-                                                      "with a skeleton. If false or none, specifies no skeleton should"
+                                                      "with a skeleton. If None, attempts to use the skeleton pulled form the "
+                                                      "tracking project. If false, specifies no skeleton should"
                                                       "be made, basically disabling this pass. If True, connect all"
                                                       "body parts to each other. If a list of strings, connect the "
                                                       "body parts in that list to every other body part in that list. "
