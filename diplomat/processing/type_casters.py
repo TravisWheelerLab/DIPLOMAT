@@ -6,10 +6,12 @@ protocol and the typecaster_function decorator.
 """
 
 import decimal
+import os
 import typing
+from pathlib import Path
+
 from typing_extensions import Protocol, runtime_checkable
 import inspect
-from pathlib import Path
 
 
 T = typing.TypeVar("T")
@@ -58,6 +60,9 @@ class ConvertibleTypeCaster(TypeCaster):
 
     def __call__(self, arg: typing.Any) -> T:
         raise NotImplementedError()
+
+    def to_metavar(self) -> str:
+        return repr(self).upper()
 
     def to_type_hint(self) -> typing.Type:
         """
@@ -151,6 +156,12 @@ def to_hint(t: TypeCaster) -> typing.Type:
         return t
     raise ValueError(f"Unable to convert '{t}' to a python type hint!")
 
+def to_metavar(t: TypeCaster) -> str:
+    if(isinstance(t, ConvertibleTypeCaster)):
+        return t.to_metavar()
+    else:
+        return get_type_name(t).upper()
+
 
 class Any(ConvertibleTypeCaster):
     def __call__(self, param: typing.Any) -> typing.Any:
@@ -158,6 +169,9 @@ class Any(ConvertibleTypeCaster):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}"
+
+    def to_metavar(self) -> str:
+        return "VAL"
 
     def to_type_hint(self) -> typing.Type:
         return typing.Any
@@ -184,6 +198,9 @@ class RangedInteger(ConvertibleTypeCaster):
 
     def __hash__(self):
         return hash((self._min, self._max))
+
+    def to_metavar(self) -> str:
+        return "INT"
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}[min={self._min}, max={self._max}]"
@@ -213,6 +230,9 @@ class RangedFloat(ConvertibleTypeCaster):
             raise ValueError(f"Value: '{param}' is not between {self._min} and {self._max}")
 
         return param
+
+    def to_metavar(self) -> str:
+        return "FLOAT"
 
     def __eq__(self, other):
         if(isinstance(other, RangedFloat)):
@@ -257,6 +277,9 @@ class List(ConvertibleTypeCaster):
             return self._item_type == other._item_type
         return super().__eq__(other)
 
+    def to_metavar(self) -> str:
+        return f"[{to_metavar(self._item_type)}, ...]"
+
     def to_type_hint(self) -> typing.Type:
         return typing.List[to_hint(self._item_type)]
 
@@ -291,6 +314,9 @@ class Tuple(ConvertibleTypeCaster):
     def to_type_hint(self) -> typing.Type:
         return typing.Tuple[tuple(to_hint(t) for t in self._valid_type_list)]
 
+    def to_metavar(self) -> str:
+        return "[" + ", ".join(to_metavar(t) for t in self._valid_type_list) + "]"
+
     def __eq__(self, other):
         if(isinstance(other, Tuple)):
             return self._valid_type_list == other._valid_type_list
@@ -319,6 +345,9 @@ class Literal(ConvertibleTypeCaster):
 
     def to_type_hint(self) -> typing.Type:
         return typing.Literal[tuple(self._valid_objs)]
+
+    def to_metavar(self) -> str:
+        return "|".join(repr(t) for t in self._valid_objs)
 
     def __eq__(self, other):
         if(isinstance(other, Literal)):
@@ -371,6 +400,9 @@ class Union(ConvertibleTypeCaster):
     def __hash__(self):
         return hash(frozenset(self._valid_types))
 
+    def to_metavar(self) -> str:
+        return "|".join({to_metavar(v): 0 for v in self._valid_types}.keys())
+
     def to_type_hint(self) -> typing.Type:
         return typing.Union[tuple(to_hint(t) for t in self._valid_types)]
 
@@ -381,6 +413,9 @@ class Union(ConvertibleTypeCaster):
 class Optional(Union):
     def __init__(self, t: TypeCaster):
         super().__init__(NoneType, t)
+
+    def to_metavar(self) -> str:
+        return to_metavar(self._valid_types[1])
 
     def to_type_hint(self) -> typing.Type:
         return typing.Optional[to_hint(self._valid_types[1])]
@@ -400,6 +435,9 @@ class RoundedDecimal(ConvertibleTypeCaster):
 
     def to_type_hint(self) -> typing.Type:
         return float
+
+    def to_metavar(self) -> str:
+        return "FLOAT"
 
     def __eq__(self, other):
         if(isinstance(other, RoundedDecimal)):
@@ -425,6 +463,9 @@ class Dict(ConvertibleTypeCaster):
 
     def to_type_hint(self) -> typing.Type:
         return typing.Dict[to_hint(self._key), to_hint(self._value)]
+
+    def to_metavar(self) -> str:
+        return f"{{{to_metavar(self._key)}: {to_metavar(self._value)}, ...}}"
 
     def __eq__(self, other):
         if(isinstance(other, Dict)):
@@ -480,4 +521,17 @@ class StrictCallable(ConvertibleTypeCaster):
         return f"{type(self).__name__}({', '.join(k + ': ' + get_type_name(v) for k, v in self._required_args.items())})"
 
 
-PathLike = Union[Path, str]
+class PathLike(Union):
+    def __init__(self):
+        super().__init__(Path, str)
+
+    def __call__(self, arg: typing.Any) -> Path:
+        return Path(arg)
+
+    def to_metavar(self) -> str:
+        return "FILE"
+
+    def to_type_hint(self) -> typing.Type:
+        return Union[os.PathLike, str]
+
+PathLike = PathLike()

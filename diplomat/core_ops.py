@@ -1,6 +1,6 @@
 import sys
 from diplomat.processing.type_casters import typecaster_function, PathLike, Union, Optional, List, Dict, Any, get_typecaster_annotations, NoneType
-from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags
+from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags, Flag
 from argparse import ArgumentParser
 
 def _get_casted_args(tc_func, extra_args):
@@ -27,12 +27,12 @@ def _get_casted_args(tc_func, extra_args):
 @typecaster_function
 def track(
     config: PathLike,
-    videos: Union[List[PathLike], NoneType, PathLike] = None,
-    frame_stores: Union[List[PathLike], NoneType, PathLike] = None,
+    videos: Optional[Union[List[PathLike], PathLike]] = None,
+    frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
     predictor: Optional[str] = None,
     predictor_settings: Optional[Dict[str, Any]] = None,
-    help_extra: bool = False,
+    help_extra: Flag = False,
     **extra_args
 ):
     """
@@ -131,11 +131,11 @@ def track(
 @typecaster_function
 def unsupervised(
     config: PathLike,
-    videos: Union[List[PathLike], NoneType, PathLike] = None,
-    frame_stores: Union[List[PathLike], NoneType, PathLike] = None,
+    videos: Optional[Union[List[PathLike], PathLike]] = None,
+    frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
     settings: Optional[Dict[str, Any]] = None,
-    help_extra: bool = False,
+    help_extra: Flag = False,
     **extra_args
 ):
     """
@@ -173,11 +173,11 @@ def unsupervised(
 @typecaster_function
 def supervised(
     config: PathLike,
-    videos: Union[List[PathLike], NoneType, PathLike] = None,
-    frame_stores: Union[List[PathLike], NoneType, PathLike] = None,
+    videos: Optional[Union[List[PathLike], PathLike]] = None,
+    frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
     settings: Optional[Dict[str, Any]] = None,
-    help_extra: bool = False,
+    help_extra: Flag = False,
     **extra_args
 ):
     """
@@ -215,8 +215,8 @@ def supervised(
 @typecaster_function
 def annotate(
     config: PathLike,
-    videos: Union[List[PathLike], NoneType, PathLike] = None,
-    help_extra: bool = False,
+    videos: Optional[Union[List[PathLike], PathLike]] = None,
+    help_extra: Flag = False,
     **extra_args
 ):
     """
@@ -224,7 +224,7 @@ def annotate(
     correct frontend to do labeling based on the passed config argument.
 
     :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
-    :param videos: A single path or list of paths to video files to run analysis on.
+    :param videos: A single path or list of paths to video files run annotation on.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
                        To see valid values, run track with --extra_help=True. Extra arguments that are not found in the frontend

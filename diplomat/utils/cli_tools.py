@@ -1,20 +1,38 @@
 from argparse import ArgumentParser, Namespace, HelpFormatter, Action, ONE_OR_MORE
-from typing import Callable, Any, Tuple, List, Dict, Optional
+from typing import Callable, Any, Tuple, List, Dict, Optional, Type
 import inspect
-import copy
 import re
 import yaml
 from io import StringIO
 from diplomat.processing import ConfigSpec
-from diplomat.processing.type_casters import TypeCaster, TypeCasterFunction, get_typecaster_annotations, get_type_name, get_typecaster_kwd_arg_name
+from diplomat.processing.type_casters import (
+    TypeCaster,
+    TypeCasterFunction,
+    get_typecaster_annotations,
+    get_type_name,
+    get_typecaster_kwd_arg_name,
+    to_metavar,
+    ConvertibleTypeCaster
+)
 
+class Flag(ConvertibleTypeCaster):
+    def __call__(self, arg: Any) -> bool:
+        return bool(arg)
+
+    def to_type_hint(self) -> Type:
+        return bool
+
+    def __repr__(self):
+        return type(self).__name__
+
+Flag = Flag()
 
 class YAMLArgHelpFormatter(HelpFormatter):
     def _format_args(self, action: Action, default_metavar: str) -> str:
         get_metavar = self._metavar_formatter(action, default_metavar)
 
         if(action.nargs == ONE_OR_MORE):
-            return f"YAML[{get_metavar(1)[0]}]"
+            return f"{get_metavar(1)[0]}"
 
         super()._format_args(action, default_metavar)
 
@@ -38,8 +56,12 @@ def _yaml_typecaster(caster: TypeCaster):
 
 
 def _func_arg_to_cmd_arg(annotation: TypeCaster, default: Any, auto_cast: bool = True) -> Tuple[dict, Optional[Callable]]:
-    args = dict(nargs="+", type=str, metavar=get_type_name(annotation))
-    arg_corrector = _yaml_typecaster(annotation) if(auto_cast) else _yaml_typecaster(lambda a: a)
+    if(annotation is Flag):
+        args = dict(action="store_true")
+        arg_corrector = None
+    else:
+        args = dict(nargs="+", type=str, metavar=to_metavar(annotation))
+        arg_corrector = _yaml_typecaster(annotation) if(auto_cast) else _yaml_typecaster(lambda a: a)
 
     if(default == inspect.Parameter.empty):
         args["required"] = True
@@ -109,6 +131,8 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> Argumen
         if(name is not None and name in help_messages):
             parser.epilog = help_messages[name]
 
+    pos_arg_count = getattr(func, "__pos_cmd_arg_count", 0)
+
     for name, caster in cmd_args.items():
         if(name == "return"):
             continue
@@ -119,7 +143,12 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> Argumen
             args["help"] = help_messages[name]
 
         abbr_cmd = "-" + "".join(s[:1] for s in name.split("_"))
-        if(abbr_cmd in abbr_set):
+        if(pos_arg_count > 0):
+            if("nargs" in args):
+                args["nargs"] = 1 if(pos_arg_count > 1) else "+"
+            parser.add_argument(name, **args)
+            pos_arg_count -= 1
+        elif(abbr_cmd in abbr_set):
             parser.add_argument("--" + name, **args)
         else:
             parser.add_argument("--" + name, abbr_cmd, **args)
@@ -232,4 +261,9 @@ def allow_arbitrary_flags(func: Callable) -> Callable:
     func.__allow_arbitrary_flags = True
     return func
 
+def positional_argument_count(amt: int) -> Callable[[Callable], Callable]:
+    def attach_pos_args(func: Callable) -> Callable:
+        func.__pos_cmd_arg_count = amt
+        return func
+    return attach_pos_args
 

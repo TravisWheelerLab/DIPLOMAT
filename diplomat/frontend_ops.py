@@ -38,6 +38,6 @@ def list_loaded_frontends():
         for k, v in asdict(funcs).items():
             if(k.startswith("_")):
                 continue
-            print(f"\t{k} -> {str(v)}")
+            print(f"\t{k}")
             print("\t\t" + " ".join(get_summary_from_doc_str(str(inspect.getdoc(v))).split()))
         print("\n")

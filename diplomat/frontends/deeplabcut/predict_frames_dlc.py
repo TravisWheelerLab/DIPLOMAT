@@ -16,7 +16,6 @@ import tqdm
 import time
 
 # Represents a string or any filesystem path-like type....
-Pathy = Union[PathLike, str]
 
 @tc.typecaster_function
 def analyze_frames(
@@ -25,7 +24,7 @@ def analyze_frames(
     predictor: tc.Optional[str] = None,
     save_as_csv: bool = False,
     multi_output_format: tc.Literal["default", "separate-bodyparts"] = "default",
-    video_folders: tc.Union[tc.NoneType, tc.List[tc.PathLike], tc.PathLike] = None,
+    video_folders: tc.Optional[tc.Union[tc.List[tc.PathLike], tc.PathLike]] = None,
     num_outputs: tc.Optional[int] = None,
     shuffle: int = 1,
     training_set_index: int = 0,

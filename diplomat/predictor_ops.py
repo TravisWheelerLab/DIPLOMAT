@@ -1,5 +1,7 @@
 from diplomat import processing
-from diplomat.processing.type_casters import typecaster_function, Union, List, NoneType, get_type_name
+from diplomat.processing.type_casters import typecaster_function, Union, List, get_type_name, Optional
+from diplomat.utils.cli_tools import Flag, positional_argument_count
+
 
 @typecaster_function
 def list_predictor_plugins():
@@ -20,7 +22,7 @@ def list_predictor_plugins():
 
 
 @typecaster_function
-def get_predictor_settings(predictor: Union[List[str], NoneType, str] = None):
+def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
     """
     Gets the available/modifiable settings for a specified predictor plugin...
     :param predictor: The string or list of strings being the names of the predictor plugins to view customizable
@@ -60,7 +62,7 @@ def get_predictor_settings(predictor: Union[List[str], NoneType, str] = None):
 
 
 @typecaster_function
-def test_predictor_plugin(predictor: Union[List[str], NoneType, str] = None, interactive: bool = False):
+def test_predictor_plugin(predictor: Optional[Union[List[str], str]] = None, interactive: Flag = False):
     """
     Run the tests for a predictor plugin.
     :param predictor: The name of the predictor or to run tests for, or a list of names of the predictors to run.
