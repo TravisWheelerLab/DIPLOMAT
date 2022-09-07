@@ -71,38 +71,48 @@ class FixFrame(FramePass):
         )) ** 2)
 
     @classmethod
-    def to_bidirectional_score_graph(
+    def get_bidirectional_score_graphs(
         cls,
         storage_graph: StorageGraph,
         frame_list: List[ForwardBackwardFrame],
         num_outputs: int,
         down_scaling: int
-    ):
+    ) -> List[List[Dict[int, float]]]:
         # Construct a graph...
-        graph = [{} for __ in range(len(storage_graph) * num_outputs)]
+        graphs = []
 
-        # Now traverse the storage graph making connection between things...
-        for node_group1 in range(len(storage_graph)):
-            for node_group2, (__, __, avg) in storage_graph[node_group1]:
-                for node_off1 in range(num_outputs):
-                    idx1 = node_group1 * num_outputs + node_off1
+        for i in range(num_outputs):
+            graph = [{} for __ in range(len(storage_graph) * num_outputs)]
 
-                    for node_off2 in range(num_outputs):
-                        idx2 = node_group2 * num_outputs + node_off2
+            # Now traverse the storage graph making connection between things...
+            for node_group1 in range(len(storage_graph)):
+                for node_group2, (__, __, avg) in storage_graph[node_group1]:
+                    for node_off1 in range(num_outputs):
+                        if(node_group1 == 0 and node_off1 != i):
+                            continue
 
-                        graph[idx1][idx2] = cls.skel_score(
-                            avg, frame_list[idx1], frame_list[idx2], down_scaling
-                        )
+                        idx1 = node_group1 * num_outputs + node_off1
 
-        return graph
+                        for node_off2 in range(num_outputs):
+                            if(node_group2 == 0 and node_off2 != i):
+                                continue
+
+                            idx2 = node_group2 * num_outputs + node_off2
+
+                            graph[idx1][idx2] = cls.skel_score(
+                                avg, frame_list[idx1], frame_list[idx2], down_scaling
+                            )
+
+            graphs.append(graph)
+
+        return graphs
 
     @classmethod
     def _shortest_paths(
         cls,
         score_graph: List[Dict[int, float]],
-        ignore_nodes: Set[int],
         start_node: int
-    ):
+    ) -> List[float]:
         visited = [False] * len(score_graph)
         node_scores = [np.inf] * len(score_graph)
 
@@ -114,9 +124,6 @@ class FixFrame(FramePass):
             __, node = heapq.heappop(next_nodes)
 
             for sub_node in score_graph[node]:
-                if(sub_node in ignore_nodes):
-                    continue
-
                 proposed_score = node_scores[node] + score_graph[node][sub_node]
 
                 node_scores[sub_node] = min(node_scores[sub_node], proposed_score)
@@ -126,6 +133,44 @@ class FixFrame(FramePass):
                     heapq.heappush(next_nodes, (node_scores[sub_node], sub_node))
 
         return node_scores
+
+    @classmethod
+    def _best_skeleton_scores(
+        cls,
+        shortest_paths: List[List[float]],
+        score_graphs: List[List[Dict[int, float]]],
+        skeleton: StorageGraph,
+        num_outputs: int
+    ) -> List[List[float]]:
+        best_skeleton_scores = []
+
+        # Now compute skeleton scores....
+        for score_graph, best_path_scores in zip(score_graphs, shortest_paths):
+            best_skel_scores = [0] * len(best_path_scores)
+
+            for i, score in enumerate(best_path_scores):
+                if (np.isinf(score)):
+                    best_skel_scores[i] = np.inf
+                    continue
+
+                for other_group, __ in skeleton[int(i / num_outputs)]:
+                    score = np.inf
+
+                    for other_off in range(num_outputs):
+                        other_idx = other_group * num_outputs + other_off
+                        score = min(score, best_path_scores[other_idx] + score_graph[i].get(other_idx, np.inf))
+
+                    best_skel_scores[i] += score
+
+            best_skeleton_scores.append(best_skel_scores)
+
+        return best_skeleton_scores
+
+    @classmethod
+    def _masked_argmin(cls, arr: np.ndarray, mask: np.ndarray) -> tuple:
+        shp = arr.shape
+        mask = np.broadcast_to(mask, shp)
+        return np.unravel_index(np.flatnonzero(mask)[np.argmin(arr[mask])], shp)
 
     @classmethod
     def create_fix_frame(
@@ -144,48 +189,40 @@ class FixFrame(FramePass):
             fixed_frame[bp_i].disable_occluded = True
 
         if(skeleton is not None):
-            score_graph = cls.to_bidirectional_score_graph(skeleton, fb_data.frames[frame_idx], num_outputs, down_scaling)
+            select_mask = np.zeros((num_outputs, fb_data.num_bodyparts), bool)
+            score_graphs = cls.get_bidirectional_score_graphs(skeleton, fb_data.frames[frame_idx], num_outputs, down_scaling)
 
-            # Compute the shortest node paths for every skeleton...
-            shortest_paths = [
-                cls._shortest_paths(score_graph, set(o for o in range(num_outputs) if(o != off)), off)
-                for off in range(num_outputs)
-            ]
+            for __ in range(fb_data.num_bodyparts):
+                # Compute the shortest node paths for every skeleton...
+                skel_scores = np.asarray(cls._best_skeleton_scores(
+                    [cls._shortest_paths(score_graph, i) for i, score_graph in enumerate(score_graphs)],
+                    score_graphs,
+                    skeleton,
+                    num_outputs
+                ))
 
-            best_skeleton_scores = []
+                # Find the best location...
+                best_body, best_part = cls._masked_argmin(skel_scores, ~select_mask)
 
-            # Now compute skeleton scores....
-            for best_path_scores in shortest_paths:
-                best_skel_scores = [0] * len(best_path_scores)
-                for i, score in enumerate(best_path_scores):
-                    if(np.isinf(score)):
-                        best_skel_scores[i] = np.inf
+                # Copy the select body part to the correct skeleton.
+                group_start = ((best_part // num_outputs) * num_outputs)
+                select_mask[:, best_part] = True
+                select_mask[best_body, group_start:group_start+num_outputs] = True
+                new_i = group_start + best_body
+                fixed_frame[new_i] = fb_data.frames[frame_idx][best_part]
+                fixed_frame[new_i].disable_occluded = True
+
+                # Modify graphs based on the selected part...
+                # Construct a zero score link between the newly added part and the original fixed part of the skeleton.
+                score_graphs[best_body][best_body][best_part] = 0
+                score_graphs[best_body][best_part][best_body] = 0
+                # Delete all of its edges in other graphs....
+                for i, score_graph in enumerate(score_graphs):
+                    if(i == best_body):
                         continue
-
-                    for other_group, __ in skeleton[int(i / num_outputs)]:
-                        score = np.inf
-
-                        for other_off in range(num_outputs):
-                            other_idx = other_group * num_outputs + other_off
-                            score = min(score, best_path_scores[other_idx] + score_graph[i][other_idx])
-
-                        best_skel_scores[i] += score
-
-                best_skeleton_scores.append(best_skel_scores)
-
-            options = np.array(best_skeleton_scores).T
-
-            for __ in range(num_outputs):
-                for part in range(int(options.shape[0] / num_outputs)):
-                    block = options[part * num_outputs:(part + 1) * num_outputs]
-
-                    pull_from, dest = np.unravel_index(np.argmin(block), block.shape)
-
-                    fixed_frame[part * num_outputs + dest] = fb_data.frames[frame_idx][part * num_outputs + pull_from].copy()
-                    fixed_frame[part * num_outputs + dest].disable_occluded = True
-
-                    block[pull_from, :] = np.inf
-                    block[:, dest] = np.inf
+                    for other_part in list(score_graph[best_part]):
+                        del score_graph[other_part][best_part]
+                        del score_graph[best_part][other_part]
 
         return fixed_frame
 

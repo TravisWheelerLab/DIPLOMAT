@@ -119,6 +119,7 @@ def get_summary_from_doc_str(doc_str: str) -> str:
 
 def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> ArgumentParser:
     parser.formatter_class = YAMLArgHelpFormatter
+    parser.allow_abbrev = False
     signature = inspect.signature(func)
     cmd_args = get_typecaster_annotations(func)
 
@@ -193,7 +194,7 @@ class CLIEngine:
         for op in extra:
             if(op.startswith("--")):
                 name = op.split('=')[0]
-                if(len(name) == 2):
+                if(len(name) <= 2):
                     continue
                 arg_handler.parser.add_argument(name, type=str, nargs="+", metavar="Unknown")
                 arg_handler.correctors[name[2:]] = _yaml_typecaster(lambda a: a)
@@ -210,6 +211,7 @@ class CLIEngine:
                 res = self._reparse(arg_list, extra, func)
             del res._func
             try:
+                print(res)
                 return func(res)
             except CLIError as e:
                 print(e)
@@ -220,6 +222,7 @@ class CLIEngine:
 
 def build_full_parser(function_tree: dict, parent_parser: ArgumentParser, name: Optional[str] = None) -> CLIEngine:
     name = parent_parser.prog if(name is None) else name
+    parent_parser.allow_abbrev = False
     sub_commands = parent_parser.add_subparsers(title=f"Subcommands and namespaces of '{name}'", required=True)
 
     for command_name, sub_actions in function_tree.items():

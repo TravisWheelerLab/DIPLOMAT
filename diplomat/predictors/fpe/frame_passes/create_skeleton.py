@@ -67,7 +67,11 @@ class CreateSkeleton(FramePass):
                 lnk_parts = [(a, b) for a in lnk_parts for b in lnk_parts if(a != b)]
 
             for (bp1, bp2) in lnk_parts:
-                self._skeleton[bp1, bp2] = Histogram(self.config.bin_size, self.config.bin_offset)
+                if((bp1 in self._skeleton) and (bp2 in self._skeleton)):
+                    self._skeleton[bp1, bp2] = Histogram(self.config.bin_size, self.config.bin_offset)
+                else:
+                    lst = [bp for bp in (bp1, bp2) if(bp not in self._skeleton)]
+                    raise ValueError(f"The skeleton included contains body parts not found in the project: {' and '.join(lst)}")
 
             return True
         return False

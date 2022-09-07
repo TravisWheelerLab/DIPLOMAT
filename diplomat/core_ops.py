@@ -52,7 +52,7 @@ def track(
                                to True to print additional settings for the selected frontend instead of running tracking.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with --extra_help=True. Extra arguments that are not found in the frontend
+                       To see valid values, run track with extra_help flag set to true. Extra arguments that are not found in the frontend
                        analysis function are thrown out.
     """
     from diplomat import _LOADED_FRONTENDS, CLI_RUN
@@ -155,7 +155,7 @@ def unsupervised(
                      frontend instead of running tracking.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with --extra_help=True. Extra arguments that are not found in the frontend
+                       To see valid values, run track with extra_help flag set to true. Extra arguments that are not found in the frontend
                        analysis function are thrown out.
     """
     track(
@@ -197,7 +197,7 @@ def supervised(
                      frontend instead of running tracking.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with --extra_help=True. Extra arguments that are not found in the frontend
+                       To see valid values, run track with extra_help flag set to true. Extra arguments that are not found in the frontend
                        analysis function are thrown out.
     """
     track(
@@ -228,7 +228,7 @@ def annotate(
     :param videos: A single path or list of paths to video files run annotation on.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with --extra_help=True. Extra arguments that are not found in the frontend
+                       To see valid values, run track with extra_help flag set to true. Extra arguments that are not found in the frontend
                        analysis function are thrown out.
     """
     from diplomat import _LOADED_FRONTENDS, CLI_RUN

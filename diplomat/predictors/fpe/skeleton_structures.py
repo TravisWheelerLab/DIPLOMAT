@@ -111,6 +111,20 @@ class StorageGraph:
             idx = self._validate_index(idx)
             return self._connections[idx].items()
 
+    def __contains__(self, idx: Union[str, int, EdgeLike]) -> bool:
+        if (isinstance(idx, (Edge, tuple))):
+            try:
+                idx = self._validate(idx)
+            except InvalidEdgeError:
+                return False
+            return (idx.node1 in self._connections) and ((idx.node2 in self._connections[idx.node1]))
+        else:
+            try:
+                self._validate_index(idx)
+                return True
+            except InvalidNodeError:
+                return False
+
     def __setitem__(self, edge: EdgeLike, value: Any):
         edge = self._validate(edge)
 

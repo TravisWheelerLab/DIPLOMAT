@@ -134,7 +134,6 @@ def _resolve_videos(
     expected_video_names = {
         name: idx for name, idx in expected_video_names.items() if (name.strip() != "")
     }
-    print(expected_video_names)
 
     # If the user passed video folders to check, check them, searching for all matching videos with the same name.
     if video_folders is not None:
@@ -174,7 +173,6 @@ def _analyze_frame_store(
     v_name_sanitized = (
         Path(video_name).resolve().stem if (video_name is not None) else "unknownVideo"
     )
-    print(v_name_sanitized)
     not_analyzed, data_name, dlc_scorer = auxiliaryfunctions.CheckifNotAnalyzed(
         str(frame_store_path.parent), v_name_sanitized, dlc_scorer, dlc_scorer_legacy
     )
