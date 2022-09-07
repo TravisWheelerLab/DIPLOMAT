@@ -15,6 +15,9 @@ from diplomat.processing.type_casters import (
     ConvertibleTypeCaster
 )
 
+class CLIError(Exception):
+    pass
+
 class Flag(ConvertibleTypeCaster):
     def __call__(self, arg: Any) -> bool:
         return bool(arg)
@@ -45,7 +48,7 @@ def _yaml_arg_load(str_list: List[str]) -> dict:
     try:
         res = yaml.safe_load(StringIO(str_list))
     except Exception as e:
-        raise ValueError(f"Unable to parse argument '{str_list}' as YAML, because: '{e}'")
+        raise CLIError(f"Unable to parse argument '{str_list}' as YAML, because: '{e}'")
 
     return res
 
@@ -56,7 +59,7 @@ def _yaml_typecaster(caster: TypeCaster):
         try:
             return caster(res)
         except Exception as e:
-            raise type(e)(f"Failed to parse {name}, because: '{e}'")
+            raise CLIError(f"Failed to parse {name}, because: '{e}'")
 
     return checker
 
@@ -208,8 +211,9 @@ class CLIEngine:
             del res._func
             try:
                 return func(res)
-            except Exception as e:
+            except CLIError as e:
                 print(e)
+                self._parser.print_usage()
         else:
             self._parser.print_usage()
 
