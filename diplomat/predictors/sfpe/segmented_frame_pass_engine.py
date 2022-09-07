@@ -1177,18 +1177,18 @@ class SegmentedFramePassEngine(Predictor):
         desc_lst = []
 
         for fp in FramePass.get_subclasses():
-            desc_lst.append(f"Pass '{fp.get_name()}' Settings: [[[")
+            desc_lst.append(f"\tPass '{fp.get_name()}' Settings: [[[")
             options = fp.get_config_options()
             if(options is None):
-                desc_lst.append("     No settings available...")
+                desc_lst.append("\t\tNo settings available...")
             else:
                 for name, (def_val, caster, desc) in options.items():
-                    desc_lst.append(f"     Setting Name: '{name}':")
-                    desc_lst.append(f"     Default Value: {def_val}")
-                    desc_lst.append(f"     Value Type: {get_type_name(caster)}")
-                    desc_lst.append(f"     Description:\n           {desc}\n")
+                    desc_lst.append(f"\t\tSetting Name: '{name}':")
+                    desc_lst.append(f"\t\tDefault Value: {def_val}")
+                    desc_lst.append(f"\t\tValue Type: {get_type_name(caster)}")
+                    desc_lst.append(f"\t\tDescription:\n\t\t\t{desc}\n")
 
-            desc_lst.append("]]]\n")
+            desc_lst.append("\t]]]\n")
 
         desc_str = "\n".join(desc_lst)
 
@@ -1212,10 +1212,10 @@ class SegmentedFramePassEngine(Predictor):
                         str
                     )
                 ),
-                "The passes to be run on the full list of frames, before segmentation occurs."
+                "The passes to be run on the full list of frames, before segmentation occurs. "
                 "A list of lists containing a string (the pass name) and a dictionary (the configuration for "
                 f"the provided plugin). If no configuration is provided, the entry can just be a string. "
-                f"the following plugins are currently supported:\n\n{desc_str}"
+                f"See 'segmented_passes' setting to see what frame passes are available and what there settings are."
             ),
             "segmented_passes": (
                 [
@@ -1228,16 +1228,16 @@ class SegmentedFramePassEngine(Predictor):
                         str
                     )
                 ),
-                "The passes to be run on partial lists of frames, after segmentation occurs."
+                "The passes to be run on partial lists of frames, after segmentation occurs. "
                 "A list of lists containing a string (the pass name) and a dictionary (the configuration for "
                 f"the provided plugin). If no configuration is provided, the entry can just be a string. "
-                f"the following plugins are currently supported:\n\n{desc_str}"
+                f"The following plugins are currently supported:\n\n{desc_str}"
             ),
             "thread_count": (
                 None,
                 type_casters.Union(type_casters.Literal(None), type_casters.RangedInteger(0, np.inf)),
                 "The number of threads to use when running segmented passes. "
-                "Defaults to None, which resolves to os.cpu_count() at runtime."
+                "Defaults to None, which resolves to os.cpu_count() at runtime. "
                 "If set to 0, disables multithreading..."
             ),
             "allow_pass_multithreading": (
@@ -1253,7 +1253,7 @@ class SegmentedFramePassEngine(Predictor):
             "export_frame_path": (
                 None,
                 type_casters.Union(type_casters.Literal(None), str),
-                "A string or None specifying where to save the post forward backward frames to."
+                "A string or None specifying where to save the post forward backward frames to. "
                 "If None, does not save the frames to a file. Used for debugging."
             ),
             "export_final_probs": (
@@ -1273,7 +1273,7 @@ class SegmentedFramePassEngine(Predictor):
             "relaxed_maximum_radius": (
                 1.8,
                 type_casters.RangedFloat(0, np.inf),
-                "Determines the radius of relaxed maximum selection."
+                "Determines the radius of relaxed maximum selection. "
                 "Set to 0 to disable relaxed maximum selection. This value is "
                 "measured in cell units, not video units."
             ),

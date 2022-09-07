@@ -402,18 +402,18 @@ class FramePassEngine(Predictor):
         desc_lst = []
 
         for fp in FramePass.get_subclasses():
-            desc_lst.append(f"Pass '{fp.get_name()}' Settings: [[[")
+            desc_lst.append(f"\tPass '{fp.get_name()}' Settings: [[[")
             options = fp.get_config_options()
             if(options is None):
-                desc_lst.append("     No settings available...")
+                desc_lst.append("\t\tNo settings available...")
             else:
                 for name, (def_val, caster, desc) in options.items():
-                    desc_lst.append(f"     Setting Name: '{name}':")
-                    desc_lst.append(f"     Default Value: {def_val}")
-                    desc_lst.append(f"     Value Type: {get_type_name(caster)}")
-                    desc_lst.append(f"     Description:\n           {desc}\n")
+                    desc_lst.append(f"\t\tSetting Name: '{name}':")
+                    desc_lst.append(f"\t\tDefault Value: {def_val}")
+                    desc_lst.append(f"\t\tValue Type: {get_type_name(caster)}")
+                    desc_lst.append(f"\t\tDescription:\n\t\t\t{desc}\n")
 
-            desc_lst.append("]]]\n")
+            desc_lst.append("\t]]]\n")
 
         desc_str = "\n".join(desc_lst)
 

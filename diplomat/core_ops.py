@@ -1,5 +1,6 @@
 import sys
-from diplomat.processing.type_casters import typecaster_function, PathLike, Union, Optional, List, Dict, Any, get_typecaster_annotations, NoneType
+from diplomat.processing.type_casters import typecaster_function, PathLike, Union, Optional, List, Dict, Any, get_typecaster_annotations
+from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags, Flag
 from argparse import ArgumentParser
 

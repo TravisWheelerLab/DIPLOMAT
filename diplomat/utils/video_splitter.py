@@ -1,4 +1,5 @@
 from typing import Union, Sequence, Tuple, List, Optional, Iterable
+from diplomat.utils.pretty_printer import printer
 import cv2
 from os import PathLike as Pl
 from pathlib import Path
@@ -60,7 +61,7 @@ def _split_single_video(
 
     :returns: The paths of the newly split videos, as a list of "Path"s...
     """
-    print(f"Processing video: {video_path}")
+    printer(f"Processing video: {video_path}")
     vid = cv2.VideoCapture(str(video_path))
 
     width, height = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)), int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))

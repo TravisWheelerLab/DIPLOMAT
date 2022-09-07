@@ -1,5 +1,6 @@
 import inspect
 from diplomat.processing.type_casters import typecaster_function
+from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import get_summary_from_doc_str
 from dataclasses import asdict
 

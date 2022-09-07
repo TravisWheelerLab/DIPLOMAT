@@ -1,5 +1,6 @@
 from diplomat import processing
 from diplomat.processing.type_casters import typecaster_function, Union, List, get_type_name, Optional
+from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import Flag, positional_argument_count
 
 
@@ -22,6 +23,7 @@ def list_predictor_plugins():
 
 
 @typecaster_function
+@positional_argument_count(1)
 def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
     """
     Gets the available/modifiable settings for a specified predictor plugin...
@@ -62,6 +64,7 @@ def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
 
 
 @typecaster_function
+@positional_argument_count(1)
 def test_predictor_plugin(predictor: Optional[Union[List[str], str]] = None, interactive: Flag = False):
     """
     Run the tests for a predictor plugin.
