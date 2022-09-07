@@ -40,7 +40,13 @@ class YAMLArgHelpFormatter(HelpFormatter):
 def _yaml_arg_load(str_list: List[str]) -> dict:
     if(not isinstance(str_list, list)):
         return str_list
-    res = yaml.safe_load(StringIO(" ".join(str_list)))
+
+    str_list = " ".join(str_list)
+    try:
+        res = yaml.safe_load(StringIO(str_list))
+    except Exception as e:
+        raise ValueError(f"Unable to parse argument '{str_list}' as YAML, because: '{e}'")
+
     return res
 
 
@@ -50,7 +56,7 @@ def _yaml_typecaster(caster: TypeCaster):
         try:
             return caster(res)
         except Exception as e:
-            raise type(e)(f"Failed to parse {name} because: {e}")
+            raise type(e)(f"Failed to parse {name}, because: '{e}'")
 
     return checker
 
@@ -200,7 +206,10 @@ class CLIEngine:
                 # Attempt to reparse after adding the extra arguments in (if this is a function that accepts arbitrary flags)...
                 res = self._reparse(arg_list, extra, func)
             del res._func
-            return func(res)
+            try:
+                return func(res)
+            except Exception as e:
+                print(e)
         else:
             self._parser.print_usage()
 
