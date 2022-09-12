@@ -1,6 +1,7 @@
-from typing import Tuple, List, Optional, Union, Any
+from typing import Tuple, List, Optional, Union, Any, Iterable
 import wx
 from diplomat.processing import *
+from diplomat.utils.shapes import DotShapeDrawer, shape_iterator, shape_str
 from .labeler_lib import PoseLabeler, SettingCollectionWidget
 from .video_player import VideoPlayer
 import cv2
@@ -8,6 +9,7 @@ from matplotlib.colors import Colormap
 from wx.lib.newevent import NewCommandEvent
 from wx.lib.scrolledpanel import ScrolledPanel
 from diplomat.utils.colormaps import to_colormap, iter_colormap
+
 
 # Represents a cropping box, using x, y, width, height....
 Box = Optional[Tuple[int, int, int, int]]
@@ -26,6 +28,26 @@ def _bounded_float(low: float, high: float):
 
     return convert
 
+class WxDotShapeDrawer(DotShapeDrawer):
+    def __init__(self, dc: wx.DC):
+        self._dc = dc
+
+    def _draw_circle(self, x: float, y: float, r: float):
+        self._dc.DrawCircle(int(x), int(y), int(r))
+
+    def _draw_square(self, x: float, y: float, r: float):
+        # Get side dimension for square that fits inside a circle of the specified radius...
+        r = r * self._INSIDE_SQUARE_RADIUS_RATIO
+        x1 = int(x - r)
+        y1 = int(y - r)
+        d = int(r * 2)
+        self._dc.DrawRectangle(x1, y1, d, d)
+
+    def _draw_triangle(self, x: float, y: float, r: float):
+        self._dc.DrawPolygon([(self._TRIANGLE_POLY * r).astype(int).tolist()], int(x), int(y))
+
+    def _draw_star(self, x: float, y: float, r: float):
+        self._dc.DrawPolygon([(self._STAR_POLY * r).astype(int).tolist()], int(x), int(y), fill_style=wx.WINDING_RULE)
 
 class Initialisable:
     """
@@ -90,7 +112,8 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         ("plot_threshold", "_plot_threshold", _bounded_float(0, 1)),
         ("point_radius", "_point_radius", int),
         ("point_alpha", "_point_alpha", _bounded_float(0, 1)),
-        ("line_thickness", "_line_thickness", int)
+        ("line_thickness", "_line_thickness", int),
+        ("shape_list", "_shape_list", shape_iterator)
     ]
 
     # All events emitted by this class.
@@ -106,6 +129,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         crop_box: Box,
         poses: Pose,
         colormap: Union[str, list, Colormap] = DEF_MAP,
+        shape_list: Iterable[str] = None,
         plot_threshold: float = 0.1,
         point_radius: int = 5,
         point_alpha: float = 0.7,
@@ -128,6 +152,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         :param crop_box: A tuple of 4 integers being the x, y, width, and height of the cropped area of the video.
         :param poses: The Pose object for the above video, used as initial point data.
         :param colormap: The matplotlib colormap to use when coloring the points.
+        :param shape_list: The list of shapes to draw as 'dots' for each point. A list of strings or None.
         :param plot_threshold: The probability threshold at which to not plot a points. Defaults to 0.1.
         :param point_radius: Determines the size of the points. Defaults to 5.
         :param point_alpha: Determines the alpha level of the points. Defaults to 0.7.
@@ -148,13 +173,14 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         self._point_radius = None
         self._point_alpha = None
         self._line_thickness = None
+        self._shape_list = None
         self._step_counter = 0
         self._shift_delay = 0
         self._fast_m_speed = ctrl_speed_divider
         self._pose_label_modes = {}
         self._current_pose_labeling_mode = ""
 
-        BasicDataFields.__init__(self, colormap, plot_threshold, point_radius, point_alpha, line_thickness)
+        BasicDataFields.__init__(self, colormap, plot_threshold, point_radius, point_alpha, line_thickness, shape_list)
 
         self._edit_point = None
         self._new_location = None
@@ -322,7 +348,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         colors = iter_colormap(self._colormap, num_out, bytes=True)
         frame = self.get_offset_count()
 
-        for bp_idx, color in zip(range(num_out), colors):
+        for bp_idx, color, shape in zip(range(num_out), colors, self._shape_list):
             x = self._poses.get_x_at(frame, bp_idx)
             y = self._poses.get_y_at(frame, bp_idx)
             prob = self._poses.get_prob_at(frame, bp_idx)
@@ -336,10 +362,10 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
                 dc.SetBrush(wx.Brush(wx_color, wx.BRUSHSTYLE_SOLID))
                 dc.SetPen(wx.Pen(wx_color, 1, wx.PENSTYLE_SOLID))
 
-            dc.DrawCircle(
-                int((x * (nv_w / ov_w)) + x_off),
-                int((y * (nv_h / ov_h)) + y_off),
-                int(self._point_radius * (nv_h / ov_h))
+            WxDotShapeDrawer(dc)[shape](
+                (x * (nv_w / ov_w)) + x_off,
+                (y * (nv_h / ov_h)) + y_off,
+                self._point_radius * (nv_h / ov_h)
             )
 
     def _get_selected_bodypart(self) -> Tuple[float, float, float]:
@@ -607,17 +633,18 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         self._edit_point = value
 
 
-class ColoredCircle(wx.Control):
+class ColoredShape(wx.Control):
     """
     Represents a static, colored circle. Used by the ColoredRadioButton for displaying colors.
     """
-    def __init__(self, parent, color: wx.Colour, w_id = wx.ID_ANY, pos = wx.DefaultPosition,
+    def __init__(self, parent, color: wx.Colour, shape: str, w_id = wx.ID_ANY, pos = wx.DefaultPosition,
                  size = wx.DefaultSize, style=wx.BORDER_NONE, validator=wx.DefaultValidator, name = "ColoredCircle"):
         """
         Construct a new ColoredCircle.
 
         :param parent: The parent wx.Window.
         :param color: A wx.Colour, the color of the circle.
+        :param shape: A string, the type of shape to draw. (circle, square, triangle, star, etc.)
         :param w_id: The wx ID.
         :param pos: The position of the widget.
         :param size: The size of the widget.
@@ -629,6 +656,7 @@ class ColoredCircle(wx.Control):
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
 
         self._color = color
+        self._shape = shape_str(shape)
         self.SetInitialSize(size)
         self.SetSize(size)
         self.Enable(False) # Disable tab traversal on this widget.
@@ -660,9 +688,9 @@ class ColoredCircle(wx.Control):
         dc.SetPen(wx.Pen(self._color, 1, wx.PENSTYLE_TRANSPARENT))
 
         circle_radius = min(width, height) // 2
-        dc.DrawCircle(width // 2, height // 2, circle_radius)
+        WxDotShapeDrawer(dc)[self._shape](width // 2, height // 2, circle_radius)
 
-    def get_circle_color(self) -> wx.Colour:
+    def get_color(self) -> wx.Colour:
         """
         Get the color of the circle.
 
@@ -670,13 +698,30 @@ class ColoredCircle(wx.Control):
         """
         return self._color
 
-    def set_circle_color(self, value: wx.Colour):
+    def set_color(self, value: wx.Colour):
         """
         Set the color of the circle.
 
         :param value: A wx.Colour, which the color of the circle will be set to.
         """
         self._color = wx.Colour(value)
+
+    def get_shape(self) -> str:
+        """
+        Get the shape of this colored shape...
+
+        :return: A string, the type of shape this colored shape is drawing...
+        """
+        return self._shape
+
+    def set_shape(self, value: str):
+        """
+        Set the shape to have this colored shape widget draw.
+
+        :param value: A string, the type of shape to draw.
+        """
+        self._shape = shape_str(value)
+
 
 
 class ColoredRadioButton(wx.Panel):
@@ -687,7 +732,7 @@ class ColoredRadioButton(wx.Panel):
     ColoredRadioEvent, EVT_COLORED_RADIO = NewCommandEvent()
     PADDING = 10
 
-    def __init__(self, parent, button_idx: int, color: wx.Colour, label: str, w_id = wx.ID_ANY,
+    def __init__(self, parent, button_idx: int, color: wx.Colour, shape: str, label: str, w_id = wx.ID_ANY,
                  pos = wx.DefaultPosition, size = wx.DefaultSize, style = 0, name = "ColoredRadioButton"):
         """
         Create a ColoredRadioButton.
@@ -695,6 +740,7 @@ class ColoredRadioButton(wx.Panel):
         :param parent: The parent wx.Window.
         :param button_idx: The internal integer index of the button this index is emitted during a ColoredRadioEvent.
         :param color: A wx.Colour, the color of the radio button.
+        :param shape: A string, the type of shape to draw. (circle, square, triangle, star, etc.)
         :param label: A string, the text to set as the radio button's label.
         :param w_id: The wx ID.
         :param pos: The position of the widget.
@@ -709,7 +755,7 @@ class ColoredRadioButton(wx.Panel):
         self._sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.radio_button = wx.CheckBox(self, label=label, style=wx.CHK_2STATE)
         height = self.radio_button.GetBestSize().GetHeight()
-        self.circle = ColoredCircle(self, color, size=wx.Size(height, height))
+        self.circle = ColoredShape(self, color, shape, size=wx.Size(height, height))
 
         self.radio_button.SetValue(False)
 
@@ -739,7 +785,7 @@ class ColoredRadioBox(wx.Panel):
     ColoredRadioEvent, EVT_COLORED_RADIO = ColoredRadioButton.ColoredRadioEvent, ColoredRadioButton.EVT_COLORED_RADIO
     PADDING = 20
 
-    def __init__(self, parent, colormap: Union[str, list, Colormap], labels: List[str], w_id = wx.ID_ANY,
+    def __init__(self, parent, colormap: Union[str, list, Colormap], shape_list: Iterable[str], labels: List[str], w_id = wx.ID_ANY,
                  pos = wx.DefaultPosition, size = wx.DefaultSize, style = wx.TAB_TRAVERSAL | wx.BORDER_DEFAULT,
                  name = "ColoredRadioBox"):
         """
@@ -748,7 +794,8 @@ class ColoredRadioBox(wx.Panel):
         :param parent: The parent wx.Window.
         :param colormap: A matplotlib colormap or string referencing a matplotlib colormap, used to assign each radio
                          a color.
-        :param labels: A list of strings, being the labels for all of the radio buttons.
+        :param shape_list: A iterable or generator of strings, being the shapes to use to draw each point.
+        :param labels: A list of strings, being the labels for all the radio buttons.
         :param w_id: The wx ID.
         :param pos: The position of the widget.
         :param size: The size of the widget.
@@ -764,12 +811,14 @@ class ColoredRadioBox(wx.Panel):
         self._buttons = []
         self._selected = None
 
+        self._shape_list = shape_iterator(shape_list)
+
         self._colormap = to_colormap(colormap)
         colors = iter_colormap(self._colormap, len(labels), bytes=True)
 
-        for i, (label, color) in enumerate(zip(labels, colors)):
+        for i, (label, color, shape) in enumerate(zip(labels, colors, shape_list)):
             wx_color = wx.Colour(*color)
-            radio_button = ColoredRadioButton(self._scroller, i, wx_color, label)
+            radio_button = ColoredRadioButton(self._scroller, i, wx_color, shape, label)
             radio_button.Bind(ColoredRadioButton.EVT_COLORED_RADIO, self._enforce_single_select)
             self._inner_sizer.Add(radio_button, 0, wx.EXPAND, self.PADDING)
             self._buttons.append(radio_button)
@@ -874,7 +923,26 @@ class ColoredRadioBox(wx.Panel):
 
         for i, (button, color) in enumerate(zip(self._buttons, colors)):
             wx_color = wx.Colour(*color)
-            button.circle.set_circle_color(wx_color)
+            button.circle.set_color(wx_color)
+
+    def get_shape_list(self) -> Iterable[str]:
+        """
+        Get the shape list.
+
+        :returns: A list of strings, the shapes of each radio button 'dot'.
+        """
+        return self._shape_list
+
+    def set_shape_list(self, value: Iterable[str]):
+        """
+        Set the shape list.
+
+        :param value: A list of strings, the shapes of each radio button 'dot'.
+        """
+        self._shape_list = shape_iterator(value)
+
+        for i, (button, shape) in enumerate(zip(self._buttons, self._shape_list)):
+            button.circle.set_shape(shape)
 
 
 
@@ -891,6 +959,7 @@ class PointEditor(wx.Panel):
         bp_names: List[str],
         labeling_modes: List[PoseLabeler],
         colormap: str = PointViewNEdit.DEF_MAP,
+        shape_list: str = None,
         plot_threshold: float = 0.1,
         point_radius: int = 5,
         point_alpha: float = 0.7,
@@ -912,6 +981,7 @@ class PointEditor(wx.Panel):
         :param poses: The Pose object for the above video, used as initial point data.
         :param bp_names: A list of strings, being the names of the body parts.
         :param colormap: The matplotlib colormap to use when coloring the points.
+        :param shape_list: A iterable or generator of strings, being the shapes to use to draw each point.
         :param plot_threshold: The probability threshold at which to not plot a points. Defaults to 0.1.
         :param point_radius: Determines the size of the points. Defaults to 5.
         :param point_alpha: Determines the alpha level of the points. Defaults to 0.7.
@@ -932,7 +1002,7 @@ class PointEditor(wx.Panel):
         self._main_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self._side_bar_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        self.video_viewer = PointViewNEdit(self, video_hdl, crop_box, poses, colormap, plot_threshold, point_radius,
+        self.video_viewer = PointViewNEdit(self, video_hdl, crop_box, poses, colormap, shape_list, plot_threshold, point_radius,
                                            point_alpha, line_thickness)
 
         for p in labeling_modes:
@@ -941,7 +1011,7 @@ class PointEditor(wx.Panel):
         self._labeling_label = wx.StaticText(self, label="Labeling Mode:")
         self._labeling_mode_selector = wx.Choice(self, choices=[p.get_display_name() for p in labeling_modes])
         self._labeling_settings = SettingCollectionWidget(self)
-        self.select_box = ColoredRadioBox(self, colormap, bp_names)
+        self.select_box = ColoredRadioBox(self, colormap, shape_list, bp_names)
 
         self._main_sizer.Add(self.video_viewer, 1, wx.EXPAND)
 

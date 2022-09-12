@@ -57,6 +57,9 @@ class Predictor(ABC):
                                                integer.
                                     "colormap": The colormap used when plotting points to a video, a string representing
                                                 a matplotlib colormap.
+                                    "shape_list": A shape iterator, yields shape names in order of
+                                                  (part 1 body 1, part 1 body 2, ..., part 2 body 1, ...). This specifies the shapes to draw each dot
+                                                  as if displaying results in a UI.
                                     "alphavalue": The alpha value of the points when outputting predictions, a float
                                                   between 0 and 1.
                                     "pcutoff": The probability at which to display no point in the final plotted video

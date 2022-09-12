@@ -230,6 +230,7 @@ class FPEEditor(wx.Frame):
 
         ps = {
             "colormap": plot_settings["colormap"],
+            "shape_list": plot_settings["shape_list"],
             "plot_threshold": plot_settings["pcutoff"],
             "point_radius": plot_settings["dotsize"],
             "point_alpha": plot_settings["alphavalue"],

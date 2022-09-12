@@ -3,7 +3,7 @@ requires = ["flit_core >=3.2"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "diplomat"
+name = "diplomat-track"
 authors = [
     {name = "Isaac Robinson", email = "isaac.k.robinson2000@gmail.com"}
 ]
@@ -21,6 +21,9 @@ classifiers = [
 requires-python = ">=3.7"
 dynamic = ["version", "description"]
 dependencies = ["opencv-python", "matplotlib"]
+
+[tool.flit.module]
+name = "diplomat"
 
 [project.urls]
 Source = "https://github.com/TravisWheelerLab/DIPLOMAT"

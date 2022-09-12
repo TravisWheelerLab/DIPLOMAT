@@ -13,6 +13,7 @@ from diplomat import processing
 from diplomat.utils import video_info
 from pathlib import Path
 import diplomat.processing.type_casters as tc
+from diplomat.utils.shapes import shape_iterator
 
 # DLC Imports
 from .dlc_importer import predict, checkcropping, load_config, auxiliaryfunctions
@@ -109,7 +110,7 @@ def analyze_videos(
     model_config["num_outputs"] = (
         int(num_outputs)
         if ((num_outputs is not None) and (num_outputs >= 1))
-        else model_config["num_outputs"]
+        else config.get("num_outputs", model_config.get("num_outputs", 1))
     )
 
     batch_size = batch_size if(batch_size is not None) else config["batch_size"]
@@ -233,6 +234,7 @@ def _analyze_video(
         else None,
         "dotsize": config["dotsize"],
         "colormap": config.get("diplomat_colormap", config["colormap"]),
+        "shape_list": shape_iterator(config.get("shape_list", None), model_config["num_outputs"]),
         "alphavalue": config["alphavalue"],
         "pcutoff": config["pcutoff"],
         "line_thickness": config.get("line_thickness", 1),

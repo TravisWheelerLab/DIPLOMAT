@@ -13,6 +13,7 @@ import diplomat.processing.type_casters as tc
 from diplomat.utils.colormaps import to_colormap, iter_colormap
 from diplomat.utils.cli_tools import extra_cli_args
 from matplotlib import colors as mpl_colors
+from diplomat.utils.shapes import shape_iterator, CV2DotShapeDrawer
 
 
 def cv2_fourcc_string(val) -> int:
@@ -26,6 +27,7 @@ LABELED_VIDEO_SETTINGS = {
     "dotsize": (4, int, "The size of the dots."),
     "alphavalue": (0.7, tc.RangedFloat(0, 1), "The alpha value of the dots."),
     "colormap": (None, to_colormap, "The colormap to use for tracked points in the video. Can be a matplotlib colormap or a list of matplotlib colors."),
+    "shape_list": (None, tc.Optional(tc.List(str)), "A list of shape names, shapes to use for drawing each individual's dots."),
     "line_thickness": (1, int, "Thickness of lines drawn."),
     "antialiasing": (True, bool, "Use antialiasing when drawing points."),
     "draw_hidden_tracks": (True, bool, "Whether or not to draw locations under the pcutoff value."),
@@ -150,9 +152,13 @@ def _create_video_single(
     # Compute the body parts to look up...
     body_parts_to_plot = EverythingSet() if(body_parts_to_plot is None) else set(body_parts_to_plot)
     body_part_data = []
+    counts = {}
+
     for col in location_data:
         scorer, body_part, coord = col
         if(body_part in body_parts_to_plot and coord.startswith("x")):
+            counts[body_part] = counts.get(body_part, 0) + 1
+
             # Views into the data_frame...
             body_part_data.append([
                 location_data[scorer, body_part, coord],
@@ -160,6 +166,7 @@ def _create_video_single(
                 location_data[scorer, body_part, "likelihood" + coord[1:]]
             ])
 
+    num_outputs = max(counts.values())
     progress = tqdm.tqdm(total=location_data.shape[0])
     i = 0
 
@@ -174,26 +181,18 @@ def _create_video_single(
         overlay = frame.copy()
 
         colors = iter_colormap(plotting_settings.colormap, len(body_part_data))
+        shapes = shape_iterator(plotting_settings.shape_list, num_outputs)
 
-        for bp_idx, ((bp_x, bp_y, bp_p), color) in enumerate(zip(body_part_data, colors)):
-            if(bp_p[i] > plotting_settings.pcutoff):
-                cv2.circle(
-                    overlay,
-                    (int(bp_x[i]), int(bp_y[i])),
-                    int(plotting_settings.dotsize),
-                    _to_cv2_color(color[:3] + (1,)),
-                    -1,
-                    cv2.LINE_AA if(plotting_settings.antialiasing) else None
-                )
-            elif(plotting_settings.draw_hidden_tracks):
-                cv2.circle(
-                    overlay,
-                    (int(bp_x[i]), int(bp_y[i])),
-                    int(plotting_settings.dotsize),
-                    _to_cv2_color(color[:3] + (1,)),
-                    plotting_settings.line_thickness,
-                    cv2.LINE_AA if(plotting_settings.antialiasing) else None
-                )
+        for bp_idx, ((bp_x, bp_y, bp_p), color, shape) in enumerate(zip(body_part_data, colors, shapes)):
+            shape_drawer = CV2DotShapeDrawer(
+                overlay,
+                _to_cv2_color(color[:3] + (1,)),
+                -1 if(bp_p[i] > plotting_settings.pcutoff) else plotting_settings.line_thickness,
+                cv2.LINE_AA if(plotting_settings.antialiasing) else None
+            )[shape]
+
+            if(bp_p[i] > plotting_settings.pcutoff or plotting_settings.draw_hidden_tracks):
+                shape_drawer(int(bp_x[i]), int(bp_y[i]), int(plotting_settings.dotsize))
 
         labeled_video.write(cv2.addWeighted(
             overlay, plotting_settings.alphavalue, frame, 1 - plotting_settings.alphavalue, 0

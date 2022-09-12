@@ -1,8 +1,5 @@
-from typing import Union, Optional, List, Type, Dict, Any
-from os import PathLike
-
+from typing import Optional, List, Type, Dict, Any
 from .dlc_importer import auxiliaryfunctions
-
 from diplomat.processing import Predictor, TQDMProgressBar, Config
 import diplomat.processing.type_casters as tc
 from diplomat import processing
@@ -14,8 +11,8 @@ import diplomat.utils.frame_store_fmt as frame_store_fmt
 import diplomat.utils.h5_frame_store_fmt as h5_frame_store_fmt
 import tqdm
 import time
+from diplomat.utils.shapes import shape_iterator
 
-# Represents a string or any filesystem path-like type....
 
 @tc.typecaster_function
 def analyze_frames(
@@ -86,7 +83,7 @@ def analyze_frames(
     # Get the number of outputs...
     num_outputs = (
         max(1, cfg.get("num_outputs", 1))
-        if (num_outputs is None)
+        if ((num_outputs is None) or (int(num_outputs) < 1))
         else max(1, int(num_outputs))
     )
 
@@ -220,6 +217,7 @@ def _analyze_frame_store(
                 "cropping-offset": None if (off_x is None or off_y is None) else (off_y, off_x),
                 "dotsize": cfg["dotsize"],
                 "colormap": cfg.get("diplomat_colormap", cfg["colormap"]),
+                "shape_list": shape_iterator(cfg.get("shape_list", None), num_outputs),
                 "alphavalue": cfg["alphavalue"],
                 "pcutoff": cfg["pcutoff"],
                 "line_thickness": cfg.get("line_thickness", 1),
