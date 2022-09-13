@@ -44,10 +44,10 @@ class WxDotShapeDrawer(DotShapeDrawer):
         self._dc.DrawRectangle(x1, y1, d, d)
 
     def _draw_triangle(self, x: float, y: float, r: float):
-        self._dc.DrawPolygon([(self._TRIANGLE_POLY * r).astype(int).tolist()], int(x), int(y))
+        self._dc.DrawPolygon((self._TRIANGLE_POLY * r).astype(int).tolist(), int(x), int(y))
 
     def _draw_star(self, x: float, y: float, r: float):
-        self._dc.DrawPolygon([(self._STAR_POLY * r).astype(int).tolist()], int(x), int(y), fill_style=wx.WINDING_RULE)
+        self._dc.DrawPolygon((self._STAR_POLY * r).astype(int).tolist(), int(x), int(y))
 
 class Initialisable:
     """

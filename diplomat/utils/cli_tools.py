@@ -211,7 +211,6 @@ class CLIEngine:
                 res = self._reparse(arg_list, extra, func)
             del res._func
             try:
-                print(res)
                 return func(res)
             except CLIError as e:
                 print(e)
