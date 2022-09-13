@@ -63,7 +63,7 @@ def shape_str(shape: str) -> str:
 class shape_iterator:
     def __new__(cls, sequence: Iterable[str], rep_count: int = None):
         if(sequence is None):
-            return cls.__new__(cls, ("circle", "square", "triangle", "star"), 1 if(rep_count is None) else rep_count)
+            return cls.__new__(cls, ("circle", "triangle", "square", "star"), 1 if(rep_count is None) else rep_count)
         if(isinstance(sequence, cls)):
             return cls.__new__(cls, sequence._seq, sequence._rep if(rep_count is None) else rep_count)
 
