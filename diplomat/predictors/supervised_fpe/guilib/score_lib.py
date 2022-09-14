@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional, Iterable
-
-from .labeler_lib import SettingCollection, SettingCollectionWidget
+from .labeler_lib import SettingCollection
 from .probability_displayer import ProbabilityDisplayer
 import wx
 from diplomat.processing import *

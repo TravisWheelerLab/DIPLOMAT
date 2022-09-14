@@ -31,7 +31,7 @@ class EditableFramePassEngine(Protocol):
     ) -> Tuple[float, float, float]:
         pass
 
-    def get_maximum_with_defaults(self, frame) -> Tuple[int, int, float, float, float]:
+    def get_maximum_with_defaults(self, frame: ForwardBackwardFrame) -> Tuple[int, int, float, float, float]:
         pass
 
 

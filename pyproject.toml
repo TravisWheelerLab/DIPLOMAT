@@ -28,6 +28,9 @@ name = "diplomat"
 [project.urls]
 Source = "https://github.com/TravisWheelerLab/DIPLOMAT"
 
+[project.scripts]
+diplomat = "diplomat:main"
+
 [project.optional-dependencies]
 gui = [
     "wxpython"
