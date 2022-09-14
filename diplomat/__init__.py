@@ -18,6 +18,13 @@ def load_frontends():
     from diplomat.utils.pluginloader import load_plugin_classes
     from types import ModuleType
     from dataclasses import asdict
+    from multiprocessing import current_process
+
+    if(current_process().name != "MainProcess"):
+        # If something in this package is using multiprocessing, disable the automatic frontend loading code.
+        # This is done because some frontends (DEEPLABCUT) use about 1/3 a Gig of memory on import, which can
+        # cause memory issues if a lot of processes are started by a predictor...
+        return (set(), {})
 
     frontends = load_plugin_classes(frontends, DIPLOMATFrontend)
     loaded_funcs = {}

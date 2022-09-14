@@ -123,9 +123,9 @@ class ProbabilityDisplayer(wx.Control):
         high_idx = np.searchsorted(bad_labels, high_goal)
         mid_idx = np.searchsorted(bad_labels, idx)
 
-        low_value = bad_labels[min(low_idx, len(bad_labels) - 1)]
-        high_value = bad_labels[min(high_idx, len(bad_labels) - 1)]
-        mid_value = bad_labels[min(mid_idx, len(bad_labels) - 1)]
+        low_value = int(bad_labels[min(low_idx, len(bad_labels) - 1)])
+        high_value = int(bad_labels[min(high_idx, len(bad_labels) - 1)])
+        mid_value = int(bad_labels[min(mid_idx, len(bad_labels) - 1)])
 
         low_gap_match = low_value == low_goal and mid_idx - low_idx == mid_value - low_value
         high_gap_match = high_value == high_goal and high_idx - mid_idx == high_value - mid_value
