@@ -20,7 +20,7 @@ classifiers = [
 ]
 requires-python = ">=3.7"
 dynamic = ["version", "description"]
-dependencies = ["opencv-python", "matplotlib"]
+dependencies = ["opencv-python", "matplotlib", "deeplabcut"]
 
 [tool.flit.module]
 name = "diplomat"
@@ -34,7 +34,4 @@ diplomat = "diplomat:main"
 [project.optional-dependencies]
 gui = [
     "wxpython"
-]
-dlc = [
-    "deeplabcut"
 ]
