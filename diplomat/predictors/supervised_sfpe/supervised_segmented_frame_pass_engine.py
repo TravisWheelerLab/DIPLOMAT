@@ -1,4 +1,3 @@
-import os
 import traceback
 
 # We first check if this is a headless environment, and if so don't even allow this module to be imported...
@@ -8,10 +7,6 @@ from pathlib import Path
 from diplomat.predictors.supervised_fpe.guilib.progress_dialog import FBProgressDialog
 from diplomat.predictors.supervised_fpe.labelers import Approximate, Point
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
-
-if os.environ.get('DLClight', default=False) == 'True':
-    raise ImportError("Can't use this module in DLClight mode!")
-
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
 from diplomat.predictors.supervised_fpe.guilib.fpe_editor import FPEEditor
