@@ -208,7 +208,7 @@ def supervised(
         predictor="SupervisedSegmentedFramePassEngine",
         predictor_settings=settings,
         help_extra=help_extra,
-        extra_args=extra_args
+        **extra_args
     )
 
 
