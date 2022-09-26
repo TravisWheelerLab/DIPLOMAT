@@ -214,6 +214,7 @@ class SparseTrackingData:
         frame: int,
         bodypart: int,
         threshold: float,
+        max_cell_count: Optional[int] = None,
         mode: SparseModes = SparseModes.IGNORE_OFFSETS
     ) -> "SparseTrackingData":
         """
@@ -223,6 +224,8 @@ class SparseTrackingData:
         :param frame: The frame of the TrackingData to sparsify
         :param bodypart: The bodypart of the TrackingData to sparsify
         :param threshold: The threshold to use when scarifying. All values below the threshold are removed.
+        :param max_cell_count: The maximum number of cells allowed in this sparsified frame. Defaults to None, so no limiting is done. If the number
+                               of cells is larger than this value, the top-k cells will be pulls so k matches this value.
         :param mode: The mode to utilize when making the data sparse. The following modes currently exist:
             - SparseModes.IGNORE_OFFSETS: Ignores offsets, placing values based on the grid cell the value is stored in.
                                           This is the default mode.
@@ -303,6 +306,14 @@ class SparseTrackingData:
                 probs = probs[ordered_coords][unique_locs]
                 x_off = x_off[ordered_coords][unique_locs]
                 y_off = y_off[ordered_coords][unique_locs]
+
+        if((max_cell_count is not None) and (len(probs) > max_cell_count)):
+            top_k = np.argpartition(probs, -max_cell_count)[-max_cell_count:]
+            x = x[top_k]
+            y = y[top_k]
+            probs = probs[top_k]
+            x_off = x_off[top_k]
+            y_off = y_off[top_k]
 
         new_sparse_data.pack(y, x, probs, x_off, y_off)
 

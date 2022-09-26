@@ -17,6 +17,7 @@ function_tree = {
     "supervised": diplomat.supervised,
     "unsupervised": diplomat.unsupervised,
     "annotate": diplomat.annotate,
+    "split_videos": diplomat.split_videos,
     "frontends": {
         "__description": "Contains subcommands for listing available frontends and inspecting the functions each frontend supports.",
         "list": {

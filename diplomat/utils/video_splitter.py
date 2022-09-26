@@ -1,29 +1,30 @@
 from typing import Union, Sequence, Tuple, List, Optional, Iterable
+
+import diplomat.processing.type_casters as tc
 from diplomat.utils.pretty_printer import printer
 import cv2
-from os import PathLike as Pl
 from pathlib import Path
+from os import PathLike
 import tqdm
 import math
-
-PathLike = Union[Pl, str]
 
 FALLBACK_CODEC = "mp4v"
 FALLBACK_EXT = ".mp4"
 
 # TODO: Add support for specifying custom output extension and codec...
 
+@tc.typecaster_function
 def split_videos(
-    video_list: Union[PathLike, Sequence[PathLike]],
-    seconds_per_segment: Union[Sequence[int], int] = 300,
-    output_fourcc_string: Optional[str] = None,
-    output_extension: Optional[str] = None
-) -> List[List[Path]]:
+    videos: tc.Union[tc.Path, tc.List[tc.Path]],
+    seconds_per_segment: tc.Union[tc.List[int], int] = 300,
+    output_fourcc_string: tc.Optional[str] = None,
+    output_extension: tc.Optional[str] = None
+) -> tc.List[tc.List[Path]]:
     """
     Split a video into even length segments. This will produce a list of videos with "-part{number}" appended to the
     original video name in the same directory as the original video.
 
-    :param video_list: Either a single path-like object (string or Path) or a list of path-like objects, being the
+    :param videos: Either a single path-like object (string or Path) or a list of path-like objects, being the
                        paths to the videos to split into several segments.
     :param seconds_per_segment: An integer or a list of integers. If a single integer, represents the length of each
                                 split segment in seconds (Ex. if 30, split the clip every 30 seconds). If a list of
@@ -37,12 +38,12 @@ def split_videos(
 
     :returns: A list of lists of Path objects, being the new split video paths for each and every video...
     """
-    video_list = _sanitize_path_arg(video_list)
+    videos = _sanitize_path_arg(videos)
 
-    if(video_list is None):
+    if(videos is None):
         raise ValueError("No videos provided!!!")
 
-    return [_split_single_video(video, seconds_per_segment, output_fourcc_string, output_extension) for video in video_list]
+    return [_split_single_video(video, seconds_per_segment, output_fourcc_string, output_extension) for video in videos]
 
 
 def _split_single_video(
