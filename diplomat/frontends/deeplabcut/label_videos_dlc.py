@@ -186,7 +186,7 @@ def _create_video_single(
         for bp_idx, ((bp_x, bp_y, bp_p), color, shape) in enumerate(zip(body_part_data, colors, shapes)):
             shape_drawer = CV2DotShapeDrawer(
                 overlay,
-                _to_cv2_color(color[:3] + (1,)),
+                _to_cv2_color(tuple(color[:3]) + (1,)),
                 -1 if(bp_p[i] > plotting_settings.pcutoff) else plotting_settings.line_thickness,
                 cv2.LINE_AA if(plotting_settings.antialiasing) else None
             )[shape]
