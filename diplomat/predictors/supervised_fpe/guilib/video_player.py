@@ -3,7 +3,6 @@ Module contains a wx video player widget and a wx video controller widget. Uses 
 deque while playing them, allowing for smoother playback...
 """
 from typing import Callable, Any, Optional, Tuple
-
 import wx
 from wx.lib.newevent import NewCommandEvent
 import cv2
@@ -12,6 +11,7 @@ from multiprocessing import Pipe
 from multiprocessing.connection import Connection
 from collections import deque
 import numpy as np
+
 try:
     from .probability_displayer import ProbabilityDisplayer
 except ImportError:
@@ -255,7 +255,7 @@ class VideoPlayer(wx.Control):
 
     # The number of frames to store in the forward and backward buffer.
     BUFFER_SIZE = 50
-    BACK_LOAD_AMT = 20
+    BACK_LOAD_AMT = 30
 
     # Events for the VideoPlayer class, one triggered for every frame change, and one triggered for every change in
     # play state (starting, stopping, pausing, etc....)

@@ -107,11 +107,11 @@ def analyze_videos(
     # Set the number of outputs...
     model_config["num_outputs"] = config.get("num_outputs", model_config.get("num_outputs", 1))
     old_num_outputs = model_config["num_outputs"]
-    model_config["num_outputs"] = (
+    model_config["num_outputs"] = int(max(1, (
         int(num_outputs)
         if ((num_outputs is not None) and (num_outputs >= 1))
-        else config.get("num_outputs", model_config.get("num_outputs", 1))
-    )
+        else config.get("num_outputs", len(config.get("individuals", [0])))
+    )))
 
     batch_size = batch_size if(batch_size is not None) else config["batch_size"]
     model_config["batch_size"] = batch_size

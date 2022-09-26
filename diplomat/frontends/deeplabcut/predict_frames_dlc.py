@@ -81,11 +81,11 @@ def analyze_frames(
     video_files = _resolve_videos(frame_stores, video_folders)
 
     # Get the number of outputs...
-    num_outputs = (
-        max(1, cfg.get("num_outputs", 1))
+    num_outputs = int(max(1, (
+        cfg.get("num_outputs", len(cfg.get("individuals", [0])))
         if ((num_outputs is None) or (int(num_outputs) < 1))
-        else max(1, int(num_outputs))
-    )
+        else int(num_outputs)
+    )))
 
     # Loading the predictor plugin
     if predictor is None:
