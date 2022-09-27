@@ -1,6 +1,6 @@
-# Project
+# DIPLOMAT
 
-**REPLACE:** One sentence description of the project.
+DeepLabCut-based Identity Preserving Labeled-Object Multi-Animal Tracking.
 
 ## About
 
@@ -8,10 +8,27 @@
 users? Why is it important or meaningful? How does it improve upon similar
 software? Is it a component of or extension to a larger piece of software?
 
+DIPLOMAT provides algorithms and tools for performing multi-animal identity preserving tracking on top of single animal and multi animal CNN based tracking packages. Currently, it supports running on both single and multi animal DeepLabCut projects, but can be extended to support other tracking
+packages. Unlike other multi-animal tracking packages, DIPLOMAT's algorithms work directly off confidence maps instead of running peak detection, allowing for more naunced tracking results compared to other methods. 
+
+**TODO:** Add pictures of tracking results....
+
+DIPLOMAT also includes a UI for performing tracking and several other tools for storing and visualizing confidence maps. 
+
+**TODO:** Add quick UI GIF
+
 ## Installation
 
-**REPLACE:** How does on install the software? What are the dependencies, if any? Is there a
-Docker image or installation package of some sort?
+DIPLOMAT will eventually be installable using pip. To install it right now, you can and install it with pip using the following command:
+```bash
+pip install git+https://github.com/TravisWheelerLab/DIPLOMAT.git
+```
+To install DIPLOMAT with GUI elements and supervised tracking support, use the command below:
+```bash
+pip install "diplomat-track[gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+```
+
+**NOTE:** 
 
 ## Usage
 
