@@ -3,6 +3,25 @@ from diplomat.processing.type_casters import typecaster_function, Union, List, g
 from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import Flag, positional_argument_count
 
+@typecaster_function
+def test_command(
+    arg1: List[str],
+    arg2: str,
+    arg3: int,
+    arg4: bool = False
+):
+    """
+    Does Command Line Stuff
+
+    :param arg1: The first argument...
+    :param arg2: The second argument...
+    :param arg3: The third argument...
+    :param arg4: The fourth argument...
+
+    :return: Nothing
+    """
+    ...
+
 
 @typecaster_function
 def list_predictor_plugins():

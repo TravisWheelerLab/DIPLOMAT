@@ -432,7 +432,7 @@ class FramePassEngine(Predictor):
                 "in order to be kept and added to the sparse matrix."
             ),
             "max_cells_per_frame": (
-                None,
+                100,
                 type_casters.Optional(type_casters.RangedInteger(1, np.inf)),
                 "The maximum number of cells allowed in any frame. Defaults to None, meaning no strict limit is placed on cells"
                 "per frame except the minimum threshold. Can be any positive integer, which will limit the number of cells in any"
