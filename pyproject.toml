@@ -29,7 +29,7 @@ name = "diplomat"
 Source = "https://github.com/TravisWheelerLab/DIPLOMAT"
 
 [project.scripts]
-diplomat = "diplomat:main"
+diplomat = "diplomat._cli_runner:main"
 
 [project.optional-dependencies]
 gui = [
