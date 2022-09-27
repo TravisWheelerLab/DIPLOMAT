@@ -6,6 +6,9 @@ def dummy_print(*args, **kwargs):
 
 with warnings.catch_warnings():
     # Keep deeplabcut from flooding diplomat with warning messages and print statements...
+    import tensorflow as tf
+    tf.get_logger().setLevel('INFO')
+
     warnings.filterwarnings("ignore")
     true_print = builtins.print
     builtins.print = dummy_print
