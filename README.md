@@ -13,7 +13,7 @@ packages. Unlike other multi-animal tracking packages, DIPLOMAT's algorithms wor
 
 DIPLOMAT also includes a UI for performing tracking and several other tools for storing and visualizing confidence maps. 
 
-![Video Demo of UI](imgs/UIDemo.mp4)
+https://user-images.githubusercontent.com/47544550/192845386-1e053590-6af7-417e-8411-0c376c27da86.mp4
 
 ## Installation
 
