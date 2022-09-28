@@ -173,6 +173,6 @@ class CreateSkeleton(FramePass):
             "bin_offset": (0, tc.RoundedDecimal(5), "A decimal, the offset of the first bin used in the histogram for computing "
                                    "the mode."),
             "max_amplitude": (1, float, "A float, the max amplitude of the skeletal curves."),
-            "min_amplitude": (0.8, float, "A float the min amplitude of the skeletal curves."),
+            "min_amplitude": (0.75, float, "A float the min amplitude of the skeletal curves."),
             "DEBUG": (False, bool, "Set to True to print skeleton information to console while this pass is running.")
         }

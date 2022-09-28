@@ -5,6 +5,9 @@ name = "pypi"
 
 [packages]
 deeplabcut = ">=2.2.0.6"
+opencv-python = ""
+matplotlib = ""
+wxpython = ""
 
 [dev-packages]
 
