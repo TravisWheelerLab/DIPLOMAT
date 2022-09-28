@@ -45,11 +45,6 @@ source DIPLOMAT/bin/activate
 
 ## Usage
 
-**REPLACE:** How is the software run (or consumed, for libraries)? Are there any command line
-flags the user should know about? What do they do, exactly? What do the input
-data look like? Are there special file formats in use, what are they? What does
-the output look like?
-
 #### Running DIPLOMAT
 
 To run DIPLOMAT on a video once it is installed, simply use DIPLOMAT's `unsupervised` and `supervised` commands to track a video:
@@ -127,13 +122,6 @@ diplomat predictors --help
 ```
 
 ## Development
-
-**REPLACE:** What language(s) are in use? What does a user need to install for development
-purposes? This might include build systems, Docker, a particular compiler or
-runtime version, test libraries or tools, linters, code formatters, or other
-tools. Are there any special requirements, like processor architecture? What
-commands should developers use to accomplish common tasks like building, running
-the test suite, and so on?
 
 DIPLOMAT is written entirely in python. To set up an environment for developing DIPLOMAT, you can simply pull down this repository and install its
 requirements.txt dependencies to your virtual environment.
