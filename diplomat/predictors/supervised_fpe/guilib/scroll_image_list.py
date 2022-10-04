@@ -1,5 +1,6 @@
 from typing import List, Optional
 import wx
+import math
 
 
 class ScrollImageList(wx.ScrolledCanvas):
@@ -37,6 +38,8 @@ class ScrollImageList(wx.ScrolledCanvas):
         self._dims = None
         self.image_quality = wx.IMAGE_QUALITY_NEAREST
 
+        self._scroll_extra = 0
+
         self.set_bitmaps(img_list)
         self.set_orientation(orientation)
         self.set_padding(padding)
@@ -48,11 +51,31 @@ class ScrollImageList(wx.ScrolledCanvas):
         self.SetSize(wx.Size(*self._dims))
         self.EnableScrolling(True, True)
         self.ShowScrollbars(True, True)
+
         self.Bind(wx.EVT_SIZE, self._compute_dimensions)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
 
     # Not sure why I duplicate this...
     def SetScrollPageSize(self, orient, pageSize):
         super().SetScrollPageSize(orient, pageSize)
+
+    def OnMouseWheel(self, event: wx.MouseEvent):
+        if(event.GetWheelAxis() != wx.MOUSE_WHEEL_VERTICAL):
+            return
+
+        self._scroll_extra -= event.GetWheelRotation()
+
+        x, y = self.CalcUnscrolledPosition(0, 0)
+        scale_x, scale_y = self.GetScrollPixelsPerUnit()
+
+        if(scale_x != 0 and scale_y != 0):
+            self.Scroll((x // scale_x), (y // scale_y) + (self._scroll_extra // scale_y))
+            self._scroll_extra = (abs(self._scroll_extra) % scale_y) * (1 if(self._scroll_extra >= 0) else -1)
+        else:
+            self._scroll_extra = 0
+
+        event.Skip(False)
+        event.StopPropagation()
 
     def _compute_dimensions(self, event=None):
         """
