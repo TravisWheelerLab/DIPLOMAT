@@ -1,6 +1,5 @@
 from typing import List, Optional
 import wx
-import math
 
 
 class ScrollImageList(wx.ScrolledCanvas):
