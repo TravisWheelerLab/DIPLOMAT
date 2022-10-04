@@ -1,17 +1,23 @@
 import warnings
 import builtins
+import os
 
 def dummy_print(*args, **kwargs):
     pass
 
 with warnings.catch_warnings():
     # Keep deeplabcut from flooding diplomat with warning messages and print statements...
-    import tensorflow as tf
-    tf.get_logger().setLevel('ERROR')
+    debug_mode = os.environ.get("DIPLOMAT_DEBUG", False)
 
-    warnings.filterwarnings("ignore")
-    true_print = builtins.print
-    builtins.print = dummy_print
+    if(not debug_mode):
+        os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+        import tensorflow as tf
+        tf.get_logger().setLevel('ERROR')
+
+        warnings.filterwarnings("ignore")
+        true_print = builtins.print
+        builtins.print = dummy_print
+
     try:
         import deeplabcut
         from deeplabcut import auxiliaryfunctions
@@ -21,4 +27,7 @@ with warnings.catch_warnings():
         from deeplabcut.pose_estimation_tensorflow import auxiliaryfunctions
     except ImportError:
         deeplabcut = None
-    builtins.print = true_print
+
+    if(not debug_mode):
+        builtins.print = true_print
+        del os.environ["TF_CPP_MIN_LOG_LEVEL"]
