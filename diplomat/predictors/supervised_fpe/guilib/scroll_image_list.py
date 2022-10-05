@@ -8,7 +8,7 @@ class ScrollImageList(wx.ScrolledCanvas):
     be updated without breaking the widget, which will properly resize its scrollbars to accommodate the images...
     """
 
-    SCROLL_RATE = 20
+    SCROLL_RATE = 5
 
     def __init__(self, parent, img_list: Optional[List[wx.Bitmap]], orientation = wx.VERTICAL, padding = 20,
                  wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.HSCROLL | wx.VSCROLL,
@@ -62,7 +62,7 @@ class ScrollImageList(wx.ScrolledCanvas):
         if(event.GetWheelAxis() != wx.MOUSE_WHEEL_VERTICAL):
             return
 
-        self._scroll_extra -= event.GetWheelRotation()
+        self._scroll_extra += (-1 if(event.IsWheelInverted()) else 1) * event.GetWheelRotation()
 
         x, y = self.CalcUnscrolledPosition(0, 0)
         scale_x, scale_y = self.GetScrollPixelsPerUnit()
@@ -189,3 +189,22 @@ class ScrollImageList(wx.ScrolledCanvas):
         self._bitmaps = bitmaps
         self._dims = None
         self._compute_dimensions()
+
+
+def scroll_image_demo():
+    app = wx.App()
+
+    im_list = [wx.Bitmap.FromRGBA(100, 100, 0, 0, 0, 255) for i in range(40)]
+    frame = wx.Frame(None, title="Scrolling Image List")
+    f_layout = wx.BoxSizer(wx.VERTICAL)
+
+    im_widget = ScrollImageList(frame, im_list, wx.VERTICAL, size=wx.Size(200, 300))
+    f_layout.Add(im_widget, 1, wx.EXPAND)
+
+    frame.SetSizerAndFit(f_layout)
+    frame.Show()
+
+    app.MainLoop()
+
+if(__name__ == "__main__"):
+    scroll_image_demo()
