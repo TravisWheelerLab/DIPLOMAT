@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
-from inspect import get_annotations
 from diplomat.processing.type_casters import StrictCallable, PathLike, Union, List, Dict, Any, Optional, TypeCaster, NoneType
 import typing
 
@@ -43,7 +42,7 @@ class DIPLOMATBaselineCommands:
     label_videos: LabelVideosFunction(NoneType)
 
     def __post_init__(self):
-        annotations = get_annotations(type(self))
+        annotations = type(self).__annotations__
 
         for name, value in asdict(self).items():
             annot = annotations.get(name, None)
