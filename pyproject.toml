@@ -20,7 +20,7 @@ classifiers = [
 ]
 requires-python = ">=3.7"
 dynamic = ["version", "description"]
-dependencies = ["opencv-python", "matplotlib", "deeplabcut"]
+dependencies = ["opencv-python", "matplotlib", "typing_extensions>=3.8", "deeplabcut"]
 
 [tool.flit.module]
 name = "diplomat"

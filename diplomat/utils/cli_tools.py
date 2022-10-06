@@ -202,7 +202,14 @@ class CLIEngine:
         return self._parser.parse_args(args)
 
     def __call__(self, arg_list: List[str]) -> Any:
-        res, extra = self._parser.parse_known_args(arg_list)
+        try:
+            res, extra = self._parser.parse_known_args(arg_list)
+        except TypeError as e:
+            # Python 3.7 argparse doesn't handle subcommand namespaces correctly when no arguments are passed to them (throws type error), we
+            # insert an empty string argument and reparse to get a more helpful error message and force argparse to print the usage string...
+            if(not (str(e) == "sequence item 0: expected str instance, NoneType found")):
+                raise
+            res, extra = self._parser.parse_known_args([*arg_list, ""])
         func = getattr(res, "_func", None)
 
         if(func is not None):

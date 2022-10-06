@@ -6,9 +6,7 @@ from typing import Tuple, Union, List, Optional, Dict, Any
 try:
     from typing import Literal
 except ImportError:
-    class LitMeta(type):
-        def __getitem__(self, item) -> object: ...
-    class Literal(metaclass=LitMeta): ...
+    from typing_extensions import Literal
 
 import numpy as np
 from numpy import ndarray

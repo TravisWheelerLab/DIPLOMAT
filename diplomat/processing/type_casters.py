@@ -344,7 +344,11 @@ class Literal(ConvertibleTypeCaster):
         )
 
     def to_type_hint(self) -> typing.Type:
-        return typing.Literal[tuple(self._valid_objs)]
+        try:
+            return typing.Literal[tuple(self._valid_objs)]
+        except AttributeError:
+            import typing_extensions
+            return typing_extensions.Literal[tuple(self._valid_objs)]
 
     def to_metavar(self) -> str:
         return "|".join(repr(t) for t in self._valid_objs)
