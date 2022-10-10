@@ -560,8 +560,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             relaxed_radius=self.settings.relaxed_maximum_radius
         )
 
-        probs = np.transpose(poses.get_all_prob())
-
         self._video_hdl = cv2.VideoCapture(self._video_path)
 
         app = wx.App()
@@ -569,7 +567,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         self._fb_editor = FPEEditor(
             None,
             self._video_hdl,
-            probs,
             poses,
             self._get_names(),
             self.video_metadata,

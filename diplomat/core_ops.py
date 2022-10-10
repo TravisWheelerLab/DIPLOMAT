@@ -272,3 +272,22 @@ def annotate(
         videos=videos,
         **_get_casted_args(selected_frontend.label_videos, extra_args)
     )
+
+
+@allow_arbitrary_flags
+@typecaster_function
+def tweak(
+    config: PathLike,
+    videos: Optional[Union[List[PathLike], PathLike]] = None,
+    help_extra: Flag = False,
+    **extra_args
+):
+    """
+
+
+    :param config:
+    :param videos:
+    :param help_extra:
+    :param extra_args:
+    :return:
+    """

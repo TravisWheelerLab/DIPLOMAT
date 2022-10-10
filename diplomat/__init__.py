@@ -9,7 +9,7 @@ CLI_RUN = False
 from diplomat.predictor_ops import list_predictor_plugins, get_predictor_settings, test_predictor_plugin
 from diplomat.frontend_ops import list_all_frontends, list_loaded_frontends
 from diplomat.utils.video_splitter import split_videos
-from diplomat.core_ops import track, supervised, unsupervised, annotate
+from diplomat.core_ops import track, supervised, unsupervised, annotate, tweak
 
 # Attempt to load all frontends, putting their public functions into submodules of diplomat.
 def load_frontends():

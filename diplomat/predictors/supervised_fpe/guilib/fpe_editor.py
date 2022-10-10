@@ -170,7 +170,6 @@ class FPEEditor(wx.Frame):
         self,
         parent,
         video_hdl: cv2.VideoCapture,
-        data: np.ndarray,
         poses: Pose,
         names: List[str],
         plot_settings: Mapping[str, Any],
@@ -256,7 +255,7 @@ class FPEEditor(wx.Frame):
         self._plot_panel = wx.Panel(self._video_splitter)
 
         self.plot_button = wx.Button(self._plot_panel, label="Plot This Frame")
-        plot_imgs = [wx.Bitmap.FromRGBA(100, 100, 0, 0, 0, 0) for __ in data]
+        plot_imgs = [wx.Bitmap.FromRGBA(100, 100, 0, 0, 0, 0) for __ in range(poses.get_bodypart_count())]
         self.plot_list = ScrollImageList(self._plot_panel, plot_imgs, wx.VERTICAL, size=wx.Size(200, -1))
 
         self._side_sizer.Add(self.plot_button, 0, wx.ALIGN_CENTER)

@@ -18,6 +18,7 @@ def main():
         "unsupervised": diplomat.unsupervised,
         "annotate": diplomat.annotate,
         "split_videos": diplomat.split_videos,
+        "tweak": diplomat.tweak,
         "frontends": {
             "__description": "Contains subcommands for listing available frontends and inspecting the functions each frontend supports.",
             "list": {
