@@ -588,7 +588,7 @@ class FPEEditor(wx.Frame):
         elif(evt.GetId() == self._redo.GetId()):
             self._history.redo()
         elif(evt.GetId() == self._save.GetId()):
-            self.Destroy()
+            self._save_and_close()
         elif(evt.GetId() == self._run.GetId()):
             if(self._fb_runner is not None):
                 if(self._fb_runner()):
@@ -601,6 +601,9 @@ class FPEEditor(wx.Frame):
             self._move_to_poor_label(True)
         elif(evt.GetId() == self._b_frame.GetId()):
             self._move_to_poor_label(False)
+
+    def _save_and_close(self):
+        self.Destroy()
 
     def _move_to_poor_label(self, forward: bool):
         self.video_player.video_viewer.pause()

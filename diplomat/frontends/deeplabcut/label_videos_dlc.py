@@ -85,7 +85,7 @@ def label_videos(
 
     for video in video_list:
         try:
-            loc_data, metadata, out_path = _get_video_info(video, dlc_scorer)
+            loc_data, metadata, out_path, h5_path = _get_video_info(video, dlc_scorer)
 
             if(Path(out_path).exists()):
                 print(f"Labeled video {Path(video).name} already exists...")
@@ -105,18 +105,20 @@ def label_videos(
         )
 
 
-def _get_video_info(video: Pathy, dlc_scorer: str) -> Tuple[pd.DataFrame, Dict[str, Any], PathLike]:
+def _get_video_info(video: Pathy, dlc_scorer: str) -> Tuple[pd.DataFrame, Dict[str, Any], PathLike, PathLike]:
     video = Path(video)
     parent_folder = video.resolve().parent
 
-    df_data = pd.read_hdf(str(parent_folder / (video.stem + dlc_scorer + ".h5")), "df_with_missing")
+    h5_path = parent_folder / (video.stem + dlc_scorer + ".h5")
+
+    df_data = pd.read_hdf(str(h5_path), "df_with_missing")
 
     with (parent_folder / (video.stem + dlc_scorer + "_meta.pickle")).open("rb") as f:
         metadata = pickle.load(f)["data"]
 
-    final_video_path = parent_folder / (video.stem + "_labeled.mp4")
+    final_video_path = parent_folder / (video.stem + dlc_scorer + "_labeled.mp4")
 
-    return (df_data, metadata, final_video_path)
+    return (df_data, metadata, final_video_path, h5_path)
 
 def _to_cv2_color(color: Tuple[float, float, float, float]) -> Tuple[int, int, int, int]:
     r, g, b, a = [min(255, max(0, int(val * 256))) for val in color]

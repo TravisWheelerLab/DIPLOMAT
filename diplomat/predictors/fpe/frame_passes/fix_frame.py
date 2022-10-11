@@ -55,6 +55,9 @@ class FixFrame(FramePass):
 
     @classmethod
     def dist(cls, a, b):
+        if(a is None or b is None):
+            return np.inf
+
         return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
 
     @classmethod

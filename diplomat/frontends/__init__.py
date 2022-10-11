@@ -40,6 +40,7 @@ class DIPLOMATBaselineCommands:
     analyze_videos: AnalyzeVideosFunction(NoneType)
     analyze_frames: AnalyzeFramesFunction(NoneType)
     label_videos: LabelVideosFunction(NoneType)
+    tweak_videos: LabelVideosFunction(NoneType)
 
     def __post_init__(self):
         annotations = type(self).__annotations__

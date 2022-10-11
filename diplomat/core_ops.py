@@ -1,8 +1,13 @@
+import os
 import sys
 from diplomat.processing.type_casters import typecaster_function, PathLike, Union, Optional, List, Dict, Any, get_typecaster_annotations
 from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags, Flag
 from argparse import ArgumentParser
+import typing
+from types import ModuleType
+from diplomat.utils.tweak_ui import UIImportError
+
 
 def _get_casted_args(tc_func, extra_args):
     """
@@ -20,8 +25,41 @@ def _get_casted_args(tc_func, extra_args):
             new_args[k] = def_tcs[k](v)
         elif(k in extra):
             new_args[k] = extra[k][1](v) if(autocast) else v
+        else:
+            print(f"Warning: command '{tc_func.__name__}' does not have an argument called '{k}', ignoring the argument...")
 
     return new_args
+
+def _find_frontend(config: os.PathLike, **kwargs: typing.Any) -> typing.Tuple[str, ModuleType]:
+    from diplomat import _LOADED_FRONTENDS
+
+    for name, funcs in _LOADED_FRONTENDS.items():
+        if(funcs._verifier(
+            config=config,
+            **kwargs
+        )):
+            print(f"Frontend '{name}' selected.")
+            return (name, funcs)
+
+    print("Could not find a frontend that correctly handles the passed config and other arguments. Make sure the config passed is valid.")
+    sys.exit(1)
+
+def _display_help(
+    frontend_name: str,
+    method_type: str,
+    calling_command_name: str,
+    command_func: typing.Callable,
+    is_cli: bool
+):
+    if(is_cli):
+        print(f"\n\nHelp for {frontend_name}'s {method_type} command:\n")
+        func_to_command(command_func, ArgumentParser(prog=calling_command_name)).print_help()
+    else:
+        import pydoc
+        help_dumper = pydoc.Helper(output=sys.stdout, input=sys.stdin)
+
+        print(f"\n\nDocstring for {frontend_name}'s {method_type} method:\n")
+        help_dumper.help(command_func)
 
 
 @allow_arbitrary_flags
@@ -55,48 +93,21 @@ def track(
                        To see valid values, run track with extra_help flag set to true. Extra arguments that are not found in the frontend
                        analysis function are thrown out.
     """
-    from diplomat import _LOADED_FRONTENDS, CLI_RUN
+    from diplomat import CLI_RUN
 
-    selected_frontend_name = None
-    selected_frontend = None
-
-    # Iterate the frontends, looking for one that actually matches our request...
-    for name, funcs in _LOADED_FRONTENDS.items():
-        if(funcs._verifier(
-            config=config,
-            videos=videos,
-            frame_stores=frame_stores,
-            num_outputs=num_outputs,
-            predictor=predictor,
-            predictor_settings=predictor_settings,
-            **extra_args
-        )):
-            selected_frontend_name = name
-            selected_frontend = funcs
-            break
-
-    if(selected_frontend_name is None):
-        print("Could not find a frontend that correctly handles the passed config and other arguments. Make sure the config passed is valid.")
-        return
-
-    print(f"Frontend '{selected_frontend_name}' selected.")
+    selected_frontend_name, selected_frontend = _find_frontend(
+        config=config,
+        videos=videos,
+        frame_stores=frame_stores,
+        num_outputs=num_outputs,
+        predictor=predictor,
+        predictor_settings=predictor_settings,
+        **extra_args
+    )
 
     if(help_extra):
-        if(CLI_RUN):
-            print(f"Help for 'DIPLOMAT {selected_frontend_name}' frontend:")
-            print(f"\n\nHelp for video analysis command:\n\n")
-            func_to_command(selected_frontend.analyze_videos, ArgumentParser(prog="diplomat track")).print_help()
-            print(f"\n\nHelp for frame analysis command:\n\n")
-            func_to_command(selected_frontend.analyze_frames, ArgumentParser(prog="diplomat track")).print_help()
-        else:
-            import pydoc
-            help_dumper = pydoc.Helper(output=sys.stdout, input=sys.stdin)
-
-            print(f"Help for 'DIPLOMAT {selected_frontend_name}' frontend:")
-            print(f"\n\nDocstring for video analysis command:\n\n")
-            help_dumper.help(selected_frontend.analyze_videos)
-            print(f"\n\nDocstring for frame analysis command:\n\n")
-            help_dumper.help(selected_frontend.analyze_frames)
+        _display_help(selected_frontend_name, "video analysis", "diplomat track", selected_frontend.analyze_videos, CLI_RUN)
+        _display_help(selected_frontend_name, "frame analysis", "diplomat track", selected_frontend.analyze_frames, CLI_RUN)
         return
 
     if(videos is None and frame_stores is None):
@@ -126,7 +137,6 @@ def track(
             predictor_settings=predictor_settings,
             **_get_casted_args(selected_frontend.analyze_frames, extra_args)
         )
-
 
 @allow_arbitrary_flags
 @typecaster_function
@@ -226,41 +236,18 @@ def annotate(
 
     :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
     :param videos: A single path or list of paths to video files run annotation on.
-    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
+    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running video annotation.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with extra_help flag set to true. Extra arguments that are not found in the frontend
+                       To see valid values, run annotate with extra_help flag set to true. Extra arguments that are not found in the frontend
                        analysis function are thrown out.
     """
-    from diplomat import _LOADED_FRONTENDS, CLI_RUN
-
-    selected_frontend_name = None
-    selected_frontend = None
+    from diplomat import CLI_RUN
 
     # Iterate the frontends, looking for one that actually matches our request...
-    for name, funcs in _LOADED_FRONTENDS.items():
-        if(funcs._verifier(config=config, videos=videos, **extra_args)):
-            selected_frontend_name = name
-            selected_frontend = funcs
-            break
-
-    if(selected_frontend_name is None):
-        print("Could not find a frontend that correctly handles the passed config and other arguments. Make sure the config passed is valid.")
-        return
-
-    print(f"Frontend '{selected_frontend_name}' selected.")
+    selected_frontend_name, selected_frontend = _find_frontend(config=config, videos=videos, **extra_args)
 
     if(help_extra):
-        if(CLI_RUN):
-            print(f"Help for 'DIPLOMAT {selected_frontend_name}' frontend:")
-            print(f"Help for video labeling command:\n\n")
-            func_to_command(selected_frontend.label_videos, ArgumentParser(prog="diplomat annotate")).print_help()
-        else:
-            import pydoc
-            help_dumper = pydoc.Helper(output=sys.stdout, input=sys.stdin)
-
-            print(f"Help for 'DIPLOMAT {selected_frontend_name}' frontend:")
-            print(f"Docstring for video analysis command:\n\n")
-            help_dumper.help(selected_frontend.label_videos)
+        _display_help(selected_frontend_name, "video labeling", "diplomat annotate", selected_frontend.label_videos, CLI_RUN)
         return
 
     if(videos is None):
@@ -283,11 +270,33 @@ def tweak(
     **extra_args
 ):
     """
+    Make modifications to DIPLOMAT produced tracking results created for a video using a limited version supervised labeling UI. Allows for touching
+    up and fixing any minor issues that may arise after tracking and saving results.
 
-
-    :param config:
-    :param videos:
-    :param help_extra:
-    :param extra_args:
-    :return:
+    :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
+    :param videos: A single path or list of paths to video files to tweak the tracks of.
+    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of showing the UI.
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
+                       To see valid values, run tweak with extra_help flag set to true. Extra arguments that are not found in the frontend
+                       tweak function are thrown out.
     """
+    from diplomat import CLI_RUN
+
+    selected_frontend_name, selected_frontend = _find_frontend(config=config, videos=videos, **extra_args)
+
+    if(help_extra):
+        _display_help(selected_frontend_name, "label tweaking", "diplomat tweak", selected_frontend.tweak_videos, CLI_RUN)
+        return
+
+    if(videos is None):
+        print("No videos passed, terminating.")
+        return
+
+    try:
+        selected_frontend.tweak_videos(
+            config=config,
+            videos=videos,
+            **_get_casted_args(selected_frontend.tweak_videos, extra_args)
+        )
+    except UIImportError as e:
+        print(e)
