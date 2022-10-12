@@ -238,6 +238,7 @@ class SparseTrackingData:
         """
         new_sparse_data = cls()
 
+        width, height = track_data.get_frame_width(), track_data.get_frame_height()
         y, x = np.nonzero(track_data.get_prob_table(frame, bodypart) > threshold)
 
         if(len(y) == 0):
@@ -304,6 +305,14 @@ class SparseTrackingData:
                 probs = probs[ordered_coords][unique_locs]
                 x_off = x_off[ordered_coords][unique_locs]
                 y_off = y_off[ordered_coords][unique_locs]
+
+            # Remove locations that point outside the video frame...
+            in_frame = ((x < width) & (x >= 0)) & ((y < height) & (y >= 0))
+            x = x[in_frame]
+            y = y[in_frame]
+            probs = probs[in_frame]
+            x_off = x_off[in_frame]
+            y_off = y_off[in_frame]
 
         if((max_cell_count is not None) and (len(probs) > max_cell_count)):
             top_k = np.argpartition(probs, -max_cell_count)[-max_cell_count:]

@@ -98,6 +98,6 @@ def _tweak_single_video(
         bp_names,
         video_metadata,
         num_outputs,
-        cropping,
+        None if(cropping is None) else (cropping[0], cropping[2], int(cropping[1] - cropping[0]), int(cropping[3] - cropping[2])),
         on_save
     )

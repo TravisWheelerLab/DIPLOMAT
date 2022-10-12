@@ -193,7 +193,7 @@ class FPEEditor(wx.Frame):
         :param names: A list of strings, being the names of the body parts...
         :param plot_settings: The video_metadata object from the predictor plugin, includes important point and video
                               settings.
-        :param crop_box: The cropping box of the video which poses were actually predicted on.
+        :param crop_box: The cropping box of the video which poses were actually predicted on. The format is: (x, y, width, height)...
         :param w_id: The WX ID of the window. Defaults to wx.ID_ANY
         :param title: String title of the window. Defaults to "".
         :param pos: WX Position of the window. Defaults to wx.DefaultPosition.

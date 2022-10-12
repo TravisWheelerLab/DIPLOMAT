@@ -183,7 +183,7 @@ class SupervisedFramePassEngine(FramePassEngine):
 
         if(offset is not None):
             y, x = offset
-            h, w = self._frame_holder.metadata.width, self._frame_holder.metadata.height
+            w, h = self._frame_holder.metadata.width, self._frame_holder.metadata.height
             w, h = w * down_scaling, h * down_scaling
             return (int(x), int(y), int(w), int(h))
 

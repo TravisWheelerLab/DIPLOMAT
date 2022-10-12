@@ -84,7 +84,7 @@ class _DummyFramePassEngine:
         num_outputs: int, prog_bar: ProgressBar
     ):
         self._poses = poses
-        self._size = (int(crop_box[1] - crop_box[0]), int(crop_box[3] - crop_box[2]))
+        self._size = (int(crop_box[2]), int(crop_box[3]))
         self._changed_frames = {}
         self._video_meta = Config(video_meta)
         self._num_outputs = num_outputs
@@ -232,7 +232,7 @@ class TweakUI:
         :param bodypart_names: A list of strings, the names for each body part.
         :param video_metadata: Various required video info needed to set up the UI to handle the video and specify appearance settings. See
                                the video_metadata attribute of Predictors to get more information about the required attributes for this dictionary.
-        :param crop_box: A tuple of 4 integers (x0, x1, y0, y1), specifying the box to crop results to within the video.
+        :param crop_box: A tuple of 4 integers (x, y, width, height), specifying the box to crop results to within the video.
         :param on_end: A callable that is executed when the user attempts to save there results or close the window. Two arguments are passed, a
                        boolean specifying if the user wants to save the modified results (True if they do), and a Pose object containing the user
                        modified poses.
