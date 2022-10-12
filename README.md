@@ -65,6 +65,13 @@ Once tracking is done, DIPLOMAT can create labeled videos via it's `annotate` su
 diplomat annotate -c path/to/config -v path/to/video
 ```
 
+If you need to make minor modifications after tracking a video, you can do so using the tweak subcommand:
+```bash
+diplomat tweak -c path/to/config -v path/to/video
+```
+This will display a stripped down version of the supervised editing UI, allowing for minor tweaks to be made to the tracks, and then
+saved back to the same file.
+
 #### Frame Store Workflow
 
 DIPLOMAT is capable of grabbing model outputs and dumping them to a file, which can improve performance
