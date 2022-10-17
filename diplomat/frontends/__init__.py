@@ -43,7 +43,7 @@ class DIPLOMATBaselineCommands:
     tweak_videos: LabelVideosFunction(NoneType)
 
     def __post_init__(self):
-        annotations = type(self).__annotations__
+        annotations = typing.get_type_hints(type(self))
 
         for name, value in asdict(self).items():
             annot = annotations.get(name, None)
