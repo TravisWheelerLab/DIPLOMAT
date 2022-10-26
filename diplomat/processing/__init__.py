@@ -9,23 +9,13 @@ from diplomat.utils import pluginloader
 from diplomat import predictors
 
 # Imports for other stuff in this module...
-try:
-    from .predictor import Predictor, TestFunction
-    from .track_data import TrackingData
-    from .progress_bar import ProgressBar, TQDMProgressBar
-    from .pose import Pose
-    from . import type_casters
-    from .type_casters import TypeCaster
-    from .containers import Config, ConfigSpec
-except ImportError:
-    __module__ = "deeplabcut.pose_estimation_tensorflow.nnet.predictors"
-    from .predictor import Predictor, TestFunction
-    from .track_data import TrackingData
-    from .progress_bar import ProgressBar, TQDMProgressBar
-    from .pose import Pose
-    from . import type_casters
-    from .type_casters import TypeCaster
-    from .containers import Config, ConfigSpec
+from diplomat.processing.predictor import Predictor, TestFunction
+from diplomat.processing.track_data import TrackingData
+from diplomat.processing.progress_bar import ProgressBar, TQDMProgressBar
+from diplomat.processing.pose import Pose
+from diplomat.processing import type_casters
+from diplomat.processing.type_casters import TypeCaster
+from diplomat.processing.containers import Config, ConfigSpec
 
 __all__ = [
     "Predictor",
@@ -37,7 +27,9 @@ __all__ = [
     "TypeCaster",
     "Config",
     "ConfigSpec",
-    "TestFunction"
+    "TestFunction",
+    "get_predictor",
+    "get_predictor_plugins"
 ]
 
 

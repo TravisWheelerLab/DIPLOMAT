@@ -20,9 +20,17 @@ from diplomat.processing.type_casters import (
 )
 
 class CLIError(Exception):
+    """
+    A custom exception thrown when an error occurs when attempting to parse user CLI inputs. Used for handling cli parsing error
+    gracefully internally.
+    """
     pass
 
 class Flag(ConvertibleTypeCaster):
+    """
+    Custom type caster type that represents a boolean flag argument on the command line (true/false doesn't need to be specified). It's python
+    type is automatically converted to a boolean.
+    """
     def __call__(self, arg: Any) -> bool:
         return bool(arg)
 

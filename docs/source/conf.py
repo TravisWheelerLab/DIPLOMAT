@@ -2,7 +2,6 @@ from pathlib import Path
 import sys
 
 # Add project root directory to python path...
-print(str(Path(__file__).resolve().parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "ext"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
@@ -28,6 +27,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.imgmath",
+    "sphinx.ext.viewcode",
     "plugin_docgen"
 ]
 
@@ -37,8 +37,10 @@ templates_path = ['_templates']
 exclude_patterns = []
 
 autodoc_mock_imports = ["deeplabcut", "tensorflow", "pandas", "scipy"]
+
 autosummary_generate = True
 autosummary_imported_members = True
+autosummary_ignore_module_all = False
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

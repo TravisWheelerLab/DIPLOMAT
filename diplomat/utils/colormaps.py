@@ -1,7 +1,6 @@
 """
 Provides utility functions for colormap conversion and iteration.
 """
-
 import matplotlib as mpl
 import numpy as np
 from matplotlib.colors import Colormap, ListedColormap, to_rgba

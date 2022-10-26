@@ -8,6 +8,7 @@ Welcome to DIPLOMAT's documentation!
 
 .. toctree::
    :maxdepth: 2
+   :includehidden:
    :caption: Contents:
 
    api/api

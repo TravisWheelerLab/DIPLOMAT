@@ -178,7 +178,8 @@ class DLFSHeader(MutableMapping):
 
 class FrameReader(ABC):
     """
-    The frame reader API. Allows for reading frames from a deeplabcut frame store format.
+    The frame reader API. Allows for reading frames from a diplomat frame store format to :py:class:`~diplomat.processing.track_data.TrackingData`
+    object.
     """
     @abstractmethod
     def __init__(self, file: BinaryIO):
@@ -260,6 +261,10 @@ class FrameReader(ABC):
 
 
 class FrameWriter(ABC):
+    """
+    The frame writer API. Allows for writing frames in the form of :py:class:`~diplomat.processing.track_data.TrackingData` objects to a diplomat
+    frame store format.
+    """
     @abstractmethod
     def __init__(
         self,

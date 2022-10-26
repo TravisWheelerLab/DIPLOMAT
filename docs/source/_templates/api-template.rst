@@ -15,14 +15,28 @@ Core Functions
 Predictors
 ----------
 
-.. autosummary::
+.. toctree::
+    :hidden:
+
+{diplomat.files.predictors}
+
+
+.. list-table::
+    :widths: auto
 
 {diplomat.predictors}
 
 Frame Passes
 ------------
 
-.. autosummary::
+.. toctree::
+    :hidden:
+
+{diplomat.files.frame_passes}
+
+
+.. list-table::
+    :widths: auto
 
 {diplomat.frame_passes}
 
@@ -34,7 +48,7 @@ Processing Module
     :template: custom-module-template.rst
     :recursive:
 
-    ~diplomat.processing
+    diplomat.processing
 
 Utilities
 ---------
@@ -44,4 +58,4 @@ Utilities
     :template: custom-module-template.rst
     :recursive:
 
-    ~diplomat.utils
+    diplomat.utils

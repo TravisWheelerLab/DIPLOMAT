@@ -40,7 +40,11 @@ class TypeCaster(Protocol[T]):
 
 
 class TypeCasterFunction(Protocol):
+    """
+    Protocol for representing a type caster function.
+    """
     _type_casters: typing.Dict[str, TypeCaster]
+    __type_caster_kwd_name: typing.Optional[str]
 
     def __call__(self, *args, **kwargs) -> typing.Any:
         pass
@@ -54,14 +58,35 @@ class ConvertibleTypeCaster(TypeCaster):
     for handling non-trivial type hinting types (such as Union, Dict, List, etc.)
     """
     def __class_getitem__(cls, item):
+        """
+        Construct this type caster using dictionary style construction.
+
+        :param item: The arguments, can be a tuple.
+
+        :return: A ConvertibleTypeCaster with the passed arguments passed to its constructor.
+        """
         if(not isinstance(item, tuple)):
             item = (item,)
         return cls(*item)
 
     def __call__(self, arg: typing.Any) -> T:
+        """
+        Must be implemented by subclasses. Cast a value to this type.
+
+        :param arg: The value to be casted.
+
+        :return: The converted value, correctly converted to this type.
+
+        :raises ValueError: If the passed value can't be properly converted to this type.
+        """
         raise NotImplementedError()
 
     def to_metavar(self) -> str:
+        """
+        Convert this type to a CLI-Friendly format for display on the command line as a metavar.
+
+        :return: A string, the CLI Friendly format for this type.
+        """
         return repr(self).upper()
 
     def to_type_hint(self) -> typing.Type:
@@ -72,6 +97,12 @@ class ConvertibleTypeCaster(TypeCaster):
                  this typecaster converts values to and represents.
         """
         raise NotImplementedError()
+
+
+class SingletonConvertibleTypeCaster(ConvertibleTypeCaster):
+    def __init__(self):
+        super().__init__()
+        self.__doc__ = type(self).__doc__
 
 
 def get_type_name(caster: TypeCaster) -> str:
@@ -93,12 +124,12 @@ def typecaster_function(func: typing.Callable) -> TypeCasterFunction:
     """
     Turns a function annotated with typecaster objects into a regular function
     with normal type annotations. The original typecaster annotations can be
-    retrieved using the get_typecaster_annotations in this same module.
+    retrieved using :py:func:`~diplomat.processing.type_casters.get_typecaster_annotations`.
 
     :param func: The function to manipulate the typecaster based annotations of.
 
     :return: The original function with modified annotations and additional functionality for
-             extracting the original type casters...
+             extracting the original type caster types...
     """
     if(hasattr(func, "__wrapped__")):
         raise TypeError("Can only typecaster annotate unwrapped functions, put this decorator first.")
@@ -139,6 +170,14 @@ def typecaster_function(func: typing.Callable) -> TypeCasterFunction:
 
 
 def get_typecaster_annotations(func: TypeCasterFunction) -> typing.Dict[str, TypeCaster]:
+    """
+    Get the type casting annotations of a type caster function. This can be used for sanitizing command line arguments before passing them to this
+    function.
+
+    :param func: The type caster function to extract arguments from.
+
+    :return: A dictionary of argument names to type caster types, describing the types of this type caster function.
+    """
     res = getattr(func, "_type_casters", None)
 
     if(res is None):
@@ -147,9 +186,23 @@ def get_typecaster_annotations(func: TypeCasterFunction) -> typing.Dict[str, Typ
     return res
 
 def get_typecaster_kwd_arg_name(func: TypeCasterFunction) -> typing.Optional[str]:
+    """
+    Get the name of the wildcard keyword argument for this type caster function if it exists.
+
+    :param func: The type caster function to extract the keyword argument name of.
+
+    :return: The name of the keyword argument, or None if this function has no wild keyword argument (**kwargs).
+    """
     return getattr(func, "_type_caster_kwd_name", None)
 
 def to_hint(t: TypeCaster) -> typing.Type:
+    """
+    Convert a type caster to a python type hint.
+
+    :param t: The type caster hint to convert.
+
+    :return: A type, repressing the underlying type this type caster represents.
+    """
     if(isinstance(t, ConvertibleTypeCaster)):
         return t.to_type_hint()
     if(isinstance(t, type)):
@@ -157,13 +210,23 @@ def to_hint(t: TypeCaster) -> typing.Type:
     raise ValueError(f"Unable to convert '{t}' to a python type hint!")
 
 def to_metavar(t: TypeCaster) -> str:
+    """
+    Convert a type caster to a command line meta-variable string.
+
+    :param t: The type caster.
+
+    :return: A string representing the type on the command line.
+    """
     if(isinstance(t, ConvertibleTypeCaster)):
         return t.to_metavar()
     else:
         return get_type_name(t).upper()
 
 
-class Any(ConvertibleTypeCaster):
+class Any(SingletonConvertibleTypeCaster):
+    """
+    A type caster representing typing.Any. Passes all types through with no conversion.
+    """
     def __call__(self, param: typing.Any) -> typing.Any:
         return param
 
@@ -176,10 +239,22 @@ class Any(ConvertibleTypeCaster):
     def to_type_hint(self) -> typing.Type:
         return typing.Any
 
-Any = Any()
+
+Any: ConvertibleTypeCaster = Any()
+"""A type caster representing typing.Any. Passes all types through with no conversion."""
+
 
 class RangedInteger(ConvertibleTypeCaster):
+    """
+    Represents an integer with a restricted range of values it can take on.
+    """
     def __init__(self, minimum: float, maximum: float):
+        """
+        Create a ranged integer type.
+
+        :param minimum: The minimum allowed value of this integer, a float, inclusive.
+        :param maximum: The maximum allowed value of this type, a float, inclusive.
+        """
         self._min = float(minimum)
         self._max = float(maximum)
 
@@ -291,6 +366,9 @@ class List(ConvertibleTypeCaster):
 
 
 class Tuple(ConvertibleTypeCaster):
+    """
+    Represents a fixed length tuple of types.
+    """
     def __init__(self, *type_list: TypeCaster):
         self._valid_type_list = type_list
 
@@ -304,7 +382,7 @@ class Tuple(ConvertibleTypeCaster):
         for param, v_type in zip(params, self._valid_type_list):
             try:
                  vals.append(v_type(param))
-            except (TypeError, ValueError) as e:
+            except (TypeError, ValueError):
                 raise ValueError(
                     f"Value: '{param}' is not of type:\n{v_type}"
                 )
@@ -330,6 +408,9 @@ class Tuple(ConvertibleTypeCaster):
 
 
 class Literal(ConvertibleTypeCaster):
+    """
+    Represents the typing.Literal type as a type caster.
+    """
     def __init__(self, *objects: typing.Any):
         self._valid_objs = list(objects)
 
@@ -365,7 +446,10 @@ class Literal(ConvertibleTypeCaster):
         return f"{type(self).__name__}{self._valid_objs}"
 
 
-class NoneType(ConvertibleTypeCaster):
+class NoneType(SingletonConvertibleTypeCaster):
+    """
+    Represents None as a type caster.
+    """
     def __call__(self, param: typing.Any) -> None:
         if(param is not None):
             raise ValueError("Value passed was not None!")
@@ -377,10 +461,13 @@ class NoneType(ConvertibleTypeCaster):
     def __repr__(self) -> str:
         return "None"
 
-NoneType = NoneType()
-
+NoneType: ConvertibleTypeCaster = NoneType()
+"""Represents None as a type caster."""
 
 class Union(ConvertibleTypeCaster):
+    """
+    Represents the typing.Union type as a type caster.
+    """
     def __init__(self, *types: TypeCaster):
         self._valid_types = types
 
@@ -388,7 +475,7 @@ class Union(ConvertibleTypeCaster):
         for t in self._valid_types:
             try:
                 return t(param)
-            except (TypeError, ValueError) as e:
+            except (TypeError, ValueError):
                 continue
 
         raise ValueError(
@@ -415,6 +502,9 @@ class Union(ConvertibleTypeCaster):
 
 
 class Optional(Union):
+    """
+    Represents typing.Optional as a type caster.
+    """
     def __init__(self, t: TypeCaster):
         super().__init__(NoneType, t)
 
@@ -429,6 +519,9 @@ class Optional(Union):
 
 
 class RoundedDecimal(ConvertibleTypeCaster):
+    """
+    Represents a decimal rounded to a fixed precision.
+    """
     def __init__(self, precision: int = 5):
         self._precision = precision
 
@@ -456,6 +549,9 @@ class RoundedDecimal(ConvertibleTypeCaster):
 
 
 class Dict(ConvertibleTypeCaster):
+    """
+    Represents typing.Dict as a type caster
+    """
     def __init__(self, key: TypeCaster, value: TypeCaster):
         self._key = key
         self._value = value
@@ -484,6 +580,9 @@ class Dict(ConvertibleTypeCaster):
 
 
 class StrictCallable(ConvertibleTypeCaster):
+    """
+    A type caster that can be used to run strict argument name and type checking on type casting functions. Useful for API conformance checks.
+    """
     def __init__(self, *, _return: TypeCaster = NoneType, _kwargs: bool = False, **kwargs: TypeCaster):
         self._return_type = _return
         self._required_args = kwargs
@@ -525,12 +624,18 @@ class StrictCallable(ConvertibleTypeCaster):
         return f"{type(self).__name__}({', '.join(k + ': ' + get_type_name(v) for k, v in self._required_args.items())})"
 
 
-class PathLike(Union):
+class PathLike(Union, SingletonConvertibleTypeCaster):
+    """
+    Represents os.PathLike as a type caster.
+    """
     def __init__(self):
         super().__init__(Path, str)
 
     def __call__(self, arg: typing.Any) -> Path:
         return Path(arg)
+
+    def __repr__(self):
+        return type(self).__name__
 
     def to_metavar(self) -> str:
         return "FILE"
@@ -538,4 +643,5 @@ class PathLike(Union):
     def to_type_hint(self) -> typing.Type:
         return Union[os.PathLike, str]
 
-PathLike = PathLike()
+PathLike: ConvertibleTypeCaster = PathLike()
+"""Represents os.PathLike as a type caster."""

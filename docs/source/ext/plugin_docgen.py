@@ -109,7 +109,7 @@ def document_predictor_plugins(path: Path) -> list:
 
     for plugin in load_plugin_classes(predictors, Predictor):
         dest = path / ("diplomat.predictors." + plugin.get_name() + ".rst")
-        api_list.append("diplomat.predictors." + plugin.get_name())
+        api_list.append(("diplomat.predictors." + plugin.get_name(), plugin.get_description()))
         dest.parent.mkdir(exist_ok=True)
 
         print(f"\tWriting {dest.name}...")
@@ -124,8 +124,10 @@ def document_frame_pass_plugins(path: Path) -> list:
     api_list = []
 
     for plugin in load_plugin_classes(frame_passes, FramePass):
+        doc_str = plugin.__doc__
+
         dest = path / ("diplomat.predictors.frame_passes." + plugin.get_name() + ".rst")
-        api_list.append("diplomat.predictors.frame_passes." + plugin.get_name())
+        api_list.append(("diplomat.predictors.frame_passes." + plugin.get_name(), doc_str if(doc_str is not None) else ""))
         dest.parent.mkdir(exist_ok=True)
 
         print(f"\tWriting {dest.name}...")
@@ -143,9 +145,57 @@ PLUGINS = {
 
 EXTRA = {
     "core": diplomat,
-    "utils": diplomat.utils,
-    "processing": diplomat.processing
 }
+
+FIX_ALL = {
+    diplomat.utils,
+    diplomat.processing
+}
+
+def fix_all_on_module(module):
+    from types import ModuleType, FunctionType
+    import pkgutil
+
+    if(hasattr(module, "__path__")):
+        path = list(iter(module.__path__))[0]
+
+        for importer, name, ispkg in pkgutil.iter_modules([path], module.__name__ + "."):
+            attr_name = name.split(".")[-1]
+
+            if(attr_name.startswith("_")):
+                continue
+
+            try:
+                setattr(module, attr_name, importer.find_module(name).load_module(name))
+                val = getattr(module, attr_name)
+                fix_all_on_module(val)
+            except:
+                raise
+
+    all_attr = getattr(module, "__all__", None)
+    if(not (all_attr is None or len(all_attr) == 0)):
+        return
+
+    module.__all__ = []
+
+    for attr_name in dir(module):
+        if(attr_name.startswith("_")):
+            continue
+
+        try:
+            val = getattr(module, attr_name)
+
+            if(isinstance(val, ModuleType) and val.__name__.startswith(module.__name__)):
+                module.__all__.append(attr_name)
+            elif(isinstance(val, (type, FunctionType)) and val.__module__.startswith(module.__name__)):
+                module.__all__.append(attr_name)
+            elif(isinstance(val, object) and type(val).__module__.startswith(module.__name__)):
+                module.__all__.append(attr_name)
+        except:
+            pass
+
+    print(f"New all for {module}: {module.__all__}")
+
 
 def write_api_rst(api_dir: Path, document_lists: AttributeDict) -> None:
     with (api_dir / "api.rst").open("w") as f:
@@ -159,14 +209,21 @@ def on_config_init(app: Sphinx, config: Config) -> None:
     build_dir.mkdir(parents=True, exist_ok=True)
 
     document_lists = AttributeDict()
+    document_lists.files = AttributeDict()
 
     for name, documenter in PLUGINS.items():
         print(f"Documenting {name}...")
         file_list = documenter(build_dir)
-        document_lists[name] = "\n".join(f"    ~{f}" for f in file_list)
+        document_lists[name] = "\n".join(
+            f"    * - :doc:`{file.split('.')[-1]} <_autosummary/{file}>`\n"
+            f"      - {doc}" for file, doc in file_list
+        )
+
+        document_lists.files[name] = "\n".join(f"    _autosummary/{file}" for file, doc in file_list)
+
 
     for name, module in EXTRA.items():
-        listing = getattr(module, "__all__", dir(module)) if(name == "core") else dir(module)
+        listing = getattr(module, "__all__", dir(module))
         document_lists[name] = "\n".join(
             f"    ~{getattr(getattr(module, sub_item), '__module__', module.__name__)}.{sub_item}"
             for sub_item in listing if(not sub_item.startswith("_"))
@@ -177,6 +234,8 @@ def on_config_init(app: Sphinx, config: Config) -> None:
 
 def setup(app: Sphinx) -> dict:
     app.connect("config-inited", on_config_init)
+    for module in FIX_ALL:
+        fix_all_on_module(module)
 
     return {
         "version": "0.0.1"
