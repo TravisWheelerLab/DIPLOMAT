@@ -1,3 +1,7 @@
+"""
+Provides the config container implementation, used for storing configuration parameters.
+"""
+
 from collections import UserDict
 from typing import TypeVar, Dict, Tuple, Any, Mapping
 from diplomat.processing.type_casters import TypeCaster

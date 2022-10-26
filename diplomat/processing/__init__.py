@@ -1,7 +1,6 @@
 """
-Contains Abstract Base Class for all predictor plugins, which when provided probability frames from the neural net,
-figure out where the points should be in the image. They are executed when deeplabcut.analyze_videos is run with
-"predictor" argument set to a valid plugin name...
+This module defines the abstract base class for predictor plugins, and additional data structures, classes, and functions used for
+processing network outputs into body part pose predictions.
 """
 # Used for type hints
 from typing import Type, Set

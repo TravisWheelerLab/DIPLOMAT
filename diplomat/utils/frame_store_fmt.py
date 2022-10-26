@@ -1,75 +1,77 @@
 """
 Contains 2 Utility Classes for reading and writing the DeepLabCut Frame Store format. The format allows for processing
 videos using DeepLabCut and then running predictions on the probability map data later. Below is a specification for
-the DeepLabCut Frame Store format...
+the DeepLabCut Frame Store format.
 
-DIPLOMAT FRAME STORE BINARY FORMAT: (All multi-byte fields are in little-endian format)
-['DLFS'] -> DipLomat (or Deep Learning) Frame Store - 4 Bytes (file magic)
+::
 
-Header:
-	['DLFH'] -> Diplomat Header
-	[num_frames] - the number of frames. 8 Bytes (long unsigned integer)
-	[num_bp] - number of bodyparts contained per frame. 4 Bytes (unsigned integer)
-    [frame_height] - The height of a frame. 4 Bytes (unsigned integer)
-	[frame_width] - The width of a frame. 4 Bytes (unsigned integer)
-	[frame_rate] - The frame rate, in frames per second. 8 Bytes (double float).
-	[stride] - The original video upscaling multiplier relative to current frame size. 4 Bytes (unsigned integer)
-	[orig_video_height] - The original video height. 4 Bytes (unsigned integer)
-	[orig_video_width] - The original video width. 4 Bytes (unsigned integer)
-	[crop_y1] - The y offset of the cropped box, set to max value to indicate no cropping... 4 Bytes (unsigned integer)
-	[crop_x1] - The x offset of the cropped box, set to max value to indicate no cropping... 4 Bytes (unsigned integer)
+    DIPLOMAT FRAME STORE BINARY FORMAT (All multi-byte fields are in little-endian format)
+    ['DLFS'] -> DipLomat (or Deep Learning) Frame Store - 4 Bytes (file magic)
 
-Bodypart Names:
-    ['DBPN'] -> Diplomat Body Part Names
-    (num_bp entries):
-        [bp_len] - The length of the name of the bodypart. 2 Bytes (unsigned short)
-        [DATA of length bp_len] - UTF8 Encoded name of the bodypart.
+    Header:
+        ['DLFH'] -> Diplomat Header
+        [num_frames] - the number of frames. 8 Bytes (long unsigned integer)
+        [num_bp] - number of bodyparts contained per frame. 4 Bytes (unsigned integer)
+        [frame_height] - The height of a frame. 4 Bytes (unsigned integer)
+        [frame_width] - The width of a frame. 4 Bytes (unsigned integer)
+        [frame_rate] - The frame rate, in frames per second. 8 Bytes (double float).
+        [stride] - The original video upscaling multiplier relative to current frame size. 4 Bytes (unsigned integer)
+        [orig_video_height] - The original video height. 4 Bytes (unsigned integer)
+        [orig_video_width] - The original video width. 4 Bytes (unsigned integer)
+        [crop_y1] - The y offset of the cropped box, set to max value to indicate no cropping... 4 Bytes (unsigned integer)
+        [crop_x1] - The x offset of the cropped box, set to max value to indicate no cropping... 4 Bytes (unsigned integer)
 
-Frame Lookup Chunk:
-    ['FLUP'] -> Frame LookUP
-    (num_frames entries):
-        [frame_offset_ptr] -> The offset of frame i into the FDAT chunk, excluding the chunk signature. 8 Bytes (unsigned long)
+    Bodypart Names:
+        ['DBPN'] -> Diplomat Body Part Names
+        (num_bp entries):
+            [bp_len] - The length of the name of the bodypart. 2 Bytes (unsigned short)
+            [DATA of length bp_len] - UTF8 Encoded name of the bodypart.
 
-Frame data block:
-	['FDAT'] -> Frame DATa
-	Now the data (num_frames entries):
-	    Each sub-frame entry (num_bp entries):
+    Frame Lookup Chunk:
+        ['FLUP'] -> Frame LookUP
+        (num_frames entries):
+            [frame_offset_ptr] -> The offset of frame i into the FDAT chunk, excluding the chunk signature. 8 Bytes (unsigned long)
 
-            Single Byte: 000000[offsets_included][sparse_fmt]:
-                [sparse_fmt]- Single bit, whether we are using the sparse format. See difference in storage below:
-                [offsets_included] - Single bit, whether we have offset data included. See difference in storage below:
-            [data_length] - The length of the compressed/uncompressed frame data, 8 Bytes (long unsigned integer)
+    Frame data block:
+        ['FDAT'] -> Frame DATa
+        Now the data (num_frames entries):
+            Each sub-frame entry (num_bp entries):
 
-            DATA (The below is compressed in the zlib format and must be uncompressed first). Based on 'sparse_fmt' flag:
+                Single Byte: 000000[offsets_included][sparse_fmt]:
+                    [sparse_fmt]- Single bit, whether we are using the sparse format. See difference in storage below:
+                    [offsets_included] - Single bit, whether we have offset data included. See difference in storage below:
+                [data_length] - The length of the compressed/uncompressed frame data, 8 Bytes (long unsigned integer)
 
-                If it is false, frames are stored as 4 byte float arrays, row-by-row, as below (x, y order below):
-                    prob(1, 1), prob(2, 1), prob(3, 1), ....., prob(x, 1)
-                    prob(1, 2), prob(2, 2), prob(3, 2), ....., prob(x, 2)
-                    .....................................................
-                    prob(1, y), prob(2, y), prob(3, y), ....., prob(x, y)
-                Length of the above data will be frame height * frame width...
-                if [offsets_included] == 1:
-                    Then 2 more maps equivalent to the above store the offset within the map when converting back
-                    to video:
-                        off_y(1, 1), off_y(2, 1), off_y(3, 1), ....., off_y(x, 1)
-                        off_y(1, 2), off_y(2, 2), off_y(3, 2), ....., off_y(x, 2)
-                        .........................................................
-                        off_y(1, y), off_y(2, y), off_y(3, y), ....., off_y(x, y)
+                DATA (The below is compressed in the zlib format and must be uncompressed first). Based on 'sparse_fmt' flag:
 
-                        off_x(1, 1), off_x(2, 1), off_x(3, 1), ....., off_x(x, 1)
-                        off_x(1, 2), off_x(2, 2), off_x(3, 2), ....., off_x(x, 2)
-                        .........................................................
-                        off_x(1, y), off_x(2, y), off_x(3, y), ....., off_x(x, y)
-                Otherwise frames are stored in the format below.
-
-                Sparse Frame Format (num_bp entries):
-                    [num_entries] - Number of sparse entries in the frame, 8 bytes, unsigned integer.
-                    [arr y] - list of 4 byte unsigned integers of length num_entries. Stores y coordinates of probabilities.
-                    [arr x] - list of 4 byte unsigned integers of length num_entries. Stores x coordinates of probabilities.
-                    [probs] - list of 4 byte floats, Stores probabilities specified at x and y coordinates above.
+                    If it is false, frames are stored as 4 byte float arrays, row-by-row, as below (x, y order below):
+                        prob(1, 1), prob(2, 1), prob(3, 1), ....., prob(x, 1)
+                        prob(1, 2), prob(2, 2), prob(3, 2), ....., prob(x, 2)
+                        .....................................................
+                        prob(1, y), prob(2, y), prob(3, y), ....., prob(x, y)
+                    Length of the above data will be frame height * frame width...
                     if [offsets_included] == 1:
-                        [off y] - list of 4 byte floats, stores y offset within the block of pixels.
-                        [off x] - list of 4 byte floats, stores x offset within the block of pixels.
+                        Then 2 more maps equivalent to the above store the offset within the map when converting back
+                        to video:
+                            off_y(1, 1), off_y(2, 1), off_y(3, 1), ....., off_y(x, 1)
+                            off_y(1, 2), off_y(2, 2), off_y(3, 2), ....., off_y(x, 2)
+                            .........................................................
+                            off_y(1, y), off_y(2, y), off_y(3, y), ....., off_y(x, y)
+
+                            off_x(1, 1), off_x(2, 1), off_x(3, 1), ....., off_x(x, 1)
+                            off_x(1, 2), off_x(2, 2), off_x(3, 2), ....., off_x(x, 2)
+                            .........................................................
+                            off_x(1, y), off_x(2, y), off_x(3, y), ....., off_x(x, y)
+                    Otherwise frames are stored in the format below.
+
+                    Sparse Frame Format (num_bp entries):
+                        [num_entries] - Number of sparse entries in the frame, 8 bytes, unsigned integer.
+                        [arr y] - list of 4 byte unsigned integers of length num_entries. Stores y coordinates of probabilities.
+                        [arr x] - list of 4 byte unsigned integers of length num_entries. Stores x coordinates of probabilities.
+                        [probs] - list of 4 byte floats, Stores probabilities specified at x and y coordinates above.
+                        if [offsets_included] == 1:
+                            [off y] - list of 4 byte floats, stores y offset within the block of pixels.
+                            [off x] - list of 4 byte floats, stores x offset within the block of pixels.
 """
 from io import BytesIO
 from typing import Tuple

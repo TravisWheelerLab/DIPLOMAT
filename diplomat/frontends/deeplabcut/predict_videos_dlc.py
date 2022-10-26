@@ -2,12 +2,8 @@ import time
 from typing import List, Dict, Any, Type, Tuple, Optional, Union, Callable
 
 import cv2
-import pandas as pd
 import numpy as np
-import tensorflow as tf
 import os
-from tqdm import tqdm
-from skimage import img_as_ubyte
 from diplomat.processing import *
 from diplomat import processing
 from diplomat.utils import video_info
@@ -17,6 +13,10 @@ from diplomat.utils.shapes import shape_iterator
 
 # DLC Imports
 from .dlc_importer import predict, checkcropping, load_config, auxiliaryfunctions
+import tensorflow as tf
+from tqdm import tqdm
+import pandas as pd
+
 
 Pathy = Union[os.PathLike, str]
 
@@ -385,12 +385,11 @@ def _get_video_batch(cap: cv2.VideoCapture, batch_size: int, cfg: Dict[str, Any]
         # If we got an actual frame, store it in the frame store.
         if ret_val:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
             if cfg["cropping"]:
-                frame_store[current_frame] = img_as_ubyte(
-                    frame[cfg["y1"] : cfg["y2"], cfg["x1"] : cfg["x2"]]
-                )
+                frame_store[current_frame] = frame[cfg["y1"] : cfg["y2"], cfg["x1"] : cfg["x2"]]
             else:
-                frame_store[current_frame] = img_as_ubyte(frame)
+                frame_store[current_frame] = frame
         else:
             # If we don't we have reached the end most likely.
             return current_frame

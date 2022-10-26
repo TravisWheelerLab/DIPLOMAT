@@ -1,3 +1,7 @@
+"""
+Provides functions for turning typecaster annotated functions into CLI commands.
+"""
+
 from argparse import ArgumentParser, Namespace, HelpFormatter, Action, ONE_OR_MORE
 from typing import Callable, Any, Tuple, List, Dict, Optional, Type
 import inspect

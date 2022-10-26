@@ -1,5 +1,5 @@
 from typing import Tuple, Optional, List
-
+from diplomat.utils._bit_or import _bit_or
 import wx
 
 Opt = Optional
@@ -34,7 +34,7 @@ class HelpDialog(wx.Dialog):
 
     def __init__(self, parent, entries: List[Tuple[wx.Bitmap, Opt[Tuple[int, int]], str]], image_sizes: Tuple[int, int],
                  wid=wx.ID_ANY, title="Help", pos=wx.DefaultPosition, size=wx.DefaultSize,
-                 style=wx.DEFAULT_DIALOG_STYLE, name="helpDialog"):
+                 style=_bit_or(wx.DEFAULT_DIALOG_STYLE, wx.RESIZE_BORDER), name="helpDialog"):
         """
         Construct a new help dialog.
 

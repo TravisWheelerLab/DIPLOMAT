@@ -1,3 +1,7 @@
+"""
+Provides utility functions for quickly extracting frames from diplomat frame store files, and also printing frame data to the terminal
+for debugging and display purposes.
+"""
 from typing import BinaryIO, Sequence, Callable, Optional, Generator, Union, Tuple, NamedTuple
 from diplomat.processing import TrackingData
 from diplomat.utils import frame_store_fmt, h5_frame_store_fmt
@@ -16,7 +20,7 @@ def extract_frames(
     on_frames: Optional[Callable[[TrackingData], None]] = None
 ):
     """
-    Extract frames from a DIPLOMAT Framestore and Store them in another framestore.
+    Extract frames from a DIPLOMAT frame store and store them in another frame store.
 
     :param dlfs_in: A binary file, the input DeepLabCut frame store file. Frames will be extracted from this file.
     :param dlfs_out: A binary file, the file to write a DeepLabCut frame store to. This will contain the extracted
@@ -54,7 +58,14 @@ def extract_frames(
     file_reader.close()
 
 
-def get_terminal_size(fallback = (80, 24)):
+def get_terminal_size(fallback: Tuple[int, int] = (80, 24)):
+    """
+    Get the size of the terminal.
+
+    :param fallback: The fallback size to use if one can't be found.
+
+    :return: A tuple of two ints, the size of the terminal in characters and lines.
+    """
     import os
 
     for file_desc in range(3):
@@ -82,7 +93,7 @@ class BorderStyle(NamedTuple):
 
 class FrameStringFormats:
     """
-    Some pre-provided string format fonts...
+    Some pre-provided frame string format fonts, used to style frames when dumping them to the console.
     """
     REGULAR = (" ░▒▓█", 2, BorderStyle("╔", "╗", "╝", "╚", "═", "║", "═", "║"))
     REGULAR_COMPACT = (" ░▒▓█", 1, BorderStyle("╔", "╗", "╝", "╚", "═", "║", "═", "║"))
@@ -109,12 +120,12 @@ def pretty_print_frame(
     :param body_part: Body part index to print, defaults to 0.
     :param dynamic_sz: Determines if the frame is resized to fit the window if it is to big....
     :param size_up: Determines if the frame should not only be downsized, but also upsized if the terminal provides
-                    extra room...
+                    extra room.
     :param interpol: The interpolation method if a size is specified. Defaults to cv2.INTER_CUBIC, but any cv2
                      interpolation value works.
     :param format_type: The format or 'font' to use for the pretty printed string. A tuple, containing a sequence of
-                    strings being the displayed characters at given magnitudes, and an integer being the number
-                    of times to repeat the characters when displaying them. ('abcd', 2 with 0 becomes aa)
+                        strings being the displayed characters at given magnitudes, and an integer being the number
+                        of times to repeat the characters when displaying them. ('abcd', 2 with 0 becomes aa)
     """
     if(dynamic_sz):
         print(pretty_frame_string(data, frame_idx, body_part, get_terminal_size()[0], size_up, interpol, format_type))

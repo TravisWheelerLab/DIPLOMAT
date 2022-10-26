@@ -1,3 +1,7 @@
+"""
+Provides the :py:class:`~diplomat.processing.track_data.TrackingData` class, used for storing model outputs and passing them to predictors.
+"""
+
 from typing import Optional, Tuple, Union, Sequence
 import numpy as np
 from numpy import ndarray

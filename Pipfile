@@ -4,12 +4,15 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+attrdict="*"
+opencv-python = "*"
+matplotlib = "*"
+typing_extensions = ">=3.8"
+wxpython = "==4.1.1"  # Because wxPython install doesn't work for newer versions...
 deeplabcut = ">=2.2.0.6"
-opencv-python = ""
-matplotlib = ""
-wxpython = ""
+
 
 [dev-packages]
 
 [requires]
-python_version = "3.8"
+python_version = ">=3.7"

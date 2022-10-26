@@ -36,7 +36,7 @@ bgr_color = type_casters.Tuple(
 
 class FastPlotterArgMax(Predictor):
     """
-    Identical to plotterargmax, but avoids using matplotlib to generate probability maps, and instead
+    Identical to :class:`~diplomat.predictors.frame_stores.PlotterArgMax`, but avoids using matplotlib to generate probability maps, and instead
     directly uses cv2 to generate the plots. This means it runs much faster, but doesn't offer as much
     customization nor a 3D mode...
     """

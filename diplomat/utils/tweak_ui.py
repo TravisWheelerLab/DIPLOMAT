@@ -1,3 +1,8 @@
+"""
+Contains utilities for loading user tracks into a lighter version of the supervised UI to allow for minor modifications
+to user saved tracking data.
+"""
+
 import os
 from typing import List, Any, Dict, Optional, Tuple, MutableMapping, Sequence, Union, Callable
 import cv2
@@ -8,6 +13,10 @@ from diplomat.processing import Pose, Config, ProgressBar
 
 
 class UIImportError(ImportError):
+    """
+    This error is thrown when TweakUI is unable to import the required UI toolkit packages, it typically indicates
+    the user has installed DIPLOMAT without GUI support and so UI packages are missing.
+    """
     pass
 
 class _DummySubPoseList(Sequence[ForwardBackwardFrame]):
@@ -144,12 +153,20 @@ class _DummyFramePassEngine:
         return SegmentedFramePassEngine.get_maximum(frame, 0)
 
 
-def simplify_editor_class(wx, editor_class):
+def _simplify_editor_class(wx, editor_class):
     class SimplifiedEditor(editor_class):
         def __init__(self, do_save, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self._toolbar.RemoveTool(self._run.GetId())
             self._toolbar.RemoveTool(self._export_btn.GetId())
+
+            idx = self._tools.index(self._run)
+            del self._tools[idx]
+            del self._bitmaps[idx]
+            idx2 = self._tools.index(self._export_btn)
+            del self._tools[idx2]
+            del self._bitmaps[idx2]
+
             self._video_splitter.Unsplit(self._plot_panel)
             self.Bind(wx.EVT_CLOSE, self.on_close)
             self._was_save = False
@@ -187,17 +204,22 @@ def simplify_editor_class(wx, editor_class):
 
 
 class TweakUI:
+    """
+    The tweak UI manager. Provides a functionality for creating a UI for modifying user tracks. Should be used by frontends to implementing
+    DIPLOMAT's tweak command functionality.
+    """
     def __init__(self):
         """
-        Create a tweak ui manager, which can be used to make modifications to user tracks passed to it. The initialization of this class can throw
-        a UIImportError, if it is unable to import needed packages for creating a UI.
+        Create a tweak UI manager, which can be used to make modifications to user tracks passed to it.
+
+        :raises UIImportError: If the UI manager it is unable to import needed packages for creating a UI.
         """
         try:
             import wx
             self._wx = wx
             from diplomat.predictors.supervised_fpe.guilib.fpe_editor import FPEEditor
             from diplomat.predictors.supervised_fpe.guilib.progress_dialog import FBProgressDialog
-            self._editor_class = simplify_editor_class(wx, FPEEditor)
+            self._editor_class = _simplify_editor_class(wx, FPEEditor)
             self._progress_dialog_cls = FBProgressDialog
 
             from diplomat.predictors.supervised_fpe.labelers import Point
@@ -224,7 +246,7 @@ class TweakUI:
         make_app: bool = True
     ):
         """
-        Load a lighter version of the supervised UI to allow for minor modification to user saved tracking data.
+        Load a lighter version of the supervised UI to allow for minor modifications to user saved tracking data.
 
         :param parent: The parent wx widget of the UI. Can be None, indicating no parent widget, or an independent window.
         :param video_path: The path to the video to display in the editor.

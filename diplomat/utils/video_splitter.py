@@ -1,4 +1,7 @@
-from typing import Union, Sequence, Tuple, List, Optional, Iterable
+"""
+Provides a function for splitting videos into consecutive chunks at provided intervals or at exact locations.
+"""
+from typing import Union, Tuple, List, Optional, Iterable
 
 import diplomat.processing.type_casters as tc
 from diplomat.utils.pretty_printer import printer
@@ -25,7 +28,7 @@ def split_videos(
     original video name in the same directory as the original video.
 
     :param videos: Either a single path-like object (string or Path) or a list of path-like objects, being the
-                       paths to the videos to split into several segments.
+                   paths to the videos to split into several segments.
     :param seconds_per_segment: An integer or a list of integers. If a single integer, represents the length of each
                                 split segment in seconds (Ex. if 30, split the clip every 30 seconds). If a list of
                                 integers, represents the locations to split the video at in seconds. The list can be

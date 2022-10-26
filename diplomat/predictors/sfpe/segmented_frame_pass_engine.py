@@ -1180,7 +1180,7 @@ class SegmentedFramePassEngine(Predictor):
             desc_lst.append(f"\tPass '{fp.get_name()}' Settings: [[[")
             options = fp.get_config_options()
             if(options is None):
-                desc_lst.append("\t\tNo settings available...")
+                desc_lst.append("\t\tNo settings available.")
             else:
                 for name, (def_val, caster, desc) in options.items():
                     desc_lst.append(f"\t\tSetting Name: '{name}':")

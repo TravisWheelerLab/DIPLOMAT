@@ -3,6 +3,8 @@ from typing import Any, Optional, Tuple, Callable, Dict
 import wx
 from diplomat.processing import Config
 from wx.lib.agw import floatspin
+from diplomat.utils._bit_or import _bit_or
+
 
 class SettingWidget(ABC):
     """
@@ -49,7 +51,7 @@ class Slider(SettingWidget):
         minimum: int,
         maximum: int,
         default: int = None,
-        style: int = wx.SL_HORIZONTAL | wx.SL_LABELS,
+        style: int = _bit_or(wx.SL_HORIZONTAL, wx.SL_LABELS),
         **kwargs
     ):
         """

@@ -1,3 +1,7 @@
+"""
+Provides an abstract progress bar interface that is passed to predictors for tracking progress.
+"""
+
 from abc import ABC, abstractmethod
 from typing import Optional
 import tqdm

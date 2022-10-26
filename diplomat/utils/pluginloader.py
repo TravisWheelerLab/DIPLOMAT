@@ -1,5 +1,5 @@
 """
-Module includes methods useful to loading all plugins placed in a folder, or module...
+Module includes methods useful to loading all plugins placed in a folder, or module.
 """
 
 from typing import Set

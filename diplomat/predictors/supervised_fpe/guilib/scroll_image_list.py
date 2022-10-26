@@ -1,5 +1,6 @@
 from typing import List, Optional
 import wx
+from diplomat.utils._bit_or import _bit_or
 
 
 class ScrollImageList(wx.ScrolledCanvas):
@@ -11,7 +12,7 @@ class ScrollImageList(wx.ScrolledCanvas):
     SCROLL_RATE = 5
 
     def __init__(self, parent, img_list: Optional[List[wx.Bitmap]], orientation = wx.VERTICAL, padding = 20,
-                 wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.HSCROLL | wx.VSCROLL,
+                 wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, style=_bit_or(wx.HSCROLL, wx.VSCROLL),
                  name="ScrollImageList"):
         """
         Construct a new scrollable image list.

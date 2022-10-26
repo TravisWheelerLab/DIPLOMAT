@@ -1,10 +1,17 @@
-from typing import Callable, Iterable, Tuple, Iterator
+"""
+Provides utilities and interfaces for drawing shape markers, and iterating lists of shapes and converting lists of shapes names to shapes.
+"""
+from typing import Callable, Iterable, Tuple, Iterator, Optional
 import numpy as np
 import cv2
 from abc import ABC, abstractmethod
 
 
 class DotShapeDrawer(ABC):
+    """
+    Abstract class defining an interface for drawing various markers, or dots, based on shape.
+    """
+
     # Unit polygons for certain types of items that for which built-in drawing functions don't exist in most programming languages...
     _TRIANGLE_POLY = np.array([[0, -1], [-0.8660254037844386, 0.5], [0.8660254037844386, 0.5]])
     _STAR_POLY = np.array([
@@ -23,11 +30,26 @@ class DotShapeDrawer(ABC):
 
     SHAPE_TYPES = tuple()
 
-    def __getitem__(self, item: str) -> Callable:
-        return getattr(self, "_draw_" + item)
+    def __getitem__(self, shape: str) -> Callable[[float, float, float], None]:
+        """
+        Get a drawer for the provided shape type.
 
-    def __contains__(self, item: str) -> bool:
-        return hasattr(self, "_draw_" + item)
+        :param shape: The shape to get a drawing function for be default, all drawers must support "circle", "square", "triangle", and "star".
+
+        :return: A function or callable which accepts 3 floats (x coordinate, y coordinate, shape radius), that draws a shape marker to the specified
+                 location when called.
+        """
+        return getattr(self, "_draw_" + shape)
+
+    def __contains__(self, shape: str) -> bool:
+        """
+        Check if this shape drawer supports this shape.
+
+        :param shape: A string representing a shape type ("square", "circle", etc.)
+
+        :return: True if this shape drawer supports that shape, otherwise False.
+        """
+        return hasattr(self, "_draw_" + shape)
 
     def __len__(self):
         len(self.SHAPE_TYPES)
@@ -61,7 +83,17 @@ def shape_str(shape: str) -> str:
 
 
 class shape_iterator:
-    def __new__(cls, sequence: Iterable[str], rep_count: int = None):
+    """
+    Allows one to iterate over a list of shape strings indefinitely, and in groups. Used to iterate over shapes on a per individual basis.
+    """
+    def __new__(cls, sequence: Optional[Iterable[str]], rep_count: int = None):
+        """
+        Get a new shape iterator.
+
+        :param sequence: The sequence of shapes to iterate over. If this is None, uses the default shape list.
+        :param rep_count: The number of values to iterate through before restarting at the beginning of the sequence. If larger than the sequence
+                          length, the iteration will wrap around the sequence, and continue until this value is reached and then reset.
+        """
         if(sequence is None):
             return cls.__new__(cls, ("circle", "triangle", "square", "star"), 1 if(rep_count is None) else rep_count)
         if(isinstance(sequence, cls)):
@@ -93,6 +125,9 @@ class shape_iterator:
 
 
 class CV2DotShapeDrawer(DotShapeDrawer):
+    """
+    A shape dot or marker implementation that utilizes opencv2 for drawing. It can draw to images stored as 2D numpy arrays.
+    """
     def __init__(
         self,
         img: np.ndarray,
@@ -100,6 +135,14 @@ class CV2DotShapeDrawer(DotShapeDrawer):
         line_thickness: int = 1,
         line_type: int = cv2.LINE_8
     ):
+        """
+        Create a cv2 marker, or shape drawer.
+
+        :param img: The image to draw results onto, a 2D numpy array, indexed by y coordinate first.
+        :param color: The color of the dots to be drawn. Should be a tuple of 4 integers between 0 and 255 being the rgba color.
+        :param line_thickness: The thickness of the border of the dots.
+        :param line_type: The type of line to ask cv2 to draw.
+        """
         self._img = img
         self._color = color
         self._line_thickness = line_thickness

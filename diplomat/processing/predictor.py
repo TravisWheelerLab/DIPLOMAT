@@ -31,7 +31,7 @@ class Predictor(ABC):
         :param bodyparts: The body parts for the dataset, a list of the string friendly names in order. Note that if in
                           multi-output mode, this will be a list of only the unique original body parts.
         :param num_outputs: The number of expected outputs for each body part model. Note that if this plugin doesn't
-                            support multi output mode, this will always be 1. When returning poses, all of the
+                            support multi output mode, this will always be 1. When returning poses, all the
                             outputs for a single body part should be side-by-side.
                                 Ex: If the bodyparts=[Nose, Tail] and num_outputs=2, pose arrangement should be:
                                     [Nose1, Nose2, Tail1, Tail2]
@@ -39,11 +39,11 @@ class Predictor(ABC):
         :param settings: The settings for this predictor plugin. Dictionary is a map of strings, or setting names
                          to values. The actual data within the dictionary depends on return provided by get_settings
                          and what settings the user has set in deeplabcut's config.yaml.
-                         If get_settings for this predictor returns None, this method will pass None...
+                         If `get_settings` for this predictor returns None, this method will pass None...
         :param video_metadata: The metadata information for this dlc instance. Most of these settings are primarily
                                useful to interactive plugins. Includes the keys:
                                     "fps": Original Video's frames per second
-                                    "h5-file-name": The name of the original h5 file and it's path, as a string.
+                                    "h5-file-name": The name of the original h5 file, and it's path, as a string.
                                     "orig-video-path": The file path and name of the video being analyzed, as a string.
                                                        this value may be None, meaning the video could not be found, and
                                                        user is processing frames via a .dlfs file.
@@ -146,7 +146,7 @@ class Predictor(ABC):
                              (Number of total frames minus the number of frames returned in 'on_frames')...
                              See ProgressBar class for API details...
 
-        :return: A Pose object representing a collection of poses for frames and body parts, or None if all of the
+        :return: A Pose object representing a collection of poses for frames and body parts, or None if all the
                  predictions were made and returned as Pose object in 'on_frames'.
         """
         pass
@@ -210,9 +210,9 @@ class Predictor(ABC):
 
                     - Test Success: A Boolean, True if test was successful, otherwise False.
 
-                    - Test Expected Results: A string, a human readable string representing the expected results of this
+                    - Test Expected Results: A string, a human-readable string representing the expected results of this
                                              test.
-                    - Test Actual Results: A string, a human readable string representing the actual results that the
+                    - Test Actual Results: A string, a human-readable string representing the actual results that
                                            the test method received. If test was successful, this should match the
                                            expected results value.
                  Another valid response from the test methods is to throw an exception, in which case the test is
@@ -225,8 +225,8 @@ class Predictor(ABC):
     @classmethod
     def supports_multi_output(cls) -> bool:
         """
-        Get whether or not this plugin supports outputting multiple of the same body part (num_outputs > 1). Returning
-        false here will keep the plugin from being allowed to be used when num_outputs is greater then 1.
+        Get whether this plugin supports outputting multiple of the same body part (num_outputs > 1). Returning
+        false here will keep the plugin from being allowed to be used when num_outputs is greater than 1.
 
         :return: A boolean, True if multiple outputs per body part is supported, otherwise False...
         """

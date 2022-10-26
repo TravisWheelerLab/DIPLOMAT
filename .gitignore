@@ -5,3 +5,8 @@ ENV/
 
 # PyCharm IDE settings
 .idea/
+
+# Build files for docs...
+docs/build/
+# Auto generated api docs...
+docs/source/api

@@ -3,54 +3,55 @@ Contains 2 Utility Classes for reading and writing the DeepLabCut Frame Store fo
 videos using DeepLabCut and then running predictions on the probability map data later. The DLF format is a glorified
 hdf5 file, with the specified fields below:
 
-Group "/" {
-    Attribute "number_of_frames": A 64 bit integer
-    Attribute "frame_height": A 64 bit integer
-    Attribute "frame_width": A 64 bit integer
-    Attribute "frame_rate": A 64 bit float
-    Attribute "stride": The video scaling factor relative to the original probability map, A 64 bit integer
-    Attribute "orig_video_height": A 64 bit integer
-    Attribute "orig_video_width", A 64 bit integer
-    Attribute "crop_offset_y": A 64 bit integer, if negative there is no cropping.
-    Attribute "crop_offset_x": A 64 bit integer, if negative there is no cropping.
-    Attribute "bodypart_names", A list of strings, being all of the body part names in order.
+::
 
-    Group "frame_0" {
-        Group "(bodypart_names[0])" {
-            Attribute "is_sparse": 8 bit integer, True or False, determines if data is stored in sparse format below.
-            Attribute "offsets_included": 8 bit integer, True or False, determines if data includes offsets.
+    Group "/" {
+        Attribute "number_of_frames": A 64 bit integer
+        Attribute "frame_height": A 64 bit integer
+        Attribute "frame_width": A 64 bit integer
+        Attribute "frame_rate": A 64 bit float
+        Attribute "stride": The video scaling factor relative to the original probability map, A 64 bit integer
+        Attribute "orig_video_height": A 64 bit integer
+        Attribute "orig_video_width", A 64 bit integer
+        Attribute "crop_offset_y": A 64 bit integer, if negative there is no cropping.
+        Attribute "crop_offset_x": A 64 bit integer, if negative there is no cropping.
+        Attribute "bodypart_names", A list of strings, being all of the body part names in order.
 
-            If "is_sparse" is True: ()
-                Data "x": 1-Dimensional array of 32-bit integers being the x-offsets of probabilities within the
-                          probability map.
-                Data "y": 1-Dimensional array of 32-bit integers being the y-offsets of probabilities within the
-                          probability map.
-                Data "probs": 1-Dimensional array of 32-bit floats being the probabilities within the probability map.
+        Group "frame_0" {
+            Group "(bodypart_names[0])" {
+                Attribute "is_sparse": 8 bit integer, True or False, determines if data is stored in sparse format below.
+                Attribute "offsets_included": 8 bit integer, True or False, determines if data includes offsets.
 
-                if "offsets_included" is True:
-                    Data "offset_x": 1-Dimensional array of 32 bit floats being x-offsets of most probable locations
-                                     within the video.
-                    Data "offset_y": 1-Dimensional array of 32 bit floats being y-offsets of most probable locations
-                                     within the video.
+                If "is_sparse" is True: ()
+                    Data "x": 1-Dimensional array of 32-bit integers being the x-offsets of probabilities within the
+                              probability map.
+                    Data "y": 1-Dimensional array of 32-bit integers being the y-offsets of probabilities within the
+                              probability map.
+                    Data "probs": 1-Dimensional array of 32-bit floats being the probabilities within the probability map.
 
-            If "is_sparse" is False: (All array dimensions below are frame_height x frame_width)
-                Data "probs": 2-Dimensional array of 32-bit floats being the probability map.
+                    if "offsets_included" is True:
+                        Data "offset_x": 1-Dimensional array of 32 bit floats being x-offsets of most probable locations
+                                         within the video.
+                        Data "offset_y": 1-Dimensional array of 32 bit floats being y-offsets of most probable locations
+                                         within the video.
 
-                if "offsets_included" is True:
-                    Data "offset_x": 2-Dimensional array of 32 bit floats being x-offsets of most probable locations
-                                     within the video.
-                    Data "offset_y": 2-Dimensional array of 32 bit floats being y-offsets of most probable locations
-                                     within the video.
+                If "is_sparse" is False: (All array dimensions below are frame_height x frame_width)
+                    Data "probs": 2-Dimensional array of 32-bit floats being the probability map.
+
+                    if "offsets_included" is True:
+                        Data "offset_x": 2-Dimensional array of 32 bit floats being x-offsets of most probable locations
+                                         within the video.
+                        Data "offset_y": 2-Dimensional array of 32 bit floats being y-offsets of most probable locations
+                                         within the video.
+            }
+            Group "(bodypart_names[1])" { [...] }
+            [...]
+            Group "(bodypart_names[length(bodypart_names) - 1])" { [...] }
         }
-        Group "(bodypart_names[1])" { [...] }
+        Group "frame_1" { [...] }
         [...]
-        Group "(bodypart_names[length(bodypart_names) - 1])" { [...] }
+        Group "frame_(number_of_frames-1)" { [...] }
     }
-    Group "frame_1" { [...] }
-    [...]
-    Group "frame_(number_of_frames-1)" { [...] }
-}
-
 """
 from typing import BinaryIO, Optional
 

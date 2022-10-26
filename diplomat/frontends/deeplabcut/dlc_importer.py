@@ -2,7 +2,7 @@ import warnings
 import builtins
 import os
 
-def dummy_print(*args, **kwargs):
+def _dummy_print(*args, **kwargs):
     pass
 
 with warnings.catch_warnings():
@@ -16,7 +16,7 @@ with warnings.catch_warnings():
 
         warnings.filterwarnings("ignore")
         true_print = builtins.print
-        builtins.print = dummy_print
+        builtins.print = _dummy_print
 
     try:
         import deeplabcut

@@ -1,5 +1,5 @@
 """
-Provides a generic API and some core data structures for frame exporters.
+Provides a generic API and some core data structures for frame store formats, or files which store model outputs on disk.
 """
 from typing import Any, Optional, Iterator, List, BinaryIO, MutableMapping
 from abc import ABC, abstractmethod

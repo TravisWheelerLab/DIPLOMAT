@@ -11,8 +11,22 @@ from diplomat.frontend_ops import list_all_frontends, list_loaded_frontends
 from diplomat.utils.video_splitter import split_videos
 from diplomat.core_ops import track, supervised, unsupervised, annotate, tweak
 
+__all__ = [
+    "list_predictor_plugins",
+    "get_predictor_settings",
+    "test_predictor_plugin",
+    "list_all_frontends",
+    "list_loaded_frontends",
+    "split_videos",
+    "track",
+    "supervised",
+    "unsupervised",
+    "annotate",
+    "tweak"
+]
+
 # Attempt to load all frontends, putting their public functions into submodules of diplomat.
-def load_frontends():
+def _load_frontends():
     from diplomat import frontends
     from diplomat.frontends import DIPLOMATFrontend
     from diplomat.utils.pluginloader import load_plugin_classes
@@ -48,4 +62,4 @@ def load_frontends():
 
     return frontends, loaded_funcs
 
-_FRONTENDS, _LOADED_FRONTENDS = load_frontends()
+_FRONTENDS, _LOADED_FRONTENDS = _load_frontends()

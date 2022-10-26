@@ -1,6 +1,7 @@
 from typing import Tuple, List, Optional, Union, Any, Iterable
 import wx
 from diplomat.processing import *
+from diplomat.utils._bit_or import _bit_or
 from diplomat.utils.shapes import DotShapeDrawer, shape_iterator, shape_str
 from .labeler_lib import PoseLabeler, SettingCollectionWidget
 from .video_player import VideoPlayer
@@ -786,7 +787,7 @@ class ColoredRadioBox(wx.Panel):
     PADDING = 20
 
     def __init__(self, parent, colormap: Union[str, list, Colormap], shape_list: Iterable[str], labels: List[str], w_id = wx.ID_ANY,
-                 pos = wx.DefaultPosition, size = wx.DefaultSize, style = wx.TAB_TRAVERSAL | wx.BORDER_DEFAULT,
+                 pos = wx.DefaultPosition, size = wx.DefaultSize, style = _bit_or(wx.TAB_TRAVERSAL, wx.BORDER_DEFAULT),
                  name = "ColoredRadioBox"):
         """
         Create a ColoredRadioBox.

@@ -26,10 +26,11 @@ def list_predictor_plugins():
 @positional_argument_count(1)
 def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
     """
-    Gets the available/modifiable settings for a specified predictor plugin...
+    Gets the available/modifiable settings for a specified predictor plugin.
+
     :param predictor: The string or list of strings being the names of the predictor plugins to view customizable
-                           settings for. If None, will print settings for all currently available predictors.
-                           Defaults to None.
+                      settings for. If None, will print settings for all currently available predictors.
+                      Defaults to None.
 
     :return: Nothing, prints to console....
     """
@@ -69,8 +70,8 @@ def test_predictor_plugin(predictor: Optional[Union[List[str], str]] = None, int
     """
     Run the tests for a predictor plugin.
     :param predictor: The name of the predictor or to run tests for, or a list of names of the predictors to run.
-                           If the predictor_name is not specified or set to None, then run tests for all the
-                           predictor plugins...
+                      If the predictor_name is not specified or set to None, then run tests for all the
+                      predictor plugins...
     :param interactive: A boolean. If True, the program will wait for user input after every test, to allow the user
                         to easily read tests one by one... If false, all tests will be run at once with no user
                         interaction. Defaults to false.

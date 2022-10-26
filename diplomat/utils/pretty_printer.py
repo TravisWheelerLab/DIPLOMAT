@@ -1,3 +1,6 @@
+"""
+Provides utilities for printing results to the console in a well formated manner.
+"""
 import shutil
 import sys
 from typing import TextIO
