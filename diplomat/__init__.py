@@ -49,6 +49,7 @@ def _load_frontends():
         if(res is not None):
             name = frontend.get_package_name()
             mod = ModuleType(__name__ + "." + name)
+            mod.__all__ = []
 
             globals()[name] = mod
             loaded_funcs[name] = res
@@ -59,6 +60,8 @@ def _load_frontends():
             for (name, func) in asdict(res).items():
                 if(not name.startswith("_")):
                     setattr(mod, name, func)
+                    func.__diplomat_src__ = func.__module__ + "." + func.__name__
+                    mod.__all__.append(name)
 
     return frontends, loaded_funcs
 

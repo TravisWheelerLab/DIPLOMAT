@@ -10,6 +10,7 @@ from multiprocessing.context import BaseContext
 import time
 import diplomat.utils.frame_store_api as frame_store_api
 from diplomat.predictors.sfpe.segmentation import EndPointSegmentor
+from ..fpe.fpe_help import FPEString
 
 try:
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -18,6 +19,7 @@ try:
     from .growable_numpy_array import GrowableNumpyArray
     from ..fpe.frame_passes.fix_frame import FixFrame
     from ..fpe.skeleton_structures import StorageGraph
+    from ..fpe.fpe_help import FPEString
 except ImportError:
     __package__ = "diplomat.predictors.sfpe"
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -26,7 +28,7 @@ except ImportError:
     from .growable_numpy_array import GrowableNumpyArray
     from ..fpe.frame_passes.fix_frame import FixFrame
     from ..fpe.skeleton_structures import StorageGraph
-
+    from ..fpe.fpe_help import FPEString
 
 class NestedProgressIndicator(ProgressBar):
 
@@ -1173,25 +1175,6 @@ class SegmentedFramePassEngine(Predictor):
 
     @classmethod
     def get_settings(cls) -> ConfigSpec:
-        from diplomat.processing.type_casters import get_type_name
-        desc_lst = []
-
-        for fp in FramePass.get_subclasses():
-            desc_lst.append(f"\tPass '{fp.get_name()}' Settings: [[[")
-            options = fp.get_config_options()
-            if(options is None):
-                desc_lst.append("\t\tNo settings available.")
-            else:
-                for name, (def_val, caster, desc) in options.items():
-                    desc_lst.append(f"\t\tSetting Name: '{name}':")
-                    desc_lst.append(f"\t\tDefault Value: {def_val}")
-                    desc_lst.append(f"\t\tValue Type: {get_type_name(caster)}")
-                    desc_lst.append(f"\t\tDescription:\n\t\t\t{desc}\n")
-
-            desc_lst.append("\t]]]\n")
-
-        desc_str = "\n".join(desc_lst)
-
         return {
             "threshold": (
                 0.001,
@@ -1236,10 +1219,11 @@ class SegmentedFramePassEngine(Predictor):
                         str
                     )
                 ),
-                "The passes to be run on partial lists of frames, after segmentation occurs. "
-                "A list of lists containing a string (the pass name) and a dictionary (the configuration for "
-                f"the provided plugin). If no configuration is provided, the entry can just be a string. "
-                f"The following plugins are currently supported:\n\n{desc_str}"
+                FPEString(
+                    "The passes to be run on partial lists of frames, after segmentation occurs. "
+                    "A list of lists containing a string (the pass name) and a dictionary (the configuration for "
+                    f"the provided plugin). If no configuration is provided, the entry can just be a string."
+                )
             ),
             "thread_count": (
                 None,

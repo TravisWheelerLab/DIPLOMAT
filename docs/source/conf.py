@@ -36,7 +36,7 @@ imgmath_image_format = "svg"
 templates_path = ['_templates']
 exclude_patterns = []
 
-autodoc_mock_imports = ["deeplabcut", "tensorflow", "pandas", "scipy"]
+autodoc_mock_imports = ["tensorflow", "pandas", "scipy", "deeplabcut"]
 
 autosummary_generate = True
 autosummary_imported_members = True

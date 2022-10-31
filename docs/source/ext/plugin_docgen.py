@@ -1,21 +1,28 @@
 from typing import Type, Optional, Tuple, List
+
 from sphinx.application import Sphinx, Config
 from docutils import nodes
 from sphinx import addnodes
 from pathlib import Path
 
-from sphinx.domains.python import PyClasslike, PythonDomain, ObjType, PyXRefRole, PyAttribute
+from sphinx.domains.python import PyClasslike, PythonDomain, ObjType, PyAttribute, PyXRefRole
+from sphinx.environment import BuildEnvironment
+from sphinx.ext.autodoc.mock import mock
+from sphinx.roles import XRefRole
 
-from diplomat.predictors.fpe.sparse_storage import AttributeDict
-from diplomat.processing.type_casters import get_type_name
-from diplomat.utils.pluginloader import load_plugin_classes
 
-import diplomat.predictors as predictors
-from diplomat.processing import Predictor, ConfigSpec
-import diplomat
+with mock(["deeplabcut", "tensorflow", "scipy", "pandas"]):
+    from diplomat.predictors.fpe.sparse_storage import AttributeDict
+    from diplomat.processing.type_casters import get_type_name
+    from diplomat.utils.pluginloader import load_plugin_classes
 
-import diplomat.predictors.fpe.frame_passes as frame_passes
-from diplomat.predictors.fpe.frame_pass import FramePass
+    import diplomat.predictors as predictors
+    from diplomat.processing import Predictor, ConfigSpec
+    import diplomat
+
+    import diplomat.predictors.fpe.frame_passes as frame_passes
+    from diplomat.predictors.fpe.frame_pass import FramePass
+    from diplomat.frontends import DIPLOMATBaselineCommands
 
 
 class PyPlugin(PyClasslike):
@@ -36,17 +43,58 @@ class PyOption(PyAttribute):
 
         return 'Option %s (in plugin %s)' % (attrname, clsname)
 
+def patch_python_sphinx_domain():
+    def _resolve_xref(self, env: BuildEnvironment, fromdocname, builder, typ, target, node, contnode):
+        from sphinx import util
 
-def register_custom_py_types():
+        if(typ == "plugin"):
+            doc_path = util.docname_join("", node['reftarget'])
+
+            if doc_path not in env.all_docs:
+                return None
+            else:
+                caption = node.astext() if(node['refexplicit']) else util.nodes.clean_astext(env.titles[doc_path])
+                innernode = nodes.strong('', '', nodes.literal(caption, caption, classes=['plugin']))
+                return util.nodes.make_refnode(builder, fromdocname, doc_path, None, innernode)
+        else:
+            return type(self)._old_resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode)
+
+    PythonDomain._old_resolve_xref = PythonDomain.resolve_xref
+    PythonDomain.resolve_xref = _resolve_xref
+
+
+class PluginXRefRole(XRefRole):
+    def process_link(
+        self,
+        env: BuildEnvironment,
+        refnode: nodes.Element,
+        has_explicit_title: bool,
+        title: str,
+        target: str
+    ) -> Tuple[str, str]:
+        title, target = super().process_link(env, refnode, has_explicit_title, title, target)
+
+        if(not has_explicit_title):
+            if(target.startswith("~")):
+                title = target.lstrip(".~").split(".")[-1]
+
+        target = target.lstrip(".~")
+
+        return title, "/" + _BUILD_LOC.strip("/") + "/" + target
+
+
+def register_custom_py_types(app: Sphinx):
     # Add support for plugin type...
-    PythonDomain.object_types["plugin"] = ObjType("plugin", 'plugin', 'class', 'exc', 'obj')
+    PythonDomain.object_types["plugin"] = ObjType("plugin", 'plugin')
     PythonDomain.directives["plugin"] = PyPlugin
-    PythonDomain.roles["plugin"] = PyXRefRole()
+    PythonDomain.roles["plugin"] = PluginXRefRole(warn_dangling=True, innernodeclass=nodes.inline)
 
     # Add support for option type (based on data or attribute type)...
     PythonDomain.object_types["option"] = ObjType("option", 'option', 'attr', 'obj')
     PythonDomain.directives["option"] = PyOption
     PythonDomain.roles["option"] = PyXRefRole()
+
+    patch_python_sphinx_domain()
 
 
 _BUILD_LOC = "api/_autosummary"
@@ -54,13 +102,18 @@ _BUILD_LOC = "api/_autosummary"
 templates = {
     "option": "option-template.rst",
     "plugin": "plugin-template.rst",
-    "api": "api-template.rst"
+    "api": "api-template.rst",
+    "frontend": "frontend-template.rst"
 }
 
 def load_templates(src: Path):
     for k in templates:
         with ((src / "_templates") / templates[k]).open("r") as f:
             templates[k] = f.read()
+
+
+def clean_doc_str(doc: str) -> str:
+    return " ".join(doc.strip().split())
 
 def format_settings(settings: Optional[ConfigSpec]) -> str:
     if(settings is None):
@@ -69,6 +122,8 @@ def format_settings(settings: Optional[ConfigSpec]) -> str:
     string_list = []
 
     for name, (default, caster, desc) in settings.items():
+        desc = getattr(desc, "__sphinx_str__", desc.__str__)()
+
         string_list.append(templates["option"].format(
             name=name,
             type=get_type_name(caster),
@@ -85,14 +140,14 @@ def get_predictor_rst(plugin: Type[Predictor]) -> str:
         title_eqs="=" * len(plugin.get_name()),
         plugin_type=Predictor.__module__ + "." + Predictor.__name__,
         plugin_type_name = Predictor.__name__,
-        desc = plugin.get_description(),
+        desc = clean_doc_str(plugin.get_description()),
         settings = format_settings(plugin.get_settings())
     )
 
 
 def get_frame_pass_rst(plugin: Type[FramePass]) -> str:
     desc = getattr(plugin, "__doc__", "")
-    desc = desc if(desc is not None) else ""
+    desc = clean_doc_str(desc if(desc is not None) else "")
 
     return templates["plugin"].format(
         name = plugin.get_name(),
@@ -103,13 +158,27 @@ def get_frame_pass_rst(plugin: Type[FramePass]) -> str:
         settings = format_settings(plugin.get_config_options())
     )
 
+def get_frontend_rst(name: str, methods: DIPLOMATBaselineCommands):
+    from dataclasses import asdict
+
+    module_name = "diplomat." + name
+    doc = getattr(getattr(diplomat, name), "__doc__", "")
+    doc = "" if(doc is None) else doc
+
+    return templates["frontend"].format(
+        module_name = module_name,
+        module_name_eqs = "=" * len(module_name),
+        desc = clean_doc_str(doc),
+        function_list = "\n".join(f"    ~{func.__diplomat_src__}" for name, func in asdict(methods).items() if(hasattr(func, "__diplomat_src__")))
+    )
+
 
 def document_predictor_plugins(path: Path) -> list:
     api_list = []
 
     for plugin in load_plugin_classes(predictors, Predictor):
         dest = path / ("diplomat.predictors." + plugin.get_name() + ".rst")
-        api_list.append(("diplomat.predictors." + plugin.get_name(), plugin.get_description()))
+        api_list.append(("diplomat.predictors." + plugin.get_name(), clean_doc_str(plugin.get_description())))
         dest.parent.mkdir(exist_ok=True)
 
         print(f"\tWriting {dest.name}...")
@@ -127,7 +196,7 @@ def document_frame_pass_plugins(path: Path) -> list:
         doc_str = plugin.__doc__
 
         dest = path / ("diplomat.predictors.frame_passes." + plugin.get_name() + ".rst")
-        api_list.append(("diplomat.predictors.frame_passes." + plugin.get_name(), doc_str if(doc_str is not None) else ""))
+        api_list.append(("diplomat.predictors.frame_passes." + plugin.get_name(), clean_doc_str(doc_str if(doc_str is not None) else "")))
         dest.parent.mkdir(exist_ok=True)
 
         print(f"\tWriting {dest.name}...")
@@ -138,9 +207,31 @@ def document_frame_pass_plugins(path: Path) -> list:
     return api_list
 
 
+def document_frontend_plugins(path: Path) -> list:
+    api_list = []
+
+    for plug in diplomat._FRONTENDS:
+        name = plug.get_package_name()
+
+        if(name not in diplomat._LOADED_FRONTENDS):
+            raise ValueError(f"Unable to load frontend '{name}' to build docs! Make sure all packages are installed...")
+
+        methods = diplomat._LOADED_FRONTENDS[name]
+
+        dest = path / ("diplomat." + name + ".rst")
+        api_list.append(("diplomat." + name, clean_doc_str(plug.__doc__ if (plug.__doc__ is not None) else "")))
+        dest.parent.mkdir(exist_ok=True)
+
+        with dest.open("w") as f:
+            f.write(get_frontend_rst(name, methods))
+
+    return api_list
+
+
 PLUGINS = {
     "predictors": document_predictor_plugins,
-    "frame_passes": document_frame_pass_plugins
+    "frame_passes": document_frame_pass_plugins,
+    "frontends": document_frontend_plugins
 }
 
 EXTRA = {
@@ -194,32 +285,31 @@ def fix_all_on_module(module):
         except:
             pass
 
-    print(f"New all for {module}: {module.__all__}")
-
-
 def write_api_rst(api_dir: Path, document_lists: AttributeDict) -> None:
     with (api_dir / "api.rst").open("w") as f:
         f.write(templates["api"].format(diplomat=document_lists))
 
+
 def on_config_init(app: Sphinx, config: Config) -> None:
     load_templates(Path(app.srcdir))
-    register_custom_py_types()
+    register_custom_py_types(app)
 
     build_dir = Path(app.srcdir) / _BUILD_LOC
     build_dir.mkdir(parents=True, exist_ok=True)
 
     document_lists = AttributeDict()
     document_lists.files = AttributeDict()
+    final_folder_name = Path(_BUILD_LOC).name
 
     for name, documenter in PLUGINS.items():
         print(f"Documenting {name}...")
         file_list = documenter(build_dir)
         document_lists[name] = "\n".join(
-            f"    * - :doc:`{file.split('.')[-1]} <_autosummary/{file}>`\n"
+            f"    * - :py:plugin:`~{file}`\n"
             f"      - {doc}" for file, doc in file_list
         )
 
-        document_lists.files[name] = "\n".join(f"    _autosummary/{file}" for file, doc in file_list)
+        document_lists.files[name] = "\n".join(f"    {final_folder_name}/{file}" for file, doc in file_list)
 
 
     for name, module in EXTRA.items():
@@ -231,9 +321,11 @@ def on_config_init(app: Sphinx, config: Config) -> None:
 
     write_api_rst(build_dir.parent, document_lists)
 
-
 def setup(app: Sphinx) -> dict:
+    app.setup_extension("sphinx.ext.autodoc")
+
     app.connect("config-inited", on_config_init)
+
     for module in FIX_ALL:
         fix_all_on_module(module)
 

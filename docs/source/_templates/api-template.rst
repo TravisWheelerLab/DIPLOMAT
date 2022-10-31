@@ -26,6 +26,9 @@ Predictors
 
 {diplomat.predictors}
 
+
+.. _Frame Passes:
+
 Frame Passes
 ------------
 
@@ -59,3 +62,18 @@ Utilities
     :recursive:
 
     diplomat.utils
+
+
+Frontends
+---------
+
+.. toctree::
+    :hidden:
+
+{diplomat.files.frontends}
+
+
+.. list-table::
+    :widths: auto
+
+{diplomat.frontends}

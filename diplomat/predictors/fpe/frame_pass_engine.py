@@ -11,11 +11,13 @@ try:
     from .frame_pass import FramePass, ProgressBar
     from .frame_pass_loader import FramePassBuilder
     from .sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
+    from .fpe_help import FPEString
 except ImportError:
     __package__ = "diplomat.predictors.fpe"
     from .frame_pass import FramePass, ProgressBar
     from .frame_pass_loader import FramePassBuilder
     from .sparse_storage import ForwardBackwardData, SparseTrackingData, ForwardBackwardFrame, AttributeDict
+    from .fpe_help import FPEString
 
 
 class FramePassEngine(Predictor):
@@ -405,24 +407,6 @@ class FramePassEngine(Predictor):
 
     @classmethod
     def get_settings(cls) -> ConfigSpec:
-        from diplomat.processing.type_casters import get_type_name
-        desc_lst = []
-
-        for fp in FramePass.get_subclasses():
-            desc_lst.append(f"\tPass '{fp.get_name()}' Settings: [[[")
-            options = fp.get_config_options()
-            if(options is None):
-                desc_lst.append("\t\tNo settings available...")
-            else:
-                for name, (def_val, caster, desc) in options.items():
-                    desc_lst.append(f"\t\tSetting Name: '{name}':")
-                    desc_lst.append(f"\t\tDefault Value: {def_val}")
-                    desc_lst.append(f"\t\tValue Type: {get_type_name(caster)}")
-                    desc_lst.append(f"\t\tDescription:\n\t\t\t{desc}\n")
-
-            desc_lst.append("\t]]]\n")
-
-        desc_str = "\n".join(desc_lst)
 
         return {
             "threshold": (
@@ -454,9 +438,10 @@ class FramePassEngine(Predictor):
                         str
                     )
                 ),
-                "A list of lists containing a string (the pass name) and a dictionary (the configuration for "
-                f"the provided plugin). If no configuration is provided, the entry can just be a string. "
-                f"the following plugins are currently supported:\n\n{desc_str}"
+                FPEString(
+                    "A list of lists containing a string (the pass name) and a dictionary (the configuration for "
+                    f"the provided plugin). If no configuration is provided, the entry can just be a string."
+                )
             ),
             "export_frame_path": (
                 None,
