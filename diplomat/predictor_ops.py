@@ -69,6 +69,7 @@ def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
 def test_predictor_plugin(predictor: Optional[Union[List[str], str]] = None, interactive: Flag = False):
     """
     Run the tests for a predictor plugin.
+
     :param predictor: The name of the predictor or to run tests for, or a list of names of the predictors to run.
                       If the predictor_name is not specified or set to None, then run tests for all the
                       predictor plugins...

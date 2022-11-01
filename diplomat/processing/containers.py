@@ -20,10 +20,9 @@ class Config(UserDict):
         """
         Create a new configuration dictionary:
 
-        :args: Only accepts 2 non-keyword arguments, the data, and a backing
+        :param args: Only accepts 2 non-keyword arguments, the data, and a backing
                dictionary. See set_backing for more info.
-
-        :kwargs: Optional, additional keys and values to add to the dictionary.
+        :param kwargs: Optional, additional keys and values to add to the dictionary.
         """
         args = list(args)
         self._back_dict = None
@@ -40,9 +39,10 @@ class Config(UserDict):
 
         :param back_dict: A dictionary of strings (key names) to length 3 tuples. The tuples contain
                           the following values in order:
-                            - E: The default value for this setting.
-                            - TypeCaster[E]: A casting function, to convert or check passed values are of the right type.
-                            - str: The description of this setting, not used here...
+
+                          - E: The default value for this setting.
+                          - TypeCaster[E]: A casting function, to convert or check passed values are of the right type.
+                          - str: The description of this setting, not used here...
         """
         self._back_dict = back_dict
         self.update(self.data)

@@ -44,6 +44,11 @@ def select(*info):
 
 
 class MITViterbi(FramePass):
+    """
+    An implementation of the Multi-Individual Tracking Viterbi algorithm. Runs a viterbi-like algorithm across the frames to determine the
+    maximum scoring paths per individual, assuming an individuals can't take a paths that would have been more likely for other individuals
+    to have taken.
+    """
 
     ND_UNIT_PER_SIDE_COUNT = 10
     # Hidden attribute used for checking if this plugin class uses a pool...

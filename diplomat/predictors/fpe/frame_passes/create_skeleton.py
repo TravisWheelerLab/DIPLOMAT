@@ -8,6 +8,10 @@ import numpy as np
 
 
 class CreateSkeleton(FramePass):
+    """
+    Computes optimal skeletal link distances and then constructs a skeleton to be used by :py:plugin:`~diplomat.predictors.frame_passes.MITViterbi`.
+    The links can be passed directly to this frame pass or are otherwise inferred from the config file.
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._skeleton = None

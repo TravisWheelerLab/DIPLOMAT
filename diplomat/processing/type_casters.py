@@ -191,7 +191,7 @@ def get_typecaster_kwd_arg_name(func: TypeCasterFunction) -> typing.Optional[str
 
     :param func: The type caster function to extract the keyword argument name of.
 
-    :return: The name of the keyword argument, or None if this function has no wild keyword argument (**kwargs).
+    :returns: The name of the keyword argument, or None if this function has no wild keyword argument.
     """
     return getattr(func, "_type_caster_kwd_name", None)
 

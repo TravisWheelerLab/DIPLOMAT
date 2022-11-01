@@ -9,7 +9,10 @@ import diplomat.processing.type_casters as tc
 
 
 class FixFrame(FramePass):
-
+    """
+    Scores frames by peak separation, and then selects a single frame to remain clustered (with peaks separated). The rest of the frames are restored,
+    and :py:plugin:`~diplomat.predictors.frame_passes.MITViterbi` uses the fixed frame as it's ground truth frame.
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._scores = None

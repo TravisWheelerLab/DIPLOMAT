@@ -10,11 +10,11 @@ from sphinx.environment import BuildEnvironment
 from sphinx.ext.autodoc.mock import mock
 from sphinx.roles import XRefRole
 
+MOCK_PACKAGES = ["deeplabcut", "tensorflow", "scipy", "pandas"]
 
-with mock(["deeplabcut", "tensorflow", "scipy", "pandas"]):
+with mock(MOCK_PACKAGES):
     from diplomat.predictors.fpe.sparse_storage import AttributeDict
     from diplomat.processing.type_casters import get_type_name
-    from diplomat.utils.pluginloader import load_plugin_classes
 
     import diplomat.predictors as predictors
     from diplomat.processing import Predictor, ConfigSpec
@@ -23,6 +23,11 @@ with mock(["deeplabcut", "tensorflow", "scipy", "pandas"]):
     import diplomat.predictors.fpe.frame_passes as frame_passes
     from diplomat.predictors.fpe.frame_pass import FramePass
     from diplomat.frontends import DIPLOMATBaselineCommands
+
+def load_plugins_with_mocks(module, clazz):
+    from diplomat.utils.pluginloader import load_plugin_classes
+    with mock(MOCK_PACKAGES):
+        return load_plugin_classes(module, clazz)
 
 
 class PyPlugin(PyClasslike):
@@ -103,7 +108,9 @@ templates = {
     "option": "option-template.rst",
     "plugin": "plugin-template.rst",
     "api": "api-template.rst",
-    "frontend": "frontend-template.rst"
+    "frontend": "frontend-template.rst",
+    "cli_header": "cli-header-template.rst",
+    "cli_entry": "cli-entry-template.rst"
 }
 
 def load_templates(src: Path):
@@ -169,14 +176,16 @@ def get_frontend_rst(name: str, methods: DIPLOMATBaselineCommands):
         module_name = module_name,
         module_name_eqs = "=" * len(module_name),
         desc = clean_doc_str(doc),
-        function_list = "\n".join(f"    ~{func.__diplomat_src__}" for name, func in asdict(methods).items() if(hasattr(func, "__diplomat_src__")))
+        function_list = "\n".join(
+            f"    ~{func.__module__}.{func.__name__}" for name, func in asdict(methods).items() if(not func.__name__.startswith("_"))
+        )
     )
 
 
 def document_predictor_plugins(path: Path) -> list:
     api_list = []
 
-    for plugin in load_plugin_classes(predictors, Predictor):
+    for plugin in load_plugins_with_mocks(predictors, Predictor):
         dest = path / ("diplomat.predictors." + plugin.get_name() + ".rst")
         api_list.append(("diplomat.predictors." + plugin.get_name(), clean_doc_str(plugin.get_description())))
         dest.parent.mkdir(exist_ok=True)
@@ -192,7 +201,7 @@ def document_predictor_plugins(path: Path) -> list:
 def document_frame_pass_plugins(path: Path) -> list:
     api_list = []
 
-    for plugin in load_plugin_classes(frame_passes, FramePass):
+    for plugin in load_plugins_with_mocks(frame_passes, FramePass):
         doc_str = plugin.__doc__
 
         dest = path / ("diplomat.predictors.frame_passes." + plugin.get_name() + ".rst")
@@ -290,6 +299,21 @@ def write_api_rst(api_dir: Path, document_lists: AttributeDict) -> None:
         f.write(templates["api"].format(diplomat=document_lists))
 
 
+# TODO: Add CLI support...
+def write_cli_entry(func_name: str, func) -> str:
+    pass
+
+def _write_cli_rst_helper(func_tree: dict, entry_list: list):
+    return
+
+def write_cli_rst(api_dir: Path) -> None:
+    from diplomat._cli_runner import get_dynamic_cli_tree
+
+    title_under = ["-", "^"]
+
+
+
+
 def on_config_init(app: Sphinx, config: Config) -> None:
     load_templates(Path(app.srcdir))
     register_custom_py_types(app)
@@ -320,6 +344,7 @@ def on_config_init(app: Sphinx, config: Config) -> None:
         )
 
     write_api_rst(build_dir.parent, document_lists)
+    write_cli_rst(build_dir.parent.parent)
 
 def setup(app: Sphinx) -> dict:
     app.setup_extension("sphinx.ext.autodoc")

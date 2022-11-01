@@ -25,11 +25,14 @@ __all__ = [
     "tweak"
 ]
 
+
+
 # Attempt to load all frontends, putting their public functions into submodules of diplomat.
 def _load_frontends():
     from diplomat import frontends
     from diplomat.frontends import DIPLOMATFrontend
     from diplomat.utils.pluginloader import load_plugin_classes
+    from diplomat.utils._function_tools import replace_function_name_and_module
     from types import ModuleType
     from dataclasses import asdict
     from multiprocessing import current_process
@@ -59,8 +62,8 @@ def _load_frontends():
 
             for (name, func) in asdict(res).items():
                 if(not name.startswith("_")):
+                    func = replace_function_name_and_module(func, name, mod.__name__)
                     setattr(mod, name, func)
-                    func.__diplomat_src__ = func.__module__ + "." + func.__name__
                     mod.__all__.append(name)
 
     return frontends, loaded_funcs

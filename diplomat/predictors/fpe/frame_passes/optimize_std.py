@@ -8,6 +8,10 @@ import diplomat.processing.type_casters as tc
 
 
 class OptimizeStandardDeviation(FramePass):
+    """
+    Runs across the video and determines the optimal value for the standard deviation for the 2D gaussian transition function
+    used in :py:plugin:`~diplomat.predictors.frame_passes.MITViterbi`.
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

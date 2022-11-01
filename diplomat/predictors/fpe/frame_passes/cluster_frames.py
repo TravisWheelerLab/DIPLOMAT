@@ -7,8 +7,10 @@ from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBa
 from diplomat.processing import ConfigSpec, ProgressBar, Config
 import numpy as np
 
-
 class ClusterFrames(FramePass):
+    """
+    Breaks up each frame and separates it into a fixed number of frames, where each frame contains typically a single peak.
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

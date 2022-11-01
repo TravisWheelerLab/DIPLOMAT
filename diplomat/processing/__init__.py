@@ -38,7 +38,8 @@ def get_predictor(name: str) -> Type[Predictor]:
     Get the predictor plugin by the specified name.
 
     :param name: The name of this plugin, should be a string
-    :return: The plugin class that has a name that matches the specified name
+
+    :returns: The plugin class that has a name that matches the specified name
     """
     # Load the plugins from the directory: "deeplabcut/pose_estimation_tensorflow/nnet/predictors"
     plugins = get_predictor_plugins()
@@ -54,9 +55,8 @@ def get_predictor(name: str) -> Type[Predictor]:
 
 def get_predictor_plugins() -> Set[Type[Predictor]]:
     """
-    Get and retrieve all predictor plugins currently available to the DeepLabCut implementation...
+    Get and retrieve all predictor plugins currently available to the DeepLabCut implementation.
 
-    :return: A Set of Predictors, being the all classes that extend the Predictor class currently loaded visible to
-    the python interpreter.
+    :returns: A Set of Predictors, being the all classes that extend the Predictor class currently loaded visible to the python interpreter.
     """
     return pluginloader.load_plugin_classes(predictors, Predictor)
