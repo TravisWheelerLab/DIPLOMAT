@@ -19,7 +19,6 @@ with warnings.catch_warnings():
         builtins.print = _dummy_print
 
     try:
-        import matplotlib
         import deeplabcut
         from deeplabcut import auxiliaryfunctions
         from deeplabcut.pose_estimation_tensorflow.core import predict
