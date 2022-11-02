@@ -274,7 +274,7 @@ h6,
 legend,
 .rst-content .toctree-wrapper p.caption {
     /* Use a lighter font for headers (Medium instead of Bold) */
-    font-weight: 500;
+    /* font-weight: 500; */
 }
 
 .rst-content div.figure p.caption {
@@ -654,9 +654,14 @@ footer,
 code,
 .rst-content tt,
 .rst-content code {
-    font-size: 14px;
+    /* font-size: 14px; */
+    font-size: 100%;
     background-color: var(--code-background-color);
     border: 1px solid var(--code-border-color);
+}
+
+.rst-content code h1 h2 h3 h4 h5 h6 {
+    font-size: 24px;
 }
 
 .rst-content tt.literal,

@@ -1,10 +1,12 @@
 DIPLOMAT API
 ============
 
-The API Documentation for DIPLOMAT...
+DIPLOMAT includes the following python interfaces and plugins below.
 
 Core Functions
 --------------
+
+Python functions that are equivalents for DIPLOMAT's command line interface.
 
 .. autosummary::
     :toctree: _autosummary
@@ -14,6 +16,9 @@ Core Functions
 
 Predictors
 ----------
+
+A list of the :class:`~diplomat.processing.Predictor` plugins included with DIPLOMAT by default.
+Predictors predict the exact locations of objects given probabilistic model outputs.
 
 .. toctree::
     :hidden:
@@ -31,6 +36,11 @@ Predictors
 
 Frame Passes
 ------------
+
+A list of the ``FramePass`` plugins included by default
+with DIPLOMAT. Some :class:`~diplomat.processing.Predictor` plugins use frame passes to perform
+pose prediction, including the :plugin:`~diplomat.predictors.FramePassEngine` and
+:plugin:`~diplomat.predictors.SegmentedFramePassEngine` based predictors.
 
 .. toctree::
     :hidden:
@@ -66,6 +76,9 @@ Utilities
 
 Frontends
 ---------
+
+A list of frontends that come included with DIPLOMAT. Frontends enable DIPLOMAT to run
+off of model results produced by a specific tracking software package and project.
 
 .. toctree::
     :hidden:

@@ -299,19 +299,51 @@ def write_api_rst(api_dir: Path, document_lists: AttributeDict) -> None:
         f.write(templates["api"].format(diplomat=document_lists))
 
 
-# TODO: Add CLI support...
-def write_cli_entry(func_name: str, func) -> str:
-    pass
+def get_cli_entry(cmd_name: str, func) -> str:
+    from diplomat.utils.cli_tools import func_to_command
+    from argparse import ArgumentParser
+    import os
 
-def _write_cli_rst_helper(func_tree: dict, entry_list: list):
-    return
+    os.environ["COLUMNS"] = "80"
+    os.environ["LINES"] = "24"
+
+    help_str = func_to_command(func, ArgumentParser(prog=cmd_name)).format_help()
+    options = "\n".join(f"         {line}" for line in help_str.split("options:")[-1].split("\n"))
+    summary = "\n".join(f"    {line}" for line in help_str.split("\n\n")[1].split("\n"))
+
+    return templates["cli_entry"].format(
+        title=cmd_name,
+        title_dash="-" * (len(cmd_name) + 4),
+        summary=summary,
+        options=options
+    )
+
+
+def _cli_rst_helper(func_tree: dict, entry_list: list, prefix: str):
+    for name, func_or_dict in func_tree.items():
+        if(name.startswith("_")):
+            continue
+
+        if(isinstance(func_or_dict, dict)):
+            # Recursive running on
+            _cli_rst_helper(func_or_dict, entry_list, prefix + " " + name)
+        else:
+            # Function, let's document it...
+            entry_list.append(get_cli_entry(prefix + " " + name, func_or_dict))
 
 def write_cli_rst(api_dir: Path) -> None:
     from diplomat._cli_runner import get_dynamic_cli_tree
 
-    title_under = ["-", "^"]
+    entries = []
+    _cli_rst_helper(get_dynamic_cli_tree(), entries, "diplomat")
 
+    cli_file = api_dir / "cli.rst"
+    result = templates["cli_header"].format(
+        entries="\n\n".join(entries)
+    )
 
+    with cli_file.open("w") as f:
+        f.write(result)
 
 
 def on_config_init(app: Sphinx, config: Config) -> None:
@@ -344,7 +376,7 @@ def on_config_init(app: Sphinx, config: Config) -> None:
         )
 
     write_api_rst(build_dir.parent, document_lists)
-    write_cli_rst(build_dir.parent.parent)
+    write_cli_rst(build_dir.parent)
 
 def setup(app: Sphinx) -> dict:
     app.setup_extension("sphinx.ext.autodoc")

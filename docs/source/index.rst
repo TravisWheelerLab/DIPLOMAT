@@ -11,6 +11,7 @@ Welcome to DIPLOMAT's documentation!
    :includehidden:
    :caption: Contents:
 
+   api/cli
    api/api
 
 

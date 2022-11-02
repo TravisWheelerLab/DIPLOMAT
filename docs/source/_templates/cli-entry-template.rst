@@ -1,8 +1,12 @@
-:code:`{title}`
-{title_star_7extra}
+``{title}``
+{title_dash}
+
+    .. rubric:: Summary
 
 {summary}
 
-.. code-block:: text
+    .. rubric:: Options
 
-{command_options}
+    .. code-block:: text
+
+{options}
