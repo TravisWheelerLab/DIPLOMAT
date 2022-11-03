@@ -300,7 +300,7 @@ def write_api_rst(api_dir: Path, document_lists: AttributeDict) -> None:
 
 
 def get_cli_entry(cmd_name: str, func) -> str:
-    from diplomat.utils.cli_tools import func_to_command
+    from diplomat.utils.cli_tools import func_to_command, get_typecaster_annotations, to_metavar
     from argparse import ArgumentParser
     import os
 
@@ -310,12 +310,14 @@ def get_cli_entry(cmd_name: str, func) -> str:
     help_str = func_to_command(func, ArgumentParser(prog=cmd_name)).format_help()
     options = "\n".join(f"         {line}" for line in help_str.split("options:")[-1].split("\n"))
     summary = "\n".join(f"    {line}" for line in help_str.split("\n\n")[1].split("\n"))
+    usage = "\n".join(f"        {line[7:] if(line.startswith('usage: ')) else line}" for line in help_str.split("\n\n")[0].split("\n"))
 
     return templates["cli_entry"].format(
         title=cmd_name,
         title_dash="-" * (len(cmd_name) + 4),
         summary=summary,
-        options=options
+        options=options,
+        usage=usage
     )
 
 

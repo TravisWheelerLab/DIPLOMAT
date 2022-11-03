@@ -207,6 +207,9 @@ def to_hint(t: TypeCaster) -> typing.Type:
         return t.to_type_hint()
     if(isinstance(t, type)):
         return t
+    if(hasattr(t, "to_type_hint") and callable(t.to_type_hint)):
+        return t.to_type_hint()
+
     raise ValueError(f"Unable to convert '{t}' to a python type hint!")
 
 def to_metavar(t: TypeCaster) -> str:
@@ -218,6 +221,8 @@ def to_metavar(t: TypeCaster) -> str:
     :return: A string representing the type on the command line.
     """
     if(isinstance(t, ConvertibleTypeCaster)):
+        return t.to_metavar()
+    elif(hasattr(t, "to_metavar") and callable(t.to_metavar)):
         return t.to_metavar()
     else:
         return get_type_name(t).upper()

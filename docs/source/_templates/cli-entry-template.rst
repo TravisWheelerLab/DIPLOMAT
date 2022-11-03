@@ -5,6 +5,12 @@
 
 {summary}
 
+    .. rubric:: Usage
+
+    .. code-block:: text
+
+{usage}
+
     .. rubric:: Options
 
     .. code-block:: text
