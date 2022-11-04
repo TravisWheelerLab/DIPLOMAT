@@ -7,9 +7,11 @@ from dataclasses import asdict
 
 def get_static_cli_tree() -> dict:
     return {
+        "_category": "track",
         "predictors": {
             "__description": "Contains subcommands for listing, testing, and printing information "
                              "for the currently installed predictor plugins in this version of DIPLOMAT.",
+            "_category": "dev",
             "list": diplomat.list_predictor_plugins,
             "test": diplomat.test_predictor_plugin,
             "list_settings": diplomat.get_predictor_settings
@@ -22,6 +24,7 @@ def get_static_cli_tree() -> dict:
         "tweak": diplomat.tweak,
         "frontends": {
             "__description": "Contains subcommands for listing available frontends and inspecting the functions each frontend supports.",
+            "_category": "dev",
             "list": {
                 "__description": "List DIPLOMAT frontends and their descriptions.",
                 "all": diplomat.list_all_frontends,
@@ -43,6 +46,7 @@ def get_dynamic_cli_tree() -> dict:
         if(doc_str is not None):
             frontend_commands["__description"] = doc_str
 
+        frontend_commands["_category"] = "frontend"
         function_tree[frontend_name] = frontend_commands
 
     return function_tree

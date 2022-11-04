@@ -52,13 +52,13 @@ def patch_python_sphinx_domain():
     def _resolve_xref(self, env: BuildEnvironment, fromdocname, builder, typ, target, node, contnode):
         from sphinx import util
 
-        if(typ == "plugin"):
+        if(typ == "plugin" or typ == "cli"):
             doc_path = util.docname_join("", node['reftarget'])
 
             if doc_path not in env.all_docs:
                 return None
             else:
-                caption = node.astext() if(node['refexplicit']) else util.nodes.clean_astext(env.titles[doc_path])
+                caption = node.astext()
                 innernode = nodes.strong('', '', nodes.literal(caption, caption, classes=['plugin']))
                 return util.nodes.make_refnode(builder, fromdocname, doc_path, None, innernode)
         else:
@@ -88,6 +88,23 @@ class PluginXRefRole(XRefRole):
         return title, "/" + _BUILD_LOC.strip("/") + "/" + target
 
 
+class CLIXRefRole(XRefRole):
+    def process_link(
+        self,
+        env: BuildEnvironment,
+        refnode: nodes.Element,
+        has_explicit_title: bool,
+        title: str,
+        target: str
+    ) -> Tuple[str, str]:
+        title, target = super().process_link(env, refnode, has_explicit_title, title, target)
+
+        title = title.replace(" ", "\u00A0")
+        target = ".".join(target.strip().split())
+
+        return title, "/" + _CLI_LOC.strip("/") + "/" + target
+
+
 def register_custom_py_types(app: Sphinx):
     # Add support for plugin type...
     PythonDomain.object_types["plugin"] = ObjType("plugin", 'plugin')
@@ -99,10 +116,15 @@ def register_custom_py_types(app: Sphinx):
     PythonDomain.directives["option"] = PyOption
     PythonDomain.roles["option"] = PyXRefRole()
 
+    # Add support for cli links...
+    PythonDomain.roles["cli"] = CLIXRefRole(warn_dangling=True, innernodeclass=nodes.inline)
+
     patch_python_sphinx_domain()
 
 
 _BUILD_LOC = "api/_autosummary"
+_CLI_LOC = "api/_clisummary"
+
 
 templates = {
     "option": "option-template.rst",
@@ -299,8 +321,8 @@ def write_api_rst(api_dir: Path, document_lists: AttributeDict) -> None:
         f.write(templates["api"].format(diplomat=document_lists))
 
 
-def get_cli_entry(cmd_name: str, func) -> str:
-    from diplomat.utils.cli_tools import func_to_command, get_typecaster_annotations, to_metavar
+def write_cli_entry(cli_dir: Path, cmd_name: str, func) -> Tuple[str, str]:
+    from diplomat.utils.cli_tools import func_to_command
     from argparse import ArgumentParser
     import os
 
@@ -312,36 +334,56 @@ def get_cli_entry(cmd_name: str, func) -> str:
     summary = "\n".join(f"    {line}" for line in help_str.split("\n\n")[1].split("\n"))
     usage = "\n".join(f"        {line[7:] if(line.startswith('usage: ')) else line}" for line in help_str.split("\n\n")[0].split("\n"))
 
-    return templates["cli_entry"].format(
-        title=cmd_name,
-        title_dash="-" * (len(cmd_name) + 4),
-        summary=summary,
-        options=options,
-        usage=usage
-    )
+    with (cli_dir / (".".join(cmd_name.strip().split()) + ".rst")).open("w") as f:
+        f.write(templates["cli_entry"].format(
+            title=cmd_name,
+            title_dash="-" * (len(cmd_name) + 4),
+            summary=summary,
+            options=options,
+            usage=usage
+        ))
+
+    return (cmd_name, clean_doc_str(summary))
 
 
-def _cli_rst_helper(func_tree: dict, entry_list: list, prefix: str):
+def _cli_rst_helper(cli_dir: Path, func_tree: dict, entries: AttributeDict, prefix: str, fallback_namespace: str = "track"):
+    namespace = func_tree.get("_category", fallback_namespace)
+    full_namespace = namespace + "_commands"
+
+    if(full_namespace not in entries):
+        entries[full_namespace] = []
+
     for name, func_or_dict in func_tree.items():
         if(name.startswith("_")):
             continue
 
         if(isinstance(func_or_dict, dict)):
             # Recursive running on
-            _cli_rst_helper(func_or_dict, entry_list, prefix + " " + name)
+            _cli_rst_helper(cli_dir, func_or_dict, entries, prefix + " " + name, namespace)
         else:
             # Function, let's document it...
-            entry_list.append(get_cli_entry(prefix + " " + name, func_or_dict))
+            entries[full_namespace].append(write_cli_entry(cli_dir, prefix + " " + name, func_or_dict))
 
-def write_cli_rst(api_dir: Path) -> None:
+def write_cli_rst(cli_dir: Path) -> None:
     from diplomat._cli_runner import get_dynamic_cli_tree
 
-    entries = []
-    _cli_rst_helper(get_dynamic_cli_tree(), entries, "diplomat")
+    entries = AttributeDict()
+    files = AttributeDict()
 
-    cli_file = api_dir / "cli.rst"
+    _cli_rst_helper(cli_dir, get_dynamic_cli_tree(), entries, "diplomat")
+
+    for name, val in entries.items():
+        files[name] = "\n".join("    " + _CLI_LOC.split("/")[-1] + "/" + ".".join(n.split()) for n, s in val)
+
+        entries[name] = "\n".join(
+            f"    * - :py:cli:`{n}`\n"
+            f"      - {summary}" for n, summary in val
+        )
+
+    entries.files = files
+    cli_file = cli_dir.parent / "cli.rst"
     result = templates["cli_header"].format(
-        entries="\n\n".join(entries)
+        entries=entries
     )
 
     with cli_file.open("w") as f:
@@ -353,7 +395,9 @@ def on_config_init(app: Sphinx, config: Config) -> None:
     register_custom_py_types(app)
 
     build_dir = Path(app.srcdir) / _BUILD_LOC
+    cli_dir = Path(app.srcdir) / _CLI_LOC
     build_dir.mkdir(parents=True, exist_ok=True)
+    cli_dir.mkdir(parents=True, exist_ok=True)
 
     document_lists = AttributeDict()
     document_lists.files = AttributeDict()
@@ -378,7 +422,7 @@ def on_config_init(app: Sphinx, config: Config) -> None:
         )
 
     write_api_rst(build_dir.parent, document_lists)
-    write_cli_rst(build_dir.parent)
+    write_cli_rst(cli_dir)
 
 def setup(app: Sphinx) -> dict:
     app.setup_extension("sphinx.ext.autodoc")

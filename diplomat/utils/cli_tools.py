@@ -244,7 +244,7 @@ def build_full_parser(function_tree: dict, parent_parser: ArgumentParser, name: 
     sub_commands = parent_parser.add_subparsers(title=f"Subcommands and namespaces of '{name}'", required=True)
 
     for command_name, sub_actions in function_tree.items():
-        if(command_name.startswith("__")):
+        if(command_name.startswith("_")):
             continue
 
         if(isinstance(sub_actions, dict)):
