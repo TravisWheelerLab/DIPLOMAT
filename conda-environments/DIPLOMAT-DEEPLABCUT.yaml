@@ -1,0 +1,16 @@
+# Environment for using diplomat with DeepLabCut projects.
+# Installs diplomat and DeepLabCut into the same environment.
+name: DIPLOMAT-DEEPLABCUT
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - ipython
+  - jupyter
+  - nb_conda
+  - ffmpeg
+  - pip:
+    - "deeplabcut[gui,tf]"
+    - "diplomat-track[gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
