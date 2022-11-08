@@ -17,7 +17,7 @@ DIPLOMAT also includes a UI for performing tracking and several other tools for 
 
 ## Installation
 
-To install DIPLOMAT right now, you can and install it with pip using the following command:
+To install DIPLOMAT with PIP right now, you can and install it with pip using the following command:
 ```bash
 pip install git+https://github.com/TravisWheelerLab/DIPLOMAT.git
 ```
