@@ -1,10 +1,15 @@
 from pathlib import Path
 import sys
+from sphinx.ext.autodoc.mock import mock
 
 # Add project root directory to python path...
 sys.path.insert(0, str(Path(__file__).resolve().parent / "ext"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+def _get_version() -> str:
+    with mock(autodoc_mock_imports):
+        import diplomat
+        return diplomat.__version__
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -17,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 project = 'DIPLOMAT'
 copyright = '2022, Isaac Robinson, Nathan Insel, Travis Wheeler'
 author = 'Isaac Robinson, Nathan Insel, Travis Wheeler'
-release = '1.0.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -41,6 +45,9 @@ autodoc_mock_imports = ["tensorflow", "pandas", "scipy", "deeplabcut"]
 autosummary_generate = True
 autosummary_imported_members = True
 autosummary_ignore_module_all = False
+
+version = _get_version()
+release = version
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

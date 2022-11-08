@@ -1,6 +1,6 @@
 # DIPLOMAT
 
-DeepLabCut-based Identity Preserving Labeled-Object Multi-Animal Tracking.
+Deep learning-based Identity Preserving Labeled-Object Multi-Animal Tracking.
 
 ## About
 
@@ -9,11 +9,11 @@ packages. Unlike other multi-animal tracking packages, DIPLOMAT's algorithms wor
 
 |                                                            |                                                  |
 |------------------------------------------------------------|--------------------------------------------------|
-| ![Example of tracking 2 Degus in a Box](imgs/example1.png) | ![Example of tracking 3 Rats](imgs/example2.png) |
+| ![Example of tracking 2 Degus in a Box](docs/source/_static/imgs/example1.png) | ![Example of tracking 3 Rats](docs/source/_static/imgs/example2.png) |
 
 DIPLOMAT also includes a UI for performing tracking and several other tools for storing and visualizing confidence maps. 
 
-![UI Demo Showing user correcting tracking in a video](imgs/UIDemo.png)
+![UI Demo Showing user correcting tracking in a video](docs/source/_static/imgs/UIDemo.png)
 
 ## Installation
 

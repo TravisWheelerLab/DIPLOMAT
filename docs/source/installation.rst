@@ -38,7 +38,7 @@ Once you have a anaconda installed, you'll want to open a terminal and type:
     **Windows:** Open the start menu and search for *Anaconda Command Prompt*. If a program by that
     name is not found, search for *Command Prompt*.
 
-    **Linux:** Press :kbd:`CTRL+ALT+T`. This will open a terminal window.
+    **Linux:** Press :kbd:`CTRL` + :kbd:`ALT` + :kbd:`T`. This will open a terminal window.
 
     **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
     then search for *Terminal*.

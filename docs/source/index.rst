@@ -1,5 +1,7 @@
-DIPLOMAT Documentation
-======================
+DIPLOMAT |version| Documentation
+================================
+
+Deep learning-based Identity Preserving Labeled-Object Multi-Animal Tracking.
 
 .. toctree::
     :maxdepth: 2
@@ -8,6 +10,7 @@ DIPLOMAT Documentation
     overview
     installation
     basic_usage
+    advanced_usage
     api/cli
     api/api
 
