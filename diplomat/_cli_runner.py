@@ -55,9 +55,12 @@ def get_dynamic_cli_tree() -> dict:
 def main():
     function_tree = get_dynamic_cli_tree()
 
+    parser = ArgumentParser(prog="DIPLOMAT", description="A tool for multi-animal tracking.")
+    parser.add_argument("--version", "-v", action="version", version=f"%(prog)s {diplomat.__version__}")
     parser = build_full_parser(
         function_tree,
-        ArgumentParser(prog="DIPLOMAT", description="A tool for multi-animal tracking.")
+        parser
     )
+
     diplomat.CLI_RUN = True
     parser(sys.argv[1:])

@@ -77,16 +77,21 @@ def load_plugin_classes(
         for item in dir(sub_module):
             field = getattr(sub_module, item)
 
-            try: # Some classes throw an error when passed to issubclass...
-                # Checking if the field is a class, and if the field is a direct child of the plugin class
+            try:
+                # We check if the field is a type or class,
+                # it's module matches the current module (it was created here, this makes sure the location classes are loaded from is consistent),
+                # it extends or is the base class for this type of plugin,
+                # and it is not the plugin base class.
                 if (
                     isinstance(field, type)
+                    and (field.__module__ == sub_module.__name__)
                     and issubclass(field, plugin_metaclass)
                     and (field != plugin_metaclass)
                 ):
                     # It is a plugin, add it to the list...
                     plugins.add(field)
             except Exception:
+                # Some classes throw an error when passed to issubclass, just ignore them as they're clearly not a plugin.
                 pass
 
     return plugins

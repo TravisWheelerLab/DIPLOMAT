@@ -9,6 +9,6 @@
 
     {desc}
 
-    .. rubric:: Options
+    .. rubric:: Settings
 
 {settings}

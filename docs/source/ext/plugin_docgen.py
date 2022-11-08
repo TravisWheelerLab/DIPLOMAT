@@ -35,9 +35,9 @@ class PyPlugin(PyClasslike):
         res = super().get_index_text(modname, name_cls)
         return res.replace("class", "plugin")
 
-class PyOption(PyAttribute):
+class PySetting(PyAttribute):
     def get_signature_prefix(self, sig: str) -> List[nodes.Node]:
-        return [nodes.Text("option"), addnodes.desc_sig_space()]
+        return [nodes.Text("setting"), addnodes.desc_sig_space()]
 
     def get_index_text(self, modname: str, name_cls: Tuple[str, str]) -> str:
         name, cls = name_cls
@@ -46,7 +46,7 @@ class PyOption(PyAttribute):
         if modname and self.env.config.add_module_names:
             clsname = '.'.join([modname, clsname])
 
-        return 'Option %s (in plugin %s)' % (attrname, clsname)
+        return 'Setting %s (in plugin %s)' % (attrname, clsname)
 
 def patch_python_sphinx_domain():
     def _resolve_xref(self, env: BuildEnvironment, fromdocname, builder, typ, target, node, contnode):
@@ -112,9 +112,9 @@ def register_custom_py_types(app: Sphinx):
     PythonDomain.roles["plugin"] = PluginXRefRole(warn_dangling=True, innernodeclass=nodes.inline)
 
     # Add support for option type (based on data or attribute type)...
-    PythonDomain.object_types["option"] = ObjType("option", 'option', 'attr', 'obj')
-    PythonDomain.directives["option"] = PyOption
-    PythonDomain.roles["option"] = PyXRefRole()
+    PythonDomain.object_types["setting"] = ObjType("setting", 'setting', 'attr', 'obj')
+    PythonDomain.directives["setting"] = PySetting
+    PythonDomain.roles["setting"] = PyXRefRole()
 
     # Add support for cli links...
     PythonDomain.roles["cli"] = CLIXRefRole(warn_dangling=True, innernodeclass=nodes.inline)
@@ -127,7 +127,7 @@ _CLI_LOC = "api/_clisummary"
 
 
 templates = {
-    "option": "option-template.rst",
+    "setting": "setting-template.rst",
     "plugin": "plugin-template.rst",
     "api": "api-template.rst",
     "frontend": "frontend-template.rst",
@@ -146,14 +146,14 @@ def clean_doc_str(doc: str) -> str:
 
 def format_settings(settings: Optional[ConfigSpec]) -> str:
     if(settings is None):
-        return "    This plugin can't be passed any options."
+        return "    This plugin can't be passed any settings."
 
     string_list = []
 
     for name, (default, caster, desc) in settings.items():
         desc = getattr(desc, "__sphinx_str__", desc.__str__)()
 
-        string_list.append(templates["option"].format(
+        string_list.append(templates["setting"].format(
             name=name,
             type=get_type_name(caster),
             default=repr(default),

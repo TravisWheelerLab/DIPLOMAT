@@ -15,8 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'DIPLOMAT'
-copyright = '2022, Isaac Robinson, Travis Wheeler, Nathan Insel'
-author = 'Isaac Robinson, Travis Wheeler, Nathan Insel'
+copyright = '2022, Isaac Robinson, Nathan Insel, Travis Wheeler'
+author = 'Isaac Robinson, Nathan Insel, Travis Wheeler'
 release = '1.0.0'
 
 # -- General configuration ---------------------------------------------------

@@ -1,5 +1,5 @@
 
-    .. py:option:: {name}
+    .. py:setting:: {name}
         :type: {type}
         :value: {default}
 
