@@ -48,7 +48,7 @@ opencv-python = "*"
 tqdm = "*"
 pyyaml = "*"
 h5py = "*"
-wxpython = "*"
+wxpython = "<4.2.0"
 
 
 # Using poetry

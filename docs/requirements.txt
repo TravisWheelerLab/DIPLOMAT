@@ -1,0 +1,9 @@
+sphinx
+sphinx-rtd-theme
+typing_extensions>=3.8
+matplotlib
+opencv-python
+tqdm
+pyyaml
+h5py
+wxpython<4.2.0
