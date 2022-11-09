@@ -223,7 +223,7 @@ class Approximate(labeler_lib.PoseLabeler):
 
         fy, fx, fp, foffx, foffy = [a if(a is not None) else np.array([]) for a in frame.orig_data.unpack()]
         final_p, (final_x, final_y), (final_off_x, final_off_y) = self._absorb_frame_data(
-            fp * ((1 - user_amp) / np.max(fp)),
+            fp * ((1 - user_amp) / np.max(fp)) if(len(fp) > 0) else fp,
             np.asarray([fx, fy]),
             np.asarray([foffx, foffy]),
             gp * user_amp,
