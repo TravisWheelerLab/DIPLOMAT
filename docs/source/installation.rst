@@ -29,7 +29,7 @@ Once you have a anaconda installed, you'll want to open a terminal and type:
 
 .. code-block:: sh
 
-    conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml?token=GHSAT0AAAAAABQMFTXHWGM3TPQVXSHQBKCCY3JJQCQ
+    conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
 
 .. hint::
 
@@ -54,7 +54,7 @@ From here, the ``diplomat`` command will be available from the command line.
 Using PIP
 ^^^^^^^^^
 
-Once you are using an alternative package for managing python environments, you can still install
+If you are using an alternative package for managing python environments, you can install
 DIPLOMAT by simply using pip, using one of the two commands below:
 
 .. code-block:: sh
