@@ -11,6 +11,6 @@ dependencies:
   - jupyter
   - nb_conda
   - ffmpeg
-  - wxpython
+  - wxpython<4.2.0
   - pip:
     - "diplomat-track[gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
