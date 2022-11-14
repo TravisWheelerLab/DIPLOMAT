@@ -10,7 +10,11 @@ from sphinx.environment import BuildEnvironment
 from sphinx.ext.autodoc.mock import mock
 from sphinx.roles import XRefRole
 
-MOCK_PACKAGES = ["deeplabcut", "tensorflow", "scipy", "pandas"]
+import warnings
+warnings.simplefilter("error", ImportWarning)
+
+
+MOCK_PACKAGES = ["deeplabcut", "tensorflow", "scipy", "pandas", "wx"]
 
 with mock(MOCK_PACKAGES):
     from diplomat.predictors.fpe.sparse_storage import AttributeDict
@@ -27,7 +31,10 @@ with mock(MOCK_PACKAGES):
 def load_plugins_with_mocks(module, clazz):
     from diplomat.utils.pluginloader import load_plugin_classes
     with mock(MOCK_PACKAGES):
-        return load_plugin_classes(module, clazz)
+        # Patch wx functions that do not exist...
+        import wx.lib.newevent
+        wx.lib.newevent.NewCommandEvent = lambda: (None, None)
+        return load_plugin_classes(module, clazz, display_error=True)
 
 
 class PyPlugin(PyClasslike):

@@ -6,4 +6,3 @@ opencv-python
 tqdm
 pyyaml
 h5py
-wxpython<4.2.0
