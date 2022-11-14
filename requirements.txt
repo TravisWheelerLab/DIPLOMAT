@@ -1,5 +1,0 @@
-opencv-python
-matplotlib
-deeplabcut
-wxpython
-typing_extensions>=3.8

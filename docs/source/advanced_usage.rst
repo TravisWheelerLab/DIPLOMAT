@@ -33,18 +33,20 @@ To get information about frontends, use commands :py:cli:`diplomat frontends lis
 Development Usage
 -----------------
 
-DIPLOMAT is written entirely in python. To set up an environment for developing DIPLOMAT, you
-can simply pull down this repository and install its requirements.txt dependencies to your
-virtual environment.
+DIPLOMAT is written entirely in python, and uses poetry for development. To set up an
+environment for developing DIPLOMAT, you can simply pull down this repository and create
+an environment for it using the commands shown below.
 
 .. code-block:: sh
 
     git clone https://github.com/TravisWheelerLab/DIPLOMAT.git
     cd DIPLOMAT
-    pip install -r requirements.txt
+    poetry install --all-extras
+
+Then, to launch the environment in the terminal, simply run :code:`poetry shell`
 
 For most development, you'll most likely want to add additional predictor plugins.
-Predictors can be found in diplomat/predictors. Classes that extend Predictor are automatically
+Predictors can be found in the ``diplomat/predictors`` directory. Classes that extend Predictor are automatically
 loaded from this directory. To test predictors, you can use the :py:cli:`diplomat predictors test` command:
 
 .. code-block:: sh

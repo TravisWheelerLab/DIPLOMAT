@@ -16,7 +16,7 @@ Deep learning-based Identity Preserving Labeled-Object Multi-Animal Tracking.
 
 
 
-Indices and tables
+Indices and Tables
 ==================
 
 * :ref:`genindex`
