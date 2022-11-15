@@ -37,6 +37,8 @@ conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/
 conda activate DIPLOMAT-DEEPLABCUT
 ```
 
+For a more thorough explanation of the installation process, see the [documentation](https://diplomat.readthedocs.io/en/latest/installation.html).
+
 ## Usage
 
 #### Running DIPLOMAT
@@ -66,11 +68,11 @@ diplomat tweak -c path/to/config -v path/to/video
 This will display a stripped down version of the supervised editing UI, allowing for minor tweaks to be made to the tracks, and then
 saved back to the same file.
 
-To see 
+For a list of additional ways DIPLOMAT can be used, see the [documentation](https://diplomat.readthedocs.io/en/latest/basic_usage.html).
 
 #### Additional Help
 
-All diplomat commands are documented via help strings. To get more information about a diplomat subcommand or command, simply run it with the `-h` or `--help` flag.
+All DIPLOMAT commands are documented via help strings. To get more information about a diplomat subcommand or command, simply run it with the `-h` or `--help` flag.
 
 ```bash
 # Help for all of diplomat (lists sub commands of diplomat):
@@ -81,10 +83,15 @@ diplomat track --help
 diplomat predictors --help
 ```
 
+## Documentation
+
+DIPLOMAT has documentation on ReadTheDocs at [https://diplomat.readthedocs.io/en/latest](https://diplomat.readthedocs.io/en/latest).
+
 ## Development
 
 DIPLOMAT is written entirely in python. To set up an environment for developing DIPLOMAT, you can simply pull down this repository and install its
-requirements using poetry. For a further description of how to set up DIPLOMAT for development, see the ...
+requirements using poetry. For a further description of how to set up DIPLOMAT for development, see the 
+[Development Usage](https://diplomat.readthedocs.io/en/latest/advanced_usage.html#development-usage) section in the documentation.
 
 ## Contributing
 
