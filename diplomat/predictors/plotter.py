@@ -19,7 +19,7 @@ def codec_string(val: str) -> int:
 
 class PlotterArgMax(Predictor):
     """
-    Identical to singleargmax, but plots probability frames in form of video to the user using matplotlib...
+    Identical to :plugin:`~diplomat.predictors.ArgMax`, but plots probability frames in form of video to the user using matplotlib...
     """
     def __init__(
             self,

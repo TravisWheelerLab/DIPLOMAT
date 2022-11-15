@@ -9,6 +9,7 @@ from sphinx.domains.python import PyClasslike, PythonDomain, ObjType, PyAttribut
 from sphinx.environment import BuildEnvironment
 from sphinx.ext.autodoc.mock import mock
 from sphinx.roles import XRefRole
+from sphinx.ext.autosummary import autosummary_toc
 
 import warnings
 warnings.simplefilter("error", ImportWarning)
@@ -66,7 +67,7 @@ def patch_python_sphinx_domain():
                 return None
             else:
                 caption = node.astext()
-                innernode = nodes.strong('', '', nodes.literal(caption, caption, classes=['plugin']))
+                innernode = nodes.strong('', '', nodes.literal(caption, caption, classes=['xref', 'plugin']))
                 return util.nodes.make_refnode(builder, fromdocname, doc_path, None, innernode)
         else:
             return type(self)._old_resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode)
