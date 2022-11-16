@@ -10,3 +10,7 @@ ENV/
 docs/build/
 # Auto generated api docs...
 docs/source/api
+# Virtual environment for docs if being used...
+docs/.venv
+docs/venv/
+docs/ENV/

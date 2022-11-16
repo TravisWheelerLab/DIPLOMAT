@@ -20,6 +20,7 @@ def load_plugin_classes(
     plugin_metaclass: Type[T],
     do_reload: bool = False,
     display_error: bool = True,
+    recursive: bool = True
 ) -> Set[Type[T]]:
     """
     Loads all plugins, or classes, within the specified module folder and submodules that extend the provided metaclass
@@ -36,6 +37,7 @@ def load_plugin_classes(
 
                           import warnings
                           warnings.simplefilter("always", ImportWarning)
+    :param recursive: Boolean, if true recursively search subpackages for the class. Otherwise, only the first level is searched.
 
     :return: A list of class types that directly extend the provided base class and where found in the specified
              module folder.
@@ -67,8 +69,8 @@ def load_plugin_classes(
         else:
             sub_module = sys.modules[package_name]
 
-        # Now we check if the module is a package, and if so, recursively call this method
-        if ispkg:
+        # Now we check if the module is a package, and if so, recursively call this method...
+        if ispkg and recursive:
             plugins = plugins | load_plugin_classes(
                 sub_module, plugin_metaclass, do_reload
             )

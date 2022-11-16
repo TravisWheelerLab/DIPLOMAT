@@ -1,5 +1,5 @@
 """
-A tool providing multi-animal tracking capabilities on top of DeepLabCut.
+A tool providing multi-animal tracking capabilities on top of other Deep learning based tracking software.
 """
 
 __version__ = "0.0.1"
@@ -43,7 +43,7 @@ def _load_frontends():
         # cause memory issues if a lot of processes are started by a predictor...
         return (set(), {})
 
-    frontends = load_plugin_classes(frontends, DIPLOMATFrontend)
+    frontends = load_plugin_classes(frontends, DIPLOMATFrontend, recursive=False)
     loaded_funcs = {}
 
     for frontend in frontends:
