@@ -386,3 +386,15 @@ class TrackingData:
         pose_object.set_x_at(frame, bodypart + output_num, scmap_x)
         pose_object.set_y_at(frame, bodypart + output_num, scmap_y)
         pose_object.set_prob_at(frame, bodypart + output_num, prob)
+
+    def __str__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"frames={self.get_frame_count()}, "
+            f"parts={self.get_bodypart_count()}, "
+            f"width={self.get_frame_width()}, "
+            f"height={self.get_frame_height()}, "
+            f"has_offset_map={self.get_offset_map() is not None}, "
+            f"downscaling={self.get_down_scaling()}"
+            f")"
+        )
