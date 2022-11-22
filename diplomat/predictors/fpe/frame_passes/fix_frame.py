@@ -42,7 +42,7 @@ class FixFrame(FramePass):
     def get_max_location(
         cls,
         frame: ForwardBackwardFrame,
-        down_scaling: int
+        down_scaling: float
     ) -> Tuple[Optional[float], Optional[float]]:
         y, x, prob, x_off, y_off = frame.src_data.unpack()
 
@@ -66,7 +66,7 @@ class FixFrame(FramePass):
         avg: float,
         frame1: ForwardBackwardFrame,
         frame2: ForwardBackwardFrame,
-        down_scaling: int
+        down_scaling: float
     ) -> float:
         return np.abs((avg - cls.dist(
             cls.get_max_location(frame1, down_scaling),
@@ -79,7 +79,7 @@ class FixFrame(FramePass):
         storage_graph: StorageGraph,
         frame_list: List[ForwardBackwardFrame],
         num_outputs: int,
-        down_scaling: int
+        down_scaling: float
     ) -> List[List[Dict[int, float]]]:
         # Construct a graph...
         graphs = []
@@ -234,7 +234,7 @@ class FixFrame(FramePass):
         cls,
         frames: List[ForwardBackwardFrame],
         num_outputs: int,
-        down_scaling: int,
+        down_scaling: float,
         skeleton: Optional[StorageGraph],
         progress_bar: Optional[ProgressBar] = None
     ) -> float:

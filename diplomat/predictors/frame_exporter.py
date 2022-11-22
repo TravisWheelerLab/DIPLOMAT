@@ -41,7 +41,7 @@ class FrameExporter(Predictor):
 
         self._frame_writer = None
         # Making the output file...
-        orig_h5_path = Path(video_metadata["h5-file-name"])
+        orig_h5_path = Path(video_metadata["output-file-path"])
         vid_path = Path(video_metadata["orig-video-path"])
         self._out_file: BinaryIO = (
             orig_h5_path.parent / (vid_path.name + "~" + settings.filename_suffix + (".h5" if(settings.export_as_h5) else ".dlfs"))

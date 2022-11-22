@@ -40,7 +40,7 @@ class Predictor(ABC):
                                useful to interactive plugins. Includes the keys:
 
                                 - :code:`"fps"`: Original Video's frames per second
-                                - :code:`"h5-file-name"`: The name of the original h5 file, and it's path, as a string.
+                                - :code:`"output-file-path"`: The name of the output file, and it's path, as a string.
                                 - :code:`"orig-video-path"`: The file path and name of the video being analyzed, as a string.
                                   this value may be None, meaning the video could not be found, and
                                   user is processing frames via a .dlfs file.

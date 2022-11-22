@@ -22,7 +22,7 @@ class TrackingData:
         self,
         scmap: ndarray,
         locref: Optional[ndarray] = None,
-        stride: int = DEFAULT_SCALE,
+        stride: float = DEFAULT_SCALE,
     ):
         """
         Create an new tracking data object to store DLC neural network data for one frame or a batch of frames.
@@ -32,7 +32,7 @@ class TrackingData:
         :param locref: The "offsets" produced by DeepLabCut neural network, stored in a 5-dimensional numpy array
                        containing the dimensions:
                        [frame, y location, x location, bodypart, 0 for x offset or 1 for y offset]
-        :param stride: Integer which stores the down scaling of the probability map relative to the size of the original
+        :param stride: Float which stores the down scaling of the probability map relative to the size of the original
                        video. This value defaults to 8, meaning the original video is 8 times the size of the
                        probability map.
         """
@@ -56,7 +56,7 @@ class TrackingData:
         part_count: int,
         width: int,
         height: int,
-        stride: int = DEFAULT_SCALE,
+        stride: float = DEFAULT_SCALE,
         allocate_offsets: bool = False
     ) -> "TrackingData":
         """
@@ -97,7 +97,7 @@ class TrackingData:
         """
         return self._locref
 
-    def get_down_scaling(self) -> int:
+    def get_down_scaling(self) -> float:
         """
         Get the down scaling performed on this source map, as an integer.
 
@@ -127,11 +127,11 @@ class TrackingData:
         """
         self._locref = locref
 
-    def set_down_scaling(self, scale: int):
+    def set_down_scaling(self, scale: float):
         """
         Set the down scaling performed on the probability map, as an integer
 
-        :param scale: An integer representing the downscaling of the probability map compared to the original video file, in
+        :param scale: An float representing the downscaling of the probability map compared to the original video file, in
                  terms of what the dimensions of the probability map need to multiplied by to match the dimensions of
                  the original video file.
         """

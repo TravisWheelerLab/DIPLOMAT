@@ -4,14 +4,35 @@ from diplomat.processing.type_casters import StrictCallable, PathLike, Union, Li
 import typing
 
 
+class Select(Union):
+    def __eq__(self, other: TypeCaster):
+        if(isinstance(other, Union)):
+            # Subset check...
+            return all(self.__eq__(val) for val in other._valid_types)
+        else:
+            if(other in self._valid_types):
+                return True
+            else:
+                return super().__eq__(other)
+
+    def to_metavar(self) -> str:
+        raise ValueError("Select should only be used for type enforcement, not type hints!")
+
+    def to_type_hint(self) -> typing.Type:
+        raise ValueError("Select should only be used for type enforcement, not type hints!")
+
+
+# Config argument can be a list of paths, single path, or union of the two...
+ConfigPathLikeArgument = Select[List[PathLike], PathLike]
+
 VerifierFunction = StrictCallable(
-    config=PathLike,
+    config=Union[List[PathLike], PathLike],
     _kwargs=True,
     _return=bool
 )
 
 AnalyzeVideosFunction = lambda ret: StrictCallable(
-    config=PathLike,
+    config=ConfigPathLikeArgument,
     videos=Union[List[PathLike], PathLike],
     predictor=Optional[str],
     predictor_settings=Optional[Dict[str, Any]],
@@ -19,7 +40,7 @@ AnalyzeVideosFunction = lambda ret: StrictCallable(
     _return=ret
 )
 AnalyzeFramesFunction = lambda ret: StrictCallable(
-    config=PathLike,
+    config=ConfigPathLikeArgument,
     frame_stores=Union[List[PathLike], PathLike],
     predictor=Optional[str],
     predictor_settings=Optional[Dict[str, Any]],
@@ -27,7 +48,7 @@ AnalyzeFramesFunction = lambda ret: StrictCallable(
     _return=ret
 )
 
-LabelVideosFunction = lambda ret: StrictCallable(config=PathLike, videos=Union[List[PathLike], PathLike], _return=ret)
+LabelVideosFunction = lambda ret: StrictCallable(config=ConfigPathLikeArgument, videos=Union[List[PathLike], PathLike], _return=ret)
 
 
 @dataclass(frozen=False)

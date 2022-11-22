@@ -15,7 +15,7 @@ the DeepLabCut Frame Store format.
         [frame_height] - The height of a frame. 4 Bytes (unsigned integer)
         [frame_width] - The width of a frame. 4 Bytes (unsigned integer)
         [frame_rate] - The frame rate, in frames per second. 8 Bytes (double float).
-        [stride] - The original video upscaling multiplier relative to current frame size. 4 Bytes (unsigned integer)
+        [stride] - The original video upscaling multiplier relative to current frame size. 8 Bytes (double float)
         [orig_video_height] - The original video height. 4 Bytes (unsigned integer)
         [orig_video_width] - The original video width. 4 Bytes (unsigned integer)
         [crop_y1] - The y offset of the cropped box, set to max value to indicate no cropping... 4 Bytes (unsigned integer)
@@ -104,13 +104,14 @@ class DLFSReader(FrameReader):
     A DeepLabCut Frame Store Reader. Allows for reading ".dlfs" files.
     """
 
+    # See spec above, describing each of these types in order...
     HEADER_DATA_TYPES = [
         luint64,
         luint32,
         luint32,
         luint32,
         ldouble,
-        luint32,
+        ldouble,
         luint32,
         luint32,
         luint32,
@@ -428,7 +429,7 @@ class DLFSWriter(FrameWriter):
             to_bytes(header.frame_rate, ldouble)
         )  # The frames per second
         self._out_file.write(
-            to_bytes(header.stride, luint32)
+            to_bytes(header.stride, ldouble)
         )  # The video up-scaling factor
         # Original video height and width.
         self._out_file.write(to_bytes(header.orig_video_height, luint32))

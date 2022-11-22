@@ -67,7 +67,7 @@ def _tweak_single_video(
     num_outputs = max(counts.values())
     video_metadata = {
         "fps": pickle_info["fps"],
-        "h5-file-name": str(h5_path),
+        "output-file-path": str(h5_path),
         "orig-video-path": str(video_path),
         "duration": pickle_info["nframes"] / pickle_info["fps"],
         "size": tuple(int(v) for v in pickle_info["frame_dimensions"]),

@@ -245,7 +245,7 @@ class SupervisedFramePassEngine(FramePassEngine):
         prob: float,
         x_off: float,
         y_off: float,
-        down_scaling: int
+        down_scaling: float
     ) -> Tuple[float, float, float]:
         x_video = (x_scmap + 0.5) * down_scaling + x_off
         y_video = (y_scmap + 0.5) * down_scaling + y_off

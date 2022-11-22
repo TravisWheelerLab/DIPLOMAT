@@ -46,7 +46,7 @@ class PlotterArgMax(Predictor):
             "$VIDEO", Path(path).stem
         )
         self.VIDEO_PATH = str(
-            (Path(video_metadata["h5-file-name"]).parent) / final_video_name
+            (Path(video_metadata["output-file-path"]).parent) / final_video_name
         )
 
         settings.figure_args.update({"dpi": settings.dpi})

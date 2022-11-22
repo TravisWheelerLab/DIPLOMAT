@@ -103,7 +103,7 @@ class ClusterFrames(FramePass):
         num_outputs: int,
         gaussian_table: np.ndarray,
         config: Config,
-        down_scaling: int,
+        down_scaling: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> List[ForwardBackwardFrame]:
         num_groups = len(frame_data) // num_outputs
@@ -137,7 +137,7 @@ class ClusterFrames(FramePass):
         num_clusters: int,
         gaussian_table: np.ndarray,
         config: Config,
-        down_scaling: int
+        down_scaling: float
     ) -> List[Tuple[np.ndarray, ...]]:
         # Special case: When cluster size is 1...
         if(num_clusters == 1):

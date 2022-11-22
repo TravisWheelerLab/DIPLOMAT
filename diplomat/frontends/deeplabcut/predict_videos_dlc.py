@@ -227,7 +227,7 @@ def _analyze_video(
         "fps": fps,
         "duration": duration,
         "size": (vh, vw),
-        "h5-file-name": str(Path(h5_path).resolve()),
+        "output-file-path": str(Path(h5_path).resolve()),
         "orig-video-path": str(Path(video).resolve()),
         "cropping-offset": (int(config["y1"]), int(config["x1"]))
         if (config.get("cropping", False))

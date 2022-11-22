@@ -10,7 +10,7 @@ hdf5 file, with the specified fields below:
         Attribute "frame_height": A 64 bit integer
         Attribute "frame_width": A 64 bit integer
         Attribute "frame_rate": A 64 bit float
-        Attribute "stride": The video scaling factor relative to the original probability map, A 64 bit integer
+        Attribute "stride": The video scaling factor relative to the original probability map, A 64 bit float
         Attribute "orig_video_height": A 64 bit integer
         Attribute "orig_video_width", A 64 bit integer
         Attribute "crop_offset_y": A 64 bit integer, if negative there is no cropping.

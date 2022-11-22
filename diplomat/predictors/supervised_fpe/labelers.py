@@ -27,7 +27,7 @@ class EditableFramePassEngine(Protocol):
         prob: float,
         x_off: float,
         y_off: float,
-        down_scaling: int
+        down_scaling: float
     ) -> Tuple[float, float, float]:
         pass
 

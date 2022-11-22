@@ -606,10 +606,10 @@ class StrictCallable(ConvertibleTypeCaster):
         for name, expected_annot in self._required_args.items():
             if(name not in annots):
                 raise TypeError(f"Callable does not have an argument called: {name}")
-            if(not (annots[name] == expected_annot)):
+            if(not (expected_annot == annots[name])):
                 raise TypeError(f"Argument '{name}' annotation '{annots[name]}' does not match '{expected_annot}'")
 
-        if(not (annots["return"] == self._return_type)):
+        if(not (self._return_type == annots["return"])):
             raise TypeError(f"Return annotation '{annots['return']}' does not match '{self._return_type}'")
 
         return arg
