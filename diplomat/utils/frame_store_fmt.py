@@ -72,7 +72,18 @@ the DeepLabCut Frame Store format.
                         if [offsets_included] == 1:
                             [off y] - list of 4 byte floats, stores y offset within the block of pixels.
                             [off x] - list of 4 byte floats, stores x offset within the block of pixels.
+
+    Frame Terminating/Ending Chunk:
+        This chunk is optional, but when included allows this file to be placed onto the end of another file
+        (in most cases this is a video file). Readers should first check for the above header, and if they don't see "DLFS",
+        then seek to the end of the file and search for a DLFE chunk.
+
+        ['DLFE'] -> Deep Learning Frame End
+        [file_size] -> The size of the file, excluding this chunk (or the whole file size -12 bytes). (long unsigned integer, 8 bytes)
+
+
 """
+import os
 from io import BytesIO
 from typing import Tuple
 from diplomat.utils.frame_store_api import *
@@ -93,10 +104,11 @@ class DLFSConstants:
     # Chunk names...
     HEADER_CHUNK_MAGIC = b"DLFH"
     # The header length, including the 'DLFH' magic
-    HEADER_LENGTH = 52
+    HEADER_LENGTH = 56
     BP_NAME_CHUNK_MAGIC = b"DBPN"
     FRAME_LOOKUP_MAGIC = b"FLUP"
     FRAME_DATA_CHUNK_MAGIC = b"FDAT"
+    FRAME_END_CHUNK_MAGIC = b"DLFE"
 
 
 class DLFSReader(FrameReader):
@@ -128,6 +140,29 @@ class DLFSReader(FrameReader):
         if not assertion:
             raise ValueError(error_msg)
 
+    def _find_header(self, file: BinaryIO):
+        """
+        Private method, find the start of a dlfs file.
+        """
+        if(file.read(4) == DLFSConstants.FILE_MAGIC):
+            return
+
+        file.seek(-12, os.SEEK_END)
+        tail = file.read(12)
+
+        self._assert_true(
+            tail[:4] == DLFSConstants.FRAME_END_CHUNK_MAGIC,
+            "File is not of the DIPLOMAT Frame Store Format!"
+        )
+
+        offset = int(from_bytes(tail[4:], luint64))
+        file.seek(-(offset + 12), os.SEEK_CUR)
+
+        self._assert_true(
+            file.read(4) == DLFSConstants.FILE_MAGIC,
+            "File is not of the DIPLOMAT Frame Store Format!"
+        )
+
     def __init__(self, file: BinaryIO):
         """
         Create a new DeepLabCut Frame Store Reader.
@@ -136,10 +171,9 @@ class DLFSReader(FrameReader):
         """
         super().__init__(file)
 
-        self._assert_true(
-            file.read(4) == DLFSConstants.FILE_MAGIC,
-            "File is not of the DIPLOMAT Frame Store Format!",
-        )
+        # Search for the start of the file...
+        self._find_header(file)
+
         # Check for valid header...
         header_bytes = file.read(DLFSConstants.HEADER_LENGTH)
         self._assert_true(
@@ -400,6 +434,7 @@ class DLFSWriter(FrameWriter):
         super().__init__(file, header, threshold)
 
         self._out_file = file
+        self._file_start_offset = file.tell()
         self._header = header
         self._threshold = (
             threshold if (threshold is None or 0 <= threshold <= 1) else 1e-6
@@ -481,6 +516,12 @@ class DLFSWriter(FrameWriter):
         self._out_file.seek(self._flup_offset)
         self._out_file.write(self._frame_offsets.tobytes("C"))
         self._out_file.seek(loc)
+
+    def _write_end_chunk(self):
+        """ Writes out the final chunk of the file. """
+        loc = self._out_file.tell()
+        self._out_file.write(DLFSConstants.FRAME_END_CHUNK_MAGIC)
+        self._out_file.write(to_bytes(loc - self._file_start_offset, luint64))
 
     def tell_frame(self) -> int:
         """
@@ -593,6 +634,7 @@ class DLFSWriter(FrameWriter):
         if(self._current_frame >= self._header.number_of_frames):
             # We have reached the end, dump the flup chunk
             self._write_flup_data()
+            self._write_end_chunk()
 
     def close(self):
         """
@@ -603,3 +645,4 @@ class DLFSWriter(FrameWriter):
         if(self._current_frame < self._header.number_of_frames):
             # We have reached the end, dump the flup chunk
             self._write_flup_data()
+            self._write_end_chunk()

@@ -8,7 +8,6 @@ from diplomat.utils.video_splitter import _sanitize_path_arg
 from pathlib import Path
 import numpy as np
 import diplomat.utils.frame_store_fmt as frame_store_fmt
-import diplomat.utils.h5_frame_store_fmt as h5_frame_store_fmt
 import tqdm
 import time
 from diplomat.utils.shapes import shape_iterator
@@ -181,11 +180,7 @@ def _analyze_frame_store(
             start = time.time()
 
             # Read in the header, setup the settings.
-            try:
-                frame_reader = frame_store_fmt.DLFSReader(fb)
-            except ValueError:
-                fb.seek(0)
-                frame_reader = h5_frame_store_fmt.DLH5FSReader(fb)
+            frame_reader = frame_store_fmt.DLFSReader(fb)
 
             (
                 num_f,

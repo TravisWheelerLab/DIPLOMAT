@@ -203,11 +203,10 @@ class FramePassEngine(Predictor):
 
         TODO
         """
-        from diplomat.utils import frame_store_fmt, h5_frame_store_fmt
+        from diplomat.utils import frame_store_fmt
 
         exporters = {
-            "DLFS": frame_store_fmt.DLFSWriter,
-            "HDF5": h5_frame_store_fmt.DLH5FSWriter
+            "DLFS": frame_store_fmt.DLFSWriter
         }
 
         if(export_all):

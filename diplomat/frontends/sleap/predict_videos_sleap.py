@@ -1,14 +1,17 @@
+import platform
+import sys
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, Type
+from typing import Optional, Type, List
 
 import numpy as np
-
 import diplomat.processing.type_casters as tc
 from diplomat.utils.cli_tools import extra_cli_args, Flag
 from diplomat.processing.progress_bar import TQDMProgressBar
-from diplomat.processing import get_predictor, Config, Predictor
+from diplomat.processing import get_predictor, Config, Predictor, Pose
 from .sleap_providers import PredictorExtractor
 from .visual_settings import VISUAL_SETTINGS
+import time
 
 import sleap
 import tensorflow as tf
@@ -88,6 +91,116 @@ def _get_video_metadata(
     })
 
 
+def _pose_to_instance(pose: Pose, frame: int, num_outputs: int, skeleton: sleap.Skeleton) -> List[sleap.PredictedInstance]:
+    all_xs = pose.get_x_at(frame, slice(None))
+    all_ys = pose.get_y_at(frame, slice(None))
+    all_scores = pose.get_prob_at(frame, slice(None))
+
+    instances = []
+
+    for body_i in range(num_outputs):
+        xs = all_xs[body_i::num_outputs]
+        ys = all_ys[body_i::num_outputs]
+        scores = all_scores[body_i::num_outputs]
+
+        instances.append(sleap.PredictedInstance.from_arrays(
+            points=np.stack([xs, ys]),
+            point_confidences=scores,
+            instance_score=np.average(scores),
+            skeleton=skeleton,
+            track=sleap.Track(0, f"Animal{body_i}"))
+        )
+
+    return instances
+
+
+class PoseLabels:
+    def __init__(
+        self,
+        video: sleap.Video,
+        num_outputs: int,
+        skeleton: sleap.Skeleton,
+        start_frame: int = 0
+    ):
+        self._frame_list = []
+        self._num_outputs = num_outputs
+        self._skeleton = skeleton
+        self._current_frame = start_frame
+        self._video = video
+
+    def append(self, pose: Optional[Pose]):
+        if(pose is not None):
+            for frame_i in range(pose.get_frame_count()):
+                self._frame_list.append(sleap.LabeledFrame(
+                    self._video,
+                    self._current_frame,
+                    _pose_to_instance(pose, frame_i, self._num_outputs, self._skeleton)
+                ))
+                self._current_frame += 1
+
+    def __len__(self) -> int:
+        return self._current_frame
+
+    def to_sleap(self) -> sleap.Labels:
+        return sleap.Labels(labeled_frames=self._frame_list)
+
+
+class Timer:
+    def __init__(self):
+        self._start_time = None
+        self._end_time = None
+
+    def __enter__(self):
+        self._start_time = time.time()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._end_time = time.time()
+
+    @property
+    def start(self) -> float:
+        return self._start_time
+
+    @property
+    def end(self) -> float:
+        return self._end_time
+
+    @property
+    def start_date(self) -> datetime:
+        return datetime.fromtimestamp(self._start_time)
+
+    @property
+    def end_date(self) -> datetime:
+        return datetime.fromtimestamp(self._end_time)
+
+    @property
+    def duration(self) -> float:
+        return self._end_time - self._start_time
+
+
+def _attach_run_info(
+    labels: sleap.Labels,
+    timer: Timer,
+    video_path: str,
+    output_path: str,
+    command: List[str]
+) -> sleap.Labels:
+    import diplomat
+
+    labels.provenance.update({
+        "sleap_version": sleap.__version__,
+        "diplomat_version": diplomat.__version__,
+        "platform": platform.platform(),
+        "command": " ".join(command),
+        "data_path": video_path,
+        "output_path": output_path,
+        "total_elapsed": timer.duration,
+        "start_timestamp": str(timer.start_date),
+        "finish_timestamp": str(timer.end_date)
+    })
+
+    return labels
+
 
 @extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
 @tc.typecaster_function
@@ -141,17 +254,81 @@ def analyze_videos(
 
     for video_path in videos:
         print(f"Running analysis on video: '{video_path}'")
-        video_path = Path(video_path).resolve()
-        video = sleap.load_video(str(video_path))
-        output_path = video_path.parent / (video_path.name + ".diplomat.slp")
+        _analyze_single_video(
+            video_path,
+            predictor_cls,
+            mdl_extractor,
+            num_outputs,
+            visual_settings,
+            mdl_metadata,
+            predictor_settings
+        )
 
-        video_metadata = _get_video_metadata(video_path, output_path, num_outputs, video, visual_settings, mdl_metadata)
-        pred = predictor_cls(mdl_metadata["bp_names"], num_outputs, video.num_frames, _get_predictor_settings(predictor_cls, kwargs), video_metadata)
 
-        prog_bar = TQDMProgressBar(total=video.num_frames)
+def _analyze_single_video(
+    video_path: str,
+    predictor_cls: Type[Predictor],
+    mdl_extractor: PredictorExtractor,
+    num_outputs: int,
+    visual_settings: Config,
+    mdl_metadata: dict,
+    predictor_settings: Optional[dict]
+):
+    video_path = Path(video_path).resolve()
+    video = sleap.load_video(str(video_path))
+    output_path = video_path.parent / (video_path.name + f".diplomat_{predictor_cls.get_name()}.slp")
 
-        for batch in mdl_extractor.extract(video):
-            result = pred.on_frames(batch)
+    video_metadata = _get_video_metadata(video_path, output_path, num_outputs, video, visual_settings, mdl_metadata)
+    pred = predictor_cls(
+        mdl_metadata["bp_names"], num_outputs, video.num_frames, _get_predictor_settings(predictor_cls, predictor_settings), video_metadata
+    )
+
+    labels = PoseLabels(video, num_outputs, mdl_metadata["orig_skeleton"])
+    total_frames = 0
+
+    with Timer() as timer:
+        with TQDMProgressBar(total=video.num_frames) as prog_bar:
+            print("Running the model...")
+            for batch in mdl_extractor.extract(video):
+                result = pred.on_frames(batch)
+                labels.append(result)
+                prog_bar.update(batch.get_frame_count())
+                total_frames += batch.get_frame_count()
+
+        with TQDMProgressBar(total=video.num_frames - len(labels)) as post_pbar:
+            print(f"Running post-processing algorithms...")
+            result = pred.on_end(post_pbar)
+            labels.append(result)
+
+    if (total_frames != len(labels)):
+        raise ValueError(
+            f"The predictor algorithm did not return the same amount of frames as are in the video.\n"
+            f"Expected Amount: {total_frames}, Actual Amount Returned: {len(labels)}"
+        )
+
+    print(f"Saving output to: {output_path}")
+    labels = _attach_run_info(labels.to_sleap(), timer, str(video_path), str(output_path), sys.argv)
+    labels.save(str(output_path))
+
+    print(f"Finished inference at: {timer.end_date}")
+    print(f"Total runtime: {timer.duration} secs")
+    print()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

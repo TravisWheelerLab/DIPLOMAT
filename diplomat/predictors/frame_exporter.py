@@ -4,11 +4,11 @@ be passed back into DeepLabCut again to perform frame predictions later. This al
 the neural network (expensive) on a headless server or supercomputer, and then run through a predictor with gui
 feedback on a laptop or somewhere else.
 """
+import shutil
 from pathlib import Path
 from typing import List, BinaryIO, Optional
 from diplomat.processing import *
 from diplomat.utils.frame_store_fmt import DLFSWriter, DLFSHeader
-from diplomat.utils.h5_frame_store_fmt import DLH5FSWriter
 
 
 class FrameExporter(Predictor):
@@ -41,11 +41,17 @@ class FrameExporter(Predictor):
 
         self._frame_writer = None
         # Making the output file...
-        orig_h5_path = Path(video_metadata["output-file-path"])
+        orig_out_path = Path(video_metadata["output-file-path"])
         vid_path = Path(video_metadata["orig-video-path"])
+
         self._out_file: BinaryIO = (
-            orig_h5_path.parent / (vid_path.name + "~" + settings.filename_suffix + (".h5" if(settings.export_as_h5) else ".dlfs"))
+            orig_out_path.parent / (vid_path.name + "~" + settings.filename_suffix + ".dlfs")
         ).open("w+b")
+
+        if(settings.include_video):
+            with vid_path.open("rb") as video_file:
+                shutil.copyfileobj(video_file, self._out_file)
+
         # Initialize the frame counter...
         self._current_frame = 0
 
@@ -65,21 +71,14 @@ class FrameExporter(Predictor):
                 self.bodyparts if(self._bp_to_idx is None) else list(self._bp_to_idx.keys())
             )
 
-            if(s.export_as_h5):
-                self._frame_writer = DLH5FSWriter(
-                    self._out_file,
-                    header,
-                    s.threshold if (s.sparsify) else None,
-                )
-            else:
-                self._frame_writer = DLFSWriter(
-                    self._out_file,
-                    header,
-                    s.threshold if (s.sparsify) else None,
-                    s.compression_level
-                )
+            self._frame_writer = DLFSWriter(
+                self._out_file,
+                header,
+                s.threshold if (s.sparsify) else None,
+                s.compression_level
+            )
 
-        # Writing all of the frames in this batch...
+        # Writing all frames in this batch...
         if(self._bp_to_idx is None):
             self._frame_writer.write_data(scmap)
         else:
@@ -127,11 +126,6 @@ class FrameExporter(Predictor):
                 "means it takes longer to compress the data, while 0 is no compression. Note this "
                 "only applies if the dlfs format is being used, the hdf5 format ignores this value."
             ),
-            "export_as_h5": (
-                False,
-                bool,
-                "Determines if the alternate hdf5 format is used instead of the default DLFS binary format."
-            ),
             "filename_suffix": (
                 "DATA",
                 str,
@@ -141,6 +135,11 @@ class FrameExporter(Predictor):
                 None,
                 type_casters.Union(type_casters.Literal(None), type_casters.List(str)),
                 "A list of body parts to store. None means keep all the body parts."
+            ),
+            "include_video": (
+                True,
+                bool,
+                "If true, the video is embedded in the file, making this file fully independent. Defaults to True."
             )
         }
 

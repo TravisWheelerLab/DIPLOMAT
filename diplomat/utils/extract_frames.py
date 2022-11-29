@@ -4,7 +4,7 @@ for debugging and display purposes.
 """
 from typing import BinaryIO, Sequence, Callable, Optional, Generator, Union, Tuple, NamedTuple
 from diplomat.processing import TrackingData
-from diplomat.utils import frame_store_fmt, h5_frame_store_fmt
+from diplomat.utils import frame_store_fmt
 from io import BytesIO
 import base64
 import numpy as np
@@ -14,7 +14,6 @@ def extract_frames(
     dlfs_in: BinaryIO,
     dlfs_out: BinaryIO,
     frames: Sequence[int],
-    use_dlfs: bool = True,
     threshold: float = 1e-6,
     compression_lvl: int = 6,
     on_frames: Optional[Callable[[TrackingData], None]] = None
@@ -26,7 +25,6 @@ def extract_frames(
     :param dlfs_out: A binary file, the file to write a DeepLabCut frame store to. This will contain the extracted
                       frames.
     :param frames: A sequence of integers, the indexes of the frames to extract, in order of extraction.
-    :param use_dlfs: A boolean. True to use the .dlfs format for export, False to use the .h5 format for export.
     :param threshold: A float between 0 and 1, inclusive. The frame sparsification threshold, any probabilities below
                       the threshold are ignored. If set to 0, sparsification of frames is disabled. Default is 1e6.
     :param compression_lvl: An integer between 0 and 9, inclusive. The compression level if using the .dlfs format.
@@ -34,16 +32,12 @@ def extract_frames(
     :param on_frames: A function that accepts a TrackingData for each frame. Useful for pretty printing/doing something
                       with the data during rewrite. Defaults to None, meaning it is not called.
     """
-    try:
-        file_reader = frame_store_fmt.DLFSReader(dlfs_in)
-    except ValueError:
-        dlfs_in.seek(0)
-        file_reader = h5_frame_store_fmt.DLH5FSReader(dlfs_in)
+    file_reader = frame_store_fmt.DLFSReader(dlfs_in)
 
     header = file_reader.get_header()
     header.number_of_frames = len(frames)
     args = (dlfs_out, header, threshold, compression_lvl)
-    file_writer = (frame_store_fmt.DLFSWriter(*args) if(use_dlfs) else h5_frame_store_fmt.DLH5FSWriter(*args[:-1]))
+    file_writer = frame_store_fmt.DLFSWriter(*args)
 
     for idx in frames:
         file_reader.seek_frame(idx)
@@ -221,7 +215,6 @@ def pretty_frame_string(
 def extract_n_pack(
     dlfs_in: BinaryIO,
     frames: Sequence[int],
-    use_dlfs: bool = True,
     threshold: float = 1e-6,
     compression_lvl: int = 6,
     on_frames: Optional[Callable[[TrackingData], None]] = None
@@ -231,7 +224,6 @@ def extract_n_pack(
 
     :param dlfs_in: A binary file, the input DeepLabCut frame store file. Frames will be extracted from this file.
     :param frames: A sequence of integers, the indexes of the frames to extract, in order of extraction.
-    :param use_dlfs: A boolean. True to use the .dlfs format for export, False to use the .h5 format for export.
     :param threshold: A float between 0 and 1, inclusive. The frame sparsification threshold, any probabilities below
                       the threshold are ignored. If set to 0, sparsification of frames is disabled. Default is 1e6.
     :param compression_lvl: An integer between 0 and 9, inclusive. The compression level if using the .dlfs format.
@@ -243,7 +235,7 @@ def extract_n_pack(
     """
     out = BytesIO()
     # Dump into the in memory file...
-    extract_frames(dlfs_in, out, frames, use_dlfs, threshold, compression_lvl, on_frames)
+    extract_frames(dlfs_in, out, frames, threshold, compression_lvl, on_frames)
 
     return base64.encodebytes(out.getvalue())
 
@@ -262,11 +254,7 @@ def unpack_frame_string(frame_string: bytes, frames_per_iter: int = 0) -> Union[
     """
     f = BytesIO(base64.decodebytes(frame_string))
 
-    try:
-        reader = frame_store_fmt.DLFSReader(f)
-    except ValueError:
-        f.seek(0)
-        reader = h5_frame_store_fmt.DLH5FSReader(f)
+    reader = frame_store_fmt.DLFSReader(f)
 
     if (frames_per_iter <= 0):
         yield reader.read_frames(reader.get_header().number_of_frames)

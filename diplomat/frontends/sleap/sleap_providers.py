@@ -8,12 +8,14 @@ from sleap.nn.data.pipelines import Provider
 from sleap.nn.data.providers import VideoReader as SleapVideoReader
 from sleap.nn.inference import Predictor as SleapPredictor
 from sleap.nn.inference import InferenceLayer as SleapInferenceLayer
+from sleap.skeleton import Skeleton as SleapSkeleton
 from diplomat.processing import TrackingData
 
 
 class SleapMetadata(TypedDict):
     bp_names: List[str]
     skeleton: Optional[List[Tuple[str, str]]]
+    orig_skeleton: SleapSkeleton
 
 def _extract_metadata(predictor: SleapPredictor) -> SleapMetadata:
     skel_list = predictor.data_config.labels.skeletons
@@ -26,7 +28,8 @@ def _extract_metadata(predictor: SleapPredictor) -> SleapMetadata:
 
     return SleapMetadata(
         bp_names=skeleton1.node_names,
-        skeleton=edge_name_list if(len(edge_name_list) > 0) else None
+        skeleton=edge_name_list if(len(edge_name_list) > 0) else None,
+        orig_skeleton=skeleton1
     )
 
 
