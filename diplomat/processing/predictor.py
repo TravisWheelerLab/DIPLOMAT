@@ -45,7 +45,7 @@ class Predictor(ABC):
                                   this value may be None, meaning the video could not be found, and
                                   user is processing frames via a .dlfs file.
                                 - :code:`"duration"`: The duration of the video in seconds
-                                - :code:`"size"`: The x and y dimensions of the original video.
+                                - :code:`"size"`: The x and y dimensions of the original video. y is first, x is second.
                                 - :code:`"cropping-offset"`: The (y, x) offset of the cropped box in the video. If there is
                                   no cropping, this value is set to None. Width/Height of cropping
                                   box can be inferred using tracking data width and height and

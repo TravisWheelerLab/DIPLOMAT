@@ -110,6 +110,7 @@ class TopDownModelExtractor(SleapModelExtractor):
     def extract(self, data: Union[Dict, np.ndarray]) -> TrackingData:
         inf_layer = self._predictor.inference_model.instance_peaks
 
+
         imgs = data["image"] if(isinstance(data, dict)) else data
         imgs = inf_layer.preprocess(imgs)
 
