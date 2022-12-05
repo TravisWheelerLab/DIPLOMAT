@@ -96,7 +96,19 @@ def _analyze_frame_store(
                 bp_lst,
             ) = frame_reader.get_header().to_list()
 
-            fake_video = _DummyVideo(fps=f_rate, num_frames=num_f, shape=(num_f, vid_h, vid_w, len(bp_lst)))
+            if(video_path is None):
+                fake_video = _DummyVideo(fps=f_rate, num_frames=num_f, shape=(num_f, vid_h, vid_w, len(bp_lst)))
+            else:
+                from sleap.io.video import MediaVideo
+                fake_video = sleap.Video(backend=sleap.Video.make_specific_backend(
+                    MediaVideo,
+                    dict(
+                        filename=sleap.Video.fixup_path(str(frame_store_path)),
+                        grayscale=False,
+                        input_format="channels_last",
+                        dataset=""
+                    )
+                ))
 
             video_metadata = _get_video_metadata(
                 video_path,

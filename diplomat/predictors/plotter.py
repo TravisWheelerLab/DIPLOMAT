@@ -202,6 +202,8 @@ class PlotterArgMax(Predictor):
                     self.VIDEO_PATH, settings.codec, vid_meta.fps, (width, height)
                 )
 
+            if(not self._vid_writer.isOpened()):
+                raise IOError("Error occurred causing the video writer to close.")
             self._vid_writer.write(img)
             self._current_frame += 1
 

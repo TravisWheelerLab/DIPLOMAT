@@ -119,6 +119,7 @@ class FastPlotterArgMax(Predictor):
         )
 
         self._canvas = np.zeros((self._vid_height, self._vid_width, 3), dtype=np.uint8)
+        print(self._vid_width, self._vid_height)
 
         self._vid_writer = cv2.VideoWriter(
             self.VIDEO_PATH,
@@ -286,6 +287,8 @@ class FastPlotterArgMax(Predictor):
                     scmap.get_prob_table(frame, bp),
                 )
 
+            if(not self._vid_writer.isOpened()):
+                raise IOError("Error occurred causing the video writer to close.")
             self._vid_writer.write(self._canvas)
 
             self._current_frame += 1
@@ -367,7 +370,7 @@ class FastPlotterArgMax(Predictor):
                 "Integer, the thickness of the font being drawn."
             ),
             "source_map_upscale": (
-                8,
+                4,
                 type_casters.RangedInteger(1, 100),
                 "Integer, The amount to upscale the probability maps."
             ),
