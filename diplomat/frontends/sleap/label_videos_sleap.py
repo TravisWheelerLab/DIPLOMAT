@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, TypeVar, Type, Tuple
+from typing import TypeVar, Type, Tuple
 import cv2
 import sleap
 
