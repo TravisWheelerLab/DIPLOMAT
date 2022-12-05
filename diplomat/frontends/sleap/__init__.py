@@ -8,14 +8,12 @@ class SLEAPFrontend(DIPLOMATFrontend):
     """
     @classmethod
     def init(cls) -> Optional[DIPLOMATBaselineCommands]:
-        return None
-
         try:
             from diplomat.frontends.sleap._verify_func import _verify_sleap_like
             from diplomat.frontends.sleap.predict_videos_sleap import analyze_videos
             from diplomat.frontends.sleap.predict_frames_sleap import analyze_frames
-            #from diplomat.frontends.deeplabcut.label_videos_dlc import label_videos
-            #from diplomat.frontends.deeplabcut.tweak_results import tweak_videos
+            from diplomat.frontends.sleap.label_videos_sleap import label_videos
+            from diplomat.frontends.sleap.tweak_results_sleap import tweak_videos
         except ImportError:
             return None
 
@@ -23,8 +21,8 @@ class SLEAPFrontend(DIPLOMATFrontend):
             _verifier=_verify_sleap_like,
             analyze_videos=analyze_videos,
             analyze_frames=analyze_frames,
-            #label_videos=label_videos,
-            #tweak_videos=tweak_videos
+            label_videos=label_videos,
+            tweak_videos=tweak_videos
         )
 
     @classmethod
