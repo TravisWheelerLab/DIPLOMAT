@@ -1,3 +1,7 @@
+import tensorflow as tf
+if(not tf.executing_eagerly()):
+        tf.compat.v1.enable_eager_execution()
+
 import platform
 import time
 from datetime import datetime
@@ -6,7 +10,6 @@ from pathlib import Path
 from typing import Optional, Type, List, Tuple, Iterable
 import sleap
 import numpy as np
-import tensorflow as tf
 from diplomat.processing import Predictor, Config, Pose
 from diplomat.utils.shapes import shape_iterator
 

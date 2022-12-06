@@ -39,9 +39,6 @@ def tweak_videos(
         _tweak_video_single(label_path, visual_cfg)
 
 
-
-
-
 def _tweak_video_single(
     label_file: str,
     visual_cfg: Config
@@ -51,6 +48,7 @@ def _tweak_video_single(
     num_outputs, pose_obj, video, skeleton = _to_diplomat_poses(labels)
     mdl_metadata = SleapMetadata(bp_names=skeleton.node_names, skeleton=skeleton.edge_names, orig_skeleton=skeleton)
     video_meta = _get_video_metadata(Path(video.filename), Path(label_file), num_outputs, video, visual_cfg, mdl_metadata, None)
+    print(video_meta)
 
     ui_manager = TweakUI()
 
@@ -64,4 +62,6 @@ def _tweak_video_single(
         else:
             print("Operation canceled...")
 
-    ui_manager.tweak(None, video.filepath, pose_obj, mdl_metadata["bp_names"], dict(video_meta), num_outputs, None, on_end)
+
+    names = [name if(i == 0) else f"{name}{i}" for name in mdl_metadata["bp_names"] for i in range(num_outputs)]
+    ui_manager.tweak(None, video.filename, pose_obj, names, dict(video_meta), num_outputs, None, on_end)

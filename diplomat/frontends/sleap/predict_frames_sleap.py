@@ -51,6 +51,7 @@ def analyze_frames(
 
     visual_settings = Config(kwargs, VISUAL_SETTINGS)
 
+    frame_stores = _paths_to_str(frame_stores)
     if(isinstance(frame_stores, str)):
         frame_stores = [frame_stores]
 

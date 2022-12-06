@@ -65,6 +65,7 @@ def analyze_videos(
 
     visual_settings = Config(kwargs, VISUAL_SETTINGS)
 
+    videos = _paths_to_str(videos)
     if(isinstance(videos, str)):
         videos = [videos]
 

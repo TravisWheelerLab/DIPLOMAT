@@ -423,14 +423,22 @@ class SegmentedFramePassEngine(Predictor):
             self._frame_holder.metadata.height = scmap.get_frame_height()
 
         # Store sparsified frames for passes done later.
+        tmp = None
+
         for f_idx in range(scmap.get_frame_count()):
             for bp_idx in range(self._num_total_bp):
-                self._sparcify_and_store(
-                    self._frame_holder.frames[self._current_frame][bp_idx],
-                    scmap,
-                    f_idx,
-                    bp_idx // self.num_outputs
-                )
+                if(bp_idx % self.num_outputs == 0):
+                    self._sparcify_and_store(
+                        self._frame_holder.frames[self._current_frame][bp_idx],
+                        scmap,
+                        f_idx,
+                        bp_idx // self.num_outputs
+                    )
+                else:
+                    dest = self._frame_holder.frames[self._current_frame][bp_idx]
+                    src = self._frame_holder.frames[self._current_frame][(bp_idx // self.num_outputs) * self.num_outputs]
+                    dest.orig_data = src.orig_data.duplicate()
+                    dest.src_data = dest.orig_data
 
             self._current_frame += 1
 

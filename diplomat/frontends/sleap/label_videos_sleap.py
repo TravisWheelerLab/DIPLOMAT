@@ -5,13 +5,14 @@ import sleap
 
 import diplomat.processing.type_casters as tc
 from diplomat.utils.cli_tools import extra_cli_args
-from diplomat.processing import Config
+from diplomat.processing import Config, TQDMProgressBar
 from diplomat.utils.colormaps import iter_colormap
 from diplomat.utils.shapes import shape_iterator, CV2DotShapeDrawer
+
 from .visual_settings import FULL_VISUAL_SETTINGS
 from .run_utils import (
     _paths_to_str,
-    _to_diplomat_poses,
+    _to_diplomat_poses
 )
 
 def _to_cv2_color(color: Tuple[float, float, float, float]) -> Tuple[int, int, int, int]:
@@ -106,40 +107,42 @@ def _label_video_single(
 
     print(f"Writing output to: '{output_path}'")
 
-    with ContextVideoWriter(str(output_path), visual_settings.output_codec, getattr(video, "fps", 30), video.shape[1:4][::-1]) as writer:
-        for f_i in range(poses.get_frame_count()):
-            frame = video.get_frame(f_i)[..., ::-1]
-            overlay = frame.copy()
+    with ContextVideoWriter(str(output_path), visual_settings.output_codec, getattr(video, "fps", 30), video.shape[1:3][::-1]) as writer:
+        with TQDMProgressBar(total=poses.get_frame_count()) as p:
+            for f_i in range(poses.get_frame_count()):
+                frame = video.get_frame(f_i)[..., ::-1]
+                overlay = frame.copy()
 
-            colors = iter_colormap(visual_settings.colormap, poses.get_bodypart_count() // num_outputs)
-            shapes = shape_iterator(visual_settings.shape_list, num_outputs)
+                colors = iter_colormap(visual_settings.colormap, poses.get_bodypart_count() // num_outputs)
+                shapes = shape_iterator(visual_settings.shape_list, num_outputs)
 
-            part_iter = zip(
-                bp_names,
-                poses.get_x_at(f_i, slice(None)),
-                poses.get_y_at(f_i, slice(None)),
-                poses.get_prob_at(f_i, slice(None)),
-                colors,
-                shapes
-            )
+                part_iter = zip(
+                    bp_names,
+                    poses.get_x_at(f_i, slice(None)),
+                    poses.get_y_at(f_i, slice(None)),
+                    poses.get_prob_at(f_i, slice(None)),
+                    colors,
+                    shapes
+                )
 
-            for (name, x, y, prob, color, shape) in part_iter:
-                if(name not in body_parts_to_plot):
-                    continue
+                for (name, x, y, prob, color, shape) in part_iter:
+                    if(name not in body_parts_to_plot):
+                        continue
 
-                shape_drawer = CV2DotShapeDrawer(
-                    overlay,
-                    _to_cv2_color(tuple(color[:3]) + (1,)),
-                    -1 if (prob > visual_settings.pcutoff) else visual_settings.line_thickness,
-                    cv2.LINE_AA if (visual_settings.antialiasing) else None
-                )[shape]
+                    shape_drawer = CV2DotShapeDrawer(
+                        overlay,
+                        _to_cv2_color(tuple(color[:3]) + (1,)),
+                        -1 if (prob > visual_settings.pcutoff) else visual_settings.line_thickness,
+                        cv2.LINE_AA if (visual_settings.antialiasing) else None
+                    )[shape]
 
-                if(prob > visual_settings.pcutoff or visual_settings.draw_hidden_tracks):
-                    shape_drawer(int(x), int(y), int(visual_settings.dotsize))
+                    if(prob > visual_settings.pcutoff or visual_settings.draw_hidden_tracks):
+                        shape_drawer(int(x), int(y), int(visual_settings.dotsize))
 
-            writer.write(cv2.addWeighted(
-                overlay, visual_settings.alphavalue, frame, 1 - visual_settings.alphavalue, 0
-            ))
+                writer.write(cv2.addWeighted(
+                    overlay, visual_settings.alphavalue, frame, 1 - visual_settings.alphavalue, 0
+                ))
+                p.update()
 
 
 

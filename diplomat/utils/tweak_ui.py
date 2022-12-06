@@ -268,7 +268,7 @@ class TweakUI:
             dialog.Show()
             fake_fpe = _DummyFramePassEngine(
                 poses,
-                crop_box if(crop_box is not None) else [0, video_metadata["size"][0], 0, video_metadata["size"][1]],
+                crop_box if(crop_box is not None) else [0, 0, video_metadata["size"][1], video_metadata["size"][0]],
                 video_metadata,
                 num_outputs,
                 dialog.progress_bar

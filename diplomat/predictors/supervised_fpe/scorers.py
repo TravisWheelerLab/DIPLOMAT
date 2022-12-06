@@ -40,7 +40,7 @@ class EntropyOfTransitions(ScoreEngine):
 
         self._gaussian_table = None
         self._std = self._get_std(self._frame_engine.frame_data.metadata)
-        self._init_gaussian_table(frame_engine.width, frame_engine.width)
+        self._init_gaussian_table(frame_engine.width, frame_engine.height)
 
         self._settings = labeler_lib.SettingCollection(
             threshold=labeler_lib.FloatSpin(0, 1, 0.8, 0.05, 4)
