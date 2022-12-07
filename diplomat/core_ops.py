@@ -65,7 +65,7 @@ def _display_help(
 @allow_arbitrary_flags
 @typecaster_function
 def track(
-    config: PathLike,
+    config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
@@ -141,7 +141,7 @@ def track(
 @allow_arbitrary_flags
 @typecaster_function
 def unsupervised(
-    config: PathLike,
+    config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
@@ -183,7 +183,7 @@ def unsupervised(
 @allow_arbitrary_flags
 @typecaster_function
 def supervised(
-    config: PathLike,
+    config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
@@ -225,7 +225,7 @@ def supervised(
 @allow_arbitrary_flags
 @typecaster_function
 def annotate(
-    config: PathLike,
+    config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     help_extra: Flag = False,
     **extra_args
@@ -264,7 +264,7 @@ def annotate(
 @allow_arbitrary_flags
 @typecaster_function
 def tweak(
-    config: PathLike,
+    config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     help_extra: Flag = False,
     **extra_args

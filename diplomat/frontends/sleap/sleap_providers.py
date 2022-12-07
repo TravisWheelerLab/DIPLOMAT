@@ -50,6 +50,12 @@ class SleapModelExtractor(ABC):
     def extract(self, data: Union[Provider]) -> Iterator[TrackingData]:
         pass
 
+def _normalize_conf_map(conf_map: tf.Tensor) -> tf.Tensor:
+    # min_val = tf.reduce_min(conf_map, axis=(1, 2), keepdims=True)
+    conf_map = tf.maximum(conf_map, 0)
+    max_val = tf.reduce_max(conf_map, axis=(1, 2), keepdims=True)
+    return conf_map / max_val
+
 
 class BottomUpModelExtractor(SleapModelExtractor):
     from sleap.nn.inference import BottomUpPredictor, BottomUpMultiClassPredictor
@@ -62,8 +68,9 @@ class BottomUpModelExtractor(SleapModelExtractor):
     def extract(self, data: Union[Dict, np.ndarray]) -> TrackingData:
         inf_layer = self._predictor.inference_model.inference_layer
         conf_map, __, offsets = inf_layer.forward_pass(data)
+
         return TrackingData(
-            conf_map.numpy(),
+            _normalize_conf_map(conf_map).numpy(),
             offsets if(offsets is None) else offsets.numpy(),
             (1 / inf_layer.input_scale) * inf_layer.cm_output_stride
         )
@@ -90,9 +97,18 @@ class TopDownModelExtractor(SleapModelExtractor):
     def __init__(self, model: Union[TopDownPredictor, TopDownMultiClassPredictor]):
         super().__init__(model)
         self._predictor = model
+        # TODO: Eventually fix top down support to actually work.
+        raise NotImplementedError("SLEAP's top down model is currently not supported. Please train using a different model type to use DIPLOMAT.")
 
     @staticmethod
-    def _merge_tiles(result: Optional[tf.Tensor], batch_sz: int, tile_counts: tuple, orig_im_sz: tuple, d_scale: int) -> Optional[np.ndarray]:
+    def _merge_tiles(
+        result: Optional[tf.Tensor],
+        batch_sz: int,
+        tile_counts: tuple,
+        orig_im_sz: tuple,
+        d_scale: int,
+        to_numpy: bool = True
+    ) -> Union[np.ndarray, tf.Tensor, None]:
         if(result is None):
             return None
 
@@ -104,8 +120,9 @@ class TopDownModelExtractor(SleapModelExtractor):
 
         result = tf.reshape(result, [batch_sz, tiles_high, tiles_wide, out_h, out_w, out_d])
         result = tf.reshape(tf.transpose(result, [0, 1, 3, 2, 4, 5]), [batch_sz, tiles_high * out_h, tiles_wide * out_w, out_d])
+        result = result[:, :ceil(og_h / d_scale), :ceil(og_w / d_scale)]
 
-        return result[:, :ceil(og_h / d_scale), :ceil(og_w / d_scale)].numpy()
+        return result.numpy() if(to_numpy) else result
 
     def extract(self, data: Union[Dict, np.ndarray]) -> TrackingData:
         inf_layer = self._predictor.inference_model.instance_peaks
@@ -132,7 +149,9 @@ class TopDownModelExtractor(SleapModelExtractor):
         conf_map, offset_map = _extract_model_outputs(inf_layer, imgs)
 
         return TrackingData(
-            self._merge_tiles(conf_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride),
+            _normalize_conf_map(
+                self._merge_tiles(conf_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride, False)
+            ).numpy(),
             self._merge_tiles(offset_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride),
             (1 / inf_layer.input_scale) * inf_layer.output_stride
         )
@@ -153,14 +172,13 @@ class SingleInstanceModelExtractor(SleapModelExtractor):
         conf_map, offset_map = _extract_model_outputs(inf_layer, inf_layer.preprocess(imgs))
 
         return TrackingData(
-            conf_map.numpy(),
+            _normalize_conf_map(conf_map).numpy(),
             offset_map if(offset_map is None) else offset_map.numpy(),
             (1 / inf_layer.input_scale) * inf_layer.output_stride
         )
 
 
 EXTRACTORS = [BottomUpModelExtractor, SingleInstanceModelExtractor, TopDownModelExtractor]
-
 
 class PredictorExtractor:
     def __init__(self, predictor: SleapPredictor):
@@ -210,9 +228,8 @@ def _main_test():
     for frame in extractor.extract(vid):
         print(frame)
         from diplomat.utils.extract_frames import pretty_print_frame
-        print(pretty_print_frame(frame, 0, 0, False))
+        print(pretty_print_frame(frame, 0, 1, False))
         return
-
 
 
 if(__name__ == "__main__"):
