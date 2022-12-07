@@ -32,6 +32,7 @@ def analyze_frames(
     num_outputs: tc.Optional[int] = None,
     predictor: tc.Optional[str] = None,
     predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None,
+    refinement_kernel_size: int = 5,
     **kwargs
 ):
     batch_size = _get_default_value(sleap.load_model, "batch_size", 4) if (batch_size is None) else batch_size
@@ -40,7 +41,7 @@ def analyze_frames(
     print("Loading Model...")
     model = sleap.load_model(_paths_to_str(config), batch_size=batch_size)
     # Get the model extractor...
-    mdl_extractor = PredictorExtractor(model)
+    mdl_extractor = PredictorExtractor(model, refinement_kernel_size)
     mdl_metadata = mdl_extractor.get_metadata()
 
     predictor_cls = get_predictor("SegmentedFramePassEngine" if (predictor is None) else predictor)
@@ -64,7 +65,7 @@ def analyze_frames(
             num_outputs,
             visual_settings,
             predictor_settings,
-            batch_size
+            batch_size,
         )
 
 
@@ -75,7 +76,7 @@ def _analyze_frame_store(
     num_outputs: int,
     visual_settings: Config,
     predictor_settings: Optional[dict],
-    batch_size: int
+    batch_size: int,
 ):
     frame_store_path = Path(frame_store_path).resolve()
     video_path = frame_store_path if (is_video(frame_store_path)) else None

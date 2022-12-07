@@ -30,6 +30,7 @@ def analyze_videos(
     predictor: tc.Optional[str] = None,
     predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None,
     gpu_index: tc.Optional[int] = None,
+    refinement_kernel_size: int = 5,
     use_cpu: Flag = False,
     **kwargs
 ):
@@ -42,6 +43,7 @@ def analyze_videos(
     :param predictor:
     :param predictor_settings:
     :param gpu_index:
+    :param refinement_kernel_size:
     :param use_cpu:
     :param kwargs:
     :return:
@@ -54,7 +56,7 @@ def analyze_videos(
     print("Loading Model...")
     model = sleap.load_model(_paths_to_str(config), batch_size=batch_size)
     # Get the model extractor...
-    mdl_extractor = PredictorExtractor(model)
+    mdl_extractor = PredictorExtractor(model, refinement_kernel_size)
     mdl_metadata = mdl_extractor.get_metadata()
 
     predictor_cls = get_predictor("SegmentedFramePassEngine" if(predictor is None) else predictor)
@@ -78,7 +80,7 @@ def analyze_videos(
             num_outputs,
             visual_settings,
             mdl_metadata,
-            predictor_settings
+            predictor_settings,
         )
 
 

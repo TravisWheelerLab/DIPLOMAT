@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
+
+import scipy.signal
 from typing_extensions import TypedDict
 import numpy as np
 import tensorflow as tf
@@ -16,6 +18,7 @@ class SleapMetadata(TypedDict):
     bp_names: List[str]
     skeleton: Optional[List[Tuple[str, str]]]
     orig_skeleton: SleapSkeleton
+
 
 def _extract_metadata(predictor: SleapPredictor) -> SleapMetadata:
     skel_list = predictor.data_config.labels.skeletons
@@ -47,11 +50,11 @@ class SleapModelExtractor(ABC):
         return _extract_metadata(self.__p)
 
     @abstractmethod
-    def extract(self, data: Union[Provider]) -> Iterator[TrackingData]:
+    def extract(self, data: Union[Provider]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
         pass
 
+
 def _normalize_conf_map(conf_map: tf.Tensor) -> tf.Tensor:
-    # min_val = tf.reduce_min(conf_map, axis=(1, 2), keepdims=True)
     conf_map = tf.maximum(conf_map, 0)
     max_val = tf.reduce_max(conf_map, axis=(1, 2), keepdims=True)
     return conf_map / max_val
@@ -65,18 +68,18 @@ class BottomUpModelExtractor(SleapModelExtractor):
         super().__init__(model)
         self._predictor = model
 
-    def extract(self, data: Union[Dict, np.ndarray]) -> TrackingData:
+    def extract(self, data: Union[Dict, np.ndarray]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
         inf_layer = self._predictor.inference_model.inference_layer
         conf_map, __, offsets = inf_layer.forward_pass(data)
 
-        return TrackingData(
-            _normalize_conf_map(conf_map).numpy(),
-            offsets if(offsets is None) else offsets.numpy(),
+        return (
+            _normalize_conf_map(conf_map),
+            offsets if(offsets is None) else offsets,
             (1 / inf_layer.input_scale) * inf_layer.cm_output_stride
         )
 
 
-def _extract_model_outputs(inf_layer: SleapInferenceLayer, images: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+def _extract_model_outputs(inf_layer: SleapInferenceLayer, images: tf.Tensor) -> Tuple[tf.Tensor, Optional[tf.Tensor]]:
     images = inf_layer.keras_model(images)
 
     conf_map = images
@@ -107,7 +110,6 @@ class TopDownModelExtractor(SleapModelExtractor):
         tile_counts: tuple,
         orig_im_sz: tuple,
         d_scale: int,
-        to_numpy: bool = True
     ) -> Union[np.ndarray, tf.Tensor, None]:
         if(result is None):
             return None
@@ -122,9 +124,9 @@ class TopDownModelExtractor(SleapModelExtractor):
         result = tf.reshape(tf.transpose(result, [0, 1, 3, 2, 4, 5]), [batch_sz, tiles_high * out_h, tiles_wide * out_w, out_d])
         result = result[:, :ceil(og_h / d_scale), :ceil(og_w / d_scale)]
 
-        return result.numpy() if(to_numpy) else result
+        return result
 
-    def extract(self, data: Union[Dict, np.ndarray]) -> TrackingData:
+    def extract(self, data: Union[Dict, np.ndarray]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
         inf_layer = self._predictor.inference_model.instance_peaks
 
 
@@ -148,10 +150,8 @@ class TopDownModelExtractor(SleapModelExtractor):
 
         conf_map, offset_map = _extract_model_outputs(inf_layer, imgs)
 
-        return TrackingData(
-            _normalize_conf_map(
-                self._merge_tiles(conf_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride, False)
-            ).numpy(),
+        return (
+            _normalize_conf_map(self._merge_tiles(conf_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride)),
             self._merge_tiles(offset_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride),
             (1 / inf_layer.input_scale) * inf_layer.output_stride
         )
@@ -165,15 +165,15 @@ class SingleInstanceModelExtractor(SleapModelExtractor):
         super().__init__(model)
         self._predictor = model
 
-    def extract(self, data: Union[Dict, np.ndarray]) -> TrackingData:
+    def extract(self, data: Union[Dict, np.ndarray]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
         inf_layer = self._predictor.inference_model.single_instance_layer
 
         imgs = data["image"] if(isinstance(data, dict)) else data
         conf_map, offset_map = _extract_model_outputs(inf_layer, inf_layer.preprocess(imgs))
 
-        return TrackingData(
-            _normalize_conf_map(conf_map).numpy(),
-            offset_map if(offset_map is None) else offset_map.numpy(),
+        return (
+            _normalize_conf_map(conf_map),
+            offset_map,
             (1 / inf_layer.input_scale) * inf_layer.output_stride
         )
 
@@ -181,9 +181,10 @@ class SingleInstanceModelExtractor(SleapModelExtractor):
 EXTRACTORS = [BottomUpModelExtractor, SingleInstanceModelExtractor, TopDownModelExtractor]
 
 class PredictorExtractor:
-    def __init__(self, predictor: SleapPredictor):
+    def __init__(self, predictor: SleapPredictor, refinement_kernel_size: int):
         super().__init__()
         self._predictor = predictor
+        self._refinement_kernel_size = refinement_kernel_size
 
         for model_extractor in EXTRACTORS:
             if(type(predictor) in model_extractor.supported_models):
@@ -194,6 +195,48 @@ class PredictorExtractor:
 
     def get_metadata(self) -> SleapMetadata:
         return self._model_extractor.get_metadata()
+
+
+    @staticmethod
+    def _convolve_2d(img: tf.Tensor, kernel: tf.Tensor):
+        """
+        Fast-ish manual 2D convolution written in python, because tf's convolution function gives stupid and unresolvable errors...
+        """
+        shift_h = kernel.shape[0] // 2
+        shift_w = kernel.shape[1] // 2
+
+        padding = tf.transpose(tf.constant([[0, shift_h, shift_w, 0, 0]] * 2))
+        img = tf.reshape(tf.repeat(img, kernel.shape[-1], axis=-1), img.shape + (3,))
+        result = tf.zeros(img.shape, dtype=img.dtype)
+        img = tf.pad(img, padding)
+
+        # We iterate over the kernel for optimal performance...
+        for i in range(kernel.shape[0]):
+            for j in range(kernel.shape[1]):
+                end_i = img.shape[1] - ((shift_h * 2) - i)
+                end_j = img.shape[2] - ((shift_w * 2) - j)
+                result += kernel[i, j] * img[:, i:end_i, j:end_j]
+
+        return result
+
+    @classmethod
+    def _create_integral_offsets(cls, probs: tf.Tensor, stride: float, kernel_size: int) -> tf.Tensor:
+        # Concept: We can do localized position integration via 3 convolutions...
+        # Two kernels for summing positions * weights in
+        if(kernel_size % 2 == 0):
+            kernel_size += 1
+
+        # Construct kernels for computing centers of mass computed around a point...
+        y_kernel = tf.reshape(tf.repeat((tf.range(kernel_size, dtype=probs.dtype) - (kernel_size // 2)) * stride, kernel_size), (5, 5))
+        x_kernel = tf.transpose(y_kernel)
+        # Simple summation kernel, adds all values in an area...
+        ones_kernel = tf.ones((kernel_size, kernel_size), dtype=probs.dtype)
+
+        filters = tf.stack([x_kernel, y_kernel, ones_kernel], axis=-1)
+
+        results = cls._convolve_2d(probs, filters)
+
+        return tf.math.divide_no_nan(results[:, :, :, :, :2], results[:, :, :, :, 2:])
 
     def extract(self, data: Union[Provider, SleapVideo]) -> Iterator[TrackingData]:
         if(isinstance(data, SleapVideo)):
@@ -206,8 +249,16 @@ class PredictorExtractor:
             pred._initialize_inference_model()
 
         for ex in pred.pipeline.make_dataset():
-            yield self._model_extractor.extract(ex)
+            probs, offsets, downscale = self._model_extractor.extract(ex)
 
+            if(offsets is None and self._refinement_kernel_size > 0):
+                offsets = self._create_integral_offsets(probs, downscale, self._refinement_kernel_size)
+
+            yield TrackingData(
+                probs.numpy(),
+                None if(offsets is None) else offsets.numpy(),
+                downscale
+            )
 
 
 def _main_test():
@@ -218,15 +269,13 @@ def _main_test():
     if(not tf.executing_eagerly()):
         tf.compat.v1.enable_eager_execution()
 
-    mdl = sleap.load_model([
-        "/home/isaac/Code/sleap-data/flies13/models/221121_212441.centroid.n=1600",
-        "/home/isaac/Code/sleap-data/flies13/models/221121_215804.centered_instance.n=1600"
-    ])
-    vid = sleap.load_video("/home/isaac/Code/sleap-data/flies13/talk_title_slide@13150-14500.mp4")
-    extractor = PredictorExtractor(mdl)
+    mdl = sleap.load_model("/home/isaac/Code/sleap-data/degu-project/models/221206_151600.multi_instance.n=379/")
+    vid = sleap.load_video("/home/isaac/Code/sleap-data/degu-project/1min-clip.mp4")
+    extractor = PredictorExtractor(mdl, 5)
 
     for frame in extractor.extract(vid):
         print(frame)
+        print(frame.get_offset_map()[0, :, :, 1, :])
         from diplomat.utils.extract_frames import pretty_print_frame
         print(pretty_print_frame(frame, 0, 1, False))
         return
