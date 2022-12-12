@@ -22,20 +22,26 @@ class PlotterArgMax(Predictor):
     Identical to :plugin:`~diplomat.predictors.ArgMax`, but plots probability frames in form of video to the user using matplotlib...
     """
     def __init__(
-            self,
-            bodyparts: List[str],
-            num_outputs: int,
-            num_frames: int,
-            settings: Config,
-            video_metadata: Config,
+        self,
+        bodyparts: List[str],
+        num_outputs: int,
+        num_frames: int,
+        settings: Config,
+        video_metadata: Config,
     ):
         super().__init__(bodyparts, num_outputs, num_frames, settings, video_metadata)
 
         # Keeps track of how many frames
         self._current_frame = 0
+
+        self._parts_set = set(self.bodyparts) if(settings.parts_to_plot is None) else (set(settings.parts_to_plot) & set(self.bodyparts))
+        if(len(self._parts_set) == 0):
+            raise ValueError("No parts selected to plot!")
+        self._part_idx_list = list(filter(lambda v: self.bodyparts[v] in self._parts_set, range(len(self.bodyparts))))
+
         # Determines grid size of charts
-        self._grid_width = int(np.ceil(np.sqrt(len(self.bodyparts))))
-        self._grid_height = int(np.ceil(len(self.bodyparts) / self._grid_width))
+        self._grid_width = int(np.ceil(np.sqrt(len(self._parts_set))))
+        self._grid_height = int(np.ceil(len(self._parts_set) / self._grid_width))
         # Stores opencv video writer...
         self._vid_writer = None
 
@@ -53,12 +59,12 @@ class PlotterArgMax(Predictor):
 
         # Build the subplots...
         if(settings["3d_projection"]):
-            settings.axes_args.update({"projection": "3d"})
             from mpl_toolkits.mplot3d import Axes3D
+            axes_args = {"projection": "3d", **settings.axes_args}
             self._figure, self._axes = pyplot.subplots(
                 self._grid_height,
                 self._grid_width,
-                subplot_kw=settings.axes_args,
+                subplot_kw=axes_args,
                 **settings.figure_args,
                 squeeze=False
             )
@@ -111,8 +117,9 @@ class PlotterArgMax(Predictor):
         x_cent, y_cent = np.meshgrid(x_cent, y_cent)
 
         if(mode3d):
-            zs = np.ones(y_cent.shape)
-            return (x_cent[mask], y_cent[mask], zs[mask], x_off[mask], y_cent[mask], zs[mask])
+            z_cent = np.ones(y_cent.shape)
+            z_off = np.zeros(y_cent.shape)
+            return (x_cent[mask], y_cent[mask], z_cent[mask], x_off[mask], y_off[mask], z_off[mask])
         else:
             return (x_cent[mask], y_cent[mask], x_off[mask], y_off[mask])
 
@@ -122,8 +129,9 @@ class PlotterArgMax(Predictor):
         vid_meta = self.video_metadata
 
         for frame in range(scmap.get_frame_count()):
+            self._figure.suptitle(f"Frame: {frame}")
             # Plot all probability maps
-            for bp, ax in zip(range(scmap.get_bodypart_count()), self._axes.flat):
+            for bp, ax in zip(self._part_idx_list, self._axes.flat):
                 ax.clear()
                 if(not settings["3d_projection"]):
                     ax.set_aspect("equal")
@@ -131,7 +139,7 @@ class PlotterArgMax(Predictor):
                     ax.axis("off")
 
                 ax.set_title(
-                    f"Bodypart: {self.bodyparts[bp]}\nFrame: {self._current_frame}"
+                    f"Bodypart: {self.bodyparts[bp]}"
                 )
 
                 if(settings["3d_projection"]):
@@ -157,10 +165,9 @@ class PlotterArgMax(Predictor):
                         if(res is not None):
                             ax.quiver(
                                 *res,
-                                angles='xy',
-                                scale_units='xy',
-                                scale=1,
                                 color=settings.arrow_color,
+                                arrow_length_ratio=0,
+                                normalize=False,
                                 **settings.arrow_args
                             )
                 else:
@@ -224,6 +231,11 @@ class PlotterArgMax(Predictor):
                 "Name of the video file that plotting data will be saved to. "
                 "Can use $VIDEO to place the name of original video somewhere "
                 "in the text."
+            ),
+            "parts_to_plot": (
+                None,
+                type_casters.Union(type_casters.Literal(None), type_casters.List(str)),
+                "A list of body parts to plot. None means plot all the body parts."
             ),
             "codec": (
                 "mp4v",

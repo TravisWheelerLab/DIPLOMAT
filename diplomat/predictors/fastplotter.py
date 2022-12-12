@@ -54,9 +54,15 @@ class FastPlotterArgMax(Predictor):
         super().__init__(bodyparts, num_outputs, num_frames, settings, video_metadata)
         # Keeps track of how many frames
         self._current_frame = 0
+
+        self._parts_set = set(self.bodyparts) if (settings.parts_to_plot is None) else (set(settings.parts_to_plot) & set(self.bodyparts))
+        if (len(self._parts_set) == 0):
+            raise ValueError("No parts selected to plot!")
+        self._part_idx_list = list(filter(lambda v: self.bodyparts[v] in self._parts_set, range(len(self.bodyparts))))
+
         # Determines grid size of charts
-        self._grid_width = int(math.ceil(math.sqrt(len(self.bodyparts))))
-        self._grid_height = int(math.ceil(len(self.bodyparts) / self._grid_width))
+        self._grid_width = int(math.ceil(math.sqrt(len(self._parts_set))))
+        self._grid_height = int(math.ceil(len(self._parts_set) / self._grid_width))
         # Stores opencv video writer...
         self._vid_writer: Optional[cv2.VideoWriter] = None
 
@@ -119,7 +125,6 @@ class FastPlotterArgMax(Predictor):
         )
 
         self._canvas = np.zeros((self._vid_height, self._vid_width, 3), dtype=np.uint8)
-        print(self._vid_width, self._vid_height)
 
         self._vid_writer = cv2.VideoWriter(
             self.VIDEO_PATH,
@@ -276,10 +281,10 @@ class FastPlotterArgMax(Predictor):
             # Drawing the title...
             self._draw_title(f"Frame {self._current_frame}")
 
-            for bp in range(len(self.bodyparts)):
+            for i, bp in enumerate(self._part_idx_list):
                 # Compute the current subplot we are on...
-                subplot_y = bp // self._grid_width
-                subplot_x = bp % self._grid_width
+                subplot_y = i // self._grid_width
+                subplot_x = i % self._grid_width
                 self._draw_subplot(
                     self.bodyparts[bp],
                     subplot_x,
@@ -313,6 +318,11 @@ class FastPlotterArgMax(Predictor):
                 str,
                 "Name of the video file that plotting data will be saved to. Can use $VIDEO to place the "
                 "name of original video somewhere in the text."
+            ),
+            "parts_to_plot": (
+                None,
+                type_casters.Union(type_casters.Literal(None), type_casters.List(str)),
+                "A list of body parts to plot. None means plot all the body parts."
             ),
             "codec": (
                 "mp4v",
