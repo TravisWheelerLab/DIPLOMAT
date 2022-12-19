@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
 
-import scipy.signal
 from typing_extensions import TypedDict
 import numpy as np
 import tensorflow as tf

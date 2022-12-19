@@ -67,7 +67,8 @@ def label_videos(
     :param video_type: Optional string, the video extension to search for if the 'videos' argument is a directory
                        to search inside ('.avi', '.mp4', ...).
     :param kwargs: The following additional arguments are supported:
-        {extra_cli_args}
+
+                   {extra_cli_args}
     """
     cfg = auxiliaryfunctions.read_config(config)
     train_frac = cfg["TrainingFraction"][training_set_index]

@@ -6,8 +6,8 @@ Deep learning-based Identity Preserving Labeled-Object Multi-Animal Tracking.
 
 ## About
 
-DIPLOMAT provides algorithms and tools for performing multi-animal identity preserving tracking on top of single animal and multi animal CNN based tracking packages. Currently, it supports running on both single and multi animal DeepLabCut projects, but can be extended to support other tracking
-packages. Unlike other multi-animal tracking packages, DIPLOMAT's algorithms work directly off confidence maps instead of running peak detection, allowing for more nuanced tracking results compared to other methods. 
+DIPLOMAT provides algorithms and tools for performing multi-animal identity preserving tracking on top of single animal and multi animal CNN based tracking packages. Currently, it supports running on both DeepLabCut and SLEAP projects.
+Unlike other multi-animal tracking packages, DIPLOMAT's algorithms work directly off confidence maps instead of running peak detection, allowing for more nuanced tracking results compared to other methods. 
 
 |                                                            |                                                  |
 |------------------------------------------------------------|--------------------------------------------------|
@@ -19,22 +19,35 @@ DIPLOMAT also includes a UI for performing tracking and several other tools for 
 
 ## Installation
 
-To install DIPLOMAT with PIP right now, you can and install it with pip using the following command:
+To install DIPLOMAT with PIP right now, you can and install it with pip using one of the following commands below:
 ```bash
-pip install git+https://github.com/TravisWheelerLab/DIPLOMAT.git
+# For working with SLEAP projects:
+pip install "diplomat-track[sleap] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+# For working with DeepLabCut projects:
+pip install "diplomat-track[dlc] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
 ```
-To install DIPLOMAT with GUI elements and supervised tracking support, use the command below:
+To install DIPLOMAT with GUI elements and supervised tracking support, use one of the commands below:
 ```bash
-pip install "diplomat-track[gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+# For using DIPLOMAT with SLEAP
+pip install "diplomat-track[sleap, gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+# Again, replace sleap with dlc to install with DeepLabCut support.
+pip install "diplomat-track[dlc, gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
 ```
 
-**NOTE:** DIPLOMAT also includes an environment configuration file for setting up DIPLOMAT with conda.
-To create an environment using conda, and activate it, run these commands:
+**NOTE:** DIPLOMAT also includes two environment configuration files for setting up DIPLOMAT with conda.
+To create an environment using conda, run one of these two commands:
 ```bash
-# Create the environment...
+# Create the environment for using DIPLOMAT with DeepLabCut
 conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
-# Activate it...
+# OR Create an environment for using DIPLOMAT with SLEAP instead...
+conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
+```
+And then activate the environment with one of these two commands:
+```bash
+# Activate the DeepLabCut/DIPLOMAT environment...
 conda activate DIPLOMAT-DEEPLABCUT
+# Activate the SLEAP/DIPLOMAT environment...
+conda activate DIPLOMAT-SLEAP
 ```
 
 For a more thorough explanation of the installation process, see the [documentation](https://diplomat.readthedocs.io/en/latest/installation.html).

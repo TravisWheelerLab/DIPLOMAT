@@ -33,14 +33,15 @@ def label_videos(
     **kwargs
 ):
     """
-    Label videos created using the SLEAP frontend.
+    Label videos tracked using the SLEAP frontend.
 
-    :param config:
-    :param videos:
-    :param body_parts_to_plot:
-    :param video_extension:
-    :param kwargs:
-    :return:
+    :param config: The path (or list of paths) to the sleap model(s) used for inference, each as either as a folder or zip file.
+    :param videos: Paths to the sleap label files, or .slp files, to make minor modifications to, NOT the video files.
+    :param body_parts_to_plot: An optional list of body part names to plot in the labeled video. Defaults to None, meaning plot all body parts.
+    :param video_extension: The file extension to use on the created labeled video, excluding the dot. Defaults to 'mp4'.
+    :param kwargs: The following additional arguments are supported:
+
+                   {extra_cli_args}
     """
     model = sleap.load_model(_paths_to_str(config))
 

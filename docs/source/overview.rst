@@ -3,10 +3,9 @@ Overview
 
 DIPLOMAT (Deep learning-based Identity-Preserving Labeled-Object Multi Animal Tracking) is a software
 package that provides algorithms for enhanced multi-animal tracking on top of other CNN based animal
-tracking packages. Currently, DIPLOMAT only has support for running on DeepLabCut based projects,
-but support for additional packages is planned. Unlike other multi-animal tracking packages,
-DIPLOMAT's algorithms work directly off confidence maps instead of running peak detection,
-allowing for more nuanced tracking results compared to other methods.
+tracking packages. Currently, DIPLOMAT has support for running on DeepLabCut and SLEAP based projects.
+Unlike other multi-animal tracking packages, DIPLOMAT's algorithms work directly off confidence maps
+instead of running peak detection, allowing for more nuanced tracking results compared to other methods.
 
 .. list-table::
     :widths: 50 50

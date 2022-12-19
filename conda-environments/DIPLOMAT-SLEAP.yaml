@@ -1,0 +1,14 @@
+# Environment for using diplomat with SLEAP projects.
+# Installs diplomat and SLEAP into the same environment.
+name: DIPLOMAT-SLEAP
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - sleap
+  - ffmpeg
+  - wxpython<4.2.0
+  - pip:
+    - "diplomat-track[gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"

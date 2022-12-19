@@ -35,18 +35,23 @@ def analyze_videos(
     **kwargs
 ):
     """
+    Run DIPLOMAT tracking on a set of videos or a single video using a SLEAP model, generating results in ".slp" files.
 
-    :param config:
-    :param videos:
-    :param batch_size:
-    :param num_outputs:
-    :param predictor:
-    :param predictor_settings:
-    :param gpu_index:
-    :param refinement_kernel_size:
-    :param use_cpu:
-    :param kwargs:
-    :return:
+    :param config: The path (or list of paths) to the sleap model(s) used for inference, each as either as a folder or zip file.
+    :param videos: A path or list of paths to video files to run DIPLOMAT on using the passed SLEAP model.
+    :param batch_size: An integer, the number of images to pass to the model per batch.
+    :param num_outputs: An integer, the number of individuals in the video defaults to 1.
+    :param predictor: A string, the name of the predictor to use to perform the task of tracking.
+    :param predictor_settings: A dictionary of strings to any values, the settings to use for the predictor. Each predictor offers different settings,
+                               see :py:cli:`diplomat predictors list_settings` or :py:func:`~diplomat.predictor_ops.get_predictor_settings` to get
+                               the settings a predictor plugin supports.
+    :param gpu_index: An integer, the index of the GPU to use. If not set DIPLOMAT allows SLEAP to automatically select a GPU.
+    :param refinement_kernel_size: An integer, the kernel size to use for creating offset maps if they don't exist (via integral refinement).
+                                   defaults to False, if set to 0 or a negative integer disables integral refinement.
+    :param use_cpu: A boolean, if True force SLEAP to use the CPU to run the model. Defaults to False.
+    :param kwargs: The following additional arguments are supported:
+
+                   {extra_cli_args}
     """
     _setup_gpus(use_cpu, gpu_index)
 

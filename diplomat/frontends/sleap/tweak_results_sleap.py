@@ -25,6 +25,15 @@ def tweak_videos(
     videos: tc.Union[tc.List[tc.PathLike], tc.PathLike],
     **kwargs
 ):
+    """
+    Make minor modifications and tweaks to sleap results (stored in .slp files) using DIPLOMAT's supervised UI.
+
+    :param config: The path (or list of paths) to the sleap model(s) used for inference, each as either as a folder or zip file.
+    :param videos: Paths to the sleap label files, or .slp files, to make minor modifications to, NOT the video files.
+    :param kwargs: The following additional arguments are supported:
+
+                   {extra_cli_args}
+    """
     model = sleap.load_model(_paths_to_str(config))
 
     if(model is None):

@@ -35,6 +35,23 @@ def analyze_frames(
     refinement_kernel_size: int = 5,
     **kwargs
 ):
+    """
+    Run DIPLOMAT tracking on a set of frame store files or a single frame store using metadata from a SLEAP model, generating results in ".slp" files.
+
+    :param config: The path (or list of paths) to the sleap model(s) used for inference, each as either as a folder or zip file.
+    :param frame_stores: A path or list of paths to frame store ('.dlfs') files to run DIPLOMAT on.
+    :param batch_size: An integer, the number of frames to read in from the frame store at a time.
+    :param num_outputs: An integer, the number of individuals in the video defaults to 1.
+    :param predictor: A string, the name of the predictor to use to perform the task of tracking.
+    :param predictor_settings: A dictionary of strings to any values, the settings to use for the predictor. Each predictor offers different settings,
+                               see :py:cli:`diplomat predictors list_settings` or :py:func:`~diplomat.predictor_ops.get_predictor_settings` to get
+                               the settings a predictor plugin supports.
+    :param refinement_kernel_size: An integer, the kernel size to use for creating offset maps if they don't exist (via integral refinement).
+                                   defaults to False, if set to 0 or a negative integer disables integral refinement.
+    :param kwargs: The following additional arguments are supported:
+
+                   {extra_cli_args}
+    """
     batch_size = _get_default_value(sleap.load_model, "batch_size", 4) if (batch_size is None) else batch_size
     num_outputs = 1 if (num_outputs is None) else num_outputs
 

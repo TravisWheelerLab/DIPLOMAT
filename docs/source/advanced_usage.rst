@@ -10,7 +10,8 @@ DIPLOMAT was developed with extensibility in mind, so core functionality can be 
 plugins. DIPLOMAT has two kinds of plugins:
 
  - Predictors: Plugins that take in model outputs and predict poses, or animal locations from them. Some of these also have additional side effects such as plotting or frame export.
- - Frontends: These are plugins that grab frames from another tracking software and pipe them into the predictor the user has selected. Currently, there is only one for `DeepLabCut <https://github.com/DeepLabCut/DeepLabCut>`_.
+ - Frontends: These are plugins that grab frames from another tracking software and pipe them into the predictor the user has selected.
+   Currently, there is two for `DeepLabCut <https://github.com/DeepLabCut/DeepLabCut>`_ and `SLEAP <https://sleap.ai/>`_.
 
 To get information about predictors, one can use the commands of diplomat predictors:
 
@@ -33,17 +34,20 @@ To get information about frontends, use commands :py:cli:`diplomat frontends lis
 Development Usage
 -----------------
 
-DIPLOMAT is written entirely in python, and uses poetry for development. To set up an
-environment for developing DIPLOMAT, you can simply pull down this repository and create
-an environment for it using the commands shown below.
+DIPLOMAT is written entirely in python. To set up an environment for developing DIPLOMAT, you can simply
+pull down this repository and create an environment for it using the commands shown below.
 
 .. code-block:: sh
 
     git clone https://github.com/TravisWheelerLab/DIPLOMAT.git
     cd DIPLOMAT
-    poetry install --all-extras
+    # Create a python environment
+    python -m venv venv
+    # On windows use the command: venv/Scripts/activate.bat
+    source venv/bin/activate
 
-Then, to launch the environment in the terminal, simply run :code:`poetry shell`
+    # Install DIPLOMAT with all extras (sleap, dlc, and gui) You may want to change this to only install some extras.
+    pip install -e .[all]
 
 For most development, you'll most likely want to add additional predictor plugins.
 Predictors can be found in the ``diplomat/predictors`` directory. Classes that extend Predictor are automatically

@@ -9,6 +9,7 @@ def _verify_sleap_like(
     **kwargs
 ) -> bool:
     try:
+        # Config for sleap is always a sleap model, so try to load it...
         config = _paths_to_str(config)
         __ = sleap.load_model(config)
         return True

@@ -85,6 +85,42 @@ def _get_predictor_settings(predictor_cls: Type[Predictor], user_passed_settings
     return Config(user_passed_settings, settings_backing)
 
 
+def _skeleton_conv(skeleton, fallback_skeleton, part_list):
+    if(skeleton is False):
+        return None
+    if(skeleton is None):
+        return fallback_skeleton
+
+    if(skeleton is True):
+        skeleton = list(part_list)
+
+    part_set = set(part_list)
+    def _validate_part(part):
+        if(part not in part_set):
+            raise ValueError(f"Part {part} not a valid body part! (Valid parts are: {part_set})")
+
+    if(isinstance(skeleton, dict)):
+        skel_list = []
+        # convert to list of tuples of strings...
+        for key, val in skeleton.items():
+            if(isinstance(val, str)):
+                skel_list.append((_validate_part(key), _validate_part(val)))
+            else:
+                key = _validate_part(key)
+                skel_list.extend([(key, _validate_part(sub_val)) for sub_val in val])
+
+        return skel_list
+    else:
+        # Force into one of two forms...
+        for val in skeleton:
+            if(isinstance(val, str)):
+                return [_validate_part(v) for v in skeleton]
+            else:
+                return [(_validate_part(a), _validate_part(b)) for a, b in skeleton]
+
+        return False  # No skeleton if we made it through the loop...
+
+
 def _get_video_metadata(
     video_path: Optional[Path],
     output_path: Path,
@@ -109,7 +145,7 @@ def _get_video_metadata(
         "alphavalue": visual_settings.alphavalue,
         "pcutoff": visual_settings.pcutoff,
         "line_thickness": visual_settings.get("line_thickness", 1),
-        "skeleton": mdl_metadata["skeleton"]
+        "skeleton": _skeleton_conv(visual_settings.skeleton, mdl_metadata["skeleton"], mdl_metadata["bp_names"])
     })
 
 

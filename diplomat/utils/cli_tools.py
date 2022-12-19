@@ -282,12 +282,24 @@ def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True) -> Callable[
         func.__auto_cast = auto_cast
 
         if(hasattr(func, "__doc__") and (func.__doc__ is not None)):
-            extra_doc = "\n        ".join(
-                f" - {name} (Type: {get_type_name(caster)}, Default: {default}): {desc}" for name, (default, caster, desc) in config_spec.items()
-            )
-            func.__doc__ = func.__doc__.format(extra_cli_args=extra_doc)
+            doc_str_lst = func.__doc__.split("\n")
+            magic_str = "{extra_cli_args}"
+
+            for i, line in enumerate(doc_str_lst):
+                escaped_line = line.replace("{{", "?").replace("}}", "?")
+                index = escaped_line.find(magic_str)
+                if(index == -1):
+                    continue
+
+                extra_doc = ("\n" + (" " * index)).join(
+                    f" - {name} (Type: {get_type_name(caster)}, Default: {default}): {desc}" for name, (default, caster, desc) in config_spec.items()
+                )
+                doc_str_lst[i] = line.format(extra_cli_args=extra_doc)
+
+            func.__doc__ = "\n".join(doc_str_lst)
 
         return func
+
     return attach_extra
 
 
