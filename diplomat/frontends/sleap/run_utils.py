@@ -98,6 +98,7 @@ def _skeleton_conv(skeleton, fallback_skeleton, part_list):
     def _validate_part(part):
         if(part not in part_set):
             raise ValueError(f"Part {part} not a valid body part! (Valid parts are: {part_set})")
+        return part
 
     if(isinstance(skeleton, dict)):
         skel_list = []
@@ -114,11 +115,11 @@ def _skeleton_conv(skeleton, fallback_skeleton, part_list):
         # Force into one of two forms...
         for val in skeleton:
             if(isinstance(val, str)):
-                return [_validate_part(v) for v in skeleton]
+                return [(_validate_part(a), _validate_part(b)) for i, a in enumerate(skeleton) for j, b in enumerate(skeleton[i + 1:], i + 1)]
             else:
                 return [(_validate_part(a), _validate_part(b)) for a, b in skeleton]
 
-        return False  # No skeleton if we made it through the loop...
+        return None  # No skeleton if we made it through the loop...
 
 
 def _get_video_metadata(
@@ -131,6 +132,7 @@ def _get_video_metadata(
     crop_loc: Optional[Tuple[int, int]] = None
 ) -> Config:
     fps = getattr(video, "fps", 30)
+    skel = _skeleton_conv(visual_settings.skeleton, mdl_metadata["skeleton"], mdl_metadata["bp_names"])
 
     return Config({
         "fps": fps,
@@ -145,7 +147,7 @@ def _get_video_metadata(
         "alphavalue": visual_settings.alphavalue,
         "pcutoff": visual_settings.pcutoff,
         "line_thickness": visual_settings.get("line_thickness", 1),
-        "skeleton": _skeleton_conv(visual_settings.skeleton, mdl_metadata["skeleton"], mdl_metadata["bp_names"])
+        "skeleton": skel
     })
 
 
