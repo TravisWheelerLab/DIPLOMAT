@@ -2,6 +2,7 @@
 # Installs diplomat and SLEAP into the same environment.
 name: DIPLOMAT-SLEAP
 channels:
+  - sleap
   - conda-forge
   - defaults
 dependencies:
