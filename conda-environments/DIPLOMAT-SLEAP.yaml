@@ -3,6 +3,7 @@
 name: DIPLOMAT-SLEAP
 channels:
   - sleap
+  - nvidia
   - conda-forge
   - defaults
 dependencies:
