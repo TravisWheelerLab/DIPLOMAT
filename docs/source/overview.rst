@@ -19,7 +19,7 @@ instead of running peak detection, allowing for more nuanced tracking results co
 
 DIPLOMAT supports two primary modes for performing animal tracking, an unsupervised mode, which
 simply runs DIPLOMAT on a video and outputs a file containing tracking information per body part
-and individual, and supervised mode, which displays the tracked results in a user interface, where
+and individual, and a supervised mode, which displays the tracked results in a user interface, where
 the user can make adjustments and rerun DIPLOMAT as many times as needed on the modified results
 before saving them. DIPLOMAT also contains additional tools for visualizing, storing, and tweaking
 tracking results.

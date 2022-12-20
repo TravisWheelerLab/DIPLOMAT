@@ -13,6 +13,8 @@ class FixFrame(FramePass):
     Scores frames by peak separation, and then selects a single frame to remain clustered (with peaks separated). The rest of the frames are restored,
     and :py:plugin:`~diplomat.predictors.frame_passes.MITViterbi` uses the fixed frame as it's ground truth frame.
     """
+    SCORES_PER_CHUNK = 20
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._scores = None
@@ -305,6 +307,28 @@ class FixFrame(FramePass):
         return score
 
     @classmethod
+    def compute_list_of_scores(
+        cls,
+        frames: List[List[ForwardBackwardFrame]],
+        num_outputs: int,
+        down_scaling: float,
+        skeleton: Optional[StorageGraph],
+        progress_bar: Optional[ProgressBar] = None
+    ) -> np.ndarray:
+        final_scores = np.zeros(len(frames))
+
+        if(progress_bar is not None):
+            progress_bar.reset(len(frames))
+
+        for i, frame in enumerate(frames):
+            final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton)
+
+            if(progress_bar is not None):
+                progress_bar.update()
+
+        return final_scores
+
+    @classmethod
     def compute_scores(
         cls,
         fb_data: ForwardBackwardData,
@@ -327,14 +351,16 @@ class FixFrame(FramePass):
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
 
+        to_index = lambda i: slice(i * cls.SCORES_PER_CHUNK, (i + 1) * cls.SCORES_PER_CHUNK)
+
         if(thread_count > 0):
             from ...sfpe.segmented_frame_pass_engine import PoolWithProgress
             with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
                 pool.fast_map(
-                    cls.compute_single_score,
-                    lambda i: (fb_data.frames[i], num_outputs, down_scaling, skeleton),
-                    scores.__setitem__,
-                    fb_data.num_frames
+                    cls.compute_list_of_scores,
+                    lambda i: (fb_data.frames[to_index(i)], num_outputs, down_scaling, skeleton),
+                    lambda i, val: scores.__setitem__(to_index(i), val),
+                    (fb_data.num_frames + (cls.SCORES_PER_CHUNK - 1)) // cls.SCORES_PER_CHUNK
                 )
         else:
             for f_idx in range(num_frames):

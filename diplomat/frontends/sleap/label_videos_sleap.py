@@ -114,11 +114,11 @@ def _label_video_single(
                 frame = video.get_frame(f_i)[..., ::-1]
                 overlay = frame.copy()
 
-                colors = iter_colormap(visual_settings.colormap, poses.get_bodypart_count() // num_outputs)
+                colors = iter_colormap(visual_settings.colormap, poses.get_bodypart_count())
                 shapes = shape_iterator(visual_settings.shape_list, num_outputs)
 
                 part_iter = zip(
-                    bp_names,
+                    [name for name in bp_names for _ in range(num_outputs)],
                     poses.get_x_at(f_i, slice(None)),
                     poses.get_y_at(f_i, slice(None)),
                     poses.get_prob_at(f_i, slice(None)),

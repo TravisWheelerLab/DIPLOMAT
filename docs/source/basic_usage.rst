@@ -27,7 +27,7 @@ Once the network is trained, you can begin using DIPLOMAT to begin tracking vide
 Tracking a Video
 ^^^^^^^^^^^^^^^^
 
-To run DIPLOMAT on a video, simply pass run either the :py:cli:`diplomat supervised`
+To run DIPLOMAT on a video, simply run either the :py:cli:`diplomat supervised`
 or :py:cli:`diplomat unsupervised` command, as shown below (you'll need to replace the paths below
 with actual paths to the project config file and the video):
 
@@ -39,7 +39,7 @@ with actual paths to the project config file and the video):
     diplomat unsupervised -c path/to/dlc/project/config.yaml -v path/to/video/to/run/on.mp4
 
 Both of these commands support running on a list videos by simply passing paths using a comma
-separated list:
+separated list encased in square brackets:
 
 .. code-block:: sh
 
@@ -96,7 +96,7 @@ all the way through the "Start Training" section.
 Tracking a Video
 ^^^^^^^^^^^^^^^^
 
-To run DIPLOMAT on a video, simply pass run either the :py:cli:`diplomat supervised`
+To run DIPLOMAT on a video, simply run either the :py:cli:`diplomat supervised`
 or :py:cli:`diplomat unsupervised` command, as shown below (you'll need to replace the paths below
 with actual paths to the project config file and the video):
 
@@ -107,7 +107,7 @@ with actual paths to the project config file and the video):
     # Run without the UI...
     diplomat unsupervised -c path/to/sleap/model/folder/or/zip -v path/to/video/to/run/on.mp4
 
-Model paths are typically placed in a folder called "models" placed next to the .slp file for your SLEAP project. Both of the above commands will
+Models are typically placed in a folder called "models" placed next to the .slp file for your SLEAP project. Both of the above commands will
 produce a ".slp" file with a prefix matching the name video. Both of these commands support running on a list videos by simply passing paths
 using a comma separated list:
 
@@ -150,7 +150,7 @@ This can be done using the :py:cli:`diplomat tweak` command.
 
 .. code-block:: sh
 
-    # NOTICE: Does not take videos, but a list of output labels for SLEAP...
+    # NOTICE: Does not take videos, but paths to output labels for SLEAP...
     diplomat tweak -c path/to/dlc/project/config.yaml -v path/to/final/labels.slp
 
 
@@ -182,7 +182,7 @@ Video Utilities
 ---------------
 
 The :py:cli:`diplomat split_videos` command provides functionality for both trimming and splitting
-videos into segments. It allows for splitting the video into fixed length segments or at exact
+videos into segments. It allows for splitting a video into fixed length segments or at exact
 second based offsets, as shown below:
 
 .. code-block:: sh
@@ -190,8 +190,8 @@ second based offsets, as shown below:
     # Split a video into 2 minute (120 second) chunks (-sps stands for seconds per segment).
     diplomat split_videos -v path/to/video.mp4 -sps 120
 
-    # Split a video at exactly 30, 70, and 500 seconds in.
-    diplomat split_videos -v path/to/video.mp4 -sps [30, 70, 500]
+    # Split a video at exactly 30.25, 70.001, and 500 seconds in.
+    diplomat split_videos -v path/to/video.mp4 -sps [30.25, 70.001, 500]
 
     # Like all other commands, multiple videos can be passed.
     diplomat split_videos -v [path/to/video1.mov, path/to/video2.avi] -sps 120

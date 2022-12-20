@@ -13,7 +13,7 @@ plugins. DIPLOMAT has two kinds of plugins:
  - Frontends: These are plugins that grab frames from another tracking software and pipe them into the predictor the user has selected.
    Currently, there is two for `DeepLabCut <https://github.com/DeepLabCut/DeepLabCut>`_ and `SLEAP <https://sleap.ai/>`_.
 
-To get information about predictors, one can use the commands of diplomat predictors:
+To get information about predictors, one can use the commands of the ``diplomat predictors`` sub-command space:
 
 .. code-block:: sh
 
@@ -46,7 +46,7 @@ pull down this repository and create an environment for it using the commands sh
     # On windows use the command: venv/Scripts/activate.bat
     source venv/bin/activate
 
-    # Install DIPLOMAT with all extras (sleap, dlc, and gui) You may want to change this to only install some extras.
+    # Install DIPLOMAT dependencies with all extras (sleap, dlc, and gui) You may want to change this to only install some extras.
     pip install -e .[all]
 
 For most development, you'll most likely want to add additional predictor plugins.
