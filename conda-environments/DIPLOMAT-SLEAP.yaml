@@ -7,7 +7,7 @@ channels:
   - conda-forge
 dependencies:
   - pip
-  - wheel==0.35  # Otherwise sleap won't work...
+  - wheel=0.35  # Otherwise sleap won't work...
   - sleap=1.2.9
   - wxpython<4.2.0
   - pip:
