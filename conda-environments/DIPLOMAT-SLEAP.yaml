@@ -7,7 +7,7 @@ channels:
   - conda-forge
 dependencies:
   - pip
-  - wheel
+  - wheel~=0.35
   - sleap=1.2.9
   - wxpython<4.2.0
   - pip:
