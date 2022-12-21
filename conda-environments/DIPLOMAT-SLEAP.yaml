@@ -7,10 +7,8 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python
   - pip
   - sleap
-  - ffmpeg
   - wxpython<4.2.0
   - pip:
-    - "diplomat-track[gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+    - "diplomat-track @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
