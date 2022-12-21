@@ -98,7 +98,7 @@ Tracking a Video
 
 To run DIPLOMAT on a video, simply run either the :py:cli:`diplomat supervised`
 or :py:cli:`diplomat unsupervised` command, as shown below (you'll need to replace the paths below
-with actual paths to the project config file and the video):
+with actual paths to the SLEAP model folder or zip file and the video):
 
 .. code-block:: sh
 
