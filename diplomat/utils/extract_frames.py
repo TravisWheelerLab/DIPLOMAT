@@ -10,6 +10,7 @@ import base64
 import numpy as np
 import cv2
 
+
 def extract_frames(
     dlfs_in: BinaryIO,
     dlfs_out: BinaryIO,
@@ -70,6 +71,7 @@ def get_terminal_size(fallback: Tuple[int, int] = (80, 24)):
 
     return fallback
 
+
 class BorderStyle(NamedTuple):
     """
     A named tuple, for representing a border style for the pretty print methods, mostly used internally...
@@ -125,6 +127,7 @@ def pretty_print_frame(
         print(pretty_frame_string(data, frame_idx, body_part, get_terminal_size()[0], size_up, interpol, format_type))
     else:
         print(pretty_frame_string(data, frame_idx, body_part, 0, size_up, interpol, format_type))
+
 
 def pretty_frame_string(
     data: TrackingData,

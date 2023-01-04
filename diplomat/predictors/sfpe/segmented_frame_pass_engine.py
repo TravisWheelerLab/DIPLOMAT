@@ -10,7 +10,6 @@ from multiprocessing.context import BaseContext
 import time
 import diplomat.utils.frame_store_api as frame_store_api
 from diplomat.predictors.sfpe.segmentation import EndPointSegmentor
-from ..fpe.fpe_help import FPEString
 
 try:
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -200,9 +199,13 @@ class SimplePool:
         self._output_queue.close()
 
         for p in self._processes:
-            if(p.is_alive()):
-                p.terminate()
-                p.join()
+            try:
+                if(p.is_alive()):
+                    p.terminate()
+                    p.join()
+            except ValueError:
+                # Process is already closed...
+                pass
             p.close()
 
 
@@ -213,6 +216,9 @@ class SimplePool:
         while((len(waiting_for) > 0) or (next_idx < length)):
             for i, p in enumerate(self._processes):
                 if(not p.is_alive()):
+                    if(p.exitcode != 0):
+                        p.close()
+                        raise ChildProcessError("Error occurred in child process...")
                     p.close()
                     del p
                     self._processes[i] = self._ctx.Process(
