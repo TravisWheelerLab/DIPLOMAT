@@ -19,6 +19,7 @@ try:
     from ..fpe.frame_passes.fix_frame import FixFrame
     from ..fpe.skeleton_structures import StorageGraph
     from ..fpe.fpe_help import FPEString
+    from ..fpe.arr_utils import _NumpyDict
 except ImportError:
     __package__ = "diplomat.predictors.sfpe"
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -28,6 +29,8 @@ except ImportError:
     from ..fpe.frame_passes.fix_frame import FixFrame
     from ..fpe.skeleton_structures import StorageGraph
     from ..fpe.fpe_help import FPEString
+    from ..fpe.arr_utils import _NumpyDict
+
 
 class NestedProgressIndicator(ProgressBar):
 
@@ -640,6 +643,32 @@ class SegmentedFramePassEngine(Predictor):
                 progress_bar.update()
 
     @classmethod
+    def _get_segment_runner(cls, is_pre_initialized: bool):
+        return cls._run_segment_pre_initialized if(is_pre_initialized) else cls._run_segment
+
+    @classmethod
+    def _run_segment_pre_initialized(
+        cls,
+        sub_frame: ForwardBackwardData,
+        frame_pass_builders: List[FramePassBuilder],
+        width: int,
+        height: int,
+        allow_multi_threading: bool,
+        fix_frame_idx: int,
+        progress_bar: Optional[ProgressBar] = None,
+    ):
+        return cls._run_segment(
+            sub_frame,
+            frame_pass_builders,
+            width,
+            height,
+            allow_multi_threading,
+            fix_frame_idx,
+            progress_bar,
+            True
+        )
+
+    @classmethod
     def _run_segment(
         cls,
         sub_frame: ForwardBackwardData,
@@ -649,16 +678,18 @@ class SegmentedFramePassEngine(Predictor):
         allow_multi_threading: bool,
         fix_frame_idx: int,
         progress_bar: Optional[ProgressBar] = None,
+        is_pre_initialized: bool = False
     ) -> ForwardBackwardData:
         if(progress_bar is not None):
             progress_bar.reset(sub_frame.num_frames)
 
         for f in range(sub_frame.num_frames):
-            for bp in range(sub_frame.num_bodyparts):
-                frame = sub_frame.frames[f][bp]
-                frame.frame_probs = None
-                frame.occluded_probs = None
-                frame.occluded_coords = None
+            if(not (f == fix_frame_idx and is_pre_initialized)):
+                for bp in range(sub_frame.num_bodyparts):
+                    frame = sub_frame.frames[f][bp]
+                    frame.frame_probs = None
+                    frame.occluded_probs = None
+                    frame.occluded_coords = None
 
             if(progress_bar is not None):
                 progress_bar.update()
@@ -674,7 +705,8 @@ class SegmentedFramePassEngine(Predictor):
             fix_frame_idx,
             fix_frame,
             progress_bar,
-            True
+            True,
+            is_pre_initialized
         )
 
         if (isinstance(progress_bar, NestedProgressIndicator)):
@@ -708,7 +740,11 @@ class SegmentedFramePassEngine(Predictor):
         start, end, fix_frame = self._segments[index]
         self._frame_holder.frames[start:end] = frame_data.frames
 
-    def _iter_run_levels(self, segment_idxs: np.ndarray, run_level_data: Optional[Tuple[np.ndarray, np.ndarray, int]]) -> Iterable[Sequence[int]]:
+    def _iter_run_levels(
+        self,
+        segment_idxs: np.ndarray,
+        run_level_data: Optional[Tuple[np.ndarray, np.ndarray, int]]
+    ) -> Iterable[Tuple[bool, Sequence[int]]]:
         segment_idxs = np.asarray(segment_idxs)
 
         if(run_level_data is None):
@@ -721,13 +757,21 @@ class SegmentedFramePassEngine(Predictor):
             locs = segment_idxs[level_vals == i]
 
             if(i == 0):
-                yield locs
+                yield False, locs
                 continue
 
             # Before the run: Fix the segments to basically patch the rest of MIT-Viterbi...
             is_before_level = is_before[level_vals == i]
+
             for loc, is_b in zip(locs, is_before_level):
                 si, ei, fi = self._segments[loc]
+
+                if(is_b):
+                    self._segments[loc] = [si - 1, ei, si - 1]
+                else:
+                    self._segments[loc] = [si, ei + 1, ei]
+
+                """
                 d_scale = self._frame_holder.metadata.down_scaling
                 num_out = self._frame_holder.metadata.num_outputs
                 # Correct the fix frame issues,
@@ -763,11 +807,48 @@ class SegmentedFramePassEngine(Predictor):
                             else:
                                 frm_nxt.orig_data.pack(y[keep], x[keep], p[keep], x_off[keep], y_off[keep])
                                 frm_nxt.src_data = frm_nxt.orig_data
+                    """
 
-                self._segments[loc, 2] = idx2
+            yield True, locs
 
-            yield locs
+            for loc, is_b in zip(locs, is_before_level):
+                si, ei, fi = self._segments[loc]
+                if(is_b):
+                    self._segments[loc] = [si + 1, ei, fi + 1]
+                else:
+                    self._segments[loc] = [si, ei - 1, fi - 1]
+                si, ei, fi = self._segments[loc]
 
+                # Fix the frame using viterbi values...
+                for bp_i in range(self._frame_holder.num_bodyparts):
+                    frame = self._frame_holder.frames[fi][bp_i]
+
+                    sy, sx, sp, sx_off, sy_off = frame.orig_data.unpack()
+                    repl_p, repl_p_occ, repl_c_occ = frame.frame_probs, frame.occluded_probs, frame.occluded_coords
+
+                    if(sy is None or repl_p is None or len(repl_p) == 0):
+                        # Just use occluded values...
+                        new_x_off = np.zeros(len(repl_c_occ))
+                        new_y_off = np.zeros(len(repl_c_occ))
+                        new_p = repl_p_occ.copy()
+                    else:
+                        def _to_keys(_x, _y):
+                            return _y * self._width + _x
+
+                        lookup = _NumpyDict(_to_keys(repl_c_occ[:, 0], repl_c_occ[:, 1]), np.arange(len(repl_p_occ)), -1)
+                        indexes = lookup[_to_keys(sx, sy)]
+
+                        new_x_off = np.zeros(len(repl_c_occ))
+                        new_y_off = np.zeros(len(repl_c_occ))
+                        new_x_off[indexes] = sx_off
+                        new_y_off[indexes] = sy_off
+
+                        new_p = repl_p_occ.copy()
+                        new_p[indexes] = np.nanmax([repl_p_occ[indexes], repl_p], axis=0)
+
+                    frame.src_data.pack(repl_c_occ[:, 1], repl_c_occ[:, 0], new_p, new_x_off, new_y_off)
+                    frame.orig_data = frame.src_data.duplicate()
+                    frame.frame_probs = new_p
 
     def _run_segmented_passes(
         self,
@@ -797,24 +878,24 @@ class SegmentedFramePassEngine(Predictor):
             if(passes_can_use_pool and allow_multithread):
                 with PoolWithProgress.get_optimal_ctx().Pool(processes=os.cpu_count()) as pool:
                     FramePass.GLOBAL_POOL = AntiCloseObject(pool)
-                    for segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
+                    for is_pre_init, segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
                         for idx in segment_idx:
                             frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
-                            self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar)
+                            self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar, is_pre_init)
             else:
-                for segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
+                for is_pre_init, segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
                     for idx in segment_idx:
                         frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
-                        self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar)
+                        self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar, is_pre_init)
 
             FramePass.GLOBAL_POOL = None
         else:
             with PoolWithProgress(progress_bar, thread_count, sub_ticks=int(self._frame_holder.num_frames / len(self._segments))) as pool:
                 progress_bar.message("Running on Segments...")
                 pool.reset_bar_to(total_segments)
-                for segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
+                for is_pre_init, segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
                     pool.fast_map(
-                        cls._run_segment,
+                        cls._get_segment_runner(is_pre_init),
                         lambda i: self._get_segment(segment_idx[i]),
                         lambda i, r: self._set_segment(segment_idx[i], r),
                         len(segment_idx),
@@ -925,7 +1006,6 @@ class SegmentedFramePassEngine(Predictor):
 
         return out_list
 
-
     def _resolve_frame_orderings(
         self,
         progress_bar: ProgressBar,
@@ -974,13 +1054,19 @@ class SegmentedFramePassEngine(Predictor):
             if(progress_bar is not None):
                 progress_bar.update()
 
-
     def _run_frame_passes(self, progress_bar: Optional[ProgressBar]):
         self._run_full_passes(progress_bar)
+
+        if(len(self.SEGMENTED_PASSES) == 0):
+            print("\n\nNo segmented passes specified! DEBUG Mode activated, disable all segmented functionality...\n")
+            self._segments = np.array([[0, self.num_frames, 0]])
+            self._segment_bp_order = np.expand_dims(np.arange(self._num_total_bp), 0)
+            self._segment_scores = np.array([[1]])
+            return
+
         self._build_segments(progress_bar)
         self._init_segmented_passes_run(progress_bar)
         self._resolve_frame_orderings(progress_bar)
-
 
     class ExportableFields(Enum):
         SOURCE = "Source"
@@ -1378,7 +1464,7 @@ class SegmentedFramePassEngine(Predictor):
         orig_frame = track_data.get_prob_table(0, 0)
         result_frame = (
             SparseTrackingData.sparsify(track_data, 0, 0, 0.001)
-                .desparsify(orig_frame.shape[1], orig_frame.shape[0], 8).get_prob_table(0, 0)
+            .desparsify(orig_frame.shape[1], orig_frame.shape[0], 8).get_prob_table(0, 0)
         )
 
         return (np.allclose(result_frame, orig_frame), str(orig_frame) + "\n", str(result_frame) + "\n")

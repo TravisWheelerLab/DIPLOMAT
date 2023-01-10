@@ -1,6 +1,7 @@
 from typing import Sequence, List, Tuple
 import numpy as np
 
+
 def intersect_coords_indexes(coord_list: Sequence[np.ndarray]) -> List[np.ndarray]:
     comb_coords = np.concatenate(coord_list)
     indexes = np.concatenate([np.arange(len(c)) for c in coord_list])
@@ -21,6 +22,7 @@ def intersect_coords_indexes(coord_list: Sequence[np.ndarray]) -> List[np.ndarra
         idxs_intersect[masks_intersect == i] for i in range(len(coord_list))
     ]
 
+
 def intersect_coords(coord_list: Sequence[np.ndarray]) -> np.ndarray:
     comb_coords = np.concatenate(coord_list)
 
@@ -33,10 +35,13 @@ def intersect_coords(coord_list: Sequence[np.ndarray]) -> np.ndarray:
 
     return sorted_comb_coords[intersection_locs]
 
+
 def union_coords(coord_list: Sequence[np.ndarray]) -> np.ndarray:
     return np.unique(np.concatenate(coord_list), axis=0)
 
+
 ndlist = List[np.ndarray]
+
 
 def pad_coordinates_and_probs(
     probs: Sequence[np.ndarray],
@@ -86,3 +91,20 @@ def pad_coordinates_and_probs(
         [all_coords for __ in range(len(coord_list))],
         resolve_idxs
     )
+
+
+class _NumpyDict:
+    def __init__(self, keys: np.ndarray, values: np.ndarray, default_val: float = 0):
+        self._keys = keys
+        self._values = values
+        self._sorted_key_indexes = np.argsort(keys)
+        self._default_value = default_val
+
+    def __getitem__(self, query):
+        into_sorted_indexes = np.searchsorted(self._keys, query, sorter=self._sorted_key_indexes)
+        out_of_bounds = into_sorted_indexes >= len(self._values)
+        into_sorted_indexes[out_of_bounds] = 0
+        indexes = self._sorted_key_indexes[into_sorted_indexes]
+        vals = self._values[indexes]
+        vals[(self._keys[indexes] != query) | out_of_bounds] = self._default_value
+        return vals

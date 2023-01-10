@@ -60,7 +60,7 @@ class FixFrame(FramePass):
 
     @classmethod
     def dist(cls, a, b):
-        return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
+        return np.sqrt(((a[0] - b[0]) ** 2) + ((a[1] - b[1]) ** 2))
 
     @classmethod
     def skel_score(
@@ -377,10 +377,12 @@ class FixFrame(FramePass):
         frame_idx: int,
         fix_frame_data: List[ForwardBackwardFrame],
         prog_bar: ProgressBar,
-        reset_bar: bool = False
+        reset_bar: bool = False,
+        is_pre_initialized: bool = False
     ) -> ForwardBackwardData:
         # For passes to use....
         fb_data.metadata.fixed_frame_index = int(frame_idx)
+        fb_data.metadata.is_pre_initialized = is_pre_initialized
 
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)

@@ -141,11 +141,12 @@ class MITViterbi(FramePass):
                 prog_bar.reset(fb_data.num_frames * 3)
 
             # Initialize fixed frame...
-            for bp_i in range(fb_data.num_bodyparts):
-                self._compute_init_frame(
-                    fb_data.frames[fb_data.metadata.fixed_frame_index][bp_i],
-                    fb_data.metadata
-                )
+            if(not fb_data.metadata.get("is_pre_initialized", False)):
+                for bp_i in range(fb_data.num_bodyparts):
+                    self._compute_init_frame(
+                        fb_data.frames[fb_data.metadata.fixed_frame_index][bp_i],
+                        fb_data.metadata
+                    )
 
             fb_data = fb_data if(in_place) else fb_data.copy()
 

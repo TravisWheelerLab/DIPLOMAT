@@ -93,8 +93,10 @@ class BasicDataFields(Initialisable):
             if(name in names):
                 getattr(self, f"set_{name}")(value)
 
+
 # Represents a x, y coordinate.
 Coord = Tuple[Optional[int], Optional[int]]
+
 
 class PointViewNEdit(VideoPlayer, BasicDataFields):
     """
@@ -842,7 +844,7 @@ class ColoredRadioBox(wx.Panel):
         if(forward_now):
             self.SendSizeEvent()
 
-    def _enforce_single_select(self, event: ColoredRadioButton.ColoredRadioEvent, user_set = True, post: bool = True):
+    def _enforce_single_select(self, event: ColoredRadioButton.ColoredRadioEvent, user_set: bool = True, post: bool = True):
         """
         PRIVATE: Enforces single select, only allowing for one radio button to be selected at a time.
         """

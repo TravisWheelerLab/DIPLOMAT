@@ -67,7 +67,7 @@ class FramePassEngine(Predictor):
             bp_idx,
             self.THRESHOLD,
             self.settings.max_cells_per_frame,
-            SparseTrackingData.SparseModes.OFFSET_SUMMATION
+            SparseTrackingData.SparseModes[self.settings.sparsification_mode]
         )
         fb_frame.src_data = fb_frame.orig_data
 
@@ -474,6 +474,11 @@ class FramePassEngine(Predictor):
                 "Determines the radius of relaxed maximum selection."
                 "Set to 0 to disable relaxed maximum selection. This value is "
                 "measured in cell units, not video units."
+            ),
+            "sparsification_mode": (
+                SparseTrackingData.SparseModes.OFFSET_DOMINATION.name,
+                type_casters.Literal(*[mode.name for mode in SparseTrackingData.SparseModes]),
+                "The mode to utilize during sparsification."
             )
         }
 

@@ -89,8 +89,6 @@ class EndPointSegmentor(Segmentor):
         if(len(fix_frames) <= 0):
             raise ValueError("No fix frame found over the entire video!")
 
-        # TODO: Bug when running this: python -m diplomat supervised -c ../AppWithAdult-PDH-2021-03-29/config.yaml -v ../AppWithAdult-PDH-2021-03-29/test_videos/1min-clip.mp4 --cropping [30, 300, 30, 300]
-
         for next_border in np.append(fix_frames, len(ordered_scores)):
             orig_prior = prior_border if(prior_border != 0) else -1
 

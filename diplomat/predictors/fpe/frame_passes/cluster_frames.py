@@ -2,32 +2,17 @@ import os
 from typing import Optional, Tuple, List
 from scipy.sparse import csgraph
 from diplomat.predictors.fpe import fpe_math
+from diplomat.predictors.fpe.arr_utils import _NumpyDict
 from diplomat.predictors.fpe.frame_pass import FramePass, RangeSlicer, PassOrderError
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardData, ForwardBackwardFrame, AttributeDict
 from diplomat.processing import ConfigSpec, ProgressBar, Config
 import numpy as np
 
 
-class _NumpyDict:
-    def __init__(self, keys: np.ndarray, values: np.ndarray, default_val: float = 0):
-        self._keys = keys
-        self._values = values
-        self._sorted_key_indexes = np.argsort(keys)
-        self._default_value = default_val
-
-    def __getitem__(self, query):
-        into_sorted_indexes = np.searchsorted(self._keys, query, sorter=self._sorted_key_indexes)
-        out_of_bounds = into_sorted_indexes >= len(self._values)
-        into_sorted_indexes[out_of_bounds] = 0
-        indexes = self._sorted_key_indexes[into_sorted_indexes]
-        vals = self._values[indexes]
-        vals[(self._keys[indexes] != query) | out_of_bounds] = self._default_value
-        return vals
-
-
 class ClusterFrames(FramePass):
     """
-    Breaks up each frame and separates it into a fixed number of frames, where each frame contains typically a single peak.
+    Breaks up each frame and separates it into a fixed number of frames, where each frame contains typically a single
+    peak.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -48,8 +33,7 @@ class ClusterFrames(FramePass):
             self._cost_table,
             self.config,
             self._frame_data.metadata.down_scaling,
-            self.width,
-            self.height
+            self.width
         )
 
     def _set_frame(self, index: int, frame: List[ForwardBackwardFrame]):
@@ -102,7 +86,6 @@ class ClusterFrames(FramePass):
         config: Config,
         down_scaling: float,
         width: int,
-        height: int,
         progress_bar: Optional[ProgressBar] = None
     ) -> List[ForwardBackwardFrame]:
         num_groups = len(frame_data) // num_outputs
@@ -120,8 +103,10 @@ class ClusterFrames(FramePass):
                 if(clusters[group_idx] is None):
                     clusters[group_idx] = cls._compute_cluster(
                         y, x, prob, x_off, y_off,
-                        num_outputs, width, height,
-                        cost_table, down_scaling
+                        num_outputs, width,
+                        cost_table, down_scaling,
+                        config.minimum_cluster_size,
+                        config.max_throwaway_count
                     )
 
                 frame.src_data = SparseTrackingData()
@@ -167,8 +152,13 @@ class ClusterFrames(FramePass):
         y_off: np.ndarray,
         num_clusters: int,
         cost_table: np.ndarray,
-        down_scaling: float
-    ) -> Tuple[list, list]:
+        down_scaling: float,
+        balance: float,
+        attempts: int
+    ) -> Optional[Tuple[list, list]]:
+        if(attempts <= 0 or len(x) < num_clusters):
+            return None
+
         x_true = (x + 0.5 + x_off / down_scaling).astype(int)
         y_true = (y + 0.5 + y_off / down_scaling).astype(int)
 
@@ -177,6 +167,25 @@ class ClusterFrames(FramePass):
         np.fill_diagonal(graph, 0)
 
         forest, components = cls._minimum_spanning_forest(graph, num_clusters)
+
+        prob_sum = np.array([np.sum(prob[components == i]) for i in range(num_clusters)])
+        prob_sum = prob_sum / np.mean(prob_sum)
+        bad_idx = np.flatnonzero(prob_sum < balance)
+
+        if(len(bad_idx) > 0):
+            keep = ~np.isin(components, bad_idx)
+            return cls._get_spanning_forest_centers(
+                x[keep],
+                y[keep],
+                prob[keep],
+                x_off[keep],
+                y_off[keep],
+                num_clusters,
+                cost_table,
+                down_scaling,
+                balance,
+                attempts - 1
+            )
 
         center_x = [np.mean(x_true[components == i]) for i in range(num_clusters)]
         center_y = [np.mean(y_true[components == i]) for i in range(num_clusters)]
@@ -193,9 +202,10 @@ class ClusterFrames(FramePass):
         y_off: np.ndarray,
         num_clusters: int,
         width: int,
-        height: int,
         cost_table: np.ndarray,
-        down_scaling: float
+        down_scaling: float,
+        balance: float,
+        attempts: int
     ) -> List[Tuple[np.ndarray, ...]]:
         # Special case: When cluster size is 1...
         if(num_clusters == 1):
@@ -217,10 +227,6 @@ class ClusterFrames(FramePass):
 
         top_indexes = np.flatnonzero(keep_arr)
 
-        # Failure to find enough clusters, return everything...
-        if(len(top_indexes) < num_clusters):
-            return [(y, x, prob, x_off, y_off) for i in range(num_clusters)]
-
         coords = cls._get_spanning_forest_centers(
             x[top_indexes],
             y[top_indexes],
@@ -229,8 +235,13 @@ class ClusterFrames(FramePass):
             y_off[top_indexes],
             num_clusters,
             cost_table,
-            down_scaling
+            down_scaling,
+            balance,
+            int(attempts)
         )
+
+        if(coords is None):
+            return [(y, x, prob, x_off, y_off) for i in range(num_clusters)]
 
         dists = [(x - tx) ** 2 + (y - ty) ** 2 for tx, ty in zip(*coords)]
         # Construct masks...
@@ -254,7 +265,9 @@ class ClusterFrames(FramePass):
         if((not current.ignore_clustering) and ((frame_index, bp_group) not in self._cluster_dict)):
             self._cluster_dict[(frame_index, bp_group)] = self._compute_cluster(
                 y, x, prob, x_off, y_off, num_out, metadata.width,
-                metadata.height, self._cost_table, metadata.down_scaling
+                self._cost_table, metadata.down_scaling,
+                self.config.minimum_cluster_size,
+                self.config.max_throwaway_count
             )
 
         if(not current.ignore_clustering):
@@ -270,16 +283,7 @@ class ClusterFrames(FramePass):
     def get_config_options(cls) -> ConfigSpec:
         import diplomat.processing.type_casters as tc
 
-        return  {
-            "standard_deviation": (
-                1, float, "The standard deviation of the 2D Gaussian curve used for edge weights in the graph."
-            ),
-            "amplitude": (
-                1, float, "The max amplitude of the 2D Gaussian curve used for edge weights in the graph."
-            ),
-            "lowest_value": (
-                0, float, "The lowest value the 2D Gaussian curve used for edge weights can reach."
-            ),
+        return {
             "minimum_cluster_size": (
                 0.1, float, "The minimum size a cluster is allowed to be (As compared to average of all clusters)."
                             "If the cluster is smaller, it get thrown out and a forest is resolved using the rest of"

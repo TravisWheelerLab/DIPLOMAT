@@ -1,8 +1,4 @@
 import tensorflow as tf
-
-if(not tf.executing_eagerly()):
-    tf.compat.v1.enable_eager_execution()
-
 import platform
 import time
 from datetime import datetime
