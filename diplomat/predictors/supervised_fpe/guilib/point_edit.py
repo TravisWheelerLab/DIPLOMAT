@@ -1,4 +1,6 @@
 from typing import Tuple, List, Optional, Union, Any, Iterable
+
+import numpy as np
 import wx
 from diplomat.processing import *
 from diplomat.utils._bit_or import _bit_or
@@ -16,6 +18,7 @@ from diplomat.utils.colormaps import to_colormap, iter_colormap
 Box = Optional[Tuple[int, int, int, int]]
 ofloat = Optional[float]
 
+
 def _bounded_float(low: float, high: float):
     """
     PRIVATE: Returns a function which will check that a float lands between the provided low and high value, inclusive,
@@ -28,6 +31,7 @@ def _bounded_float(low: float, high: float):
         return value
 
     return convert
+
 
 class WxDotShapeDrawer(DotShapeDrawer):
     def __init__(self, dc: wx.DC):
@@ -49,6 +53,7 @@ class WxDotShapeDrawer(DotShapeDrawer):
 
     def _draw_star(self, x: float, y: float, r: float):
         self._dc.DrawPolygon((self._STAR_POLY * r).astype(int).tolist(), int(x), int(y))
+
 
 class Initialisable:
     """
@@ -185,9 +190,8 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
 
         BasicDataFields.__init__(self, colormap, plot_threshold, point_radius, point_alpha, line_thickness, shape_list)
 
-        self._edit_point = None
-        self._new_location = None
-        self._old_location = None
+        self._edit_points = np.array([])
+        self._old_locations = None
         self._ctrl_mode = False
         self._pressed = False
         # Handle point changing events....
@@ -233,7 +237,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         PRIVATE: Triggered when moving from frame-to-frame in fast labeling mode, increments the frame and finalizes
                  the point location.
         """
-        if((not self.is_frozen()) or (self._edit_point is None)):
+        if((not self.is_frozen()) or (len(self._edit_points) == 0)):
             self._ctrl_mode = False
             return
 
@@ -247,7 +251,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
                 self.unfreeze()
                 self.move_back(min(self.get_offset_count(), self.JUMP_BACK_AMT))
                 self.freeze()
-                self._old_location = self._get_selected_bodypart()
+                self._old_locations = self._get_selected_bodyparts()
                 self._point_prediction(x, y)
             elif(self._step_counter >= self._fast_m_speed):
                 self._step_counter = 0
@@ -258,7 +262,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
                 if (self.get_offset_count() < (self.get_total_frames() - 1)):
                     self.move_forward()
                 self.freeze()
-                self._old_location = self._get_selected_bodypart()
+                self._old_locations = self._get_selected_bodyparts()
                 self._point_prediction(x, y)
 
             self._shift_delay = max(0, self._shift_delay - (1000 / self._fps))
@@ -272,13 +276,13 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         PRIVATE: Triggered on key press event. Determines if we should enter fast labeling mode.
         """
         if(event.GetKeyCode() == self.FAST_MODE_KEY):
-            if ((not self.is_playing()) and (self._edit_point is not None) and (not self._pressed)):
+            if ((not self.is_playing()) and (len(self._edit_points) != 0) and (not self._pressed)):
                 if(not self._ctrl_mode):
                     self.freeze()
                     self._ctrl_mode = True
                     self._step_counter = 0
-                    self._old_location = self._get_selected_bodypart()
-                    self._push_point_init_event(self._old_location)
+                    self._old_locations = self._get_selected_bodyparts()
+                    self._push_point_init_event(self._old_locations)
                     self._core_timer.StartOnce(int(1000 / self._fps))
 
         event.Skip()
@@ -371,16 +375,21 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
                 self._point_radius * (nv_h / ov_h)
             )
 
-    def _get_selected_bodypart(self) -> Tuple[float, float, float]:
+    def _get_selected_bodyparts(self) -> List[Tuple[float, float, float]]:
         """
         PRIVATE: Get the currently selected body part in the video.
         """
-        x = self._poses.get_x_at(self.get_offset_count(), self._edit_point)
-        y = self._poses.get_y_at(self.get_offset_count(), self._edit_point)
-        prob = self._poses.get_prob_at(self.get_offset_count(), self._edit_point)
-        return float(x), float(y), float(prob)
+        points = []
 
-    def _point_prediction(self, x: ofloat, y: ofloat) -> Tuple[Any, Tuple[float, float, float]]:
+        for part in self._edit_points:
+            x = float(self._poses.get_x_at(self.get_offset_count(), part))
+            y = float(self._poses.get_y_at(self.get_offset_count(), part))
+            prob = float(self._poses.get_prob_at(self.get_offset_count(), part))
+            points.append((x, y, prob))
+
+        return points
+
+    def _point_prediction(self, x: ofloat, y: ofloat) -> Tuple[List[Any], List[Tuple[float, float, float]]]:
         """
         PRIVATE: Makes a location prediction based on the user submitted point,
         and returns the submission data needed to force a full relocation for
@@ -393,37 +402,46 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         elif(self._current_pose_labeling_mode not in self._pose_label_modes):
             raise ValueError(f"Selected labeling mode '{self._current_pose_labeling_mode}' not a valid labeling mode.")
 
-        labeler = self._pose_label_modes[self._current_pose_labeling_mode]
-        submit_data, (x, y, probability) = labeler.predict_location(
-            self.get_offset_count(), self._edit_point, x, y, probability
-        )
+        all_submit_data = []
+        all_points = []
 
-        self._set_selected_bodypart(x, y, probability)
+        for point in self._edit_points:
+            labeler = self._pose_label_modes[self._current_pose_labeling_mode]
+            submit_data, (x, y, probability) = labeler.predict_location(
+                self.get_offset_count(), point, x, y, probability
+            )
+            all_submit_data.append(submit_data)
+            all_points.append((x, y, probability))
 
-        return submit_data, (x, y, probability)
+            self._set_part(point, x, y, probability)
 
-    def _point_relocation(self, x: ofloat, y: ofloat) -> Tuple[Any, Tuple[float, float, float]]:
+        return all_submit_data, all_points
+
+    def _point_relocation(self, x: ofloat, y: ofloat) -> Tuple[List[Any], List[Tuple[float, float, float]]]:
         """
         PRIVATE: Makes a location prediction using _point_prediction, and
         then submits a point relocation to the point labeler, updating the
         labelers internal state. Returns the history data required to
         undo this point relocation event.
         """
-        submit_data, new_p = self._point_prediction(x, y)
-        labeler = self._pose_label_modes[self._current_pose_labeling_mode]
-        hist_data = labeler.pose_change(submit_data)
-        self._push_point_change_event(new_p, self._old_location, labeler, hist_data)
-        self._old_location = None
+        submit_data_l, new_p_l = self._point_prediction(x, y)
 
-        return (submit_data, new_p)
+        for i, (part, submit_data, new_p) in enumerate(zip(self._edit_points, submit_data_l, new_p_l)):
+            labeler = self._pose_label_modes[self._current_pose_labeling_mode]
+            hist_data = labeler.pose_change(submit_data)
+            self._push_point_change_event(part, new_p, self._old_locations[i], labeler, hist_data)
 
-    def _set_selected_bodypart(self, x: float, y: float, probability: float):
+        self._old_locations = None
+
+        return (submit_data_l, new_p_l)
+
+    def _set_part(self, bp: int, x: float, y: float, probability: float):
         """
         PRIVATE: Set the currently selected body part in the video to a new location.
         """
-        self._poses.set_x_at(self.get_offset_count(), self._edit_point, x)
-        self._poses.set_y_at(self.get_offset_count(), self._edit_point, y)
-        self._poses.set_prob_at(self.get_offset_count(), self._edit_point, probability)
+        self._poses.set_x_at(self.get_offset_count(), bp, x)
+        self._poses.set_y_at(self.get_offset_count(), bp, y)
+        self._poses.set_prob_at(self.get_offset_count(), bp, probability)
 
     def get_all_poses(self) -> Pose:
         """
@@ -477,6 +495,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
 
     def _push_point_change_event(
         self,
+        part: int,
         new_point: Tuple[float, float, float],
         old_point: Tuple[float, float, float],
         labeler: PoseLabeler,
@@ -488,7 +507,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         new_evt = self.PointChangeEvent(
             id=self.Id,
             frame=self.get_offset_count(),
-            part=self._edit_point,
+            part=part,
             new_location=new_point,
             old_location=old_point,
             labeler=labeler,
@@ -496,45 +515,47 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         )
         wx.PostEvent(self, new_evt)
 
-    def _push_point_init_event(self, old_point: Tuple[float, float, float]):
+    def _push_point_init_event(self, old_points: List[Tuple[float, float, float]]):
         """
         PRIVATE: Emits a PointInitEvent from this widget with the provided values above.
         """
-        new_evt = self.PointInitEvent(
-            id=self.Id,
-            frame=self.get_offset_count(),
-            part=self._edit_point,
-            current_location = old_point
-        )
-        wx.PostEvent(self, new_evt)
+        for old_point, part in zip(old_points, self._edit_points):
+            new_evt = self.PointInitEvent(
+                id=self.Id,
+                frame=self.get_offset_count(),
+                part=part,
+                current_location=old_point
+            )
+            wx.PostEvent(self, new_evt)
 
     def _push_point_end_event(self):
         """
         PRIVATE: Emits a PointEndEvent from this widget.
         """
-        new_evt = self.PointEndEvent(
-            id=self.Id,
-            frame=self.get_offset_count(),
-            part=self._edit_point
-        )
-        wx.PostEvent(self, new_evt)
+        for part in self._edit_points:
+            new_evt = self.PointEndEvent(
+                id=self.Id,
+                frame=self.get_offset_count(),
+                part=part
+            )
+            wx.PostEvent(self, new_evt)
 
     def on_press(self, event: wx.MouseEvent):
         """
         PRIVATE: Executed whenever the mouse is pressed down, triggering a PointInitEvent.
         """
-        if(not self.is_playing() and (self._edit_point is not None) and (not self._ctrl_mode)):
+        if(not self.is_playing() and (len(self._edit_points) > 0) and (not self._ctrl_mode)):
             self.freeze()
-            self._old_location = self._get_selected_bodypart()
+            self._old_locations = self._get_selected_bodyparts()
             self._pressed = True
-            self._push_point_init_event(self._old_location)
+            self._push_point_init_event(self._old_locations)
             self.on_move(event)
 
     def on_move(self, event: wx.MouseEvent):
         """
         PRIVATE: Executed whenever the mouse is moved, simply displaying the new point location on screen.
         """
-        if((self._edit_point is None) or (not self.is_frozen())):
+        if((len(self._edit_points) == 0) or (not self.is_frozen())):
             self._pressed = False
             return
 
@@ -554,7 +575,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         """
         PRIVATE: Executed whenever the mouse is released, triggering a PointChangeEvent followed by a PointEndEvent.
         """
-        if((self._edit_point is None) or self._ctrl_mode or (not self.is_frozen())):
+        if((len(self._edit_points) == 0) or self._ctrl_mode or (not self.is_frozen())):
             self._pressed = False
             return
 
@@ -571,11 +592,11 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         """
         PRIVATE: Executed on right click, makes the point disappear as if it isn't in this frame.
         """
-        if(self.is_playing() or (self._edit_point is None) or self._ctrl_mode):
+        if(self.is_playing() or (len(self._edit_points) == 0) or self._ctrl_mode):
             return
         self.freeze()
 
-        self._old_location = self._get_selected_bodypart()
+        self._old_locations = self._get_selected_bodyparts()
         x, y = self._get_mouse_loc_video(event)
 
         if(x is None):
@@ -614,26 +635,28 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         prob = float(self._poses.get_prob_at(frame, bodypart))
         return (x, y, prob)
 
-    def get_selected_body_part(self) -> Optional[int]:
+    def get_selected_body_parts(self) -> np.ndarray:
         """
         Get the selected body part. The selected body part can be modified in the point editor.
 
         :return: An integer index, being the index of the selected body part.
         """
-        return self._edit_point
+        return self._edit_points
 
-    def set_selected_bodypart(self, value: Optional[int]):
+    def set_selected_bodyparts(self, value: Union[List[int], np.ndarray]):
         """
         Set the selected body part. The selected body part can be modified in the point editor.
 
         :param value: An integer index, being the index to set the selected body part to.
         """
         if(value is None):
-            self._edit_point = None
-            return
-        if(not (0 <= value <= self._poses.get_bodypart_count())):
+            raise ValueError("Selected Part Can't Be None!")
+
+        value = np.unique(value)
+
+        if(not np.all((0 <= value) & (value < self._poses.get_bodypart_count()))):
             raise ValueError("Selected Body part not within range!")
-        self._edit_point = value
+        self._edit_points = value
 
 
 class ColoredShape(wx.Control):
@@ -726,7 +749,6 @@ class ColoredShape(wx.Control):
         self._shape = shape_str(value)
 
 
-
 class ColoredRadioButton(wx.Panel):
     """
     A colored radio button, used for displaying colors of each body part.
@@ -788,9 +810,18 @@ class ColoredRadioBox(wx.Panel):
     ColoredRadioEvent, EVT_COLORED_RADIO = ColoredRadioButton.ColoredRadioEvent, ColoredRadioButton.EVT_COLORED_RADIO
     PADDING = 20
 
-    def __init__(self, parent, colormap: Union[str, list, Colormap], shape_list: Iterable[str], labels: List[str], w_id = wx.ID_ANY,
-                 pos = wx.DefaultPosition, size = wx.DefaultSize, style = _bit_or(wx.TAB_TRAVERSAL, wx.BORDER_DEFAULT),
-                 name = "ColoredRadioBox"):
+    def __init__(
+        self,
+        parent,
+        colormap: Union[str, list, Colormap],
+        shape_list: Iterable[str],
+        labels: List[str],
+        w_id=wx.ID_ANY,
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=_bit_or(wx.TAB_TRAVERSAL, wx.BORDER_DEFAULT),
+        name="ColoredRadioBox"
+    ):
         """
         Create a ColoredRadioBox.
 
@@ -812,7 +843,8 @@ class ColoredRadioBox(wx.Panel):
 
         self._inner_sizer = wx.BoxSizer(wx.VERTICAL)
         self._buttons = []
-        self._selected = None
+        self._selected = np.array([])
+        self._multi_select = False
 
         self._shape_list = shape_iterator(shape_list)
 
@@ -844,26 +876,55 @@ class ColoredRadioBox(wx.Panel):
         if(forward_now):
             self.SendSizeEvent()
 
-    def _enforce_single_select(self, event: ColoredRadioButton.ColoredRadioEvent, user_set: bool = True, post: bool = True):
+    def _enforce_single_select(
+        self,
+        event: Optional[ColoredRadioButton.ColoredRadioEvent],
+        post: bool = True
+    ):
         """
         PRIVATE: Enforces single select, only allowing for one radio button to be selected at a time.
         """
-        # If we clicked on the already selected widget, toggle it off...
-        if(user_set):
-            if(self._selected == event.button_id):
-                event.button_id = None
+        user_event = event is not None
+        if(event is None):
+            event = ColoredRadioButton.ColoredRadioEvent(
+                id=self.GetId(), button_id=None if (len(self._selected) == 0) else self._selected[0]
+            )
 
         # Disable all radio buttons except for the one that was just toggled on.
-        for i, radio_button in enumerate(self._buttons):
-            radio_button.radio_button.SetValue(i == event.button_id)
+        if(not self._multi_select):
+            # If we clicked on the already selected widget, toggle it off...
+            if(user_event and (event.button_id in self._selected)):
+                event.button_id = None
 
-        self._selected = event.button_id
+            self._selected = np.array([event.button_id], dtype=int) if(event.button_id is not None) else np.array([])
+        else:
+            self._selected = np.flatnonzero([btn.radio_button.GetValue() for btn in self._buttons])
+
+        for i, button in enumerate(self._buttons):
+            button.radio_button.SetValue(i in self._selected)
 
         # Repost the event on this widget...
         if(post):
             wx.PostEvent(self, event)
 
-    def get_selected(self) -> Optional[int]:
+    def is_multiselect(self) -> bool:
+        """
+        Get if this selection box currently support selecting multiple elements at once.
+
+        :return: A boolean, True if multi-selection is enabled.
+        """
+        return self._multi_select
+
+    def set_multiselect(self, value: bool):
+        """
+        Enable/Disable multi-selection mode.
+
+        :param value: True to enable multiple selections at once, otherwise set to False.
+        """
+        self._multi_select = bool(value)
+        self._enforce_single_select(None, True)
+
+    def get_selected(self) -> np.ndarray:
         """
         Get the currently selected entry.
 
@@ -871,19 +932,17 @@ class ColoredRadioBox(wx.Panel):
         """
         return self._selected
 
-    def set_selected(self, value: int):
+    def set_selected(self, value: np.ndarray):
         """
         Get the currently selected entry.
 
         :param value: An integer index, the radio button to select, or None to deselect all the radio buttons.
         """
-        if(not (0 <= value < len(self._buttons)) and (value is not None)):
+        value = np.unique(np.asarray(value, dtype=int))
+        if(not np.all((0 <= value) & (value < len(self._buttons)))):
             raise ValueError("Not a valid selection!!!!")
-        if(value is not None):
-            value = int(value)
 
-        new_evt = ColoredRadioButton.ColoredRadioEvent(id=self.GetId(), button_id=value)
-        self._enforce_single_select(new_evt, False, False)
+        self._enforce_single_select(None, False)
 
     def get_labels(self) -> List[str]:
         """
@@ -948,13 +1007,13 @@ class ColoredRadioBox(wx.Panel):
             button.circle.set_shape(shape)
 
 
-
 class PointEditor(wx.Panel):
     """
     The Point Editor. Combines a PointViewNEdit and A ColoredRadio box to allow the user to edit any body parts on any
     frame.
     """
-    def __init__(self,
+    def __init__(
+        self,
         parent,
         video_hdl: cv2.VideoCapture,
         crop_box: Box,
@@ -967,11 +1026,11 @@ class PointEditor(wx.Panel):
         point_radius: int = 5,
         point_alpha: float = 0.7,
         line_thickness: int = 1,
-        w_id = wx.ID_ANY,
-        pos = wx.DefaultPosition,
-        size = wx.DefaultSize,
-        style = wx.TAB_TRAVERSAL,
-        name = "PointEditor"
+        w_id=wx.ID_ANY,
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=wx.TAB_TRAVERSAL,
+        name="PointEditor"
     ):
         """
         Construct a new PointEdit
@@ -1047,24 +1106,25 @@ class PointEditor(wx.Panel):
     def _set_mode_from_dropdown(self, evt):
         idx = self._labeling_mode_selector.GetSelection()
         value = self._labeling_mode_selector.GetString(idx)
-        self._labeling_settings.set_setting_collection(
-            self.video_viewer.get_labeling_class(value).get_settings()
-        )
+        labeler = self.video_viewer.get_labeling_class(value)
+
+        self._labeling_settings.set_setting_collection(labeler.get_settings())
         self.video_viewer.set_labeling_mode(value)
+        self.select_box.set_multiselect(labeler.supports_multi_label())
 
-    def set_body_part(self, part: int):
+    def set_body_parts(self, part: np.ndarray):
         """
-        Set the selected body part.
+        Set the selected body parts.
 
-        :param part: An integer, the index of the body part to select.
+        :param part: An array of integers, the indexes of the body parts to select.
         """
         self.select_box.set_selected(part)
 
-    def get_body_part(self) -> int:
+    def get_body_parts(self) -> np.ndarray:
         """
-        Get the selected body part.
+        Get the selected body parts.
 
-        :returns: An integer, the index of the selected body part.
+        :returns: An array of integers, the indexes of the selected body parts.
         """
         return self.select_box.get_selected()
 
@@ -1072,5 +1132,4 @@ class PointEditor(wx.Panel):
         """
         PRIVATE: Triggered when the selected body part is changed.
         """
-        idx = event.button_id
-        self.video_viewer.set_selected_bodypart(idx)
+        self.video_viewer.set_selected_bodyparts(self.select_box.get_selected())

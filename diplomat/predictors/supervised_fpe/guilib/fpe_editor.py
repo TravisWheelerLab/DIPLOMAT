@@ -522,7 +522,7 @@ class FPEEditor(wx.Frame):
 
         self.video_player.video_viewer.pause()
         self.video_player.video_viewer.set_offset_frames(frm)
-        self.video_player.set_body_part(bp)
+        self.video_player.set_body_parts(np.array([bp]))
         cur_loc = self.video_player.video_viewer.get_pose(frm, bp)
         self.video_player.video_viewer.set_pose(frm, bp, (x, y, prob))
 

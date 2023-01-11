@@ -122,6 +122,9 @@ class Approximate(labeler_lib.PoseLabeler):
     already existing DLC probs when the user input is close enough the
     DLC predictions.
     """
+
+    CELL_LIMIT = 100
+
     def __init__(self, frame_engine: EditableFramePassEngine):
         super().__init__()
         self._frame_engine = frame_engine
@@ -183,6 +186,18 @@ class Approximate(labeler_lib.PoseLabeler):
             np.delete(comb_off, from_dlc, axis=0).T
         )
 
+    @staticmethod
+    def _filter_cell_count(
+        x: np.ndarray,
+        y: np.ndarray,
+        probs: np.ndarray,
+        x_off: np.ndarray,
+        y_off: np.ndarray,
+        max_cell_count: int
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        top_k = np.argpartition(probs, -max_cell_count)[-max_cell_count:]
+        return (x[top_k], y[top_k], probs[top_k], x_off[top_k], y_off[top_k])
+
     def predict_location(
         self,
         frame_idx: int,
@@ -232,6 +247,15 @@ class Approximate(labeler_lib.PoseLabeler):
                 xvid - (gc[0] * meta.down_scaling + meta.down_scaling * 0.5),
                 yvid - (gc[1] * meta.down_scaling + meta.down_scaling * 0.5)
             ])
+        )
+
+        final_x, final_y, final_p, final_off_x, final_off_y = self._filter_cell_count(
+            final_x,
+            final_y,
+            final_p,
+            final_off_x,
+            final_off_y,
+            self.CELL_LIMIT
         )
 
         final_x = final_x.astype(np.int32)
@@ -305,3 +329,7 @@ class Approximate(labeler_lib.PoseLabeler):
 
     def get_settings(self) -> Optional[labeler_lib.SettingCollection]:
         return self._settings
+
+    @classmethod
+    def supports_multi_label(cls) -> bool:
+        return True

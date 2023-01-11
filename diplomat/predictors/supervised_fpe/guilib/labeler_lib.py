@@ -294,6 +294,16 @@ class PoseLabeler(ABC):
             f" {c}" if(65 <= ord(c) <= 90) else c for c in type(self).__name__
         ]).strip()
 
+    @classmethod
+    def supports_multi_label(cls) -> bool:
+        """
+        Get if this pose labeler supports editing multiple parts at once...
+
+        :return: A boolean, true if this labeler wants to allow the user to manipulate multiple parts at once. Defaults
+                 to false.
+        """
+        return False
+
 
 class SettingCollectionWidget(wx.Control):
     """
