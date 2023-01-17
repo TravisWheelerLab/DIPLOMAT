@@ -239,9 +239,11 @@ class FixFrame(FramePass):
         down_scaling: float,
         skeleton: Optional[StorageGraph],
         progress_bar: Optional[ProgressBar] = None
-    ) -> float:
+    ) -> Tuple[float, float]:
         num_bp = len(frames) // num_outputs
+
         score = 0
+        score2 = 0
 
         for bp_group_off in range(num_bp):
 
@@ -254,7 +256,7 @@ class FixFrame(FramePass):
                 )
 
                 if (f1_loc[0] is None):
-                    return -np.inf
+                    score = -np.inf
 
                 for j in range(i + 1, num_outputs):
                     f2_loc = cls.get_max_location(
@@ -262,15 +264,16 @@ class FixFrame(FramePass):
                     )
 
                     if (f2_loc[0] is None):
-                        return -np.inf
+                        score = -np.inf
 
                     min_dist = min(cls.dist(f1_loc, f2_loc), min_dist)
 
             if(min_dist == 0):
                 # BAD! We found a frame that failed to cluster properly...
-                return -np.inf
+                score = -np.inf
 
             score += min_dist
+            score2 += min_dist
 
         # If skeleton is implemented...
         if (skeleton is not None):
@@ -285,7 +288,7 @@ class FixFrame(FramePass):
                 )
 
                 if (f1_loc[0] is None):
-                    return -np.inf
+                    score = -np.inf
 
                 for (bp2_group_off, (__, __, avg)) in skel[bp_group_off]:
                     min_score = np.inf
@@ -297,14 +300,15 @@ class FixFrame(FramePass):
                         )
 
                         if (f2_loc[0] is None):
-                            return -np.inf
+                            score = -np.inf
 
                         result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
                         min_score = min(result, min_score)
 
                     score -= (min_score / num_pairs)
+                    score2 -= (min_score / num_pairs)
 
-        return score
+        return score, score2
 
     @classmethod
     def compute_list_of_scores(
@@ -315,7 +319,7 @@ class FixFrame(FramePass):
         skeleton: Optional[StorageGraph],
         progress_bar: Optional[ProgressBar] = None
     ) -> np.ndarray:
-        final_scores = np.zeros(len(frames))
+        final_scores = np.zeros((len(frames), 2))
 
         if(progress_bar is not None):
             progress_bar.reset(len(frames))
@@ -335,13 +339,13 @@ class FixFrame(FramePass):
         prog_bar: ProgressBar,
         reset_bar: bool = False,
         thread_count: int = 0
-    ) -> np.ndarray:
-        if(not "is_clustered" in fb_data.metadata):
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        if("is_clustered" not in fb_data.metadata):
             raise PassOrderError(
                 "Clustering must be done before frame fixing!"
             )
 
-        scores = np.zeros(fb_data.num_frames)
+        scores = np.zeros((fb_data.num_frames, 2))
 
         num_outputs = fb_data.metadata.num_outputs
         num_frames = fb_data.num_frames
@@ -368,7 +372,7 @@ class FixFrame(FramePass):
                 if (prog_bar is not None):
                     prog_bar.update(1)
 
-        return scores
+        return (scores[:, 0], scores[:, 1])
 
     @classmethod
     def restore_all_except_fix_frame(
@@ -412,9 +416,13 @@ class FixFrame(FramePass):
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames * 2)
 
-        self._scores = self.compute_scores(fb_data, prog_bar, False)
+        self._scores, fallback_scores = self.compute_scores(fb_data, prog_bar, False)
 
         self._max_frame_idx = int(np.argmax(self._scores))
+
+        if(np.isneginf(self._scores[self._max_frame_idx])):
+            self._max_frame_idx = int(np.argmax(fallback_scores))
+            self._scores = fallback_scores
 
         if(self.config.fix_frame_override is not None):
             if(not (0 <= self.config.fix_frame_override < len(self._scores))):

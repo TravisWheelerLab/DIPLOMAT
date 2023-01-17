@@ -12,7 +12,12 @@ class Segmentor(ABC):
         pass
 
     @abstractmethod
-    def segment(self, scores: np.ndarray, progress_bar: Optional[ProgressBar]) -> np.ndarray:
+    def segment(
+        self,
+        scores: np.ndarray,
+        fallback_scores: np.ndarray,
+        progress_bar: Optional[ProgressBar]
+    ) -> np.ndarray:
         pass
 
 
@@ -20,7 +25,12 @@ class MidpointSegmentor(Segmentor):
     def __init__(self, size: int):
         self._size = size
 
-    def segment(self, scores: np.ndarray, progress_bar: Optional[ProgressBar]) -> np.ndarray:
+    def segment(
+        self,
+        scores: np.ndarray,
+        fallback_scores: np.ndarray,
+        progress_bar: Optional[ProgressBar]
+    ) -> np.ndarray:
         visited = np.zeros(len(scores), bool)
         ordered_scores = np.argsort(scores, kind="stable")[::-1]
 
@@ -41,8 +51,8 @@ class MidpointSegmentor(Segmentor):
             visited[section] = True
 
             if(np.isneginf(scores[frame_idx])):
-                # Bad segment, we resolve these later, setting the fix frame to -1 tells the segmented FPE to use fallback to a method that is
-                # basically sequential...
+                # Bad segment, we resolve these later, setting the fix frame to -1 tells the segmented FPE to use
+                # fallback to a method that is basically sequential...
                 if(len(segments) == 0):
                     raise ValueError("No fix frame found over the entire video!")
                 frame_idx = -1
@@ -60,7 +70,12 @@ class EndPointSegmentor(Segmentor):
     def __init__(self, size: int):
         self._size = size
 
-    def segment(self, scores: np.ndarray, progress_bar: Optional[ProgressBar]) -> np.ndarray:
+    def segment(
+        self,
+        scores: np.ndarray,
+        fallback_scores: np.ndarray,
+        progress_bar: Optional[ProgressBar]
+    ) -> np.ndarray:
         location_ids = np.zeros(len(scores), np.uint8)
         ordered_scores = np.argsort(scores, kind="stable")[::-1]
 
@@ -87,7 +102,8 @@ class EndPointSegmentor(Segmentor):
         fix_frames = np.flatnonzero(location_ids == 2)
 
         if(len(fix_frames) <= 0):
-            raise ValueError("No fix frame found over the entire video!")
+            print("No fix frame found over the entire video! Running in fallback mode...")
+            fix_frames = np.array([np.argmax(fallback_scores)])
 
         for next_border in np.append(fix_frames, len(ordered_scores)):
             orig_prior = prior_border if(prior_border != 0) else -1

@@ -272,9 +272,6 @@ class StorageGraph:
 class Histogram:
     __slots__ = ["_bins", "_bin_size", "_bin_offset"]
 
-    LEFT = reversed
-    RIGHT = iter
-
     def __init__(self, bin_size: float = 1, bin_offset: float = 0):
         self._bins: Dict[int, Tuple[int, float]] = {}
         self._bin_size = bin_size
@@ -290,7 +287,7 @@ class Histogram:
 
     def get_bin_for_value(self, value: float) -> Tuple[float, int, float]:
         val_bin = int((value - self._bin_offset) / self._bin_size)
-        freq, avg = self._bins.get(val_bin, (0, 0.0))
+        freq, avg = self._bins.get(val_bin, (0, value))
         return (val_bin * self._bin_size + self._bin_offset, freq, avg)
 
     def __iter__(self) -> Iterable[float]:
@@ -313,16 +310,17 @@ class Histogram:
     def get_quantile(
         self,
         quant: float,
-        start_bin: float = None,
-        direction: Callable[[List], List] = RIGHT
+        start_bin: float = None
     ) -> Tuple[float, int, float]:
-        ordered_bins = list(direction(sorted(self)))
+        ordered_bins = sorted(self)
+        ordered_indexes = sorted(self._bins)
+
         start_idx = bisect.bisect_left(ordered_bins, start_bin) if(start_bin is not None) else 0
 
         full_list = [self._bins[int((bin_i - self._bin_offset) / self._bin_size)][0] for bin_i in ordered_bins]
         sub_list = full_list[start_idx:]
 
-        bin_num = ordered_bins[min(start_idx + bisect.bisect_right(np.cumsum(sub_list) / np.sum(full_list), quant), len(ordered_bins) - 1)]
+        bin_num = ordered_indexes[min(start_idx + bisect.bisect_right(np.cumsum(sub_list) / np.sum(full_list), quant), len(ordered_bins) - 1)]
         freq, avg = self._bins[bin_num]
         return (bin_num, freq, avg)
 

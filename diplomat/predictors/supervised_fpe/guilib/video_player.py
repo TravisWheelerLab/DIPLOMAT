@@ -303,10 +303,9 @@ class VideoPlayer(wx.Control):
         self._back_queue = deque(maxlen=self.BACK_LOAD_AMT)
         self._current_loc = 0
 
-        size = wx.Size(int(self._width), int(self._height))
+        size = self._compute_min_size()
         self.SetMinSize(size)
         self.SetInitialSize(size)
-        # self.SetSize(size)
 
         self._core_timer = wx.Timer(self)
 
@@ -322,6 +321,15 @@ class VideoPlayer(wx.Control):
         self.Bind(wx.EVT_TIMER, self._on_timer)
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt: None)
+
+    def _compute_min_size(self) -> wx.Size:
+        displays = (wx.Display(i) for i in range(wx.Display.GetCount()))
+        sizes = [display.GetGeometry().GetSize() for display in displays]
+
+        w = int(min(self._width / 2, *(s.GetWidth() / 3 for s in sizes)))
+        h = int(min(self._height / 2, *(s.GetHeight() / 3 for s in sizes)))
+
+        return wx.Size(w, h)
 
     @classmethod
     def _get_resize_dims(cls, frame: np.ndarray, width: int, height: int) -> Tuple[int, int]:

@@ -19,7 +19,8 @@ class CreateSkeleton(FramePass):
         self._prior_max_locations = None
         self._current_frame = None
 
-    def run_pass(self,
+    def run_pass(
+        self,
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
         in_place: bool = True,

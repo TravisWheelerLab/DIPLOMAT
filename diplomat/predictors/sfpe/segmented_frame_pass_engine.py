@@ -599,7 +599,7 @@ class SegmentedFramePassEngine(Predictor):
 
         segment_size = self.settings.segment_size
 
-        scores = FixFrame.compute_scores(
+        scores, fallback_scores = FixFrame.compute_scores(
             self._frame_holder,
             progress_bar,
             thread_count=self._get_thread_count()
@@ -611,7 +611,7 @@ class SegmentedFramePassEngine(Predictor):
             progress_bar.message("Determining Optimal Segments...")
             progress_bar.reset(self.num_frames)
 
-        self._segments = segmentor.segment(scores, progress_bar)
+        self._segments = segmentor.segment(scores, fallback_scores, progress_bar)
 
         # Sort the segments by the start of the segment...
         self._segment_scores = scores[self._segments[:, 2]]
@@ -620,7 +620,7 @@ class SegmentedFramePassEngine(Predictor):
         self._segments = self._segments[sort_order]
         self._segment_scores = self._segment_scores[sort_order]
 
-        # We are done building segments, now for each segment we compute the fix frame and copy it back into orig_data...
+        # We are done building segments, now for each segment we compute the fix frame and copy it back into orig_data.
         if(progress_bar is not None):
             progress_bar.message("Finalize segments...")
             progress_bar.reset(len(self._segments))

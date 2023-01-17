@@ -12,6 +12,13 @@ class OptimizeStandardDeviation(FramePass):
     Runs across the video and determines the optimal value for the standard deviation for the 2D gaussian transition function
     used in :py:plugin:`~diplomat.predictors.frame_passes.MITViterbi`.
     """
+    # This is erfinv(0.5) * sqrt(2)
+    # Here our histogram tracks the half normal distribution of the movements of body parts to find the original
+    # standard deviation of movements. Computing the standard deviation from the mean or directly is sensitive.
+    # Therefore, we instead get the median of the histogram (0.5 quantile or 50th percentile), and then divide the
+    # median by the magic constant below, as for a half normal the original std equals erfinv(0.5) * sqrt(2) * median.
+    MAGIC_CONST = 0.6744897502
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -42,11 +49,12 @@ class OptimizeStandardDeviation(FramePass):
 
         result = super().run_pass(fb_data, prog_bar, in_place, reset_bar)
 
-        std = self._histogram.get_std_using_mean(0)
-        result.metadata.optimal_std = (*self._histogram.get_bin_for_value(std)[:2], std)
+        approx_std = self._histogram.get_quantile(0.5)[2] / self.MAGIC_CONST  # Median...
+        result.metadata.optimal_std = (*self._histogram.get_bin_for_value(approx_std)[:2], approx_std)
 
         if(self.config.DEBUG):
             print(f"Optimal STD: {result.metadata.optimal_std}")
+            print("Histogram:", self._histogram)
 
         return result
 
