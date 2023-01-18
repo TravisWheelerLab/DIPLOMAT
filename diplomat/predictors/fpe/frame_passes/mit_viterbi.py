@@ -43,6 +43,42 @@ def select(*info):
     return info[::2][-1]
 
 
+class ViterbiTransitionTable:
+    def __init__(
+        self,
+        table: np.ndarray,
+        enter_exit_prob: float,
+        enter_stay_prob: float
+    ):
+        self._table = table
+        self._enter_exit_prob = to_log_space(enter_exit_prob)
+        self._enter_stay_prob = to_log_space(enter_stay_prob)
+
+    @staticmethod
+    def _is_enter_state(coords: Coords) -> bool:
+        return len(coords[0]) == 1 and np.isneginf(coords[0][0])
+
+    def __call__(
+        self,
+        prior_probs: Probs,
+        prior_coords: Coords,
+        current_probs: Probs,
+        current_coords: Coords
+    ) -> np.ndarray:
+        if(self._is_enter_state(prior_coords)):
+            return np.full(
+                (len(current_probs), len(prior_probs)),
+                self._enter_stay_prob if(self._is_enter_state(current_coords)) else self._enter_exit_prob,
+                np.float32
+            )
+        elif(self._is_enter_state(current_coords)):
+            return np.full((len(current_probs), len(prior_probs)), -np.inf, np.float32)
+
+        return fpe_math.table_transition(
+            prior_coords, current_coords, self._table
+        )
+
+
 class MITViterbi(FramePass):
     """
     An implementation of the Multi-Individual Tracking Viterbi algorithm. Runs a viterbi-like algorithm across the frames to determine the
@@ -106,21 +142,12 @@ class MITViterbi(FramePass):
         metadata.obscured_prob = self.config.obscured_probability
         metadata.obscured_survival_max = self.config.obscured_survival_max
 
-    def _gaussian_trans_internal(
-        self,
-        prior_probs: Probs,
-        prior_coords: Coords,
-        current_probs: Probs,
-        current_coords: Coords
-    ) -> np.ndarray:
-        """
-        PRIVATE: Compute the transition table with currently stored gaussian transition probabilities in this class.
-        """
-        return fpe_math.table_transition(
-            prior_coords, current_coords, self._gaussian_table
-        )
+    def _init_edge_state(self, metadata: AttributeDict):
+        metadata.enter_prob = self.config.enter_state_probability
+        metadata.enter_trans_prob = self.config.enter_state_exit_probability
 
-    def run_pass(self,
+    def run_pass(
+        self,
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
         in_place: bool = True,
@@ -134,6 +161,7 @@ class MITViterbi(FramePass):
             self._init_gaussian_table(fb_data.metadata)
             self._init_skeleton(fb_data)
             self._init_obscured_state(fb_data.metadata)
+            self._init_edge_state(fb_data.metadata)
 
             fix_frame = fb_data.metadata.fixed_frame_index
 
@@ -147,6 +175,12 @@ class MITViterbi(FramePass):
                         fb_data.frames[fb_data.metadata.fixed_frame_index][bp_i],
                         fb_data.metadata
                     )
+            else:
+                for bp_i in range(fb_data.num_bodyparts):
+                    frame = fb_data.frames[fb_data.metadata.fixed_frame_index][bp_i]
+                    frame.frame_probs = to_log_space(frame.frame_probs)
+                    frame.occluded_probs = to_log_space(frame.occluded_probs)
+                    frame.enter_state = to_log_space(frame.enter_state)
 
             fb_data = fb_data if(in_place) else fb_data.copy()
 
@@ -166,6 +200,7 @@ class MITViterbi(FramePass):
                     fix_frame = fb_data.frames[f_i][bp_i]
                     fix_frame.frame_probs = from_log_space(fix_frame.frame_probs)
                     fix_frame.occluded_probs = from_log_space(fix_frame.occluded_probs)
+                    fix_frame.enter_state = from_log_space(fix_frame.enter_state)
                 if(prog_bar is not None):
                     prog_bar.update()
 
@@ -212,21 +247,28 @@ class MITViterbi(FramePass):
                     max_of_maxes = np.argmax(
                         np.max(combined, axis=1))  # Is it in occluded or frame?
 
+                    # If edge state is higher, select it over the actual frame coordinates...
+                    if(combined[max_of_maxes][prior_max_idxs[max_of_maxes]] < prior.enter_state):
+                        prob, coords = prior.enter_state, [-np.inf, -np.inf]
+                    else:
+                        prob = combined[max_of_maxes][prior_max_idxs[max_of_maxes]]
+                        coords = combined_coords[max_of_maxes][prior_max_idxs[max_of_maxes]]
+
                     prior_data = [(
-                        np.asarray([combined[max_of_maxes][
-                                        prior_max_idxs[max_of_maxes]]]),
-                        np.asarray([combined_coords[max_of_maxes][
-                                        prior_max_idxs[max_of_maxes]]]).T
+                        np.asarray([prob]),
+                        np.asarray([coords]).T
                     )]
 
                     current_data = [
                         (current.frame_probs, (cx, cy)),
-                        (current.occluded_probs, current.occluded_coords.T)
+                        (current.occluded_probs, current.occluded_coords.T),
+                        (np.array([current.enter_state]), np.array([[-np.inf, -np.inf]]).T)
                     ]
 
                     backtrace_priors[bp_idx] = prior_data
                     backtrace_current[bp_idx] = current_data
 
+                exit_prob = fb_data.metadata.enter_trans_prob
                 # Now run the actual backtrace, computing transitions for
                 # prior maximums -> current frames...
                 results = pool.starmap(
@@ -236,7 +278,7 @@ class MITViterbi(FramePass):
                         backtrace_current[bp_i],
                         bp_i,
                         fb_data.metadata,
-                        self._gaussian_trans_internal,
+                        ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob),
                         self._skeleton_tables if (self.config.include_skeleton) else None,
                         self.config.skeleton_weight
                     ) for bp_i in range(fb_data.num_bodyparts)]
@@ -244,9 +286,10 @@ class MITViterbi(FramePass):
 
                 # We stash the entire frame, the maximums are computed on
                 # the next step, and by the FramePassEngine at the end...
-                for bp_i, (frm_prob, occ_prob) in enumerate(results):
+                for bp_i, (frm_prob, occ_prob, enter_state) in enumerate(results):
                     fb_data.frames[frame_idx][bp_i].frame_probs = frm_prob
                     fb_data.frames[frame_idx][bp_i].occluded_probs = occ_prob
+                    fb_data.frames[frame_idx][bp_i].enter_state = enter_state[0]
 
                 if(prog_bar is not None):
                     prog_bar.update()
@@ -268,7 +311,6 @@ class MITViterbi(FramePass):
                 continue
 
         return get_context().Pool()
-
 
     def _run_forward(
         self,
@@ -298,6 +340,8 @@ class MITViterbi(FramePass):
                 current = fb_data.frames[i]
                 current = current if (in_place) else [c.copy() for c in current]
 
+                exit_prob = fb_data.metadata.enter_trans_prob
+
                 results = pool.starmap(
                     MITViterbi._compute_normal_frame,
                     [(
@@ -305,7 +349,7 @@ class MITViterbi(FramePass):
                         current,
                         bp_grp_i,
                         meta,
-                        self._gaussian_trans_internal,
+                        ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob),
                         self._skeleton_tables if (self.config.include_skeleton) else None,
                         self.config.skeleton_weight
                     ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)]
@@ -359,7 +403,10 @@ class MITViterbi(FramePass):
         y, x, probs, x_off, y_off = frame.src_data.unpack()
 
         if(y is None):
-            raise ValueError("Invalid frame to start on!")
+            print("Invalid frame to start on! Using enter state...")
+            frame.enter_state = to_log_space(1)
+            frame.occluded_probs = to_log_space(np.array([0]))
+            frame.occluded_coords = np.array([[0, 0]])
 
         # Occluded state for first frame...
         occ_coord = np.array([x, y]).T
@@ -377,6 +424,7 @@ class MITViterbi(FramePass):
         frame.frame_probs, frame.occluded_probs = norm_together(
             [to_log_space(probs), occ_probs]
         )
+        frame.enter_state = -np.inf  # Make enter state 0 in log space...
 
         return frame
 
@@ -436,16 +484,18 @@ class MITViterbi(FramePass):
                     continue
 
                 z_a = lambda: np.array([0])
+                nf_a = lambda: np.array([-np.inf])
 
                 prior_data = [
                     (prior_frame.frame_probs, (px, py) if(py is not None) else (z_a(), z_a())),
-                    (prior_frame.occluded_probs, prior_frame.occluded_coords.T)
+                    (prior_frame.occluded_probs, prior_frame.occluded_coords.T),
+                    (np.array([prior_frame.enter_state]), (nf_a(), nf_a()))
                 ]
             else:
                 prior_data = prior_frame
 
-            def transition_func(pp, pc, cp, cc):
-                return fpe_math.table_transition(pc, cc, trans_table)
+            # No skeleton penalty for transitioning from
+            transition_func = ViterbiTransitionTable(trans_table, 0.5, 0.5)
 
             results.append((
                 other_bp_group_idx * metadata.num_outputs + bp_off,
@@ -501,10 +551,21 @@ class MITViterbi(FramePass):
                 cy = cx = cprob = None
 
             z_arr = lambda: np.array([0])
+            neg_inf_arr = lambda: np.array([-np.inf])
 
             prior_data = [
-                (prior[bp_i].frame_probs, (px, py) if(py is not None) else (z_arr(), z_arr())),
-                (prior[bp_i].occluded_probs, prior[bp_i].occluded_coords.T)
+                (
+                    prior[bp_i].frame_probs if(py is not None) else neg_inf_arr(),
+                    (px, py) if(py is not None) else (z_arr(), z_arr())
+                ),
+                (
+                    prior[bp_i].occluded_probs,
+                    prior[bp_i].occluded_coords.T
+                ),
+                (
+                    np.array([prior[bp_i].enter_state]),
+                    (neg_inf_arr(), neg_inf_arr())
+                )
             ]
 
             c_frame_data = (
@@ -521,7 +582,11 @@ class MITViterbi(FramePass):
 
             current[bp_i].occluded_coords = c_occ_coords
 
-            current_data = [c_frame_data, (c_occ_probs, c_occ_coords.T)]
+            current_data = [
+                c_frame_data,
+                (c_occ_probs, c_occ_coords.T),
+                (np.array([to_log_space(metadata.enter_prob)]), (neg_inf_arr(), neg_inf_arr()))
+            ]
 
             from_skel = cls._compute_from_skeleton(
                 prior,
@@ -542,7 +607,8 @@ class MITViterbi(FramePass):
                 for t, s in zip(from_transition, from_skel)
             ])
 
-            result_coords.append([c[1] for c in current_data])
+            # Result coordinates, exclude the enter state...
+            result_coords.append([c[1] for c in current_data[:-1]])
 
         # Pad all arrays so we can do element-wise comparisons between them...
         frm_probs, frm_coords, frm_idxs = arr_utils.pad_coordinates_and_probs(
@@ -556,13 +622,15 @@ class MITViterbi(FramePass):
             -np.inf
         )
 
+        enter_probs = [r[2][0] for r in results]
+
         # Compute the dominators (max transitions across individuals)...
         frame_dominators = np.maximum.reduce(frm_probs)
         occ_dominators = np.maximum.reduce(occ_probs)
 
         # Domination & store step...
-        for bp_i, frm_prob, occ_prob, frm_idx, occ_idx in zip(
-            group_range, frm_probs, occ_probs, frm_idxs, occ_idxs
+        for bp_i, frm_prob, occ_prob, frm_idx, occ_idx, enter_prob in zip(
+            group_range, frm_probs, occ_probs, frm_idxs, occ_idxs, enter_probs
         ):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
             frm_prob[frm_prob < frame_dominators] = -np.inf
@@ -576,7 +644,7 @@ class MITViterbi(FramePass):
                 occ_prob[best_occ] = 0  # 1 in log space...
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
 
-            norm_val = max(np.nanmax(frm_prob), np.nanmax(occ_prob))
+            norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
             # Store the results...
             current[bp_i].frame_probs = frm_prob[frm_idx] - norm_val
@@ -588,6 +656,7 @@ class MITViterbi(FramePass):
             )
             current[bp_i].occluded_coords = c
             current[bp_i].occluded_probs = p - norm_val
+            current[bp_i].enter_state = enter_prob - norm_val
 
         return current
 
@@ -666,7 +735,16 @@ class MITViterbi(FramePass):
             "obscured_probability": (
                 0.000001, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
-                "probability of going to any hidden state cell."
+                "prior probability of being in any hidden state cell."
+            ),
+            "enter_state_probability": (
+                1e-9, tc.RangedFloat(0, 1),
+                "A constant, the probability of being in the enter state."
+            ),
+            "enter_state_exit_probability": (
+                0.99, tc.RangedFloat(0, 1),
+                "A constant, the probability of exiting the enter state. Probability of staying in the "
+                "enter state is this value subtracted from 1."
             ),
             "obscured_survival_max": (
                 50, int,

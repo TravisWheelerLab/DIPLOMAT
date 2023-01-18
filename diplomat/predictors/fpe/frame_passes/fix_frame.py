@@ -238,6 +238,7 @@ class FixFrame(FramePass):
         num_outputs: int,
         down_scaling: float,
         skeleton: Optional[StorageGraph],
+        max_dist: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> Tuple[float, float]:
         num_bp = len(frames) // num_outputs
@@ -257,6 +258,7 @@ class FixFrame(FramePass):
 
                 if (f1_loc[0] is None):
                     score = -np.inf
+                    continue
 
                 for j in range(i + 1, num_outputs):
                     f2_loc = cls.get_max_location(
@@ -265,9 +267,12 @@ class FixFrame(FramePass):
 
                     if (f2_loc[0] is None):
                         score = -np.inf
+                        continue
 
                     min_dist = min(cls.dist(f1_loc, f2_loc), min_dist)
 
+            if(np.isinf(min_dist)):
+                min_dist = 0
             if(min_dist == 0):
                 # BAD! We found a frame that failed to cluster properly...
                 score = -np.inf
@@ -289,6 +294,8 @@ class FixFrame(FramePass):
 
                 if (f1_loc[0] is None):
                     score = -np.inf
+                    score2 -= (max_dist / num_pairs)
+                    continue
 
                 for (bp2_group_off, (__, __, avg)) in skel[bp_group_off]:
                     min_score = np.inf
@@ -299,10 +306,12 @@ class FixFrame(FramePass):
                             down_scaling
                         )
 
-                        if (f2_loc[0] is None):
+                        if(f2_loc[0] is None):
                             score = -np.inf
+                            result = max_dist
+                        else:
+                            result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
 
-                        result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
                         min_score = min(result, min_score)
 
                     score -= (min_score / num_pairs)
@@ -317,6 +326,7 @@ class FixFrame(FramePass):
         num_outputs: int,
         down_scaling: float,
         skeleton: Optional[StorageGraph],
+        max_dist: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> np.ndarray:
         final_scores = np.zeros((len(frames), 2))
@@ -325,7 +335,7 @@ class FixFrame(FramePass):
             progress_bar.reset(len(frames))
 
         for i, frame in enumerate(frames):
-            final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton)
+            final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton, max_dist)
 
             if(progress_bar is not None):
                 progress_bar.update()
@@ -356,19 +366,22 @@ class FixFrame(FramePass):
             prog_bar.reset(fb_data.num_frames)
 
         to_index = lambda i: slice(i * cls.SCORES_PER_CHUNK, (i + 1) * cls.SCORES_PER_CHUNK)
+        max_dist = np.sqrt(fb_data.metadata.width ** 2 + fb_data.metadata.height ** 2)
 
         if(thread_count > 0):
             from ...sfpe.segmented_frame_pass_engine import PoolWithProgress
             with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
                 pool.fast_map(
                     cls.compute_list_of_scores,
-                    lambda i: (fb_data.frames[to_index(i)], num_outputs, down_scaling, skeleton),
+                    lambda i: (fb_data.frames[to_index(i)], num_outputs, down_scaling, skeleton, max_dist),
                     lambda i, val: scores.__setitem__(to_index(i), val),
                     (fb_data.num_frames + (cls.SCORES_PER_CHUNK - 1)) // cls.SCORES_PER_CHUNK
                 )
         else:
             for f_idx in range(num_frames):
-                scores[f_idx] = cls.compute_single_score(fb_data.frames[f_idx], num_outputs, down_scaling, skeleton)
+                scores[f_idx] = cls.compute_single_score(
+                    fb_data.frames[f_idx], num_outputs, down_scaling, skeleton, max_dist
+                )
                 if (prog_bar is not None):
                     prog_bar.update(1)
 

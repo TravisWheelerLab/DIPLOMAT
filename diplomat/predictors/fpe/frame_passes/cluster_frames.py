@@ -156,8 +156,13 @@ class ClusterFrames(FramePass):
         balance: float,
         attempts: int
     ) -> Optional[Tuple[list, list]]:
-        if(attempts <= 0 or len(x) < num_clusters):
+        if(attempts <= 0):
             return None
+
+        if(len(x) < num_clusters):
+            center_x = list(np.append(x, [np.inf] * (num_clusters - len(x))))
+            center_y = list(np.append(y, [np.inf] * (num_clusters - len(y))))
+            return (center_x, center_y)
 
         x_true = (x + 0.5 + x_off / down_scaling).astype(int)
         y_true = (y + 0.5 + y_off / down_scaling).astype(int)
@@ -174,7 +179,7 @@ class ClusterFrames(FramePass):
 
         if(len(bad_idx) > 0):
             keep = ~np.isin(components, bad_idx)
-            return cls._get_spanning_forest_centers(
+            result = cls._get_spanning_forest_centers(
                 x[keep],
                 y[keep],
                 prob[keep],
@@ -186,6 +191,8 @@ class ClusterFrames(FramePass):
                 balance,
                 attempts - 1
             )
+            if(result is not None or (not np.any(np.isinf(result)))):
+                return result
 
         center_x = [np.mean(x_true[components == i]) for i in range(num_clusters)]
         center_y = [np.mean(y_true[components == i]) for i in range(num_clusters)]
@@ -247,8 +254,12 @@ class ClusterFrames(FramePass):
         # Construct masks...
         mask_arr = np.argmin(dists, axis=0)
         masks = [mask_arr == i for i in range(num_clusters)]
-
-        return [(y[mask], x[mask], prob[mask], x_off[mask], y_off[mask]) for mask in masks]
+        
+        return [
+            (y[mask], x[mask], prob[mask], x_off[mask], y_off[mask])
+            if(np.isfinite(tx) and np.isfinite(ty)) else (None, None, None, None, None)
+            for mask, tx, ty in zip(masks, *coords)
+        ]
 
     def run_step(self, prior: Optional[ForwardBackwardFrame], current: ForwardBackwardFrame, frame_index: int,
                  bodypart_index: int, metadata: AttributeDict) -> Optional[ForwardBackwardFrame]:
