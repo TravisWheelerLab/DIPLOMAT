@@ -156,7 +156,9 @@ class History:
         """
         return (len(self.future) > 0)
 
+
 Box = Optional[Tuple[int, int, int, int]]
+
 
 class FPEEditor(wx.Frame):
     """
@@ -176,6 +178,7 @@ class FPEEditor(wx.Frame):
         crop_box: Box,
         labeling_modes: List[PoseLabeler],
         score_engines: List[ScoreEngine],
+        part_groups: Optional[List[str]] = None,
         w_id=wx.ID_ANY,
         title="",
         pos=wx.DefaultPosition,
@@ -194,6 +197,10 @@ class FPEEditor(wx.Frame):
         :param plot_settings: The video_metadata object from the predictor plugin, includes important point and video
                               settings.
         :param crop_box: The cropping box of the video which poses were actually predicted on. The format is: (x, y, width, height)...
+        :param labeling_modes: A list of pose labelers, labeling modes to enable in the UI.
+        :param score_engines: A list of scoring engines to produce scores in the UI.
+        :param part_groups: An optional list of integers, the group to place a body part in when building the selection
+                            list on the side.
         :param w_id: The WX ID of the window. Defaults to wx.ID_ANY
         :param title: String title of the window. Defaults to "".
         :param pos: WX Position of the window. Defaults to wx.DefaultPosition.
@@ -242,6 +249,7 @@ class FPEEditor(wx.Frame):
             poses=poses,
             bp_names=names,
             labeling_modes=labeling_modes,
+            group_list=part_groups,
             **ps
         )
         self.video_controls = VideoController(self._sub_panel, video_player=self.video_player.video_viewer)

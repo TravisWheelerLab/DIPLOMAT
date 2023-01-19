@@ -793,6 +793,10 @@ class ColoredRadioButton(wx.Panel):
 
         self.radio_button.Bind(wx.EVT_CHECKBOX, self._send_event)
 
+    @property
+    def button_index(self) -> int:
+        return self._index
+
     def _send_event(self, event):
         """
         PRIVATE: Emits a colored radio event.
@@ -816,6 +820,8 @@ class ColoredRadioBox(wx.Panel):
         colormap: Union[str, list, Colormap],
         shape_list: Iterable[str],
         labels: List[str],
+        group_ids: Optional[List[int]],
+        group_prefix: str = "Individual ",
         w_id=wx.ID_ANY,
         pos=wx.DefaultPosition,
         size=wx.DefaultSize,
@@ -830,6 +836,8 @@ class ColoredRadioBox(wx.Panel):
                          a color.
         :param shape_list: A iterable or generator of strings, being the shapes to use to draw each point.
         :param labels: A list of strings, being the labels for all the radio buttons.
+        :param group_ids: A optional list of integers, the group or individual each part belongs to.
+        :param group_prefix: A string, prefix used when listing groups.
         :param w_id: The wx ID.
         :param pos: The position of the widget.
         :param size: The size of the widget.
@@ -851,12 +859,37 @@ class ColoredRadioBox(wx.Panel):
         self._colormap = to_colormap(colormap)
         colors = iter_colormap(self._colormap, len(labels), bytes=True)
 
-        for i, (label, color, shape) in enumerate(zip(labels, colors, shape_list)):
+        if(group_ids is None):
+            group_ids = [0] * len(labels)
+
+        self._group_to_buttons = {}
+        self._ids = np.unique(group_ids)
+
+        for i, (label, color, shape, group) in enumerate(zip(labels, colors, shape_list, group_ids)):
             wx_color = wx.Colour(*color)
             radio_button = ColoredRadioButton(self._scroller, i, wx_color, shape, label)
             radio_button.Bind(ColoredRadioButton.EVT_COLORED_RADIO, self._enforce_single_select)
-            self._inner_sizer.Add(radio_button, 0, wx.EXPAND, self.PADDING)
+            btn_list = self._group_to_buttons.get(group, None)
+
+            if(btn_list is None):
+                btn_list = []
+                self._group_to_buttons[group] = btn_list
+
+            btn_list.append(radio_button)
             self._buttons.append(radio_button)
+
+        self._body_buttons = []
+
+        for grp_id in self._ids:
+            if(grp_id > 0):
+                button = wx.Button(self._scroller, label=f"{group_prefix}{grp_id}")
+                button.group_id = grp_id
+                button.Bind(wx.EVT_BUTTON, self._group_select)
+                self._inner_sizer.Add(button, 0, wx.EXPAND, self.PADDING)
+                self._body_buttons.append(button)
+
+            for btn in self._group_to_buttons.get(grp_id, []):
+                self._inner_sizer.Add(btn, 0, wx.EXPAND, self.PADDING)
 
         self._scroller.SetSizerAndFit(self._inner_sizer)
         self._scroller.SetMinSize(wx.Size(self._scroller.GetMinSize().GetWidth() + self.PADDING, -1))
@@ -907,6 +940,19 @@ class ColoredRadioBox(wx.Panel):
         if(post):
             wx.PostEvent(self, event)
 
+    def _group_select(self, event: wx.CommandEvent):
+        if(not self._multi_select):
+            return
+
+        buttons = self._group_to_buttons.get(event.GetEventObject().group_id, [])
+        do_enable = (np.sum([btn.radio_button.GetValue() for btn in buttons]) / len(buttons)) < 0.5
+        indexes = [btn.button_index for btn in buttons]
+
+        self.set_selected(
+            np.union1d(self.get_selected(), indexes) if(do_enable) else np.setdiff1d(self.get_selected(), indexes)
+        )
+        self._enforce_single_select(None, True)
+
     def is_multiselect(self) -> bool:
         """
         Get if this selection box currently support selecting multiple elements at once.
@@ -922,6 +968,10 @@ class ColoredRadioBox(wx.Panel):
         :param value: True to enable multiple selections at once, otherwise set to False.
         """
         self._multi_select = bool(value)
+
+        for btn in self._body_buttons:
+            btn.Enable(self._multi_select)
+
         self._enforce_single_select(None, True)
 
     def get_selected(self) -> np.ndarray:
@@ -941,7 +991,10 @@ class ColoredRadioBox(wx.Panel):
         value = np.unique(np.asarray(value, dtype=int))
         if(not np.all((0 <= value) & (value < len(self._buttons)))):
             raise ValueError("Not a valid selection!!!!")
-
+        for btn in self._buttons:
+            btn.radio_button.SetValue(False)
+        for i in value:
+            self._buttons[i].radio_button.SetValue(True)
         self._enforce_single_select(None, False)
 
     def get_labels(self) -> List[str]:
@@ -1020,6 +1073,7 @@ class PointEditor(wx.Panel):
         poses: Pose,
         bp_names: List[str],
         labeling_modes: List[PoseLabeler],
+        group_list: Optional[List[int]] = None,
         colormap: str = PointViewNEdit.DEF_MAP,
         shape_list: str = None,
         plot_threshold: float = 0.1,
@@ -1042,6 +1096,8 @@ class PointEditor(wx.Panel):
         :param crop_box: A tuple of 4 integers being the x, y, width, and height of the cropped area of the video.
         :param poses: The Pose object for the above video, used as initial point data.
         :param bp_names: A list of strings, being the names of the body parts.
+        :param labeling_modes: A list of pose labelers, the labeling modes to make available for selection.
+        :param group_list: Optional list of integers, groups to group body parts into.
         :param colormap: The matplotlib colormap to use when coloring the points.
         :param shape_list: A iterable or generator of strings, being the shapes to use to draw each point.
         :param plot_threshold: The probability threshold at which to not plot a points. Defaults to 0.1.
@@ -1073,7 +1129,7 @@ class PointEditor(wx.Panel):
         self._labeling_label = wx.StaticText(self, label="Labeling Mode:")
         self._labeling_mode_selector = wx.Choice(self, choices=[p.get_display_name() for p in labeling_modes])
         self._labeling_settings = SettingCollectionWidget(self)
-        self.select_box = ColoredRadioBox(self, colormap, shape_list, bp_names)
+        self.select_box = ColoredRadioBox(self, colormap, shape_list, bp_names, group_list)
 
         self._main_sizer.Add(self.video_viewer, 1, wx.EXPAND)
 

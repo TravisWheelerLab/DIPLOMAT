@@ -284,6 +284,7 @@ class TweakUI:
             crop_box,
             [self._labeler_class(fake_fpe)],
             [sc(fake_fpe) for sc in self._scorer_classes],
+            list(range(1, num_outputs + 1)) * (len(bodypart_names) // num_outputs),
             title="Tweak Tracks"
         )
 
