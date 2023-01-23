@@ -36,26 +36,28 @@ class CreateSkeleton(FramePass):
         # Build a graph...
         has_skel = self._build_skeleton_graph()
 
+        if(not has_skel):
+            return fb_data
+
         # Build up skeletal data with frequencies.
         new_frame_data = super().run_pass(fb_data, prog_bar, in_place)
 
         # Grab max frequency skeletal distances and store them for later passes...
-        if(has_skel):
-            new_skeleton_info = StorageGraph(fb_data.metadata.bodyparts)
-            for edge, hist in self._skeleton.items():
-                new_skeleton_info[edge] = hist.get_max()
+        new_skeleton_info = StorageGraph(fb_data.metadata.bodyparts)
+        for edge, hist in self._skeleton.items():
+            new_skeleton_info[edge] = hist.get_max()
 
-            new_frame_data.metadata.skeleton = new_skeleton_info
-            new_frame_data.metadata.skeleton_config = {
-                "peak_amplitude": self.config.max_amplitude,
-                "trough_amplitude": self.config.min_amplitude
-            }
+        new_frame_data.metadata.skeleton = new_skeleton_info
+        new_frame_data.metadata.skeleton_config = {
+            "peak_amplitude": self.config.max_amplitude,
+            "trough_amplitude": self.config.min_amplitude
+        }
 
-            if(self.config.DEBUG):
-                print("Selected Skeleton Lengths (bin, freq, avg):")
-                print(new_skeleton_info)
-                print("Skeleton Histograms:")
-                print(self._skeleton)
+        if(self.config.DEBUG):
+            print("Selected Skeleton Lengths (bin, freq, avg):")
+            print(new_skeleton_info)
+            print("Skeleton Histograms:")
+            print(self._skeleton)
 
         return new_frame_data
 
@@ -161,22 +163,23 @@ class CreateSkeleton(FramePass):
                 # Convert all dictionary arguments to lists...
                 return [(str(k), str(v)) for k, v in skel]
 
-
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
             "linked_parts": (None, cls.cast_skeleton, "None, a boolean, a list of strings, or a list of strings "
-                                                      "to strings (as tuples). Determines what parts should be linked together. "
-                                                      "with a skeleton. If None, attempts to use the skeleton pulled form the "
-                                                      "tracking project. If false, specifies no skeleton should"
-                                                      "be made, basically disabling this pass. If True, connect all"
-                                                      "body parts to each other. If a list of strings, connect the "
-                                                      "body parts in that list to every other body part in that list. "
-                                                      "If a list of strings to strings, specifies exact links "
-                                                      "that should be made between body parts. Defaults to True."),
-            "bin_size": (1 / 4, tc.RoundedDecimal(5), "A decimal, the size of each bin used in the histogram for computing the mode."),
-            "bin_offset": (0, tc.RoundedDecimal(5), "A decimal, the offset of the first bin used in the histogram for computing "
-                                   "the mode."),
+                                                      "to strings (as tuples). Determines what parts should be linked "
+                                                      "together. with a skeleton. If None, attempts to use the "
+                                                      "skeleton pulled form the tracking project. If false, specifies "
+                                                      "no skeleton should be made, basically disabling this pass. "
+                                                      "If True, connect all body parts to each other. If a list of "
+                                                      "strings, connect the body parts in that list to every other "
+                                                      "body part in that list. If a list of strings to strings, "
+                                                      "specifies exact links that should be made between body parts. "
+                                                      "Defaults to True."),
+            "bin_size": (1 / 4, tc.RoundedDecimal(5), "A decimal, the size of each bin used in the histogram for "
+                                                      "computing the mode."),
+            "bin_offset": (0, tc.RoundedDecimal(5), "A decimal, the offset of the first bin used in the histogram "
+                                                    "for computing the mode."),
             "max_amplitude": (1, float, "A float, the max amplitude of the skeletal curves."),
             "min_amplitude": (0.75, float, "A float the min amplitude of the skeletal curves."),
             "DEBUG": (False, bool, "Set to True to print skeleton information to console while this pass is running.")
