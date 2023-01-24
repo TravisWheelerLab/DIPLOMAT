@@ -26,7 +26,6 @@ __all__ = [
 ]
 
 
-
 # Attempt to load all frontends, putting their public functions into submodules of diplomat.
 def _load_frontends():
     from diplomat import frontends

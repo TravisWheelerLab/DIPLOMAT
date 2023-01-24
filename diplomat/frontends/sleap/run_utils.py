@@ -67,7 +67,8 @@ def _setup_gpus(use_cpu: bool, gpu_index: Optional[int]):
 
     sleap.disable_preallocation()
 
-    # Make sure tensorflow is running in the correct mode for evaluation (this issue can happen when the DLC frontend is loaded)...
+    # Make sure tensorflow is running in the correct mode for evaluation
+    # (this issue can happen when the DLC frontend is loaded)...
     if(not tf.executing_eagerly()):
         tf.compat.v1.enable_eager_execution()
 

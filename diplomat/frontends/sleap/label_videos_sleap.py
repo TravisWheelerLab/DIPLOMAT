@@ -15,13 +15,16 @@ from .run_utils import (
     _to_diplomat_poses
 )
 
+
 def _to_cv2_color(color: Tuple[float, float, float, float]) -> Tuple[int, int, int, int]:
     r, g, b, a = [min(255, max(0, int(val * 256))) for val in color]
     return (b, g, r, a)
 
+
 class EverythingSet:
     def __contains__(self, item):
         return True
+
 
 @extra_cli_args(FULL_VISUAL_SETTINGS, auto_cast=False)
 @tc.typecaster_function
@@ -59,6 +62,7 @@ def label_videos(
 
 T = TypeVar("T")
 
+
 def _create_manager(clazz: Type[T]) -> Type[T]:
     class cv2_context_manager(clazz):
         def __enter__(self):
@@ -81,6 +85,7 @@ def _create_manager(clazz: Type[T]) -> Type[T]:
             return super().write(frame)
 
     return cv2_context_manager
+
 
 ContextVideoWriter = _create_manager(cv2.VideoWriter)
 ContextVideoCapture = _create_manager(cv2.VideoCapture)
