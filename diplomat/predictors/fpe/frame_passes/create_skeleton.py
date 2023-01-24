@@ -39,13 +39,20 @@ class CreateSkeleton(FramePass):
         if(not has_skel):
             return fb_data
 
-        # Build up skeletal data with frequencies.
-        new_frame_data = super().run_pass(fb_data, prog_bar, in_place)
+        if(self.config.part_weights is not None):
+            new_skeleton_info = StorageGraph(fb_data.metadata.bodyparts)
+            for node1, node2, val in self.config.part_weights:
+                new_skeleton_info[node1, node2] = (val, 1, val)
 
-        # Grab max frequency skeletal distances and store them for later passes...
-        new_skeleton_info = StorageGraph(fb_data.metadata.bodyparts)
-        for edge, hist in self._skeleton.items():
-            new_skeleton_info[edge] = hist.get_max()
+            new_frame_data = fb_data
+        else:
+            # Build up skeletal data with frequencies.
+            new_frame_data = super().run_pass(fb_data, prog_bar, in_place)
+
+            # Grab max frequency skeletal distances and store them for later passes...
+            new_skeleton_info = StorageGraph(fb_data.metadata.bodyparts)
+            for edge, hist in self._skeleton.items():
+                new_skeleton_info[edge] = hist.get_max()
 
         new_frame_data.metadata.skeleton = new_skeleton_info
         new_frame_data.metadata.skeleton_config = {
@@ -62,7 +69,10 @@ class CreateSkeleton(FramePass):
         return new_frame_data
 
     def _build_skeleton_graph(self) -> bool:
-        lnk_parts = self.config.linked_parts
+        if(self.config.part_weights is not None):
+            lnk_parts = [(a, b) for a, b, weight in self.config.part_weights]
+        else:
+            lnk_parts = self.config.linked_parts
 
         if(lnk_parts is None):
             lnk_parts = self._frame_data.metadata.project_skeleton
@@ -78,7 +88,9 @@ class CreateSkeleton(FramePass):
                     self._skeleton[bp1, bp2] = Histogram(self.config.bin_size, self.config.bin_offset)
                 else:
                     lst = [bp for bp in (bp1, bp2) if(bp not in self._skeleton)]
-                    raise ValueError(f"The skeleton included contains body parts not found in the project: {' and '.join(lst)}")
+                    raise ValueError(
+                        f"The skeleton included contains body parts not found in the project: {' and '.join(lst)}"
+                    )
 
             return True
         return False
@@ -86,8 +98,10 @@ class CreateSkeleton(FramePass):
     def run_step(
         self,
         prior: Optional[ForwardBackwardFrame],
-        current: ForwardBackwardFrame, frame_index: int,
-        bodypart_index: int, metadata: AttributeDict
+        current: ForwardBackwardFrame,
+        frame_index: int,
+        bodypart_index: int,
+        metadata: AttributeDict
     ) -> Optional[ForwardBackwardFrame]:
         # If we have moved to the next frame, update histograms using body part maximums of prior frame...
         if(self._current_frame != frame_index):
@@ -166,21 +180,40 @@ class CreateSkeleton(FramePass):
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
-            "linked_parts": (None, cls.cast_skeleton, "None, a boolean, a list of strings, or a list of strings "
-                                                      "to strings (as tuples). Determines what parts should be linked "
-                                                      "together. with a skeleton. If None, attempts to use the "
-                                                      "skeleton pulled form the tracking project. If false, specifies "
-                                                      "no skeleton should be made, basically disabling this pass. "
-                                                      "If True, connect all body parts to each other. If a list of "
-                                                      "strings, connect the body parts in that list to every other "
-                                                      "body part in that list. If a list of strings to strings, "
-                                                      "specifies exact links that should be made between body parts. "
-                                                      "Defaults to True."),
-            "bin_size": (1 / 4, tc.RoundedDecimal(5), "A decimal, the size of each bin used in the histogram for "
-                                                      "computing the mode."),
-            "bin_offset": (0, tc.RoundedDecimal(5), "A decimal, the offset of the first bin used in the histogram "
-                                                    "for computing the mode."),
-            "max_amplitude": (1, float, "A float, the max amplitude of the skeletal curves."),
-            "min_amplitude": (0.75, float, "A float the min amplitude of the skeletal curves."),
-            "DEBUG": (False, bool, "Set to True to print skeleton information to console while this pass is running.")
+            "linked_parts": (
+                None,
+                cls.cast_skeleton,
+                "None, a boolean, a list of strings, or a list of strings to strings (as tuples). Determines what "
+                "parts should be linked together. with a skeleton. If None, attempts to use the skeleton pulled form "
+                "the tracking project. If false, specifies no skeleton should be made, basically disabling this pass. "
+                "If True, connect all body parts to each other. If a list of strings, connect the body parts in that "
+                "list to every other body part in that list. If a list of strings to strings, specifies exact links "
+                "that should be made between body parts. Defaults to True."
+            ),
+            "part_weights": (
+                None,
+                tc.Optional[tc.List[tc.Tuple[str, str, tc.RangedFloat(0, np.inf)]]],
+                "Optional list of tuples. Each tuple contains the edge (two strings) and the distance to use between"
+                "those two parts, measured in pixels. This allows for manual specification of the skeleton weights."
+                "This value defaults to None, meaning run automated skeleton selection."
+            ),
+            "bin_size": (
+                1 / 4,
+                tc.RoundedDecimal(5),
+                "A decimal, the size of each bin used in the histogram for computing the mode."
+            ),
+            "bin_offset": (
+                0,
+                tc.RoundedDecimal(5),
+                "A decimal, the offset of the first bin used in the histogram for computing the mode."
+            ),
+            "max_amplitude": (
+                1, float, "A float, the max amplitude of the skeletal curves."
+            ),
+            "min_amplitude": (
+                0.75, float, "A float the min amplitude of the skeletal curves."
+            ),
+            "DEBUG": (
+                False, bool, "Set to True to print skeleton information to console while this pass is running."
+            )
         }
