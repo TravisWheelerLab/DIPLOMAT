@@ -733,16 +733,16 @@ class MITViterbi(FramePass):
                 "probabilities can reach."
             ),
             "obscured_probability": (
-                0.000001, tc.RangedFloat(0, 1),
+                0.0000001, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
                 "prior probability of being in any hidden state cell."
             ),
             "enter_state_probability": (
-                1e-9, tc.RangedFloat(0, 1),
+                1e-12, tc.RangedFloat(0, 1),
                 "A constant, the probability of being in the enter state."
             ),
             "enter_state_exit_probability": (
-                0.99, tc.RangedFloat(0, 1),
+                0.9999, tc.RangedFloat(0, 1),
                 "A constant, the probability of exiting the enter state. Probability of staying in the "
                 "enter state is this value subtracted from 1."
             ),

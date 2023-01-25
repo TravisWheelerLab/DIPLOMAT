@@ -132,6 +132,9 @@ def _label_video_single(
                 )
 
                 for (name, x, y, prob, color, shape) in part_iter:
+                    if(x != x or y != y):
+                        continue
+
                     if(name not in body_parts_to_plot):
                         continue
 

@@ -29,6 +29,7 @@ def _silent_import(name, pkg=None):
                 del os.environ["TF_CPP_MIN_LOG_LEVEL"]
 
 
+# DLC Interferes with other backends by doing un-library like things on import.
 class LazyImporter:
 
     NOTHING = object()

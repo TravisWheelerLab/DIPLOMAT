@@ -211,7 +211,7 @@ class CreateSkeleton(FramePass):
                 1, float, "A float, the max amplitude of the skeletal curves."
             ),
             "min_amplitude": (
-                0.75, float, "A float the min amplitude of the skeletal curves."
+                0.8, float, "A float the min amplitude of the skeletal curves."
             ),
             "DEBUG": (
                 False, bool, "Set to True to print skeleton information to console while this pass is running."
