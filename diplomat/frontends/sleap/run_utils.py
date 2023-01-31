@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from inspect import signature
 from pathlib import Path
-from typing import Optional, Type, List, Tuple, Iterable
+from typing import Optional, Type, List, Tuple, Iterable, Dict
 import sleap
 import numpy as np
 from diplomat.processing import Predictor, Config, Pose
@@ -13,22 +13,25 @@ from diplomat.utils.shapes import shape_iterator
 
 def _frame_iter(
     frame: sleap.LabeledFrame,
-    skeleton: sleap.Skeleton
+    skeleton: sleap.Skeleton,
+    track_to_idx: Dict[sleap.Track, int]
 ) -> Iterable[sleap.PredictedInstance]:
     for inst in frame.instances:
-        if(isinstance(inst, sleap.PredictedInstance) and (inst.skeleton == skeleton)):
-            yield inst
+        if((inst.track is not None) and isinstance(inst, sleap.PredictedInstance) and (inst.skeleton == skeleton)):
+            yield track_to_idx[inst.track], inst
 
 
 def _to_diplomat_poses(labels: sleap.Labels) -> Tuple[int, Pose, sleap.Video, sleap.Skeleton]:
     video = labels.video
     skeleton = labels.skeleton
-    num_outputs = max(sum(1 for _ in _frame_iter(frame, skeleton)) for frame in labels.frames(video))
+
+    tracks_to_idx = {track: i for i, track in enumerate(labels.tracks)}
+    num_outputs = len(labels.tracks)
 
     pose_obj = Pose.empty_pose(labels.get_labeled_frame_count(), len(skeleton.node_names) * num_outputs)
 
     for f_i, frame in enumerate(labels.frames(video)):
-        for i_i, inst in zip(range(num_outputs), _frame_iter(frame, skeleton)):
+        for i_i, inst in _frame_iter(frame, skeleton, tracks_to_idx):
             inst_data = inst.points_and_scores_array
 
             pose_obj.set_x_at(f_i, slice(i_i, None, num_outputs), inst_data[:, 0])
@@ -36,6 +39,7 @@ def _to_diplomat_poses(labels: sleap.Labels) -> Tuple[int, Pose, sleap.Video, sl
             pose_obj.set_prob_at(f_i, slice(i_i, None, num_outputs), inst_data[:, 2])
 
     return num_outputs, pose_obj, video, skeleton
+
 
 def _paths_to_str(paths):
     if(isinstance(paths, (list, tuple))):

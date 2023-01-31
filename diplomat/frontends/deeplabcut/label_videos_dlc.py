@@ -3,6 +3,7 @@ from os import PathLike
 from pathlib import Path
 from typing import List, Union, Optional, Dict, Any, Tuple
 import cv2
+import numpy as np
 import tqdm
 
 from .dlc_importer import auxiliaryfunctions
@@ -19,7 +20,9 @@ from diplomat.utils.shapes import shape_iterator, CV2DotShapeDrawer
 def cv2_fourcc_string(val) -> int:
     return int(cv2.VideoWriter_fourcc(*val))
 
+
 Pathy = Union[PathLike, str]
+
 
 LABELED_VIDEO_SETTINGS = {
     "skeleton_color": ("black", mpl_colors.to_rgba, "Color of the skeleton."),
@@ -34,14 +37,17 @@ LABELED_VIDEO_SETTINGS = {
     "output_codec": ("mp4v", cv2_fourcc_string, "The codec to use for the labeled video...")
 }
 
+
 class EverythingSet:
     def __contains__(self, item):
         return True
+
 
 def _to_str_list(path_list):
     if(isinstance(path_list, (list, tuple))):
         return [str(path) for path in path_list]
     return str(path_list)
+
 
 @extra_cli_args(LABELED_VIDEO_SETTINGS, auto_cast=False)
 @tc.typecaster_function
@@ -51,6 +57,7 @@ def label_videos(
     body_parts_to_plot: tc.Optional[tc.List[str]] = None,
     shuffle: int = 1,
     training_set_index: int = 0,
+    tracker: str = "",
     video_type: str = "",
     **kwargs
 ):
@@ -64,6 +71,7 @@ def label_videos(
                     the network. The default is 1.
     :param training_set_index: int, optional. Integer specifying which TrainingsetFraction to use. By default, the first
                                (note that TrainingFraction is a list in config.yaml).
+    :param tracker: String, the extension of the deeplabcut tracker used, used to find the h5 file. Doesn't need to be set for DIPLOMAT files.
     :param video_type: Optional string, the video extension to search for if the 'videos' argument is a directory
                        to search inside ('.avi', '.mp4', ...).
     :param kwargs: The following additional arguments are supported:
@@ -86,7 +94,7 @@ def label_videos(
 
     for video in video_list:
         try:
-            loc_data, metadata, out_path, h5_path = _get_video_info(video, dlc_scorer)
+            loc_data, metadata, out_path, h5_path = _get_video_info(video, dlc_scorer, tracker)
 
             if(Path(out_path).exists()):
                 print(f"Labeled video {Path(video).name} already exists...")
@@ -94,7 +102,6 @@ def label_videos(
         except FileNotFoundError:
             print(f"Unable to find h5 file for video {Path(video).name}. Make sure to run analysis first!")
             continue
-
 
         _create_video_single(
             Path(video),
@@ -106,13 +113,40 @@ def label_videos(
         )
 
 
-def _get_video_info(video: Pathy, dlc_scorer: str) -> Tuple[pd.DataFrame, Dict[str, Any], PathLike, PathLike]:
+def _convert_new_ma_dlc_hdf5(df: pd.DataFrame) -> pd.DataFrame:
+    lvls = df.columns.levels
+    names = [lvl.name for lvl in lvls]
+    scs, indvs, bps, coords = [list(df.columns.unique(name)) for name in names]
+
+    iterator = [(sc, i, ind, bp, coord) for sc in scs for bp in bps for i, ind in enumerate(indvs) for coord in coords]
+
+    new_cols = [(sc, bp, coord + ("" if (i == 0) else f"{i + 1}")) for sc, i, ind, bp, coord in iterator]
+    old_cols = [(sc, ind, bp, coord) for sc, i, ind, bp, coord in iterator]
+
+    df2 = pd.DataFrame(index=df.index, columns=pd.MultiIndex.from_tuples(new_cols, names=[names[0], *names[2:]]))
+
+    for old_col, new_col in zip(old_cols, new_cols):
+        df2[new_col] = df[old_col]
+
+    return df2
+
+
+def _get_video_info(video: Pathy, dlc_scorer: str, tracker_ext: str = "") -> Tuple[pd.DataFrame, Dict[str, Any], PathLike, PathLike]:
     video = Path(video)
     parent_folder = video.resolve().parent
 
-    h5_path = parent_folder / (video.stem + dlc_scorer + ".h5")
+    tracker_ext = f"_{tracker_ext}" if(tracker_ext != "") else tracker_ext
 
-    df_data = pd.read_hdf(str(h5_path), "df_with_missing")
+    h5_path = parent_folder / (video.stem + dlc_scorer + tracker_ext + ".h5")
+
+    try:
+        df_data = pd.read_hdf(str(h5_path), "df_with_missing")
+    except KeyError:
+        df_data = pd.read_hdf(str(h5_path))
+
+    if(len(df_data.columns.levels) == 4):
+        # We have a thing in the new MA-DLC format, convert to older MA-DLC format...
+        df_data = _convert_new_ma_dlc_hdf5(df_data)
 
     with (parent_folder / (video.stem + dlc_scorer + "_meta.pickle")).open("rb") as f:
         metadata = pickle.load(f)["data"]
@@ -121,9 +155,11 @@ def _get_video_info(video: Pathy, dlc_scorer: str) -> Tuple[pd.DataFrame, Dict[s
 
     return (df_data, metadata, final_video_path, h5_path)
 
+
 def _to_cv2_color(color: Tuple[float, float, float, float]) -> Tuple[int, int, int, int]:
     r, g, b, a = [min(255, max(0, int(val * 256))) for val in color]
     return (b, g, r, a)
+
 
 def _create_video_single(
     video_path: Pathy,
@@ -187,6 +223,9 @@ def _create_video_single(
         shapes = shape_iterator(plotting_settings.shape_list, num_outputs)
 
         for bp_idx, ((bp_x, bp_y, bp_p), color, shape) in enumerate(zip(body_part_data, colors, shapes)):
+            if(not (np.isfinite(bp_x[i]) and np.isfinite(bp_y[i]))):
+                continue
+
             shape_drawer = CV2DotShapeDrawer(
                 overlay,
                 _to_cv2_color(tuple(color[:3]) + (1,)),

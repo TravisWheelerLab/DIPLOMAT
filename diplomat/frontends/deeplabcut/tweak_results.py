@@ -15,6 +15,7 @@ def tweak_videos(
     videos: tc.Union[tc.List[tc.PathLike], tc.PathLike],
     shuffle: int = 1,
     training_set_index: int = 0,
+    tracker: str = "",
     video_type: str = "",
 ):
     """
@@ -24,6 +25,7 @@ def tweak_videos(
     :param videos: A single video or list of videos to tweak, passed in order to modify.
     :param shuffle: The shuffle index of the model used to track the video. Defaults to 1.
     :param training_set_index: The training index of the model used. Defaults to 0.
+    :param tracker: String, the extension of the deeplabcut tracker used, used to find the h5 file. Doesn't need to be set for DIPLOMAT files.
     :param video_type: An optional video extension to limit the videos to videos with the specified extension if a directory is passed to the
                        'videos' parameter.
     """
@@ -37,7 +39,7 @@ def tweak_videos(
 
     for video in video_list:
         try:
-            loc_data, metadata, out_path, h5_path = _get_video_info(video, dlc_scorer)
+            loc_data, metadata, out_path, h5_path = _get_video_info(video, dlc_scorer, tracker)
         except FileNotFoundError:
             print(f"Unable to find h5 file for video {Path(video).name}. Make sure to run analysis first!")
             continue

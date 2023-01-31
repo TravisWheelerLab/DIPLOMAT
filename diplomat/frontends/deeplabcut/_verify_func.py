@@ -8,15 +8,20 @@ def _verify_dlc_like(
     try:
         # DLC functions only accept a single path for the config, the path to the config.yaml...
         if(isinstance(config, (list, tuple))):
-            return False
+            if(len(config) > 1):
+                return False
+            config = config[0]
 
         import yaml
         with open(str(config)) as f:
             cfg = yaml.load(f, yaml.SafeLoader)
         # Check the config for DLC based keys...
-        expected_keys = {"Task", "scorer", "date", "project_path", "video_sets", "bodyparts"}
+        expected_keys = {"Task", "scorer", "date", "project_path", "video_sets", ("bodyparts", "multianimalbodyparts")}
         for key in expected_keys:
-            if(key not in cfg):
+            if(isinstance(key, str)):
+                key = (key,)
+
+            if(not any((sub_key in cfg) for sub_key in key)):
                 return False
 
         return True

@@ -20,10 +20,12 @@ import pandas as pd
 
 Pathy = Union[os.PathLike, str]
 
+
 def _to_str_list(path_list):
     if(isinstance(path_list, (list, tuple))):
         return [str(path) for path in path_list]
     return str(path_list)
+
 
 @tc.typecaster_function
 def analyze_videos(

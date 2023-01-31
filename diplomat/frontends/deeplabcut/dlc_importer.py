@@ -2,6 +2,7 @@ import warnings
 import builtins
 import os
 from importlib import import_module
+from importlib.util import find_spec
 
 
 def _dummy_print(*args, **kwargs):
@@ -22,7 +23,12 @@ def _silent_import(name, pkg=None):
             true_print = builtins.print
             builtins.print = _dummy_print
         try:
-            return import_module(name, pkg)
+            path = name.split(".")
+            if(len(path) == 1):
+                return import_module(name, pkg)
+            else:
+                mod = import_module(".".join(path[:-1]), pkg)
+                return getattr(mod, path[-1])
         finally:
             if(not debug_mode):
                 builtins.print = true_print
@@ -49,9 +55,16 @@ class LazyImporter:
         return self._mod(*args, **kwargs)
 
 
+# This enforces dlc exists so this module can't be imported when DLC doesn't exist, but still avoids
+# executing DLC's code which has a bunch of side effects...
+try:
+    find_spec("deeplabcut")
+except Exception as e:
+    raise ImportError(str(e))
+
 deeplabcut = LazyImporter("deeplabcut")
 predict = LazyImporter("deeplabcut.pose_estimation_tensorflow.core.predict")
 checkcropping = LazyImporter("deeplabcut.pose_estimation_tensorflow.predict_videos.checkcropping")
 load_config = LazyImporter("deeplabcut.pose_estimation_tensorflow.config.load_config")
-auxiliaryfunctions = LazyImporter("deeplabcut.pose_estimation_tensorflow.auxiliaryfunctions")
+auxiliaryfunctions = LazyImporter("deeplabcut.utils.auxiliaryfunctions")
 
