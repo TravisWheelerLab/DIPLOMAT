@@ -25,9 +25,25 @@ class NotAPool:
     def starmap(self, func: Callable[[T], E], iterable: Iterable[T]) -> Iterable[E]:
         return (func(*item) for item in iterable)
 
+
+# General log prob operations defined as function...
 to_log_space = np.log2
 from_log_space = np.exp2
-norm = lambda arr: arr - np.max(arr)
+
+def norm(arr):
+    """
+    Normalize in log space such that highest value is 1.
+    """
+    return arr - np.max(arr)
+
+
+def log_prob_complement(arr):
+    """
+    Take the complement of a probability in log space.
+    """
+    return to_log_space(1 - from_log_space(arr))
+
+
 
 NumericArray = Union[int, float, np.ndarray]
 
@@ -117,6 +133,8 @@ class MITViterbi(FramePass):
             self.height, self.width, self._scaled_std, conf.amplitude,
             conf.lowest_value, self._flatten_std, conf.square_distances
         )))
+
+        metadata.include_soft_domination = self.config.include_soft_domination
 
     def _init_skeleton(self, data: ForwardBackwardData):
         if("skeleton" in data.metadata):
@@ -280,6 +298,7 @@ class MITViterbi(FramePass):
                         fb_data.metadata,
                         ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob),
                         self._skeleton_tables if (self.config.include_skeleton) else None,
+                        self.config.soft_domination_weight,
                         self.config.skeleton_weight
                     ) for bp_i in range(fb_data.num_bodyparts)]
                 )
@@ -351,6 +370,7 @@ class MITViterbi(FramePass):
                         meta,
                         ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob),
                         self._skeleton_tables if (self.config.include_skeleton) else None,
+                        self.config.soft_domination_weight,
                         self.config.skeleton_weight
                     ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)]
                 )
@@ -375,6 +395,7 @@ class MITViterbi(FramePass):
         metadata: AttributeDict,
         transition_function: TransitionFunction,
         skeleton_table: Optional[StorageGraph] = None,
+        soft_dom_weight: float = 0,
         skeleton_weight: float = 0
     ) -> List[np.ndarray]:
         skel_res = cls._compute_from_skeleton(
@@ -384,6 +405,15 @@ class MITViterbi(FramePass):
             metadata,
             skeleton_table
         )
+
+        from_soft_dom = cls._compute_soft_domination(
+            prior,
+            current,
+            bp_idx,
+            metadata,
+            transition_function if(metadata.get("include_soft_domination", False)) else None,
+        )
+
         trans_res = cls.log_viterbi_between(
             current,
             prior[bp_idx],
@@ -391,7 +421,7 @@ class MITViterbi(FramePass):
         )
 
         return norm_together([
-            t + s * skeleton_weight for t, s in zip(trans_res, skel_res)
+            t + s * skeleton_weight + d * soft_dom_weight for t, s, d in zip(trans_res, skel_res, from_soft_dom)
         ])
 
     @classmethod
@@ -523,6 +553,77 @@ class MITViterbi(FramePass):
         return final_result
 
     @classmethod
+    def _compute_soft_domination(
+        cls,
+        prior: Union[List[ForwardBackwardFrame], List[List[Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]]]],
+        current_data: List[Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]],
+        bp_idx: int,
+        metadata: AttributeDict,
+        transition_func: Optional[TransitionFunction] = None,
+        merge_arrays: Callable[[Iterable[np.ndarray]], np.ndarray] = np.maximum.reduce,
+        merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.max,
+        merge_results: bool = True
+    ) -> Union[List[Tuple[int, List[NumericArray]]], List[NumericArray]]:
+        if(transition_func is None or metadata.num_outputs <= 1):
+            return [0] * len(current_data) if(merge_results) else []
+
+        bp_group_idx = bp_idx // metadata.num_outputs
+
+        results = []
+        final_result = [0] * len(current_data)
+
+        for other_idx in range(bp_group_idx * metadata.num_outputs, (bp_group_idx + 1) * metadata.num_outputs):
+            if(other_idx == bp_idx):
+                continue
+
+            # Grab the prior frame...
+            prior_frame = prior[other_idx]
+            if(isinstance(prior_frame, ForwardBackwardFrame)):
+                py, px, __, __, __ = prior_frame.src_data.unpack()
+
+                # If wasn't found, don't include in the result.
+                if(prior_frame.frame_probs is None):
+                    continue
+
+                z_a = lambda: np.array([0])
+                nf_a = lambda: np.array([-np.inf])
+
+                prior_data = [
+                    (prior_frame.frame_probs, (px, py) if(py is not None) else (z_a(), z_a())),
+                    (prior_frame.occluded_probs, prior_frame.occluded_coords.T),
+                    (np.array([prior_frame.enter_state]), (nf_a(), nf_a()))
+                ]
+            else:
+                prior_data = prior_frame
+
+            results.append((
+                other_idx,
+                # Find the best paths from other parts, then take the complement. This optimizes for avoiding
+                # paths from other parts....
+                [log_prob_complement(v) for v in cls.log_viterbi_between(
+                    current_data,
+                    prior_data,
+                    transition_func,
+                    merge_arrays,
+                    merge_internal
+                )]
+            ))
+
+        if(not merge_results):
+            return results
+
+        for __, bp_res in results:
+            for i, (current_total, bp_sub_res) in enumerate(zip(final_result, bp_res)):
+                merged_result = current_total + bp_sub_res
+                if(np.all(np.isneginf(merged_result))):
+                    continue
+                final_result[i] = merged_result
+
+            final_result = norm_together(final_result)
+
+        return final_result
+
+    @classmethod
     def _compute_normal_frame(
         cls,
         prior: List[ForwardBackwardFrame],
@@ -531,6 +632,7 @@ class MITViterbi(FramePass):
         metadata: AttributeDict,
         transition_function: TransitionFunction,
         skeleton_table: Optional[StorageGraph] = None,
+        soft_dom_weight: float = 0,
         skeleton_weight: float = 0
     ) -> List[ForwardBackwardFrame]:
         group_range = range(
@@ -596,6 +698,14 @@ class MITViterbi(FramePass):
                 skeleton_table
             )
 
+            from_soft_dom = cls._compute_soft_domination(
+                prior,
+                current_data,
+                bp_i,
+                metadata,
+                transition_function if(metadata.get("include_soft_domination", False)) else None,
+            )
+
             from_transition = cls.log_viterbi_between(
                 current_data,
                 prior_data,
@@ -603,8 +713,8 @@ class MITViterbi(FramePass):
             )
 
             results.append([
-                t + s * skeleton_weight
-                for t, s in zip(from_transition, from_skel)
+                t + s * skeleton_weight + d * soft_dom_weight
+                for t, s, d in zip(from_transition, from_skel, from_soft_dom)
             ])
 
             # Result coordinates, exclude the enter state...
@@ -722,6 +832,13 @@ class MITViterbi(FramePass):
                 "by prior passes... This is not a probability, but rather a "
                 "ratio."
             ),
+            "soft_domination_weight": (
+                1, float,
+                "A positive float, determines how much impact probabilities "
+                "from soft domination transitions should have in each "
+                "forward/backward step if soft domination was enabled "
+                "This is not a probability, but rather a ratio."
+            ),
             "amplitude": (
                 1, float,
                 "The max amplitude of the 2D Gaussian curve used for "
@@ -762,6 +879,11 @@ class MITViterbi(FramePass):
                 "A boolean. If True, include skeleton information in the "
                 "forward backward pass, otherwise don't. If no skeleton has "
                 "been built in a prior pass, does nothing."
+            ),
+            "include_soft_domination": (
+                False, bool,
+                "A boolean, if True, enable soft domination in MIT-Viterbi algorithm."
+                "Otherwise soft domination probabilities are excluded."
             ),
             "square_distances": (
                 False, bool,

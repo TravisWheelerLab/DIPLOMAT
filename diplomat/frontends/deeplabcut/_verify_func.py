@@ -1,5 +1,6 @@
 from diplomat.processing.type_casters import Union, List, PathLike, typecaster_function
 
+
 @typecaster_function
 def _verify_dlc_like(
     config: Union[List[PathLike], PathLike],
