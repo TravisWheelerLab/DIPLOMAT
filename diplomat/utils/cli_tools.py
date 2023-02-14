@@ -19,17 +19,19 @@ from diplomat.processing.type_casters import (
     ConvertibleTypeCaster
 )
 
+
 class CLIError(Exception):
     """
-    A custom exception thrown when an error occurs when attempting to parse user CLI inputs. Used for handling cli parsing error
-    gracefully internally.
+    A custom exception thrown when an error occurs when attempting to parse user CLI inputs. Used for handling cli
+    parsing error gracefully internally.
     """
     pass
 
+
 class Flag(ConvertibleTypeCaster):
     """
-    Custom type caster type that represents a boolean flag argument on the command line (true/false doesn't need to be specified). It's python
-    type is automatically converted to a boolean.
+    Custom type caster type that represents a boolean flag argument on the command line (true/false doesn't need to be
+    specified). It's python type is automatically converted to a boolean.
     """
     def __call__(self, arg: Any) -> bool:
         return bool(arg)
@@ -40,7 +42,9 @@ class Flag(ConvertibleTypeCaster):
     def __repr__(self):
         return type(self).__name__
 
+
 Flag = Flag()
+
 
 class YAMLArgHelpFormatter(HelpFormatter):
     def _format_args(self, action: Action, default_metavar: str) -> str:
@@ -128,6 +132,7 @@ class ComplexParsingWrapper:
 
 def get_summary_from_doc_str(doc_str: str) -> str:
     return "".join(re.split(":param |:return|:throw", doc_str)[:1])
+
 
 def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> ArgumentParser:
     parser.formatter_class = YAMLArgHelpFormatter
@@ -306,6 +311,7 @@ def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True) -> Callable[
 def allow_arbitrary_flags(func: Callable) -> Callable:
     func.__allow_arbitrary_flags = True
     return func
+
 
 def positional_argument_count(amt: int) -> Callable[[Callable], Callable]:
     def attach_pos_args(func: Callable) -> Callable:

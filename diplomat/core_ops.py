@@ -1,22 +1,26 @@
 import os
 import sys
-from diplomat.processing.type_casters import typecaster_function, PathLike, Union, Optional, List, Dict, Any, get_typecaster_annotations
+from diplomat.processing.type_casters import typecaster_function, PathLike, Union, Optional, List, Dict, Any, get_typecaster_annotations, NoneType, get_typecaster_required_arguments
 from diplomat.utils.pretty_printer import printer as print
-from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags, Flag
+from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags, Flag, positional_argument_count, CLIError
 from argparse import ArgumentParser
 import typing
 from types import ModuleType
 from diplomat.utils.tweak_ui import UIImportError
 
 
-def _get_casted_args(tc_func, extra_args):
+class ArgumentError(CLIError):
+    pass
+
+def _get_casted_args(tc_func, extra_args, error_on_miss=True):
     """
-    PRIVATE: Get correctly casted extra arguments for the provided typecasting function. Any arguments that don't match those in the function
-             get thrown out.
+    PRIVATE: Get correctly casted extra arguments for the provided typecasting function. Any arguments that don't
+    match those in the function get thrown out.
     """
     def_tcs = get_typecaster_annotations(tc_func)
     extra = getattr(tc_func, "__extra_args", {})
     autocast = getattr(tc_func, "__auto_cast", True)
+    allow_arb = getattr(tc_func, "__allow_arbitrary_flags", False)
 
     new_args = {}
 
@@ -26,9 +30,20 @@ def _get_casted_args(tc_func, extra_args):
         elif(k in extra):
             new_args[k] = extra[k][1](v) if(autocast) else v
         else:
-            print(f"Warning: command '{tc_func.__name__}' does not have an argument called '{k}', ignoring the argument...")
+            if(allow_arb):
+                new_args[k] = k
+                continue
+            msg = (
+                f"Warning: command '{tc_func.__name__}' does not have "
+                f"an argument called '{k}'!"
+            )
+            if(not error_on_miss):
+                print(f"{msg} Ignoring the argument...")
+            else:
+                raise ArgumentError(msg)
 
     return new_args
+
 
 def _find_frontend(config: os.PathLike, **kwargs: typing.Any) -> typing.Tuple[str, ModuleType]:
     from diplomat import _LOADED_FRONTENDS
@@ -41,8 +56,10 @@ def _find_frontend(config: os.PathLike, **kwargs: typing.Any) -> typing.Tuple[st
             print(f"Frontend '{name}' selected.")
             return (name, funcs)
 
-    print("Could not find a frontend that correctly handles the passed config and other arguments. Make sure the config passed is valid.")
+    print("Could not find a frontend that correctly handles the passed config and other arguments. Make sure the "
+          "config passed is valid.")
     sys.exit(1)
+
 
 def _display_help(
     frontend_name: str,
@@ -60,6 +77,70 @@ def _display_help(
 
         print(f"\n\nDocstring for {frontend_name}'s {method_type} method:\n")
         help_dumper.help(command_func)
+
+
+@allow_arbitrary_flags
+@typecaster_function
+@positional_argument_count(1)
+def yaml(
+    run_config: Union[PathLike, NoneType] = None,
+    **extra_args
+):
+    """
+    Run DIPLOMAT based on a passed yaml run script. The yaml script should include a 'command' key specifying the
+    DIPLOMAT sub-command to run and an 'arguments' key specifying the list of arguments (key-value pairs) to
+    pass to the command.
+
+    :param run_config: The path to the YAML configuration file to use to configure the running of DIPLOMAT.
+                       If this value is not specified or is None, read the yaml from standard output.
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the selected
+                       command, as specified in the YAML file. Additional arguments passed with the same name as ones
+                       found in the YAML file will overwrite the values found in the YAML file.
+
+    :return: Returns the value returned by the selected diplomat command.
+    """
+    import yaml
+
+    if(run_config is None):
+        data = yaml.load(sys.stdin, yaml.SafeLoader)
+    else:
+        with open(str(run_config), "r") as f:
+            data = yaml.load(f, yaml.SafeLoader)
+
+    command_name = data.get("command", None)
+    arguments = data.get("arguments", {})
+
+    if(not isinstance(command_name, str)):
+        raise ArgumentError(f"Yaml file 'command' attribute does not have a value that is a string.")
+    if(not isinstance(arguments, dict)):
+        raise ArgumentError(f"Yaml file 'arguments' attribute not a list of key-value pairs, or mapping.")
+
+    # Load the command...
+    from diplomat._cli_runner import get_dynamic_cli_tree
+    cli_tree = get_dynamic_cli_tree()
+
+    sub_tree = cli_tree
+    for command_part in command_name.strip().split():
+        try:
+            sub_tree = cli_tree[command_part]
+        except KeyError:
+            raise ArgumentError(f"Command '{command_name}' is not a valid diplomat command.")
+
+    try:
+        get_typecaster_annotations(sub_tree)
+    except TypeError:
+        raise ArgumentError(f"Command '{command_name}' is not a valid diplomat command.")
+
+    arguments.update(extra_args)
+
+    for arg in get_typecaster_required_arguments(sub_tree):
+        if(arg not in arguments):
+            raise ArgumentError(
+                f"Command '{command_name}' requires '{arg}' to be passed, include it in the yaml file or pass it as a "
+                f"flag to this command."
+            )
+
+    return sub_tree(**_get_casted_args(sub_tree, arguments))
 
 
 @allow_arbitrary_flags
@@ -90,8 +171,7 @@ def track(
                                to True to print additional settings for the selected frontend instead of running tracking.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with extra_help flag set to true. Extra arguments that are not found in the frontend
-                       analysis function are thrown out.
+                       To see valid values, run track with extra_help flag set to true.
     """
     from diplomat import CLI_RUN
 
@@ -165,8 +245,7 @@ def unsupervised(
                      frontend instead of running tracking.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with extra_help flag set to true. Extra arguments that are not found in the frontend
-                       analysis function are thrown out.
+                       To see valid values, run track with extra_help flag set to true.
     """
     track(
         config=config,
@@ -207,8 +286,7 @@ def supervised(
                      frontend instead of running tracking.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with extra_help flag set to true. Extra arguments that are not found in the frontend
-                       analysis function are thrown out.
+                       To see valid values, run track with extra_help flag set to true.
     """
     track(
         config=config,
@@ -238,8 +316,7 @@ def annotate(
     :param videos: A single path or list of paths to video files run annotation on.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running video annotation.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run annotate with extra_help flag set to true. Extra arguments that are not found in the frontend
-                       analysis function are thrown out.
+                       To see valid values, run annotate with extra_help flag set to true.
     """
     from diplomat import CLI_RUN
 
@@ -277,8 +354,7 @@ def tweak(
     :param videos: A single path or list of paths to video files to tweak the tracks of.
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of showing the UI.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run tweak with extra_help flag set to true. Extra arguments that are not found in the frontend
-                       tweak function are thrown out.
+                       To see valid values, run tweak with extra_help flag set to true.
     """
     from diplomat import CLI_RUN
 

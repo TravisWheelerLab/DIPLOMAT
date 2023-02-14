@@ -9,12 +9,12 @@ import decimal
 import os
 import typing
 from pathlib import Path
-
 from typing_extensions import Protocol, runtime_checkable
 import inspect
 
 
 T = typing.TypeVar("T")
+
 
 @runtime_checkable
 class TypeCaster(Protocol[T]):
@@ -185,6 +185,23 @@ def get_typecaster_annotations(func: TypeCasterFunction) -> typing.Dict[str, Typ
 
     return res
 
+
+def get_typecaster_required_arguments(func: TypeCasterFunction) -> typing.Set[str]:
+    """
+    Get the arguments that must be passed to this typecasting function (one's that lack a default argument).
+
+    :param func: The type caster function to extract required arguments from.
+
+    :return: A set of strings, being the names of arguments that must be passed to this function for it to run.
+    """
+    ignore = [inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL]
+
+    return {
+        name for name, value in inspect.signature(func).parameters.items()
+        if(value.default is inspect.Parameter.empty and value.kind not in ignore)
+    }
+
+
 def get_typecaster_kwd_arg_name(func: TypeCasterFunction) -> typing.Optional[str]:
     """
     Get the name of the wildcard keyword argument for this type caster function if it exists.
@@ -194,6 +211,7 @@ def get_typecaster_kwd_arg_name(func: TypeCasterFunction) -> typing.Optional[str
     :returns: The name of the keyword argument, or None if this function has no wild keyword argument.
     """
     return getattr(func, "_type_caster_kwd_name", None)
+
 
 def to_hint(t: TypeCaster) -> typing.Type:
     """
@@ -211,6 +229,7 @@ def to_hint(t: TypeCaster) -> typing.Type:
         return t.to_type_hint()
 
     raise ValueError(f"Unable to convert '{t}' to a python type hint!")
+
 
 def to_metavar(t: TypeCaster) -> str:
     """
@@ -466,8 +485,10 @@ class NoneType(SingletonConvertibleTypeCaster):
     def __repr__(self) -> str:
         return "None"
 
+
 NoneType: ConvertibleTypeCaster = NoneType()
 """Represents None as a type caster."""
+
 
 class Union(ConvertibleTypeCaster):
     """
@@ -647,6 +668,7 @@ class PathLike(Union, SingletonConvertibleTypeCaster):
 
     def to_type_hint(self) -> typing.Type:
         return Union[os.PathLike, str]
+
 
 PathLike: ConvertibleTypeCaster = PathLike()
 """Represents os.PathLike as a type caster."""

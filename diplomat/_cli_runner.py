@@ -22,8 +22,10 @@ def get_static_cli_tree() -> dict:
         "annotate": diplomat.annotate,
         "split_videos": diplomat.split_videos,
         "tweak": diplomat.tweak,
+        "yaml": diplomat.yaml,
         "frontends": {
-            "__description": "Contains subcommands for listing available frontends and inspecting the functions each frontend supports.",
+            "__description": "Contains subcommands for listing available frontends and inspecting the functions "
+                             "each frontend supports.",
             "_category": "dev",
             "list": {
                 "__description": "List DIPLOMAT frontends and their descriptions.",
