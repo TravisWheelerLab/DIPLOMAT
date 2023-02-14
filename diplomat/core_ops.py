@@ -10,7 +10,9 @@ from diplomat.utils.tweak_ui import UIImportError
 
 
 class ArgumentError(CLIError):
+    """ Error in arguments passed to CLI Command """
     pass
+
 
 def _get_casted_args(tc_func, extra_args, error_on_miss=True):
     """

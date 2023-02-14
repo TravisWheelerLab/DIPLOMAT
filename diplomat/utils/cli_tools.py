@@ -172,7 +172,12 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> Argumen
         abbr_cmd = "-" + "".join(s[:1] for s in name.split("_"))
         if(pos_arg_count > 0):
             if("nargs" in args):
-                args["nargs"] = 1 if(pos_arg_count > 1) else "+"
+                if(pos_arg_count > 1):
+                    args["nargs"] = 1
+                else:
+                    # A default argument for positional arguments only works if the argument is in the last position.
+                    no_default = signature.parameters[name].default is inspect.Parameter.empty
+                    args["nargs"] = "+" if(no_default) else "*"
             parser.add_argument(name, **args)
             pos_arg_count -= 1
         elif(abbr_cmd in abbr_set):
