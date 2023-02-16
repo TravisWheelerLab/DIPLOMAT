@@ -19,6 +19,7 @@ class UIImportError(ImportError):
     """
     pass
 
+
 class _DummySubPoseList(Sequence[ForwardBackwardFrame]):
     def __init__(self, sub_index: Union[int, slice], poses: Pose):
         self._sub_index = sub_index
@@ -83,6 +84,7 @@ class _DummyForwardBackwardData(ForwardBackwardData):
     @frames.setter
     def frames(self, val: Sequence[Sequence[ForwardBackwardFrame]]):
         raise NotImplementedError("Direct setting not supported by this dummy data structure...")
+
 
 class _DummyFramePassEngine:
     def __init__(
@@ -232,7 +234,6 @@ class TweakUI:
                 " or diplomat was installed with optional dependencies enabled."
             )
 
-
     def tweak(
         self,
         parent,
@@ -254,6 +255,7 @@ class TweakUI:
         :param bodypart_names: A list of strings, the names for each body part.
         :param video_metadata: Various required video info needed to set up the UI to handle the video and specify appearance settings. See
                                the video_metadata attribute of Predictors to get more information about the required attributes for this dictionary.
+        :param num_outputs: An integer, the number of each individual in the tracking data.
         :param crop_box: A tuple of 4 integers (x, y, width, height), specifying the box to crop results to within the video.
         :param on_end: A callable that is executed when the user attempts to save there results or close the window. Two arguments are passed, a
                        boolean specifying if the user wants to save the modified results (True if they do), and a Pose object containing the user

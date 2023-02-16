@@ -5,7 +5,7 @@ from .guilib.fpe_editor import FPEEditor
 from .guilib.progress_dialog import FBProgressDialog
 from ..fpe.frame_pass_engine import FramePassEngine, SparseTrackingData
 from ..fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData
-from .labelers import Approximate, Point
+from .labelers import Approximate, Point, NearestInSource
 from .scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
 
 import wx
@@ -16,6 +16,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use("Agg")
+
 
 class SupervisedFramePassEngine(FramePassEngine):
     """
@@ -66,7 +67,7 @@ class SupervisedFramePassEngine(FramePassEngine):
             self._get_names(),
             self.video_metadata,
             self._get_crop_box(),
-            [Approximate(self), Point(self)],
+            [Approximate(self), Point(self), NearestInSource(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
             list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs)
         )

@@ -94,8 +94,10 @@ class Slider(SettingWidget):
     def get_value(self) -> int:
         return self._value
 
+
 def first_non_none(*vals):
     return next((v for v in vals if(v is not None)), None)
+
 
 class FloatSpin(SettingWidget):
     """

@@ -5,7 +5,7 @@ from collections import UserList
 from pathlib import Path
 
 from diplomat.predictors.supervised_fpe.guilib.progress_dialog import FBProgressDialog
-from diplomat.predictors.supervised_fpe.labelers import Approximate, Point
+from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, NearestInSource
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
@@ -551,7 +551,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         # Return false to not clear the history....
         return False
 
-
     def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         self._run_frame_passes(progress_bar)
 
@@ -575,7 +574,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._get_names(),
             self.video_metadata,
             self._get_crop_box(),
-            [Approximate(self), Point(self)],
+            [Approximate(self), Point(self), NearestInSource(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
             list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs)
         )
