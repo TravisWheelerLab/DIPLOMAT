@@ -30,6 +30,7 @@ def analyze_videos(
     predictor: tc.Optional[str] = None,
     predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None,
     gpu_index: tc.Optional[int] = None,
+    output_suffix: str = "",
     refinement_kernel_size: int = 5,
     use_cpu: Flag = False,
     **kwargs
@@ -46,6 +47,7 @@ def analyze_videos(
                                see :py:cli:`diplomat predictors list_settings` or :py:func:`~diplomat.predictor_ops.get_predictor_settings` to get
                                the settings a predictor plugin supports.
     :param gpu_index: An integer, the index of the GPU to use. If not set DIPLOMAT allows SLEAP to automatically select a GPU.
+    :param output_suffix: A string, the suffix to append onto the output .slp file. Defaults to an empty string.
     :param refinement_kernel_size: An integer, the kernel size to use for creating offset maps if they don't exist (via integral refinement).
                                    defaults to False, if set to 0 or a negative integer disables integral refinement.
     :param use_cpu: A boolean, if True force SLEAP to use the CPU to run the model. Defaults to False.
@@ -86,6 +88,7 @@ def analyze_videos(
             visual_settings,
             mdl_metadata,
             predictor_settings,
+            output_suffix
         )
 
 
@@ -96,11 +99,12 @@ def _analyze_single_video(
     num_outputs: int,
     visual_settings: Config,
     mdl_metadata: dict,
-    predictor_settings: Optional[dict]
+    predictor_settings: Optional[dict],
+    output_suffix: str
 ):
     video_path = Path(video_path).resolve()
     video = sleap.load_video(str(video_path))
-    output_path = video_path.parent / (video_path.name + f".diplomat_{predictor_cls.get_name()}.slp")
+    output_path = video_path.parent / (video_path.name + f".diplomat_{predictor_cls.get_name()}{output_suffix}.slp")
 
     video_metadata = _get_video_metadata(video_path, output_path, num_outputs, video, visual_settings, mdl_metadata)
     pred = predictor_cls(

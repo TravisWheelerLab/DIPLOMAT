@@ -32,6 +32,7 @@ def analyze_frames(
     num_outputs: tc.Optional[int] = None,
     predictor: tc.Optional[str] = None,
     predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None,
+    output_suffix: str = "",
     refinement_kernel_size: int = 5,
     **kwargs
 ):
@@ -46,6 +47,7 @@ def analyze_frames(
     :param predictor_settings: A dictionary of strings to any values, the settings to use for the predictor. Each predictor offers different settings,
                                see :py:cli:`diplomat predictors list_settings` or :py:func:`~diplomat.predictor_ops.get_predictor_settings` to get
                                the settings a predictor plugin supports.
+    :param output_suffix: A string, the suffix to append onto the output .slp file. Defaults to an empty string.
     :param refinement_kernel_size: An integer, the kernel size to use for creating offset maps if they don't exist (via integral refinement).
                                    defaults to False, if set to 0 or a negative integer disables integral refinement.
     :param kwargs: The following additional arguments are supported:
@@ -83,6 +85,7 @@ def analyze_frames(
             visual_settings,
             predictor_settings,
             batch_size,
+            output_suffix
         )
 
 
@@ -94,10 +97,11 @@ def _analyze_frame_store(
     visual_settings: Config,
     predictor_settings: Optional[dict],
     batch_size: int,
+    output_suffix: str
 ):
     frame_store_path = Path(frame_store_path).resolve()
     video_path = frame_store_path if (is_video(frame_store_path)) else None
-    output_path = frame_store_path.parent / (frame_store_path.name + f".diplomat_{predictor_cls.get_name()}.slp")
+    output_path = frame_store_path.parent / (frame_store_path.name + f".diplomat_{predictor_cls.get_name()}{output_suffix}.slp")
 
     # LOAD the frame store file...
     with frame_store_path.open("rb") as frame_store:
