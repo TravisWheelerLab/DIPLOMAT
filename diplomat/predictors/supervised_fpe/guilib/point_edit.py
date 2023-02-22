@@ -360,6 +360,9 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
             y = self._poses.get_y_at(frame, bp_idx)
             prob = self._poses.get_prob_at(frame, bp_idx)
 
+            if(np.isnan(x) or np.isnan(y)):
+                continue
+
             wx_color = wx.Colour(*color)
 
             if(prob < self._plot_threshold):

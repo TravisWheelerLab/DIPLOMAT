@@ -43,7 +43,11 @@ class _DummySubPoseList(Sequence[ForwardBackwardFrame]):
 
     @staticmethod
     def _get_item_single(x: float, y: float, p: float) -> ForwardBackwardFrame:
+        if(np.isnan(x) or np.isnan(y)):
+            x, y, p = 0, 0, 0
+
         sx, sy, sp, sox, soy = _DummyFramePassEngine.video_to_scmap_coord((x, y, p))
+
         res = SparseTrackingData().pack([sy], [sx], [sp], [sox], [soy])
         return ForwardBackwardFrame(
             orig_data=res,

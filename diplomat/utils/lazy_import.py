@@ -24,13 +24,14 @@ def _simple_import(name: str, pkg: Optional[str] = None) -> ModuleType:
         return getattr(mod, path[-1])
 
 
+def _dummy_print(*args, **kwargs):
+    pass
+
+
 def _silent_import(name: str, pkg: Optional[str] = None) -> ModuleType:
     with warnings.catch_warnings():
         # Keep deeplabcut from flooding diplomat with warning messages and print statements...
         debug_mode = os.environ.get("DIPLOMAT_DEBUG", False)
-
-        def _dummy_print(*args, **kwargs):
-            pass
 
         if(not debug_mode):
             os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
