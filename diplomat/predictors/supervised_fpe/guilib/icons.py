@@ -162,6 +162,18 @@ kXEeQvt5HlJtBxrAAm/XP5IkXTsDAxMPNBl81CWsGKsLJB6iRDzpAJQMEBFPBnD48b+GAu0MDJGz
 SY54VMBIasSjaafMdmwAAI2/hN8=
 """
 
+SWAP_IDENTITIES_SIZE = (64, 64)
+SWAP_IDENTITIES_ICON = b"""
+eJztl69LQ1EUx5+8LY8tbDCb+Bc417QJJtEiNsGwF2yiYBEsBovFoNgsUzAZLGrVIjZRmDDjRINF
+0DDYcb+Ud+/5nuu5e8Hiifecz+dd7q93bxD8xx9ErlwYDMyW5tcPLhtE4zyXystcemQq2j65fafv
+yLKS8OhxGJDh3Nr+Rb1JZrwBnAgKKi3icYNwD8ExxPWCLYyrBUsCrhVMGul8LZaqFRUCq6ZwH8uh
+HhQbBv4xFHgJjHQ77tgHnAIbp1PeQ4eA4bQDhkgUcJyWAS8JAE7TiMeCYnxun/vTOAp5JLCaeuug
+mcY8F7CGrqAu4KwedKgjOBd5U1CvMbwr2JN5ONxxvCNYdfCCIL4gKrMuHgrMTRk6eSCAh4Je4Im3
+BfGBpydfPCmfsP8Jxy/h/P2+fqIZbzwuiForShzun6hFuzpc3L9nSlw6Px60uHB+fdq/HxEXzk/0
+i/Q5vyf0OBQseuBIsOmDA8GhF24NYjuu/HB2f3gxs/73l4yRDavur/P701ggCCAesfvbQoAFSpw2
+7JqeQIvzCewK1Dhd87qw6nF/fwWVrvdDyn4/ZORaV/y8X0qD8f3IlR19/Q99fAGnbhGP
+"""
+
 
 def to_wx_bitmap(icon_bytes: bytes, icon_size: Tuple[int, int], fg_color: wx.Colour, bitmap_size: Tuple[int, int] = None):
     """

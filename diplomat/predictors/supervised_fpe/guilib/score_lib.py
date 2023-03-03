@@ -6,6 +6,7 @@ import wx
 from diplomat.processing import *
 import numpy as np
 
+
 class ScoreEngine(ABC):
     """
     Represents a "ScoreEngine" which assigns scores to every frame that can be

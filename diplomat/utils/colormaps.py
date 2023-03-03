@@ -32,6 +32,7 @@ def to_colormap(cmap: Union[None, str, list, Colormap] = None) -> Colormap:
 # Threshold for allowing colormaps to be treated as listed...
 _MAX_LISTED_THRESHOLD = 0.05
 
+
 def iter_colormap(cmap: Colormap, count: int, bytes: bool = False) -> Sequence[Tuple[float, float, float, float]]:
     """
     Iterate a matplotlib colormap, returning a sequence of colors sampled from it.

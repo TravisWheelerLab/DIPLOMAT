@@ -636,6 +636,7 @@ def test_demo_displayer():
 
     app.MainLoop()
 
+
 def print_all_sys_colors():
     for attr in dir(wx):
         if(attr.startswith("SYS_COLOUR")):

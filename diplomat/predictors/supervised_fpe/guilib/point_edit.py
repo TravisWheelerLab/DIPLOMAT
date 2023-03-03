@@ -903,6 +903,10 @@ class ColoredRadioBox(wx.Panel):
         self._main_sizer.Add(self._scroller, 1, wx.EXPAND)
         self.SetSizerAndFit(self._main_sizer)
 
+    @property
+    def ids(self):
+        return self._ids
+
     def _correct_sidebar_size(self, forward_now = True):
         """
         PRIVATE: Fixes the size of the radio box to account for the scrollbar...

@@ -3,6 +3,8 @@ import wx
 import cv2
 import numpy as np
 from typing import List, Any, Tuple, Optional, Callable, Mapping
+
+from .id_swap_dialog import IdSwapDialog
 from .point_edit import PointEditor, PointViewNEdit, PoseLabeler
 from .progress_dialog import FBProgressDialog
 from .score_lib import ScoreEngine, ScoreEngineDisplayer
@@ -13,6 +15,7 @@ from .video_player import VideoController
 from wx.lib.scrolledpanel import ScrolledPanel
 from collections import deque
 from . import icons
+from .identity_swapper import IdentitySwapper
 
 
 class History:
@@ -167,6 +170,7 @@ class FPEEditor(wx.Frame):
 
     TOOLBAR_ICON_SIZE = (32, 32)
     HIST_POSE_CHANGE = "pose_change"
+    HIST_IDENTITY_SWAP = "id_swap"
 
     def __init__(
         self,
@@ -178,6 +182,7 @@ class FPEEditor(wx.Frame):
         crop_box: Box,
         labeling_modes: List[PoseLabeler],
         score_engines: List[ScoreEngine],
+        identity_swapper: Optional[IdentitySwapper] = None,
         part_groups: Optional[List[str]] = None,
         w_id=wx.ID_ANY,
         title="",
@@ -199,6 +204,7 @@ class FPEEditor(wx.Frame):
         :param crop_box: The cropping box of the video which poses were actually predicted on. The format is: (x, y, width, height)...
         :param labeling_modes: A list of pose labelers, labeling modes to enable in the UI.
         :param score_engines: A list of scoring engines to produce scores in the UI.
+        :param identity_swapper: An identity swapper object, enables identity swapping functionality in the UI.
         :param part_groups: An optional list of integers, the group to place a body part in when building the selection
                             list on the side.
         :param w_id: The WX ID of the window. Defaults to wx.ID_ANY
@@ -210,10 +216,17 @@ class FPEEditor(wx.Frame):
         """
         super().__init__(parent, w_id, title, pos, size, style | wx.WANTS_CHARS, name)
 
+        self._identity_swapper = identity_swapper
+
         self._history = History()
         self._history.set_change_handler(self._update_hist_btns)
         self._history.register_undoer(self.HIST_POSE_CHANGE, self._pose_doer)
         self._history.register_redoer(self.HIST_POSE_CHANGE, self._pose_doer)
+        if(self._identity_swapper is not None):
+            self._history.register_undoer(self.HIST_IDENTITY_SWAP, self._identity_swapper.undo)
+            self._history.register_redoer(self.HIST_IDENTITY_SWAP, self._identity_swapper.redo)
+            self._identity_swapper.set_extra_hook(self._id_swap_hook)
+
         self._fb_runner = None
         self._frame_exporter = None
 
@@ -349,7 +362,6 @@ class FPEEditor(wx.Frame):
         ]
         entries.extend(other_entries)
 
-
         with HelpDialog(self, entries, self.TOOLBAR_ICON_SIZE) as d:
             d.ShowModal()
 
@@ -388,6 +400,9 @@ class FPEEditor(wx.Frame):
         export_bmp = icons.to_wx_bitmap(icons.DUMP_FRAMES_ICON, icons.DUMP_FRAMES_SIZE,
                                         self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
 
+        swap_id_bmp = icons.to_wx_bitmap(icons.SWAP_IDENTITIES_ICON, icons.SWAP_IDENTITIES_SIZE,
+                                         self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
+
         spin_ctrl = wx.SpinCtrl(self._toolbar, min=1, max=50, initial=PointViewNEdit.DEF_FAST_MODE_SPEED_FRACTION)
         spin_ctrl.SetMaxSize(wx.Size(-1, self.TOOLBAR_ICON_SIZE[1]))
         spin_ctrl.Bind(wx.EVT_SPINCTRL, self._on_spin)
@@ -412,6 +427,15 @@ class FPEEditor(wx.Frame):
         self._run = self._toolbar.CreateTool(wx.ID_ANY, "Run Frame Passes", run_bmp,
                                              shortHelp="Rerun the frame passes on user modified results.")
         self._toolbar.AddTool(self._run)
+
+        self._swap_id = self._toolbar.CreateTool(wx.ID_ANY, "Swap Identities", swap_id_bmp,
+                                                 shortHelp="Swap body part positions for this frame and all frames in "
+                                                           "front of it.")
+        if(self._identity_swapper is None):
+            self._swap_id.Hide()
+        else:
+            self._toolbar.AddTool(self._swap_id)
+
         self._save = self._toolbar.CreateTool(wx.ID_ANY, "Save Results", save_bmp,
                                               shortHelp="Save the current results to file.")
         self._toolbar.AddTool(self._save)
@@ -434,9 +458,30 @@ class FPEEditor(wx.Frame):
         self._update_hist_btns(self._history)
         self.Bind(wx.EVT_TOOL, self.on_tool)
 
-        self._tools = [self._b_frame, self._f_frame, self._undo, self._redo, self._run, self._save, self._turtle,
-                       self._export_btn, self._help]
-        self._bitmaps = [p_f_bmp, n_f_bmp, b_bmp, f_bmp, run_bmp, save_bmp, turtle_bmp, export_bmp, help_bmp]
+        self._tools = [
+            self._b_frame,
+            self._f_frame,
+            self._undo,
+            self._redo,
+            self._run,
+            self._swap_id,
+            self._save,
+            self._turtle,
+            self._export_btn,
+            self._help
+        ]
+        self._bitmaps = [
+            p_f_bmp,
+            n_f_bmp,
+            b_bmp,
+            f_bmp,
+            run_bmp,
+            swap_id_bmp,
+            save_bmp,
+            turtle_bmp,
+            export_bmp,
+            help_bmp
+        ]
 
         self._toolbar.Realize()
 
@@ -609,6 +654,30 @@ class FPEEditor(wx.Frame):
             self._move_to_poor_label(True)
         elif(evt.GetId() == self._b_frame.GetId()):
             self._move_to_poor_label(False)
+        elif((self._identity_swapper is not None) and (evt.GetId() == self._swap_id.GetId())):
+            self._display_id_swap_dialog()
+
+    def _display_id_swap_dialog(self):
+        self.video_player.video_viewer.pause()
+        num_outputs = len(self.video_player.select_box.ids)
+        labels = self.video_player.select_box.get_labels()
+        with IdSwapDialog(None, wx.ID_ANY, num_outputs=num_outputs, labels=labels) as dlg:
+            if(dlg.ShowModal() == wx.ID_OK):
+                self._do_id_swap(dlg.get_proposed_order())
+
+    def _do_id_swap(self, new_order: List[int]):
+        current_offset = self.video_player.video_viewer.get_offset_count()
+        self._history.do(
+            self.HIST_IDENTITY_SWAP,
+            self._identity_swapper.do(current_offset, new_order)
+        )
+
+    def _id_swap_hook(self, frame: int, new_order: List[int]):
+        self.video_player.video_viewer.pause()
+        self.video_player.video_viewer.set_offset_frames(frame)
+        poses = self.video_player.video_viewer.get_all_poses()
+        poses[frame:, np.arange(poses.shape[1])] = poses[frame:, new_order]
+        self.video_player.video_viewer.set_all_poses(poses)
 
     def _save_and_close(self):
         self.Destroy()

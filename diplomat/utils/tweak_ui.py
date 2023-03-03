@@ -230,8 +230,10 @@ class TweakUI:
 
             from diplomat.predictors.supervised_fpe.labelers import Point
             from diplomat.predictors.supervised_fpe.scorers import MaximumJumpInStandardDeviations, EntropyOfTransitions
+            from diplomat.predictors.supervised_fpe.guilib.identity_swapper import IdentitySwapper
             self._labeler_class = Point
             self._scorer_classes = [MaximumJumpInStandardDeviations, EntropyOfTransitions]
+            self._id_class = IdentitySwapper
         except ImportError:
             raise UIImportError(
                 "Unable to load wx UI, make sure wxPython is installed,"
@@ -290,6 +292,7 @@ class TweakUI:
             crop_box,
             [self._labeler_class(fake_fpe)],
             [sc(fake_fpe) for sc in self._scorer_classes],
+            self._id_class(fake_fpe),
             list(range(1, num_outputs + 1)) * (len(bodypart_names) // num_outputs),
             title="Tweak Tracks"
         )

@@ -4,11 +4,13 @@ import wx
 
 Opt = Optional
 
+
 def is_ascii(s):
     """
     Meant for internal use: Checks if the passed string is made of only ascii characters.
     """
     return all(ord(c) < 128 for c in s)
+
 
 class HelpDialog(wx.Dialog):
     """
