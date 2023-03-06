@@ -1,6 +1,7 @@
-from typing import List, Tuple, Any, Callable
+from typing import List, Tuple, Any, Callable, Optional, Iterable
 
 from diplomat.predictors.supervised_fpe.labelers import EditableFramePassEngine
+from diplomat.processing import ProgressBar
 
 
 def _invert(order: List[int]) -> List[int]:
@@ -16,12 +17,22 @@ class IdentitySwapper:
     def __init__(self, frame_engine: EditableFramePassEngine):
         self._frame_engine = frame_engine
         self._extra_hook = None
+        self._progress_handler = None
 
     def set_extra_hook(self, hook: Callable[[int, List[int]], None]):
         self._extra_hook = hook
 
+    def set_progress_handler(self, handler: Callable[[str, Iterable], Iterable]):
+        self._progress_handler = handler
+
     def do(self, frame_idx: int, order: List[int]) -> Tuple[int, List[int]]:
-        for f_i in range(frame_idx, self._frame_engine.frame_data.num_frames):
+        progress_hdlr = self._progress_handler
+
+        if(progress_hdlr is None):
+            def progress_hdlr(msg, gen):
+                yield from gen
+
+        for f_i in progress_hdlr("Updating Track Identities", range(frame_idx, self._frame_engine.frame_data.num_frames)):
             frame = self._frame_engine.frame_data.frames[f_i]
 
             for idx, val in enumerate([frame[idx] for idx in order]):

@@ -44,6 +44,7 @@ class IdSwapDialog(wx.Dialog):
 
 _PADDING = 3
 
+
 @dataclass
 class Part:
     x: int
@@ -85,11 +86,13 @@ class Part:
             return self
         return None
 
+
 @dataclass
 class Body:
     x: int
     y: int
     name: str
+    shape: str
     parts: List[Part]
 
     def __post_init__(self):
@@ -127,6 +130,10 @@ class Body:
 
         dc.DrawText(self.name, self.x + canvas_width // 2 - w // 2, self.y + h // 2)
 
+        dc.SetBrush(wx.Brush(dc.GetTextForeground(), wx.BRUSHSTYLE_SOLID))
+        dc.SetPen(wx.TRANSPARENT_PEN)
+        WxDotShapeDrawer(dc)[self.shape](self.x + canvas_width // 2 - w // 2 - h // 2, self.y + h, h // 2)
+
         for part in sorted(self.parts, key=lambda a: a.dragging):
             part.draw(dc, canvas_width, canvas_height)
 
@@ -140,6 +147,7 @@ class Body:
             pw, ph = part.size(dc, canvas_width, canvas_height)
             if((x_cur + pw + _PADDING) > canvas_width):
                 y_cur += h_jump + _PADDING
+                x_cur = _PADDING
             h_jump = max(h_jump, ph)
             x_cur += pw + _PADDING
 
@@ -169,9 +177,11 @@ class DragZone(wx.Control):
         self._hover_obj = None
         self._highlight_obj = None
         self._press_offset = (0, 0)
+        self._offset_shapes = []
 
         for i in range(num_outputs):
-            body = Body(0, 0, f"Body {i}", [])
+            body = Body(0, 0, f"Body {i}", shapes[i], [])
+            self._offset_shapes.append(shapes[i])
             body.background_color = self.GetBackgroundColour()
 
             for j in range(i, len(parts), num_outputs):
@@ -207,25 +217,45 @@ class DragZone(wx.Control):
         new_h = _PADDING
 
         for body in self._bodies:
-            bw, bh = body.size(dc, w - _PADDING * 2, h - _PADDING * 2)
+            bw, bh = body.size(dc, *self._get_internal_size(w, h))
             new_h += bh + _PADDING
 
         return w, new_h
 
+    def _get_internal_size(self, w: int, h: int) -> Tuple[int, int]:
+        __, fh = self.GetFont().GetPixelSize()
+        return (w - _PADDING * 4 - fh, h - _PADDING * 2)
+
     def _on_draw(self, dc: wx.DC):
         width, height = self.GetClientSize()
         y_off = _PADDING
+        __, fh = self.GetFont().GetPixelSize()
+
+        y_info = []
 
         for body in self._bodies:
             if(not body.dragging):
                 body.x = _PADDING
                 body.y = y_off
 
-            bw, bh = body.size(dc, width - _PADDING * 2, height - _PADDING * 2)
+            bw, bh = body.size(dc, *self._get_internal_size(width, height))
+            y_info.append((y_off, bh))
             y_off += bh + _PADDING
 
+        for (by_off, bh), orig_shape in zip(y_info, self._offset_shapes):
+            dc.SetPen(wx.Pen(dc.GetTextForeground(), _PADDING // 2, wx.PENSTYLE_SOLID))
+            dc.DrawLine(
+                width - fh - _PADDING * 2,
+                by_off + _PADDING,
+                width - fh - _PADDING * 2,
+                by_off + bh - _PADDING * 2
+            )
+            dc.SetPen(wx.TRANSPARENT_PEN)
+            dc.SetBrush(wx.Brush(dc.GetTextForeground(), wx.BRUSHSTYLE_SOLID))
+            WxDotShapeDrawer(dc)[orig_shape](width - fh // 2 - _PADDING, by_off + bh // 2, fh // 2)
+
         for body in sorted(self._bodies, key=lambda a: a.dragging or any(b.dragging for b in a.parts)):
-            body.draw(dc, width - _PADDING * 2, height - _PADDING * 2)
+            body.draw(dc, *self._get_internal_size(width, height))
 
     def _on_press(self, evt: wx.MouseEvent):
         if(self._pressed_obj is None):
@@ -234,7 +264,7 @@ class DragZone(wx.Control):
             mx, my = evt.GetPosition()
 
             for body in self._bodies:
-                res = body.get_mouseover(dc, w - _PADDING * 2, h - _PADDING * 2, mx, my)
+                res = body.get_mouseover(dc, *self._get_internal_size(w, h), mx, my)
                 if(res is not None):
                     self._pressed_obj = res
                     self._owner_body = body
@@ -248,7 +278,7 @@ class DragZone(wx.Control):
 
         if(isinstance(self._pressed_obj, Part)):
             for body in self._bodies:
-                res = body.get_mouseover(dc, w - _PADDING * 2, h - _PADDING * 2, x, y)
+                res = body.get_mouseover(dc, *self._get_internal_size(w, h), x, y)
                 if(res is not None and res is not self._pressed_obj):
                     index = self._pressed_obj.index // self._num_outputs
                     if(is_release):
@@ -264,7 +294,7 @@ class DragZone(wx.Control):
             for i, body in enumerate(self._bodies):
                 if(body is self._pressed_obj):
                     continue
-                h = body.size(dc, w - _PADDING * 2, h - _PADDING * 2)[1]
+                h = body.size(dc, *self._get_internal_size(w, h))[1]
                 end_h = body.y + h
                 if(end_h >= y):
                     break
@@ -309,7 +339,7 @@ class DragZone(wx.Control):
             self._handle_drag(dc, w, h, mx, my)
         else:
             for body in self._bodies:
-                res = body.get_mouseover(dc, w - _PADDING * 2, h - _PADDING * 2, mx, my)
+                res = body.get_mouseover(dc, *self._get_internal_size(w, h), mx, my)
                 if(res is not None):
                     if(self._hover_obj is not None):
                         self._hover_obj.hover = False

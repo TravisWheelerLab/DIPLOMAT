@@ -2,8 +2,9 @@ from pathlib import Path
 import wx
 import cv2
 import numpy as np
-from typing import List, Any, Tuple, Optional, Callable, Mapping
+from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable
 
+from diplomat.utils.colormaps import iter_colormap
 from .id_swap_dialog import IdSwapDialog
 from .point_edit import PointEditor, PointViewNEdit, PoseLabeler
 from .progress_dialog import FBProgressDialog
@@ -225,6 +226,7 @@ class FPEEditor(wx.Frame):
         if(self._identity_swapper is not None):
             self._history.register_undoer(self.HIST_IDENTITY_SWAP, self._identity_swapper.undo)
             self._history.register_redoer(self.HIST_IDENTITY_SWAP, self._identity_swapper.redo)
+            self._identity_swapper.set_progress_handler(self._id_swap_prog)
             self._identity_swapper.set_extra_hook(self._id_swap_hook)
 
         self._fb_runner = None
@@ -661,7 +663,9 @@ class FPEEditor(wx.Frame):
         self.video_player.video_viewer.pause()
         num_outputs = len(self.video_player.select_box.ids)
         labels = self.video_player.select_box.get_labels()
-        with IdSwapDialog(None, wx.ID_ANY, num_outputs=num_outputs, labels=labels) as dlg:
+        colors = iter_colormap(self.video_player.select_box.get_colormap(), len(labels), bytes=True)
+        shapes = [v for i, v in zip(range(len(labels)), self.video_player.select_box.get_shape_list())]
+        with IdSwapDialog(None, wx.ID_ANY, num_outputs=num_outputs, labels=labels, colors=colors, shapes=shapes) as dlg:
             if(dlg.ShowModal() == wx.ID_OK):
                 self._do_id_swap(dlg.get_proposed_order())
 
@@ -672,12 +676,21 @@ class FPEEditor(wx.Frame):
             self._identity_swapper.do(current_offset, new_order)
         )
 
+    def _id_swap_prog(self, msg: str, iterable: Iterable) -> Iterable:
+        with FBProgressDialog(self, inner_msg=msg) as dlg:
+            self.Disable()
+            dlg.Show()
+            for item in dlg.progress_bar(iterable):
+                yield item
+            self.Enable()
+
     def _id_swap_hook(self, frame: int, new_order: List[int]):
         self.video_player.video_viewer.pause()
         self.video_player.video_viewer.set_offset_frames(frame)
-        poses = self.video_player.video_viewer.get_all_poses()
+        poses = self.video_player.video_viewer.get_all_poses().get_all()
+        poses = poses.reshape((poses.shape[0], poses.shape[1] // 3, 3))
         poses[frame:, np.arange(poses.shape[1])] = poses[frame:, new_order]
-        self.video_player.video_viewer.set_all_poses(poses)
+        self.video_player.video_viewer.set_all_poses(Pose(poses[:, :, 0], poses[:, :, 1], poses[:, :, 2]))
 
     def _save_and_close(self):
         self.Destroy()
