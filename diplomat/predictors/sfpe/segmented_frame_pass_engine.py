@@ -771,44 +771,6 @@ class SegmentedFramePassEngine(Predictor):
                 else:
                     self._segments[loc] = [si, ei + 1, ei]
 
-                """
-                d_scale = self._frame_holder.metadata.down_scaling
-                num_out = self._frame_holder.metadata.num_outputs
-                # Correct the fix frame issues,
-                idx1, idx2 = (si - 1, si) if(is_b) else (ei, ei - 1)
-
-                for bp_grp in range(self._frame_holder.num_bodyparts // num_out):
-                    group_slice = slice(bp_grp * num_out, (bp_grp + 1) * num_out)
-                    y, x, p, x_off, y_off = self._frame_holder.frames[idx2][group_slice.start].orig_data.unpack()
-
-                    if(y is None):
-                        for frm, frm_nxt in zip(self._frame_holder.frames[idx1][group_slice], self._frame_holder.frames[idx2][group_slice]):
-                            xp, yp, pp, x_offp, y_offp = self.get_maximum(frm)
-                            frm_nxt.orig_data.pack(*[np.array([v]) for v in [yp, xp, pp, x_offp, y_offp]])
-                            frm_nxt.src_data = frm_nxt.orig_data
-                    else:
-                        dists = []
-
-                        for frm, frm_nxt in zip(self._frame_holder.frames[idx1][group_slice], self._frame_holder.frames[idx2][group_slice]):
-                            xp, yp, __, x_offp, y_offp = self.get_maximum(frm)
-                            dists.append(FixFrame.dist(
-                                (xp + 0.5 + x_offp / d_scale, yp + 0.5 + y_offp / d_scale),
-                                (x + 0.5 + x_off / d_scale, y + 0.5 + y_off / d_scale)
-                            ))
-
-                        doms = np.minimum.reduce(dists)
-                        for dist, frm_nxt in zip(dists, self._frame_holder.frames[idx2][group_slice]):
-                            keep = dist <= doms
-                            if(np.all(~keep)):
-                                best_idx = np.argmin(dist)
-                                doms[best_idx] = 0
-                                frm_nxt.orig_data.pack(*[np.array([v]) for v in [y[best_idx], x[best_idx], 1, x_off[best_idx], y_off[best_idx]]])
-                                frm_nxt.src_data = frm_nxt.orig_data
-                            else:
-                                frm_nxt.orig_data.pack(y[keep], x[keep], p[keep], x_off[keep], y_off[keep])
-                                frm_nxt.src_data = frm_nxt.orig_data
-                    """
-
             yield True, locs
 
             for loc, is_b in zip(locs, is_before_level):

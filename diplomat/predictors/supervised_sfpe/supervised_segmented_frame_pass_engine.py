@@ -576,6 +576,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._get_crop_box(),
             [Approximate(self), Point(self), NearestInSource(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
+            None,
             list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs)
         )
 

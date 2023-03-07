@@ -430,13 +430,14 @@ class FPEEditor(wx.Frame):
                                              shortHelp="Rerun the frame passes on user modified results.")
         self._toolbar.AddTool(self._run)
 
-        self._swap_id = self._toolbar.CreateTool(wx.ID_ANY, "Swap Identities", swap_id_bmp,
-                                                 shortHelp="Swap body part positions for this frame and all frames in "
-                                                           "front of it.")
-        if(self._identity_swapper is None):
-            self._swap_id.Hide()
-        else:
+        if(self._identity_swapper is not None):
+            self._swap_id = self._toolbar.CreateTool(
+                wx.ID_ANY, "Swap Identities", swap_id_bmp,
+                shortHelp="Swap body part positions for this frame and all frames in front of it."
+            )
             self._toolbar.AddTool(self._swap_id)
+        else:
+            self._swap_id = None
 
         self._save = self._toolbar.CreateTool(wx.ID_ANY, "Save Results", save_bmp,
                                               shortHelp="Save the current results to file.")
@@ -478,13 +479,15 @@ class FPEEditor(wx.Frame):
             b_bmp,
             f_bmp,
             run_bmp,
-            swap_id_bmp,
+            swap_id_bmp if(self._swap_id is not None) else None,
             save_bmp,
             turtle_bmp,
             export_bmp,
             help_bmp
         ]
 
+        self._tools = filter(lambda a: a is not None, self._tools)
+        self._bitmaps = filter(lambda a: a is not None, self._bitmaps)
         self._toolbar.Realize()
 
     def _on_spin(self, evt: wx.SpinEvent):

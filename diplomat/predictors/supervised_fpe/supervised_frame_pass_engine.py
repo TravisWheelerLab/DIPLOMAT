@@ -69,6 +69,7 @@ class SupervisedFramePassEngine(FramePassEngine):
             self._get_crop_box(),
             [Approximate(self), Point(self), NearestInSource(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
+            None,
             list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs)
         )
         self._fb_editor.plot_button.Bind(wx.EVT_BUTTON, self._make_plots)

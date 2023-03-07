@@ -132,7 +132,7 @@ class Body:
 
         dc.SetBrush(wx.Brush(dc.GetTextForeground(), wx.BRUSHSTYLE_SOLID))
         dc.SetPen(wx.TRANSPARENT_PEN)
-        WxDotShapeDrawer(dc)[self.shape](self.x + canvas_width // 2 - w // 2 - h // 2, self.y + h, h // 2)
+        WxDotShapeDrawer(dc)[self.shape](self.x + canvas_width // 2 - w // 2 - h // 2 - _PADDING, self.y + h, h // 2)
 
         for part in sorted(self.parts, key=lambda a: a.dragging):
             part.draw(dc, canvas_width, canvas_height)

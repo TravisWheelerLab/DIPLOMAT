@@ -191,7 +191,7 @@ class ClusterFrames(FramePass):
                 balance,
                 attempts - 1
             )
-            if(result is not None or (not np.any(np.isinf(result)))):
+            if(result is not None and (not np.any(np.isinf(result)))):
                 return result
 
         center_x = [np.mean(x_true[components == i]) for i in range(num_clusters)]
