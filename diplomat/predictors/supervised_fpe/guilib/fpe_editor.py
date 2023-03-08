@@ -486,8 +486,8 @@ class FPEEditor(wx.Frame):
             help_bmp
         ]
 
-        self._tools = filter(lambda a: a is not None, self._tools)
-        self._bitmaps = filter(lambda a: a is not None, self._bitmaps)
+        self._tools = list(filter(lambda a: a is not None, self._tools))
+        self._bitmaps = list(filter(lambda a: a is not None, self._bitmaps))
         self._toolbar.Realize()
 
     def _on_spin(self, evt: wx.SpinEvent):
