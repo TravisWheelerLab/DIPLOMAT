@@ -98,7 +98,7 @@ class EndPointSegmentor(Segmentor):
 
         segments = GrowableNumpyArray(3, np.int64)
 
-        prior_border = 0
+        prior_border = -1
         fix_frames = np.flatnonzero(location_ids == 2)
 
         if(len(fix_frames) <= 0):
@@ -106,7 +106,12 @@ class EndPointSegmentor(Segmentor):
             fix_frames = np.array([np.argmax(fallback_scores)])
 
         for next_border in np.append(fix_frames, len(ordered_scores)):
-            orig_prior = prior_border if(prior_border != 0) else -1
+            if(next_border == 0):
+                prior_border = next_border
+                continue
+
+            orig_prior = prior_border
+            prior_border = max(prior_border, 0)
 
             while((next_border - prior_border) > self._size):
                 segments.add([prior_border, prior_border + self._size, prior_border if(prior_border == orig_prior) else -1])
@@ -116,6 +121,3 @@ class EndPointSegmentor(Segmentor):
             prior_border = next_border
 
         return segments.finalize()
-
-
-
