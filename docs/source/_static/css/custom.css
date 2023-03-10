@@ -69,9 +69,9 @@ p {
     /*--navbar-level-1-color: #c3e3ff;*/
     /*--navbar-level-2-color: #b8d6f0;*/
     /*--navbar-level-3-color: #a3c4e1;*/
-    --navbar-level-1-color: cadetblue;
-    --navbar-level-2-color: cadetblue;
-    --navbar-level-3-color: cadetblue;
+    --navbar-level-1-color: steelblue;
+    --navbar-level-2-color: steelblue;
+    --navbar-level-3-color: steelblue;
 
     --navbar-heading-color: #ff7381;
 
@@ -79,10 +79,10 @@ p {
     /*--navbar-scrollbar-hover-color: #b14550;*/
     /*--navbar-scrollbar-active-color: #72383e;*/
     /*--navbar-scrollbar-background: #131e2b;*/
-    --navbar-scrollbar-color: cadetblue;
-    --navbar-scrollbar-hover-color: #558e90;
-    --navbar-scrollbar-active-color: #426e70;
-    --navbar-scrollbar-background: #131e2b;
+    --navbar-scrollbar-color: steelblue;
+    --navbar-scrollbar-hover-color: #5f9fd4;
+    --navbar-scrollbar-active-color: #31609e;
+    --navbar-scrollbar-background: #cacaca;
 
     --link-color: #2980b9;
     --link-color-hover: #3091d1;
@@ -108,8 +108,7 @@ p {
     --search-credits-link-color: #4392c5; /* derived from --link-color */
 
 
-
---highlight-background-color: #efefef;
+    --highlight-background-color: #efefef;
     --highlight-background-emph-color: #dbe6c3;
     --highlight-default-color: #404040;
     --highlight-comment-color: #408090;
@@ -135,9 +134,9 @@ p {
     --admonition-danger-color: #404040;
     --admonition-danger-title-background-color: #e9a499;
     --admonition-danger-title-color: #fff;
-    --admonition-tip-background-color: #dbfaf4;
+    --admonition-tip-background-color: #dbf0fa;
     --admonition-tip-color: #404040;
-    --admonition-tip-title-background-color: #1abc9c;
+    --admonition-tip-title-background-color: #1a95bc;
     --admonition-tip-title-color: #fff;
 
     --kbd-background-color: #fafbfc;
@@ -151,6 +150,10 @@ p {
     --btn-neutral-background-color: #f3f6f6;
     --btn-neutral-hover-background-color: #e5ebeb;
     --footer-color: #808080;
+}
+
+.icon-home {
+    color: var(--link-color) !important;
 }
 
 /*!* Dark theme colors *!*/
@@ -594,6 +597,9 @@ footer,
 
 .wy-nav-content {
     background-color: var(--content-background-color);
+    z-index: 300;
+    box-shadow: 0 0 7px -3px black;
+    position: relative;
 }
 
 .wy-body-for-nav {
@@ -966,6 +972,7 @@ kbd.compound > .kbd,
 
 .wy-nav-side {
     background-color: var(--navbar-background-color);
+    box-shadow: 0 0 7px -3px black;
 }
 
 @media only screen and (min-width: 769px) {

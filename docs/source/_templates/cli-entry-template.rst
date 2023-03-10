@@ -11,6 +11,8 @@
 
 {usage}
 
+{positional_arguments}
+
     .. rubric:: Options
 
     .. code-block:: text

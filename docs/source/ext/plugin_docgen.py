@@ -339,6 +339,17 @@ def write_cli_entry(cli_dir: Path, cmd_name: str, func) -> Tuple[str, str]:
 
     help_str = func_to_command(func, ArgumentParser(prog=cmd_name)).format_help()
     options = "\n".join(f"         {line}" for line in help_str.split("options:")[-1].split("\n"))
+
+    pos_split = help_str.split("positional arguments:")
+    if(len(pos_split) < 2):
+        positional_arguments = ""
+    else:
+        positional_arguments = (
+            "    .. rubric:: Positional Arguments\n\n"
+            "    .. code-block:: text\n\n"
+            + ("\n".join(f"        {line}" for line in pos_split[-1].split("options:")[0].split("\n")))
+        )
+
     summary = "\n".join(f"    {line}" for line in help_str.split("\n\n")[1].split("\n"))
     usage = "\n".join(f"        {line[7:] if(line.startswith('usage: ')) else line}" for line in help_str.split("\n\n")[0].split("\n"))
 
@@ -348,6 +359,7 @@ def write_cli_entry(cli_dir: Path, cmd_name: str, func) -> Tuple[str, str]:
             title_dash="-" * (len(cmd_name) + 4),
             summary=summary,
             options=options,
+            positional_arguments=positional_arguments,
             usage=usage
         ))
 
