@@ -63,7 +63,8 @@ class ScrollImageList(wx.ScrolledCanvas):
         if(event.GetWheelAxis() != wx.MOUSE_WHEEL_VERTICAL):
             return
 
-        self._scroll_extra += (-1 if(event.IsWheelInverted()) else 1) * event.GetWheelRotation()
+        is_inv_func = getattr(event, "IsWheelInverted", lambda: False)
+        self._scroll_extra += (-1 if(is_inv_func()) else 1) * event.GetWheelRotation()
 
         x, y = self.CalcUnscrolledPosition(0, 0)
         scale_x, scale_y = self.GetScrollPixelsPerUnit()
