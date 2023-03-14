@@ -6,3 +6,4 @@ opencv-python
 tqdm
 pyyaml
 h5py
+pandas

@@ -174,6 +174,29 @@ i/Q5vyf0OBQseuBIsOmDA8GhF24NYjuu/HB2f3gxs/73l4yRDavur/P701ggCCAesfvbQoAFSpw2
 7JqeQIvzCewK1Dhd87qw6nF/fwWVrvdDyn4/ZORaV/y8X0qD8f3IlR19/Q99fAGnbhGP
 """
 
+SAVE_TRACKS_SIZE = (64, 64)
+SAVE_TRACKS_ICON = b"""
+eJxjYBhigF2WmwLd+itff/5y2I9o9XzOUT6SCG7gkzfvP37++r2DON1MiXuPnzx9ppUHyle//+LV
+m3cfgAZEEaW/4sChI8dOnj67kl/XP7exf9rKx0+fvwQa8OnLNWK02+/eux9owIlTZxdfvnr91p17
+lx48Ahrw+i3QAFUi9HfvABpw8DDQgKOnLl29fvPG7XsPHj15BjTg/UcbwtoZ12/bsWsP0ICjx0/N
+6cgL9/M4e/suyIAXr96+VyOsn3nD5q1AA/YdABpgABaZcPP23fsPQQZcYCTC/TM2bt66fSfQgEOH
+RcACmpdu3AIa8Pjpi2gitDNkrtsAMmD33gOToCJBl28Ag/Hh43ZitIvNnL9uw6YtQAO2w31ruODq
+rTs7A4jRzti4fPactUADtq01QxLmVRYmRjcDg8OiJYs1PWomtkULEKcBBYgbNkxbGEiGRjBQLJs2
+c/bsFiJdigG0eyZNmTZj1tweclzOwMDT3Ns/cTLQgDnFZOl37OjqARowdfqsObLk6I9vBRrQNwFo
+wEwncvSnNre2dwINmDRluhc5+kMaQAZ09wINMCOsGhNo1zU0tYAM6O/hIawaEzAm1gINaOvo7nUn
+RzswAlNq6xuBBoQQk8uxARaz5NqaMrKTLwio1dYXolh/5jYENBCnn7mwpl4OWeD9fwiYRqQD3Ktq
+fCjRL52fXZARqkG2fouyympgNMSykadfv6ikrKIKaACsqiNNP3t6fmEx0ICaukYVcvSrZOUADSgt
+BxrgT45+o4ysnLwCoAGV1Qnk6NdNTQcZUFRSXhlFjn7x5NT0zGyQAWW25Ohn9E1KARqQm19UwEeO
+fgaB6KSUtAygAboMZOlnEPBOBBqQoALjk6qfgTE4PFKDGc4lWb9EZEwoiOYRBIMPUP1zIVw2vHrZ
+xKT4LcIjjUFs2x//McE1fFUTq563X2BwgF8YP5ibgKn9jTI+y63dvXz8AoJC7aEC3ejaf9rj0c6g
+7ezq7ukNNCCQCyLAtAFV+79YfNo57BycXIAG+PoHweKe5wKK/mas+lg4mMC0qDXIADcPoAFwZ0o9
+QdK+lgmLbgElLR1dZZCDxS2tbe1BBnj5IqpP469w7WexdQBElVTUNXX09IHRImBmATTA0RloAFL1
+F/IPqv2pDBbtvDLyiipqmtp6euwcMsZmFlY2QANc3ZEL8HqI9m+mWLQziknJyCkqq2lo62poaOka
+mwINsHNwtkT2KOMSkPa/WNt+LCLikjJyCsqqGlpaqupamsam5pY2dmYcKIo4jgH1l2PTzsAqKCIm
+KS2noATUrCDBycCjbGCiK40ezCJ3/i/Aqp2BmU9QWExCWhZogBKeOldrCzsOGW4+AWFRCSlZeSUR
+3NrxABagAUKi4lIyssyEFWMDrNy8IAMkOAgrxQ6YOXj5BXlZyNUOAuS2VgYSAAD00GPz
+"""
+
 
 def to_wx_bitmap(icon_bytes: bytes, icon_size: Tuple[int, int], fg_color: wx.Colour, bitmap_size: Tuple[int, int] = None):
     """
@@ -204,7 +227,7 @@ if(__name__ == "__main__"):
     # Tests icon loading code above by displaying the help icon in a wx Frame...,
     app = wx.App()
     frame = wx.Frame(None, title="Image Test!")
-    bitmap = to_wx_bitmap(DUMP_FRAMES_ICON, DUMP_FRAMES_SIZE, frame.GetForegroundColour())
+    bitmap = to_wx_bitmap(SAVE_TRACKS_ICON, SAVE_TRACKS_SIZE, frame.GetForegroundColour())
     icon = wx.StaticBitmap(frame, wx.ID_ANY, bitmap)
     frame.Show(1)
     app.MainLoop()

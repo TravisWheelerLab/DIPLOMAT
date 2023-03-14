@@ -14,6 +14,7 @@ class SLEAPFrontend(DIPLOMATFrontend):
             from diplomat.frontends.sleap.predict_frames_sleap import analyze_frames
             from diplomat.frontends.sleap.label_videos_sleap import label_videos
             from diplomat.frontends.sleap.tweak_results_sleap import tweak_videos
+            from diplomat.frontends.sleap.convert_results_sleap import convert_results
         except ImportError:
             return None
 
@@ -22,7 +23,8 @@ class SLEAPFrontend(DIPLOMATFrontend):
             analyze_videos=analyze_videos,
             analyze_frames=analyze_frames,
             label_videos=label_videos,
-            tweak_videos=tweak_videos
+            tweak_videos=tweak_videos,
+            convert_results=convert_results
         )
 
     @classmethod

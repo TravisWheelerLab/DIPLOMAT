@@ -6,6 +6,7 @@ from typing import Optional, Union, Tuple
 from numpy import ndarray
 import numpy as np
 
+
 class Pose:
     """
     Class defines the Poses for given amount of frames and body parts... Note that pose has no concept of multiple
@@ -119,7 +120,7 @@ class Pose:
         """
         Set the x video coordinates of this batch of Poses.
 
-        :param x: An ndarray with the same dimensions as this Pose object, providing all x video coordinates...
+        :param x: A ndarray with the same dimensions as this Pose object, providing all x video coordinates...
         """
         self._data[:, 0::3] = x
 
@@ -180,7 +181,7 @@ class Pose:
 
     def get_all(self) -> ndarray:
         """
-        Returns all data combined together into a numpy array. Note method is mostly useful to DLC, not Predictor
+        Returns all data combined into a numpy array. Note method is mostly useful to DLC, not Predictor
         plugins.
 
         :return: A numpy array with indexing of the dimensions: [frame -> x, y or prob every 3-slots].

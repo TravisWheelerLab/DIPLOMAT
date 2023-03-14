@@ -23,6 +23,7 @@ def get_static_cli_tree() -> dict:
         "split_videos": diplomat.split_videos,
         "tweak": diplomat.tweak,
         "yaml": diplomat.yaml,
+        "convert": diplomat.convert,
         "frontends": {
             "__description": "Contains subcommands for listing available frontends and inspecting the functions "
                              "each frontend supports.",

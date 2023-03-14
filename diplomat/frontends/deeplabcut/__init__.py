@@ -14,6 +14,7 @@ class DEEPLABCUTFrontend(DIPLOMATFrontend):
             from diplomat.frontends.deeplabcut.predict_frames_dlc import analyze_frames
             from diplomat.frontends.deeplabcut.label_videos_dlc import label_videos
             from diplomat.frontends.deeplabcut.tweak_results import tweak_videos
+            from diplomat.frontends.deeplabcut.convert_results_dlc import convert_results
         except ImportError:
             return None
 
@@ -22,7 +23,8 @@ class DEEPLABCUTFrontend(DIPLOMATFrontend):
             analyze_videos=analyze_videos,
             analyze_frames=analyze_frames,
             label_videos=label_videos,
-            tweak_videos=tweak_videos
+            tweak_videos=tweak_videos,
+            convert_results=convert_results
         )
 
     @classmethod

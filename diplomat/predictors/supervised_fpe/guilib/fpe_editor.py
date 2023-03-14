@@ -5,6 +5,7 @@ import numpy as np
 from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable
 
 from diplomat.utils.colormaps import iter_colormap
+from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table
 from .id_swap_dialog import IdSwapDialog
 from .point_edit import PointEditor, PointViewNEdit, PoseLabeler
 from .progress_dialog import FBProgressDialog
@@ -405,6 +406,9 @@ class FPEEditor(wx.Frame):
         swap_id_bmp = icons.to_wx_bitmap(icons.SWAP_IDENTITIES_ICON, icons.SWAP_IDENTITIES_SIZE,
                                          self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
 
+        export_csv_bmp = icons.to_wx_bitmap(icons.SAVE_TRACKS_ICON, icons.SAVE_TRACKS_SIZE,
+                                            self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
+
         spin_ctrl = wx.SpinCtrl(self._toolbar, min=1, max=50, initial=PointViewNEdit.DEF_FAST_MODE_SPEED_FRACTION)
         spin_ctrl.SetMaxSize(wx.Size(-1, self.TOOLBAR_ICON_SIZE[1]))
         spin_ctrl.Bind(wx.EVT_SPINCTRL, self._on_spin)
@@ -455,6 +459,10 @@ class FPEEditor(wx.Frame):
                                                     shortHelp="Export the current modified frames from the UI.")
         self._toolbar.AddTool(self._export_btn)
 
+        self._export_to_csv = self._toolbar.CreateTool(wx.ID_ANY, "Export Tracks to CSV", export_csv_bmp,
+                                                       shortHelp="Export current tracks to a csv file from the UI.")
+        self._toolbar.AddTool(self._export_to_csv)
+
         self._help = self._toolbar.CreateTool(wx.ID_ANY, "Help", help_bmp, shortHelp="Display the help dialog.")
         self._toolbar.AddTool(self._help)
 
@@ -471,6 +479,7 @@ class FPEEditor(wx.Frame):
             self._save,
             self._turtle,
             self._export_btn,
+            self._export_to_csv,
             self._help
         ]
         self._bitmaps = [
@@ -483,6 +492,7 @@ class FPEEditor(wx.Frame):
             save_bmp,
             turtle_bmp,
             export_bmp,
+            export_csv_bmp,
             help_bmp
         ]
 
@@ -659,8 +669,37 @@ class FPEEditor(wx.Frame):
             self._move_to_poor_label(True)
         elif(evt.GetId() == self._b_frame.GetId()):
             self._move_to_poor_label(False)
+        elif(evt.GetId() == self._export_to_csv.GetId()):
+            self._save_to_csv()
         elif((self._identity_swapper is not None) and (evt.GetId() == self._swap_id.GetId())):
             self._display_id_swap_dialog()
+
+    def _save_to_csv(self):
+        with wx.FileDialog(self, "Select FrameStore Save Location",
+                           wildcard="CSV File (*.csv)",
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
+            if(fd.ShowModal() == wx.ID_CANCEL):
+                return
+
+            path = Path(fd.GetPath()).with_suffix(".csv")
+            num_outputs = len(self.video_player.select_box.ids)
+            poses = self.video_player.video_viewer.get_all_poses()
+
+            def replace_suffix(string, suffix):
+                return string[:-len(suffix)] if(string.endswith(suffix)) else string
+
+            orig_part_names = [
+                replace_suffix(label, str((i % num_outputs) + 1))
+                for i, label in enumerate(self.video_player.select_box.get_labels())
+                if((i % num_outputs) == 0)
+            ]
+
+            try:
+                table = to_diplomat_table(num_outputs, orig_part_names, poses)
+                save_diplomat_table(table, str(path))
+            except IOError as e:
+                with wx.MessageDialog(self, str(e), "File Export Error", wx.ICON_ERROR | wx.OK) as msgd:
+                    msgd.ShowModal()
 
     def _display_id_swap_dialog(self):
         self.video_player.video_viewer.pause()

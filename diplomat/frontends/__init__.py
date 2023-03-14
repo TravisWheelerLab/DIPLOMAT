@@ -39,6 +39,7 @@ AnalyzeVideosFunction = lambda ret: StrictCallable(
     num_outputs=Optional[int],
     _return=ret
 )
+
 AnalyzeFramesFunction = lambda ret: StrictCallable(
     config=ConfigPathLikeArgument,
     frame_stores=Union[List[PathLike], PathLike],
@@ -48,7 +49,17 @@ AnalyzeFramesFunction = lambda ret: StrictCallable(
     _return=ret
 )
 
-LabelVideosFunction = lambda ret: StrictCallable(config=ConfigPathLikeArgument, videos=Union[List[PathLike], PathLike], _return=ret)
+LabelVideosFunction = lambda ret: StrictCallable(
+    config=ConfigPathLikeArgument,
+    videos=Union[List[PathLike], PathLike],
+    _return=ret
+)
+
+ConvertResultsFunction = lambda ret: StrictCallable(
+    config=ConfigPathLikeArgument,
+    videos=Union[List[PathLike], PathLike],
+    _return=ret
+)
 
 
 @dataclass(frozen=False)
@@ -62,6 +73,7 @@ class DIPLOMATBaselineCommands:
     analyze_frames: AnalyzeFramesFunction(NoneType)
     label_videos: LabelVideosFunction(NoneType)
     tweak_videos: LabelVideosFunction(NoneType)
+    convert_results: ConvertResultsFunction(NoneType)
 
     def __post_init__(self):
         annotations = typing.get_type_hints(type(self))

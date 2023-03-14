@@ -71,6 +71,5 @@ def _tweak_video_single(
         else:
             print("Operation canceled...")
 
-
     names = [name if(i == 0) else f"{name}{i}" for name in mdl_metadata["bp_names"] for i in range(num_outputs)]
     ui_manager.tweak(None, video.filename, pose_obj, names, dict(video_meta), num_outputs, None, on_end)

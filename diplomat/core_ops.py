@@ -220,6 +220,7 @@ def track(
             **_get_casted_args(selected_frontend.analyze_frames, extra_args)
         )
 
+
 @allow_arbitrary_flags
 @typecaster_function
 def unsupervised(
@@ -378,3 +379,48 @@ def tweak(
         )
     except UIImportError as e:
         print(e)
+
+
+@allow_arbitrary_flags
+@typecaster_function
+def convert(
+    config: Union[List[PathLike], PathLike],
+    videos: Optional[Union[List[PathLike], PathLike]] = None,
+    help_extra: Flag = False,
+    **extra_args
+):
+    """
+    Convert DIPLOMAT produced tracking results created for a video from the software specific format to a CSV file
+    for inspection and analysis.
+
+    :param config: The path to the configuration file for the project. The format of this argument will
+                   depend on the frontend.
+    :param videos: A single path or list of paths to video or tracking files (depending on frontend) to convert to CSV
+                   files.
+    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of
+                       showing the UI.
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically
+                       selected frontend. To see valid values, run tweak with extra_help flag set to true.
+    """
+    from diplomat import CLI_RUN
+
+    selected_frontend_name, selected_frontend = _find_frontend(config=config, videos=videos, **extra_args)
+
+    if(help_extra):
+        _display_help(
+            selected_frontend_name,
+            "result conversion",
+            "diplomat convert",
+            selected_frontend.tweak_videos, CLI_RUN
+        )
+        return
+
+    if(videos is None):
+        print("No videos passed, terminating.")
+        return
+
+    selected_frontend.convert_results(
+        config=config,
+        videos=videos,
+        **_get_casted_args(selected_frontend.convert_results, extra_args)
+    )
