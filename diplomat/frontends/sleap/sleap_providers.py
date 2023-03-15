@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
 
+import sleap.nn.data.resizing
 from typing_extensions import TypedDict
 import numpy as np
 import tensorflow as tf
@@ -71,10 +72,14 @@ class BottomUpModelExtractor(SleapModelExtractor):
         inf_layer = self._predictor.inference_model.inference_layer
         conf_map, __, offsets = inf_layer.forward_pass(data)
 
+        first_scale_val = float(tf.reshape(data["scale"], -1)[0])
+        if(not tf.experimental.numpy.allclose(data["scale"], first_scale_val)):
+            raise ValueError("Scaling is not consistent!")
+
         return (
             _normalize_conf_map(conf_map),
             offsets if(offsets is None) else offsets,
-            (1 / inf_layer.input_scale) * inf_layer.cm_output_stride
+            (1 / first_scale_val) * (1 / inf_layer.input_scale) * inf_layer.cm_output_stride
         )
 
 
@@ -128,7 +133,6 @@ class TopDownModelExtractor(SleapModelExtractor):
     def extract(self, data: Union[Dict, np.ndarray]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
         inf_layer = self._predictor.inference_model.instance_peaks
 
-
         imgs = data["image"] if(isinstance(data, dict)) else data
         imgs = inf_layer.preprocess(imgs)
 
@@ -170,14 +174,19 @@ class SingleInstanceModelExtractor(SleapModelExtractor):
         imgs = data["image"] if(isinstance(data, dict)) else data
         conf_map, offset_map = _extract_model_outputs(inf_layer, inf_layer.preprocess(imgs))
 
+        first_scale_val = float(tf.reshape(data["scale"], -1)[0])
+        if (not tf.experimental.numpy.allclose(data["scale"], first_scale_val)):
+            raise ValueError("Scaling is not consistent!")
+
         return (
             _normalize_conf_map(conf_map),
             offset_map,
-            (1 / inf_layer.input_scale) * inf_layer.output_stride
+            (1 / first_scale_val) * (1 / inf_layer.input_scale) * inf_layer.output_stride
         )
 
 
 EXTRACTORS = [BottomUpModelExtractor, SingleInstanceModelExtractor, TopDownModelExtractor]
+
 
 class PredictorExtractor:
     def __init__(self, predictor: SleapPredictor, refinement_kernel_size: int):
@@ -252,6 +261,12 @@ class PredictorExtractor:
 
             if(offsets is None and self._refinement_kernel_size > 0):
                 offsets = self._create_integral_offsets(probs, downscale, self._refinement_kernel_size)
+
+            # Trim the resulting outputs so the match expected area for poses from the original video.
+            h, w = data.video.shape[1:3]
+            trim_h, trim_w = int(np.ceil(h / downscale)), int(np.ceil(h / downscale))
+            probs = probs[:, :trim_h, :trim_w]
+            offsets = offsets[:, :trim_h, :trim_w]
 
             yield TrackingData(
                 probs.numpy(),

@@ -20,6 +20,7 @@ from .run_utils import (
     Timer
 )
 
+
 @extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
 @tc.typecaster_function
 def analyze_videos(
@@ -108,7 +109,8 @@ def _analyze_single_video(
 
     video_metadata = _get_video_metadata(video_path, output_path, num_outputs, video, visual_settings, mdl_metadata)
     pred = predictor_cls(
-        mdl_metadata["bp_names"], num_outputs, video.num_frames, _get_predictor_settings(predictor_cls, predictor_settings), video_metadata
+        mdl_metadata["bp_names"], num_outputs, video.num_frames,
+        _get_predictor_settings(predictor_cls, predictor_settings), video_metadata
     )
 
     labels = PoseLabels(video, num_outputs, mdl_metadata["orig_skeleton"])
