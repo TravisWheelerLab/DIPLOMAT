@@ -30,6 +30,7 @@ class NotAPool:
 to_log_space = np.log2
 from_log_space = np.exp2
 
+
 def norm(arr):
     """
     Normalize in log space such that highest value is 1.
@@ -44,12 +45,13 @@ def log_prob_complement(arr):
     return to_log_space(1 - from_log_space(arr))
 
 
-
 NumericArray = Union[int, float, np.ndarray]
+
 
 def norm_together(arrs):
     max_val = max(np.max(arr) for arr in arrs)
     return [arr - max_val for arr in arrs]
+
 
 def select(*info):
     for val, cond in zip(info[::2, 1::2]):
@@ -111,6 +113,7 @@ class MITViterbi(FramePass):
         self._scaled_std = None
         self._flatten_std = None
         self._gaussian_table = None
+        self._gaussian_repel_table = None
         self._skeleton_tables = None
 
     def _init_gaussian_table(self, metadata: AttributeDict):
@@ -128,11 +131,23 @@ class MITViterbi(FramePass):
             self._scaled_std = metadata.optimal_std[2]
         else:
             self._scaled_std = (std if (std != "auto") else 1) / metadata.down_scaling
+
         self._flatten_std = None if (conf.gaussian_plateau is None) else self._scaled_std * conf.gaussian_plateau
         self._gaussian_table = norm(to_log_space(fpe_math.gaussian_table(
             self.height, self.width, self._scaled_std, conf.amplitude,
             conf.lowest_value, self._flatten_std, conf.square_distances
         )))
+
+        if(conf.include_soft_domination):
+            self._gaussian_repel_table = norm(to_log_space(fpe_math.gaussian_table(
+                self.height,
+                self.width,
+                self._scaled_std * conf.soft_domination_spread,
+                conf.amplitude,
+                conf.lowest_value,
+                self._flatten_std * conf.soft_domination_spread,
+                conf.square_distances
+            )))
 
         metadata.include_soft_domination = self.config.include_soft_domination
 
@@ -235,6 +250,14 @@ class MITViterbi(FramePass):
         backtrace_current = [None for __ in range(fb_data.num_bodyparts)]
 
         with pool_cls() as pool:
+            exit_prob = fb_data.metadata.enter_trans_prob
+            transition_function = ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob)
+            resist_transition_func = (
+                ViterbiTransitionTable(self._gaussian_repel_table, exit_prob, 1 - exit_prob)
+                if (self._gaussian_repel_table is not None)
+                else None
+            )
+
             for frame_idx in RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]:
                 if(not (0 <= (frame_idx + self._prior_off) < len(fb_data.frames))):
                     continue
@@ -286,7 +309,6 @@ class MITViterbi(FramePass):
                     backtrace_priors[bp_idx] = prior_data
                     backtrace_current[bp_idx] = current_data
 
-                exit_prob = fb_data.metadata.enter_trans_prob
                 # Now run the actual backtrace, computing transitions for
                 # prior maximums -> current frames...
                 results = pool.starmap(
@@ -296,7 +318,8 @@ class MITViterbi(FramePass):
                         backtrace_current[bp_i],
                         bp_i,
                         fb_data.metadata,
-                        ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob),
+                        transition_function,
+                        resist_transition_func,
                         self._skeleton_tables if (self.config.include_skeleton) else None,
                         self.config.soft_domination_weight,
                         self.config.skeleton_weight
@@ -350,6 +373,14 @@ class MITViterbi(FramePass):
         pool_cls = self._get_pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // meta.num_outputs) > 2) else NotAPool
 
         with pool_cls() as pool:
+            exit_prob = fb_data.metadata.enter_trans_prob
+            transition_func = ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob)
+            resist_transition_func = (
+                ViterbiTransitionTable(self._gaussian_repel_table, exit_prob, 1 - exit_prob)
+                if(self._gaussian_repel_table is not None)
+                else None
+            )
+
             for i in frame_iter:
                 prior_idx = i + self._prior_off
 
@@ -359,8 +390,6 @@ class MITViterbi(FramePass):
                 current = fb_data.frames[i]
                 current = current if (in_place) else [c.copy() for c in current]
 
-                exit_prob = fb_data.metadata.enter_trans_prob
-
                 results = pool.starmap(
                     MITViterbi._compute_normal_frame,
                     [(
@@ -368,7 +397,8 @@ class MITViterbi(FramePass):
                         current,
                         bp_grp_i,
                         meta,
-                        ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob),
+                        transition_func,
+                        resist_transition_func,
                         self._skeleton_tables if (self.config.include_skeleton) else None,
                         self.config.soft_domination_weight,
                         self.config.skeleton_weight
@@ -394,6 +424,7 @@ class MITViterbi(FramePass):
         bp_idx: int,
         metadata: AttributeDict,
         transition_function: TransitionFunction,
+        resist_transition_function: Optional[TransitionFunction] = None,
         skeleton_table: Optional[StorageGraph] = None,
         soft_dom_weight: float = 0,
         skeleton_weight: float = 0
@@ -411,7 +442,7 @@ class MITViterbi(FramePass):
             current,
             bp_idx,
             metadata,
-            transition_function if(metadata.get("include_soft_domination", False)) else None,
+            resist_transition_function,
         )
 
         trans_res = cls.log_viterbi_between(
@@ -631,6 +662,7 @@ class MITViterbi(FramePass):
         bp_group: int,
         metadata: AttributeDict,
         transition_function: TransitionFunction,
+        resist_transition_function: Optional[TransitionFunction] = None,
         skeleton_table: Optional[StorageGraph] = None,
         soft_dom_weight: float = 0,
         skeleton_weight: float = 0
@@ -703,7 +735,7 @@ class MITViterbi(FramePass):
                 current_data,
                 bp_i,
                 metadata,
-                transition_function if(metadata.get("include_soft_domination", False)) else None,
+                resist_transition_function,
             )
 
             from_transition = cls.log_viterbi_between(
@@ -838,6 +870,12 @@ class MITViterbi(FramePass):
                 "from soft domination transitions should have in each "
                 "forward/backward step if soft domination was enabled "
                 "This is not a probability, but rather a ratio."
+            ),
+            "soft_domination_spread": (
+                3, float,
+                "A positive float, the standard deviation of the viterbi is "
+                "multiplied by this value to determine the standard deviation "
+                "of the soft domination gaussian."
             ),
             "amplitude": (
                 1, float,

@@ -38,7 +38,7 @@ class History:
             self.name = name
             self.value = value
 
-    def __init__(self, max_size: int = 100):
+    def __init__(self, max_size: int = 2000):
         """
         Construct a new history object.
 
