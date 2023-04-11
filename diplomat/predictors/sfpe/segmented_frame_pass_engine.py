@@ -291,7 +291,6 @@ class PoolWithProgress:
             bar.reset_rerun_counter()
         self._current_value = 0
 
-
     def fast_map(
         self,
         do_work: Callable,
@@ -1202,7 +1201,6 @@ class SegmentedFramePassEngine(Predictor):
 
                         if(p_bar is not None):
                             p_bar.update()
-
 
     def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         self._run_frame_passes(progress_bar)

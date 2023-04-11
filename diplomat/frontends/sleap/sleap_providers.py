@@ -264,7 +264,7 @@ class PredictorExtractor:
 
             # Trim the resulting outputs so the match expected area for poses from the original video.
             h, w = data.video.shape[1:3]
-            trim_h, trim_w = int(np.ceil(h / downscale)), int(np.ceil(h / downscale))
+            trim_h, trim_w = int(np.ceil(h / downscale)), int(np.ceil(w / downscale))
             probs = probs[:, :trim_h, :trim_w]
             offsets = offsets[:, :trim_h, :trim_w]
 
@@ -273,31 +273,4 @@ class PredictorExtractor:
                 None if(offsets is None) else offsets.numpy(),
                 downscale
             )
-
-
-def _main_test():
-    import sleap
-    sleap.disable_preallocation()
-
-    import tensorflow as tf
-    if(not tf.executing_eagerly()):
-        tf.compat.v1.enable_eager_execution()
-
-    mdl = sleap.load_model("/home/isaac/Code/sleap-data/degu-project/models/221206_151600.multi_instance.n=379/")
-    vid = sleap.load_video("/home/isaac/Code/sleap-data/degu-project/1min-clip.mp4")
-    extractor = PredictorExtractor(mdl, 5)
-
-    for frame in extractor.extract(vid):
-        print(frame)
-        print(frame.get_offset_map()[0, :, :, 1, :])
-        from diplomat.utils.extract_frames import pretty_print_frame
-        print(pretty_print_frame(frame, 0, 1, False))
-        return
-
-
-if(__name__ == "__main__"):
-    _main_test()
-
-
-
 
