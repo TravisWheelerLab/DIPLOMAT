@@ -33,7 +33,7 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
             new_args[k] = extra[k][1](v) if(autocast) else v
         else:
             if(allow_arb):
-                new_args[k] = k
+                new_args[k] = v
                 continue
             msg = (
                 f"Warning: command '{tc_func.__name__}' does not have "
