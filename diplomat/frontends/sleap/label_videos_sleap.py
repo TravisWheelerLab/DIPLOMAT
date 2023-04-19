@@ -111,12 +111,28 @@ def _label_video_single(
     body_parts_to_plot = EverythingSet() if(body_parts_to_plot is None) else set(body_parts_to_plot)
     bp_names = [name for name in skeleton.node_names for _ in range(num_outputs)]
 
+    upscale = 1 if(visual_settings.upscale_factor is None) else visual_settings.upscale_factor
+    out_w, out_h = tuple(int(dim * upscale) for dim in video.shape[1:3][::-1])
+
     print(f"Writing output to: '{output_path}'")
 
-    with ContextVideoWriter(str(output_path), visual_settings.output_codec, getattr(video, "fps", 30), video.shape[1:3][::-1]) as writer:
+    with ContextVideoWriter(
+        str(output_path),
+        visual_settings.output_codec,
+        getattr(video, "fps", 30),
+        (out_w, out_h)
+    ) as writer:
         with TQDMProgressBar(total=poses.get_frame_count()) as p:
             for f_i in range(poses.get_frame_count()):
                 frame = video.get_frame(f_i)[..., ::-1]
+
+                if(visual_settings.upscale_factor is not None):
+                    frame = cv2.resize(
+                        frame,
+                        (out_w, out_h),
+                        interpolation=cv2.INTER_NEAREST
+                    )
+
                 overlay = frame.copy()
 
                 colors = iter_colormap(visual_settings.colormap, poses.get_bodypart_count())
@@ -146,7 +162,7 @@ def _label_video_single(
                     )[shape]
 
                     if(prob > visual_settings.pcutoff or visual_settings.draw_hidden_tracks):
-                        shape_drawer(int(x), int(y), int(visual_settings.dotsize))
+                        shape_drawer(int(x * upscale), int(y * upscale), int(visual_settings.dotsize * upscale))
 
                 writer.write(cv2.addWeighted(
                     overlay, visual_settings.alphavalue, frame, 1 - visual_settings.alphavalue, 0

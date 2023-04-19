@@ -34,7 +34,9 @@ LABELED_VIDEO_SETTINGS = {
     "line_thickness": (1, int, "Thickness of lines drawn."),
     "antialiasing": (True, bool, "Use antialiasing when drawing points."),
     "draw_hidden_tracks": (True, bool, "Whether or not to draw locations under the pcutoff value."),
-    "output_codec": ("mp4v", cv2_fourcc_string, "The codec to use for the labeled video...")
+    "output_codec": ("mp4v", cv2_fourcc_string, "The codec to use for the labeled video..."),
+    "upscale_factor": (None, tc.Optional(tc.RangedFloat(0, 1000)), "An optional float multiplier to use for "
+                                                                     "increasing the size of the output video.")
 }
 
 
@@ -178,11 +180,13 @@ def _create_video_single(
     if(pickle_info["cropping"]):
         x_off, x_off2, y_off, y_off2 = [int(v) for v in pickle_info["cropping_parameters"]]
 
+    upscale = 1 if(plotting_settings.upscale_factor is None) else float(plotting_settings.upscale_factor)
+
     labeled_video = cv2.VideoWriter(
         str(export_path),
         plotting_settings.output_codec,
         float(unlabeled_video.get(cv2.CAP_PROP_FPS)),
-        (x_off2 - x_off, y_off2 - y_off)
+        (int((x_off2 - x_off) * upscale), int((y_off2 - y_off) * upscale))
     )
 
     if(not labeled_video.isOpened()):
@@ -217,6 +221,11 @@ def _create_video_single(
             break
 
         frame = frame[y_off:y_off2, x_off:x_off2]
+
+        if(plotting_settings.upscale_factor is not None):
+            h, w = frame.shape[:-1]
+            frame = cv2.resize(frame, (int(w * upscale), int(h * upscale)), interpolation=cv2.INTER_NEAREST)
+
         overlay = frame.copy()
 
         colors = iter_colormap(plotting_settings.colormap, len(body_part_data))
@@ -234,7 +243,7 @@ def _create_video_single(
             )[shape]
 
             if(bp_p[i] > plotting_settings.pcutoff or plotting_settings.draw_hidden_tracks):
-                shape_drawer(int(bp_x[i]), int(bp_y[i]), int(plotting_settings.dotsize))
+                shape_drawer(int(bp_x[i] * upscale), int(bp_y[i] * upscale), int(plotting_settings.dotsize * upscale))
 
         labeled_video.write(cv2.addWeighted(
             overlay, plotting_settings.alphavalue, frame, 1 - plotting_settings.alphavalue, 0

@@ -6,6 +6,7 @@ import diplomat.processing.type_casters as tc
 import matplotlib.colors as mpl_colors
 from diplomat.utils.colormaps import to_colormap
 from sleap.prefs import prefs
+import numpy as np
 import cv2
 
 def cv2_fourcc_string(val) -> int:
@@ -33,6 +34,8 @@ FULL_VISUAL_SETTINGS: ConfigSpec = {
     "skeleton_color": ("black", mpl_colors.to_rgba, "Color of the skeleton."),
     "output_codec": ("mp4v", cv2_fourcc_string, "The codec to use for the labeled video..."),
     "draw_hidden_tracks": (True, bool, "Whether or not to draw locations under the pcutoff value."),
-    "antialiasing": (True, bool, "Use antialiasing when drawing points.")
+    "antialiasing": (True, bool, "Use antialiasing when drawing points."),
+    "upscale_factor": (1, tc.RangedFloat(0, 1000), "A optional integer multiplier to use for increasing the "
+                                                   "size of the output video.")
 }
 
