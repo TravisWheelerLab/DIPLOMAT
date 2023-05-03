@@ -8,7 +8,8 @@ def gaussian_formula(
     y: float,
     std: float,
     amplitude: float,
-    lowest_value: float = 0
+    lowest_value: float = 0,
+    in_log_space: bool = False
 ) -> float:
     """
     Compute a value on a 2D Gaussian curve.
@@ -19,13 +20,17 @@ def gaussian_formula(
     :param y: The current y value. Value to evaluate on the curve.
     :param std: The standard deviation of the 2D gaussian, in both dimensions.
     :param amplitude: The amplitude, or height of the gaussian curve.
-    :param lowest_value: The lowest value the gaussian curve can reach. Defaults to 0.
+    :param lowest_value: The lowest value the gaussian curve can reach (achieved by clipping the curve). Defaults to 0.
+    :param in_log_space: Boolean, if true returns the log-probability instead of the probability (in log base 2 space).
 
     :returns: A float, the 2D gaussian evaluated with the above parameters.
     """
     inner_x_delta = ((prior_x - x) ** 2) / (2 * std ** 2)
     inner_y_delta = ((prior_y - y) ** 2) / (2 * std ** 2)
-    return amplitude * np.exp(-(inner_x_delta + inner_y_delta)) + lowest_value
+    if(not in_log_space):
+        return max(amplitude * np.exp(-(inner_x_delta + inner_y_delta)), lowest_value)
+    else:
+        return max(np.log2(amplitude) - (inner_x_delta + inner_y_delta) * np.log(np.e), np.log2(lowest_value))
 
 def skeleton_formula(
     x: float,
@@ -33,7 +38,7 @@ def skeleton_formula(
     peak_dist_out: float,
     peak_amplitude: float,
     trough_amplitude: float,
-    standard_deviation: float = None
+    in_log_space: bool = False
 ) -> float:
     """
     Compute a location on the 2D skeletal transition curve with given parameters. The equation takes the form:
@@ -43,12 +48,13 @@ def skeleton_formula(
     where . In 1 dimension. To generalize to two dimensions, the euclidean distance to x, y from 0, 0 is used as the
     input to the 1D version of the function.
 
-    @param x: The x location to evaluate the skeletal transition function at.
-    @param y: The y location to evaluate the skeletal transition function at.
-    @param peak_dist_out: The location of the peak or max value of the curve on all sides from 0, 0.
-    @param peak_amplitude: The amplitude of the peek.
-    @param trough_amplitude: The amplitude of the trough, or the curve value at 0, 0.
-    @param standard_deviation: Unused in this method...
+    :param x: The x location to evaluate the skeletal transition function at.
+    :param y: The y location to evaluate the skeletal transition function at.
+    :param peak_dist_out: The location of the peak or max value of the curve on all sides from 0, 0.
+    :param peak_amplitude: The amplitude of the peek.
+    :param trough_amplitude: The amplitude of the trough, or the curve value at 0, 0.
+    :param in_log_space: Boolean, if True (defaults to False) return log-probabilities (base 2) instead of regular
+                         probabilities.
 
     :returns: A float, the skeletal transition function evaluated at the provided location.
     """
@@ -60,40 +66,10 @@ def skeleton_formula(
     # To use 1D formula...
     x_y_out = x ** 2 + y ** 2
 
-    return c * np.exp((a * x_y_out) - (b * x_y_out ** 2))
-
-def negative_gaussian_formula(
-    prior_x: float,
-    x: float,
-    prior_y: float,
-    y: float,
-    std: float,
-    amplitude: float,
-) -> float:
-    """
-    Compute a value on an inverted 2D Gaussian curve. To invert the curve, the result is simply subtracted from 1.
-
-    @param prior_x: The prior x value. Center of the gaussian bell.
-    @param x: The current x value. Value to evaluate on the curve.
-    @param prior_y: The prior y value. Center of the gaussian bell.
-    @param y: The current y value. Value to evaluate on the curve.
-    @param std: The standard deviation of the 2D gaussian, in both dimensions.
-    @param amplitude: The amplitude, or height of the gaussian curve.
-
-    @returns: A float, the inverted 2D gaussian (1 - G(x, y)) evaluated with the above parameters.
-    """
-    return 1 - gaussian_formula(prior_x, x, prior_y, y, std, amplitude)
-
-
-def quartic_formula(
-    x: float,
-    y: float,
-    std: float
-) -> float:
-    """
-    Internal: Used as alternate curve offering for old body part negation .
-    """
-    return max(0.0, (0.5 - ((x / std) ** 4)) + (0.5 - ((y / std) ** 4)))
+    if(not in_log_space):
+        return c * np.exp((a * x_y_out) - (b * x_y_out ** 2))
+    else:
+        return np.log2(c) + ((a * x_y_out) - (b * x_y_out ** 2)) * np.log2(np.e)
 
 
 def get_func_table(
@@ -142,7 +118,8 @@ def gaussian_table(
     amplitude: float,
     lowest_value: float = 0,
     flatten_radius: Optional[float] = None,
-    square_dists: bool = False
+    square_dists: bool = False,
+    in_log_space: bool = False
 ) -> np.ndarray:
     """
     Creates a pre-computed 2D gaussian table.
@@ -154,11 +131,12 @@ def gaussian_table(
     :param lowest_value: The lowest value the gaussian curve can get down to.
     :param flatten_radius: The radius out from the peak the gaussian curve to flatten.
     :param square_dists: Boolean, if true square the distance values before putting them through the Gaussian curve.
+    :param in_log_space: Boolean, if true return log-probs (base 2) instead of probabilities
 
     :return: A 2D numpy array of floats, containing a 2D gaussian curve. (Indexing is x then y).
     """
     dist_func = (lambda v: v) if(not square_dists) else (lambda v: v * v)
-    g = lambda x, y: gaussian_formula(0, dist_func(x), 0, dist_func(y), std, amplitude, lowest_value)
+    g = lambda x, y: gaussian_formula(0, dist_func(x), 0, dist_func(y), std, amplitude, lowest_value, in_log_space)
     return get_func_table(width, height, g, flatten_radius)
 
 

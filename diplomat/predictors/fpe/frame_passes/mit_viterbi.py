@@ -133,21 +133,22 @@ class MITViterbi(FramePass):
             self._scaled_std = (std if (std != "auto") else 1) / metadata.down_scaling
 
         self._flatten_std = None if (conf.gaussian_plateau is None) else self._scaled_std * conf.gaussian_plateau
-        self._gaussian_table = norm(to_log_space(fpe_math.gaussian_table(
+        self._gaussian_table = norm(fpe_math.gaussian_table(
             self.height, self.width, self._scaled_std, conf.amplitude,
-            conf.lowest_value, self._flatten_std, conf.square_distances
-        )))
+            conf.lowest_value, self._flatten_std, conf.square_distances, True
+        ))
 
         if(conf.include_soft_domination):
-            self._gaussian_repel_table = norm(to_log_space(fpe_math.gaussian_table(
+            self._gaussian_repel_table = norm(fpe_math.gaussian_table(
                 self.height,
                 self.width,
                 self._scaled_std * conf.soft_domination_spread,
                 conf.amplitude,
                 conf.lowest_value,
                 self._flatten_std * conf.soft_domination_spread,
-                conf.square_distances
-            )))
+                conf.square_distances,
+                True
+            ))
 
         metadata.include_soft_domination = self.config.include_soft_domination
 
@@ -158,15 +159,16 @@ class MITViterbi(FramePass):
 
             for ((n1, n2), (bin_val, freq, avg)) in meta.skeleton.items():
                 fill_func = lambda x, y: fpe_math.skeleton_formula(
-                    x, y, avg, **meta.skeleton_config
+                    x, y, avg, **meta.skeleton_config, in_log_space=True
                 )
 
-                self._skeleton_tables[n1, n2] = norm(
-                    to_log_space(
+                self._skeleton_tables[n1, n2] = np.maximum(
+                    norm(
                         fpe_math.get_func_table(
                             self.height, self.width, fill_func
                         )
-                    )
+                    ),
+                    self.config.lowest_skeleton_score
                 )
         else:
             self.config.skeleton_weight = 0
@@ -575,8 +577,6 @@ class MITViterbi(FramePass):
         for __, bp_res in results:
             for i, (current_total, bp_sub_res) in enumerate(zip(final_result, bp_res)):
                 merged_result = current_total + bp_sub_res
-                if(np.all(np.isneginf(merged_result))):
-                    continue
                 final_result[i] = merged_result
 
             final_result = norm_together(final_result)
@@ -789,6 +789,7 @@ class MITViterbi(FramePass):
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
             # Store the results...
+            # Store the results...
             current[bp_i].frame_probs = frm_prob[frm_idx] - norm_val
             # Filter occluded probabilities...
             c, p = cls.filter_occluded_probabilities(
@@ -927,5 +928,11 @@ class MITViterbi(FramePass):
                 False, bool,
                 "A boolean. If True, square distances between points before "
                 "putting them through the gaussian, otherwise don't."
+            ),
+            "lowest_skeleton_score": (
+                -np.inf,
+                tc.RangedFloat(-np.inf, 0),
+                "A float, the lowest allowed log-probability for the distribution of skeleton scores."
+                "This prevents the skeleton transitions from zeroing all probabilities in the viterbi."
             )
         }

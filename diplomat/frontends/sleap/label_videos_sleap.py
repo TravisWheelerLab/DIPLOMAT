@@ -1,3 +1,4 @@
+import functools
 from pathlib import Path
 from typing import TypeVar, Type, Tuple
 import cv2
@@ -63,6 +64,7 @@ def label_videos(
 T = TypeVar("T")
 
 
+@functools.lru_cache(None)
 def _create_manager(clazz: Type[T]) -> Type[T]:
     class cv2_context_manager(clazz):
         def __enter__(self):
