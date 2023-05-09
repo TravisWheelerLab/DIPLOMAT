@@ -269,8 +269,8 @@ class PredictorExtractor:
             offsets = offsets[:, :trim_h, :trim_w]
 
             yield TrackingData(
-                probs.numpy(),
-                None if(offsets is None) else offsets.numpy(),
+                probs.cpu().numpy(),
+                None if(offsets is None) else offsets.cpu().numpy(),
                 downscale
             )
 

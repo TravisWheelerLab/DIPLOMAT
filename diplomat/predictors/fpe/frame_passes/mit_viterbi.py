@@ -145,7 +145,7 @@ class MITViterbi(FramePass):
                 self._scaled_std * conf.soft_domination_spread,
                 conf.amplitude,
                 conf.lowest_value,
-                self._flatten_std * conf.soft_domination_spread,
+                self._flatten_std * conf.soft_domination_spread if(self._flatten_std is not None) else None,
                 conf.square_distances,
                 True
             ))

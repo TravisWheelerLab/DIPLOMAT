@@ -173,9 +173,9 @@ class ClusterFrames(FramePass):
 
         forest, components = cls._minimum_spanning_forest(graph, num_clusters)
 
-        prob_sum = np.array([np.sum(prob[components == i]) for i in range(num_clusters)])
-        prob_sum = prob_sum / np.mean(prob_sum)
-        bad_idx = np.flatnonzero(prob_sum < balance)
+        prob_max = np.array([np.max(prob[components == i]) for i in range(num_clusters)])
+        prob_max = prob_max / ((np.sum(prob_max) - prob_max) / (prob_max.size - 1))
+        bad_idx = np.flatnonzero(prob_max < balance)
 
         if(len(bad_idx) > 0):
             keep = ~np.isin(components, bad_idx)
@@ -296,9 +296,9 @@ class ClusterFrames(FramePass):
 
         return {
             "minimum_cluster_size": (
-                0.1, float, "The minimum size a cluster is allowed to be (As compared to average of all clusters)."
-                            "If the cluster is smaller, it get thrown out and a forest is resolved using the rest of"
-                            "the data."
+                0.25, float, "The minimum size a cluster is allowed to be (As compared to average of all clusters)."
+                             "If the cluster is smaller, it get thrown out and a forest is resolved using the rest of"
+                             "the data."
             ),
             "max_throwaway_count": (
                 10, float, "The maximum number of clusters to throw away before giving up on clustering a given frame."
