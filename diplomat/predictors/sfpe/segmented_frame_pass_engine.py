@@ -1294,7 +1294,7 @@ class SegmentedFramePassEngine(Predictor):
                 "Whether or not to allow frame passes to utilize multithreading. Defaults to True."
             ),
             "segment_size": (
-                200,
+                400,
                 type_casters.RangedInteger(10, np.inf),
                 "The size of the segments in frames to break the video into for tracking."
             ),

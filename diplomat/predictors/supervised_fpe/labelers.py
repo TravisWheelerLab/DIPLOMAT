@@ -209,7 +209,7 @@ class Approximate(labeler_lib.PoseLabeler):
     ) -> Tuple[Any, Tuple[float, float, float]]:
         info = self._settings.get_values()
         user_amp = info.user_input_strength / 1000
-        if(info.user_input_spread != self._cached_gaussian_std):
+        if((self._cached_gaussian is None) or (info.user_input_spread != self._cached_gaussian_std)):
             self._make_gaussian(info.user_input_spread)
 
         meta = self._frame_engine.frame_data.metadata

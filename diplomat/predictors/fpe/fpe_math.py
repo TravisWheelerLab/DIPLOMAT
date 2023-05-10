@@ -28,9 +28,9 @@ def gaussian_formula(
     inner_x_delta = ((prior_x - x) ** 2) / (2 * std ** 2)
     inner_y_delta = ((prior_y - y) ** 2) / (2 * std ** 2)
     if(not in_log_space):
-        return max(amplitude * np.exp(-(inner_x_delta + inner_y_delta)), lowest_value)
+        return np.maximum(amplitude * np.exp(-(inner_x_delta + inner_y_delta)), lowest_value)
     else:
-        return max(np.log2(amplitude) - (inner_x_delta + inner_y_delta) * np.log(np.e), np.log2(lowest_value))
+        return np.maximum(np.log2(amplitude) - (inner_x_delta + inner_y_delta) * np.log(np.e), np.log2(lowest_value))
 
 def skeleton_formula(
     x: float,

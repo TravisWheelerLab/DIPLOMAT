@@ -195,7 +195,12 @@ class FixFrame(FramePass):
 
         if(skeleton is not None):
             select_mask = np.zeros((num_outputs, fb_data.num_bodyparts), bool)
-            score_graphs = cls.get_bidirectional_score_graphs(skeleton, fb_data.frames[frame_idx], num_outputs, down_scaling)
+            score_graphs = cls.get_bidirectional_score_graphs(
+                skeleton,
+                fb_data.frames[frame_idx],
+                num_outputs,
+                down_scaling
+            )
 
             for __ in range(fb_data.num_bodyparts):
                 # Compute the shortest node paths for every skeleton...
