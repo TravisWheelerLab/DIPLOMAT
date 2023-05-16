@@ -9,6 +9,8 @@ Deep learning-based Identity Preserving Labeled-Object Multi-Animal Tracking.
 DIPLOMAT provides algorithms and tools for performing multi-animal identity preserving tracking on top of single animal and multi animal CNN based tracking packages. Currently, it supports running on both DeepLabCut and SLEAP projects.
 Unlike other multi-animal tracking packages, DIPLOMAT's algorithms work directly off confidence maps instead of running peak detection, allowing for more nuanced tracking results compared to other methods. 
 
+https://github.com/TravisWheelerLab/DIPLOMAT/assets/47544550/d805b673-4678-4297-b288-3fd08ad3cf62
+
 |                                                            |                                                  |
 |------------------------------------------------------------|--------------------------------------------------|
 | ![Example of tracking 2 Degus in a Box](docs/source/_static/imgs/example1.png) | ![Example of tracking 3 Rats](docs/source/_static/imgs/example2.png) |
