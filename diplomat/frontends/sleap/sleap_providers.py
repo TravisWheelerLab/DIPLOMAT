@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
 
 import sleap.nn.data.resizing
+from sleap.nn.config import DataConfig as SleapDataConfig
 from typing_extensions import TypedDict
 import numpy as np
 import tensorflow as tf
@@ -20,10 +21,10 @@ class SleapMetadata(TypedDict):
     orig_skeleton: SleapSkeleton
 
 
-def _extract_metadata(predictor: SleapPredictor) -> SleapMetadata:
-    skel_list = predictor.data_config.labels.skeletons
+def sleap_metadata_from_config(config: SleapDataConfig) -> SleapMetadata:
+    skel_list = config.labels.skeletons
 
-    if(len(skel_list) < 1):
+    if (len(skel_list) < 1):
         raise ValueError("No part information for this SLEAP project, can't run diplomat!")
 
     skeleton1 = skel_list[0]
@@ -31,7 +32,7 @@ def _extract_metadata(predictor: SleapPredictor) -> SleapMetadata:
 
     return SleapMetadata(
         bp_names=skeleton1.node_names,
-        skeleton=edge_name_list if(len(edge_name_list) > 0) else None,
+        skeleton=edge_name_list if (len(edge_name_list) > 0) else None,
         orig_skeleton=skeleton1
     )
 
@@ -47,7 +48,7 @@ class SleapModelExtractor(ABC):
         self.__p = model
 
     def get_metadata(self) -> SleapMetadata:
-        return _extract_metadata(self.__p)
+        return sleap_metadata_from_config(self.__p.data_config)
 
     @abstractmethod
     def extract(self, data: Union[Provider]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:

@@ -71,7 +71,9 @@ def verify_existence_of(name: str):
         raise ValueError("Can only check top-level modules without attempting to import them.")
 
     try:
-        find_spec(name)
+        spec = find_spec(name)
+        if(spec is None):
+            raise ImportError(f"Unable to find package '{name}'.")
     except Exception as e:
         raise ImportError(str(e))
 

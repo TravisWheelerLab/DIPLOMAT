@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
+from collections import OrderedDict
 from diplomat.processing.type_casters import StrictCallable, PathLike, Union, List, Dict, Any, Optional, TypeCaster, NoneType
 import typing
-
 
 class Select(Union):
     def __eq__(self, other: TypeCaster):
@@ -62,29 +62,100 @@ ConvertResultsFunction = lambda ret: StrictCallable(
 )
 
 
-@dataclass(frozen=False)
-class DIPLOMATBaselineCommands:
+@dataclass(frozen=True)
+class DIPLOMATContract:
+    """
+    Represents a 'contract'
+    """
+    method_name: str
+    method_type: StrictCallable
+
+
+class CommandManager(type):
+
+    __no_type_check__ = False
+    def __new__(cls, *args, **kwargs):
+        obj = super().__new__(cls, *args, **kwargs)
+
+        annotations = typing.get_type_hints(obj)
+
+        for name, annot in annotations.items():
+            if(name in obj.__dict__):
+                raise TypeError(f"Command annotation '{name}' has default value, which is not allowed.")
+
+        return obj
+
+    def __getattr__(self, item):
+        annot = typing.get_type_hints(self)[item]
+        return DIPLOMATContract(item, annot)
+
+
+def required(typecaster: TypeCaster) -> TypeCaster:
+    typecaster._required = True
+    return typecaster
+
+
+class DIPLOMATCommands(metaclass=CommandManager):
     """
     The baseline set of functions each DIPLOMAT backend must implement. Backends can add additional commands
-    by extending this base class...
+    by passing the methods to this classes constructor.
     """
-    _verifier: VerifierFunction
+    _verifier: required(VerifierFunction)
     analyze_videos: AnalyzeVideosFunction(NoneType)
     analyze_frames: AnalyzeFramesFunction(NoneType)
     label_videos: LabelVideosFunction(NoneType)
     tweak_videos: LabelVideosFunction(NoneType)
     convert_results: ConvertResultsFunction(NoneType)
 
-    def __post_init__(self):
+    def __init__(self, **kwargs):
+        missing = object()
+        self._commands = OrderedDict()
+
         annotations = typing.get_type_hints(type(self))
 
-        for name, value in asdict(self).items():
-            annot = annotations.get(name, None)
+        for name, annot in annotations.items():
+            value = kwargs.get(name, missing)
 
+            if(value is missing):
+                if(getattr(annot, "_required", False)):
+                    raise ValueError(f"Command '{name}' is required, but was not provided.")
+                continue
             if(annot is None or (not isinstance(annot, TypeCaster))):
                 raise TypeError("DIPLOMAT Command Struct can only contain typecaster types.")
 
-            setattr(self, name, annot(value))
+            self._commands[name] = annot(value)
+
+        for name, value in kwargs.items():
+            if(name not in annotations):
+                self._commands[name] = value
+
+    def __iter__(self):
+        return iter(self._commands.items())
+
+    def __getattr__(self, item: str):
+        return self._commands.get(item)
+
+    def verify(self, contract: DIPLOMATContract, config: Union[List[PathLike], PathLike], **kwargs: Any) -> bool:
+        """
+        Verify this backend can handle the provided command type, config file, and arguments.
+
+        :param contract: The contract for the command. Includes the name of the method and the type of the method,
+                         which will typically be a strict callable.
+        :param config: The configuration file, checks if the backend can handle this configuration file.
+        :param kwargs: Any additional arguments to pass to the backends verifier.
+
+        :return: A boolean, True if the backend can handle the provided command and arguments, otherwise False.
+        """
+        if(contract.method_name in self._commands):
+            func = self._commands[contract.method_name]
+            try:
+                contract.method_type(func)
+            except Exception:
+                return False
+
+            return self._verifier(config, **kwargs)
+
+        return False
 
 
 class DIPLOMATFrontend(ABC):
@@ -93,7 +164,7 @@ class DIPLOMATFrontend(ABC):
     """
     @classmethod
     @abstractmethod
-    def init(cls) -> typing.Optional[DIPLOMATBaselineCommands]:
+    def init(cls) -> typing.Optional[DIPLOMATCommands]:
         """
         Attempt to initialize the frontend, returning a list of api functions. If the backend can't initialize due to missing imports/requirements,
         this function should return None.

@@ -7,6 +7,7 @@ from argparse import ArgumentParser
 import typing
 from types import ModuleType
 from diplomat.utils.tweak_ui import UIImportError
+from diplomat.frontends import DIPLOMATContract, DIPLOMATCommands
 
 
 class ArgumentError(CLIError):
@@ -47,14 +48,21 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
     return new_args
 
 
-def _find_frontend(config: os.PathLike, **kwargs: typing.Any) -> typing.Tuple[str, ModuleType]:
+def _find_frontend(
+    contracts: Union[DIPLOMATContract, List[DIPLOMATContract]],
+    config: os.PathLike,
+    **kwargs: typing.Any
+) -> typing.Tuple[str, ModuleType]:
     from diplomat import _LOADED_FRONTENDS
 
+    contracts = [contracts] if(isinstance(contracts, DIPLOMATContract)) else contracts
+
     for name, funcs in _LOADED_FRONTENDS.items():
-        if(funcs._verifier(
+        if(all(funcs.verify(
+            contract=c,
             config=config,
             **kwargs
-        )):
+        ) for c in contracts)):
             print(f"Frontend '{name}' selected.")
             return (name, funcs)
 
@@ -178,6 +186,7 @@ def track(
     from diplomat import CLI_RUN
 
     selected_frontend_name, selected_frontend = _find_frontend(
+        contracts=[DIPLOMATCommands.analyze_videos, DIPLOMATCommands.analyze_videos],
         config=config,
         videos=videos,
         frame_stores=frame_stores,
@@ -324,7 +333,12 @@ def annotate(
     from diplomat import CLI_RUN
 
     # Iterate the frontends, looking for one that actually matches our request...
-    selected_frontend_name, selected_frontend = _find_frontend(config=config, videos=videos, **extra_args)
+    selected_frontend_name, selected_frontend = _find_frontend(
+        contracts=DIPLOMATCommands.label_videos,
+        config=config,
+        videos=videos,
+        **extra_args
+    )
 
     if(help_extra):
         _display_help(selected_frontend_name, "video labeling", "diplomat annotate", selected_frontend.label_videos, CLI_RUN)
@@ -350,18 +364,25 @@ def tweak(
     **extra_args
 ):
     """
-    Make modifications to DIPLOMAT produced tracking results created for a video using a limited version supervised labeling UI. Allows for touching
-    up and fixing any minor issues that may arise after tracking and saving results.
+    Make modifications to DIPLOMAT produced tracking results created for a video using a limited version supervised
+    labeling UI. Allows for touching up and fixing any minor issues that may arise after tracking and saving results.
 
-    :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
+    :param config: The path to the configuration file for the project. The format of this argument will depend on the
+                   frontend.
     :param videos: A single path or list of paths to video files to tweak the tracks of.
-    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of showing the UI.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run tweak with extra_help flag set to true.
+    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of
+                       showing the UI.
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically
+                       selected frontend. To see valid values, run tweak with extra_help flag set to true.
     """
     from diplomat import CLI_RUN
 
-    selected_frontend_name, selected_frontend = _find_frontend(config=config, videos=videos, **extra_args)
+    selected_frontend_name, selected_frontend = _find_frontend(
+        contracts=DIPLOMATCommands.tweak_videos,
+        config=config,
+        videos=videos,
+        **extra_args
+    )
 
     if(help_extra):
         _display_help(selected_frontend_name, "label tweaking", "diplomat tweak", selected_frontend.tweak_videos, CLI_RUN)
@@ -404,7 +425,12 @@ def convert(
     """
     from diplomat import CLI_RUN
 
-    selected_frontend_name, selected_frontend = _find_frontend(config=config, videos=videos, **extra_args)
+    selected_frontend_name, selected_frontend = _find_frontend(
+        contracts=DIPLOMATCommands.convert_results,
+        config=config,
+        videos=videos,
+        **extra_args
+    )
 
     if(help_extra):
         _display_help(

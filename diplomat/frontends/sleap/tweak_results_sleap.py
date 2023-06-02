@@ -13,7 +13,7 @@ from .run_utils import (
     _paths_to_str,
     _get_video_metadata,
     _to_diplomat_poses,
-    PoseLabels,
+    PoseLabels, _load_config,
 )
 from .sleap_providers import SleapMetadata
 
@@ -34,10 +34,7 @@ def tweak_videos(
 
                    {extra_cli_args}
     """
-    model = sleap.load_model(_paths_to_str(config))
-
-    if(model is None):
-        raise ValueError("Model passed was invalid!")
+    _load_config(_paths_to_str(config))
 
     label_paths = _paths_to_str(videos)
     label_paths = [label_paths] if(isinstance(label_paths, str)) else label_paths

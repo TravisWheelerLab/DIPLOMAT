@@ -13,7 +13,8 @@ from diplomat.utils.shapes import shape_iterator, CV2DotShapeDrawer
 from .visual_settings import FULL_VISUAL_SETTINGS
 from .run_utils import (
     _paths_to_str,
-    _to_diplomat_poses
+    _to_diplomat_poses,
+    _load_config
 )
 
 
@@ -47,10 +48,7 @@ def label_videos(
 
                    {extra_cli_args}
     """
-    model = sleap.load_model(_paths_to_str(config))
-
-    if(model is None):
-        raise ValueError("Model passed was invalid!")
+    _load_config(_paths_to_str(config))
 
     videos = _paths_to_str(videos)
     videos = [videos] if(isinstance(videos, str)) else videos

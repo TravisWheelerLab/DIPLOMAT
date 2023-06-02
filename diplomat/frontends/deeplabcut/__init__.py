@@ -1,5 +1,5 @@
 from typing import Optional
-from diplomat.frontends import DIPLOMATFrontend, DIPLOMATBaselineCommands
+from diplomat.frontends import DIPLOMATFrontend, DIPLOMATCommands
 
 
 class DEEPLABCUTFrontend(DIPLOMATFrontend):
@@ -7,7 +7,7 @@ class DEEPLABCUTFrontend(DIPLOMATFrontend):
     The DEEPLABCUT frontend for DIPLOMAT. Contains functions for running DIPLOMAT on DEEPLABCUT projects.
     """
     @classmethod
-    def init(cls) -> Optional[DIPLOMATBaselineCommands]:
+    def init(cls) -> Optional[DIPLOMATCommands]:
         try:
             from diplomat.frontends.deeplabcut._verify_func import _verify_dlc_like
             from diplomat.frontends.deeplabcut.predict_videos_dlc import analyze_videos
@@ -18,7 +18,7 @@ class DEEPLABCUTFrontend(DIPLOMATFrontend):
         except ImportError:
             return None
 
-        return DIPLOMATBaselineCommands(
+        return DIPLOMATCommands(
             _verifier=_verify_dlc_like,
             analyze_videos=analyze_videos,
             analyze_frames=analyze_frames,

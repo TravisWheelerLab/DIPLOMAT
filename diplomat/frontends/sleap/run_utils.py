@@ -48,6 +48,18 @@ def _paths_to_str(paths):
         return str(paths)
 
 
+def _load_config(paths):
+    try:
+        paths = [paths] if(isinstance(paths, str)) else paths
+
+        if(len(paths) < 1):
+            raise ValueError(f"No configuration files passed to open!")
+
+        return [sleap.load_config(p) for p in paths]
+    except IOError as e:
+        raise type(e)(f"Unable to load provided sleap config: '{repr(e)}'")
+
+
 def _get_default_value(func, attr, fallback):
     param = signature(func).parameters.get(attr, None)
     return fallback if(param is None) else param.default
