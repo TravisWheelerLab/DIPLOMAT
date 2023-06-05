@@ -243,7 +243,7 @@ class TweakUI:
     def tweak(
         self,
         parent,
-        video_path: os.PathLike,
+        video_path: Union[os.PathLike, str],
         poses: Pose,
         bodypart_names: List[str],
         video_metadata: Dict[str, Any],
