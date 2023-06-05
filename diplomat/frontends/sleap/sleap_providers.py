@@ -1,17 +1,20 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
 
-import sleap.nn.data.resizing
-from sleap.nn.config import DataConfig as SleapDataConfig
 from typing_extensions import TypedDict
 import numpy as np
 import tensorflow as tf
-from sleap import Video as SleapVideo
-from sleap.nn.data.pipelines import Provider
-from sleap.nn.data.providers import VideoReader as SleapVideoReader
-from sleap.nn.inference import Predictor as SleapPredictor
-from sleap.nn.inference import InferenceLayer as SleapInferenceLayer
-from sleap.skeleton import Skeleton as SleapSkeleton
+
+from .sleap_importer import (
+    SleapDataConfig,
+    SleapVideo,
+    Provider,
+    SleapVideoReader,
+    SleapPredictor,
+    SleapInferenceLayer,
+    SleapSkeleton
+)
+
 from diplomat.processing import TrackingData
 
 
@@ -62,10 +65,12 @@ def _normalize_conf_map(conf_map: tf.Tensor) -> tf.Tensor:
 
 
 class BottomUpModelExtractor(SleapModelExtractor):
-    from sleap.nn.inference import BottomUpPredictor, BottomUpMultiClassPredictor
-    supported_models: Optional[Set[SleapPredictor]] = {BottomUpPredictor, BottomUpMultiClassPredictor}
+    @property
+    def supported_models(self) -> Set[SleapPredictor]:
+        from sleap.nn.inference import BottomUpPredictor, BottomUpMultiClassPredictor
+        return {BottomUpPredictor, BottomUpMultiClassPredictor}
 
-    def __init__(self, model: Union[BottomUpPredictor, BottomUpMultiClassPredictor]):
+    def __init__(self, model: SleapPredictor):
         super().__init__(model)
         self._predictor = model
 
@@ -99,14 +104,17 @@ def _extract_model_outputs(inf_layer: SleapInferenceLayer, images: tf.Tensor) ->
 
 
 class TopDownModelExtractor(SleapModelExtractor):
-    from sleap.nn.inference import TopDownPredictor, TopDownMultiClassPredictor
-    supported_models: Optional[Set[SleapPredictor]] = {TopDownPredictor, TopDownMultiClassPredictor}
+    @property
+    def supported_models(self) -> Set[SleapPredictor]:
+        from sleap.nn.inference import TopDownPredictor, TopDownMultiClassPredictor
+        return {TopDownPredictor, TopDownMultiClassPredictor}
 
-    def __init__(self, model: Union[TopDownPredictor, TopDownMultiClassPredictor]):
+    def __init__(self, model: SleapPredictor):
         super().__init__(model)
         self._predictor = model
         # TODO: Eventually fix top down support to actually work.
-        raise NotImplementedError("SLEAP's top down model is currently not supported. Please train using a different model type to use DIPLOMAT.")
+        raise NotImplementedError("SLEAP's top down model is currently not supported. Please train using a "
+                                  "different model type to use DIPLOMAT.")
 
     @staticmethod
     def _merge_tiles(
@@ -162,10 +170,12 @@ class TopDownModelExtractor(SleapModelExtractor):
 
 
 class SingleInstanceModelExtractor(SleapModelExtractor):
-    from sleap.nn.inference import SingleInstancePredictor
-    supported_models: Optional[Set[SleapPredictor]] = {SingleInstancePredictor}
+    @property
+    def supported_models(self) -> Set[SleapPredictor]:
+        from sleap.nn.inference import SingleInstancePredictor
+        return {SingleInstancePredictor}
 
-    def __init__(self, model: Union[SingleInstancePredictor]):
+    def __init__(self, model: SleapPredictor):
         super().__init__(model)
         self._predictor = model
 

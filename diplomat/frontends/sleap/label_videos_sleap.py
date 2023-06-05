@@ -2,7 +2,7 @@ import functools
 from pathlib import Path
 from typing import TypeVar, Type, Tuple
 import cv2
-import sleap
+from .sleap_importer import sleap
 
 import diplomat.processing.type_casters as tc
 from diplomat.utils.cli_tools import extra_cli_args

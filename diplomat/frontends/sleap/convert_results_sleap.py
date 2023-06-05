@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import sleap
+from .sleap_importer import sleap
 
 import diplomat.processing.type_casters as tc
 from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table

@@ -9,12 +9,20 @@ from diplomat.processing import get_predictor, Config, TQDMProgressBar, Predicto
 from diplomat.utils.video_info import is_video
 from diplomat.utils import frame_store_fmt
 
-from .run_utils import _get_default_value, _paths_to_str, _get_video_metadata, _get_predictor_settings, PoseLabels, \
-    Timer, _attach_run_info, _load_config
+from .run_utils import (
+    _get_default_value,
+    _paths_to_str,
+    _get_video_metadata,
+    _get_predictor_settings,
+    PoseLabels,
+    Timer,
+    _attach_run_info,
+    _load_config
+)
+
+from .sleap_importer import sleap
 from .sleap_providers import sleap_metadata_from_config, SleapMetadata
 from .visual_settings import VISUAL_SETTINGS
-
-import sleap
 
 
 @dataclass
@@ -55,6 +63,7 @@ def analyze_frames(
 
                    {extra_cli_args}
     """
+    import sleap
     batch_size = _get_default_value(sleap.load_model, "batch_size", 4) if (batch_size is None) else batch_size
     num_outputs = 1 if (num_outputs is None) else num_outputs
 

@@ -5,7 +5,7 @@ from datetime import datetime
 from inspect import signature
 from pathlib import Path
 from typing import Optional, Type, List, Tuple, Iterable, Dict
-import sleap
+from .sleap_importer import sleap
 import numpy as np
 from diplomat.processing import Predictor, Config, Pose
 from diplomat.utils.shapes import shape_iterator

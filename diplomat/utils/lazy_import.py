@@ -113,3 +113,9 @@ class LazyImporter:
             self._mod = self._imp(self._name, self._pkg)
 
         return self._mod(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return repr(self)
+
+    def __repr__(self) -> str:
+        return self._name
