@@ -1,4 +1,4 @@
-import tensorflow as tf
+from .sleap_importer import tf
 import platform
 import time
 from datetime import datetime
@@ -16,6 +16,7 @@ def _frame_iter(
     skeleton: sleap.Skeleton,
     track_to_idx: Dict[sleap.Track, int]
 ) -> Iterable[sleap.PredictedInstance]:
+    import sleap
     for inst in frame.instances:
         if((inst.track is not None) and isinstance(inst, sleap.PredictedInstance) and (inst.skeleton == skeleton)):
             yield track_to_idx[inst.track], inst
@@ -266,6 +267,7 @@ def _attach_run_info(
     command: List[str]
 ) -> sleap.Labels:
     import diplomat
+    import sleap
 
     labels.provenance.update({
         "sleap_version": sleap.__version__,

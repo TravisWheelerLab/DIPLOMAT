@@ -4,6 +4,7 @@ verify_existence_of("sleap")
 
 
 sleap = LazyImporter("sleap")
+tf = LazyImporter("tensorflow")
 
 SleapDataConfig = LazyImporter("sleap.nn.config.DataConfig")
 SleapVideo = LazyImporter("sleap.Video")

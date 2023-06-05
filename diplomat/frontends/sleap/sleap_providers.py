@@ -3,9 +3,9 @@ from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
 
 from typing_extensions import TypedDict
 import numpy as np
-import tensorflow as tf
 
 from .sleap_importer import (
+    tf,
     SleapDataConfig,
     SleapVideo,
     Provider,
@@ -258,6 +258,7 @@ class PredictorExtractor:
         return tf.math.divide_no_nan(results[:, :, :, :, :2], results[:, :, :, :, 2:])
 
     def extract(self, data: Union[Provider, SleapVideo]) -> Iterator[TrackingData]:
+        from sleap import Video as SleapVideo
         if(isinstance(data, SleapVideo)):
             data = SleapVideoReader(data)
 
