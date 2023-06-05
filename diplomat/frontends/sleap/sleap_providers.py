@@ -44,7 +44,9 @@ class SleapModelExtractor(ABC):
     """
     Takes a SLEAP Predictor, and modifies it so that it outputs TrackingData instead of SLEAP predictions.
     """
-    supported_models: Optional[Set[Type[SleapPredictor]]] = None
+    @classmethod
+    def supported_models(cls) -> Set[SleapPredictor]:
+        return set()
 
     @abstractmethod
     def __init__(self, model: SleapPredictor):
@@ -65,8 +67,8 @@ def _normalize_conf_map(conf_map: tf.Tensor) -> tf.Tensor:
 
 
 class BottomUpModelExtractor(SleapModelExtractor):
-    @property
-    def supported_models(self) -> Set[SleapPredictor]:
+    @classmethod
+    def supported_models(cls) -> Set[SleapPredictor]:
         from sleap.nn.inference import BottomUpPredictor, BottomUpMultiClassPredictor
         return {BottomUpPredictor, BottomUpMultiClassPredictor}
 
@@ -104,8 +106,8 @@ def _extract_model_outputs(inf_layer: SleapInferenceLayer, images: tf.Tensor) ->
 
 
 class TopDownModelExtractor(SleapModelExtractor):
-    @property
-    def supported_models(self) -> Set[SleapPredictor]:
+    @classmethod
+    def supported_models(cls) -> Set[SleapPredictor]:
         from sleap.nn.inference import TopDownPredictor, TopDownMultiClassPredictor
         return {TopDownPredictor, TopDownMultiClassPredictor}
 
@@ -170,8 +172,8 @@ class TopDownModelExtractor(SleapModelExtractor):
 
 
 class SingleInstanceModelExtractor(SleapModelExtractor):
-    @property
-    def supported_models(self) -> Set[SleapPredictor]:
+    @classmethod
+    def supported_models(cls) -> Set[SleapPredictor]:
         from sleap.nn.inference import SingleInstancePredictor
         return {SingleInstancePredictor}
 
@@ -206,7 +208,7 @@ class PredictorExtractor:
         self._refinement_kernel_size = refinement_kernel_size
 
         for model_extractor in EXTRACTORS:
-            if(type(predictor) in model_extractor.supported_models):
+            if(type(predictor) in model_extractor.supported_models()):
                 self._model_extractor = model_extractor(self._predictor)
                 break
         else:

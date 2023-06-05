@@ -92,8 +92,6 @@ def _label_videos_single(
                     if(not retval):
                         continue
 
-                    frame = frame[..., ::-1]
-
                     if (visual_settings.upscale_factor is not None):
                         frame = cv2.resize(
                             frame,
