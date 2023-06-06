@@ -2,7 +2,7 @@
 A tool providing multi-animal tracking capabilities on top of other Deep learning based tracking software.
 """
 
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 # Can be used by functions to determine if diplomat was invoked through it's CLI interface.
 CLI_RUN = False
 
@@ -61,12 +61,13 @@ def _load_frontends():
             if(hasattr(frontend, "__doc__")):
                 mod.__doc__ = frontend.__doc__
 
-            for (name, func) in asdict(res).items():
+            for (name, func) in res:
                 if(not name.startswith("_")):
                     func = replace_function_name_and_module(func, name, mod.__name__)
                     setattr(mod, name, func)
                     mod.__all__.append(name)
 
     return frontends, loaded_funcs
+
 
 _FRONTENDS, _LOADED_FRONTENDS = _load_frontends()

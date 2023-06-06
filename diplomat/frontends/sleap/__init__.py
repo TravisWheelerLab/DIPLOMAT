@@ -1,5 +1,5 @@
 from typing import Optional
-from diplomat.frontends import DIPLOMATFrontend, DIPLOMATBaselineCommands
+from diplomat.frontends import DIPLOMATFrontend, DIPLOMATCommands
 
 
 class SLEAPFrontend(DIPLOMATFrontend):
@@ -7,7 +7,7 @@ class SLEAPFrontend(DIPLOMATFrontend):
     The SLEAP frontend for DIPLOMAT. Contains functions for running DIPLOMAT on SLEAP projects.
     """
     @classmethod
-    def init(cls) -> Optional[DIPLOMATBaselineCommands]:
+    def init(cls) -> Optional[DIPLOMATCommands]:
         try:
             from diplomat.frontends.sleap._verify_func import _verify_sleap_like
             from diplomat.frontends.sleap.predict_videos_sleap import analyze_videos
@@ -18,7 +18,7 @@ class SLEAPFrontend(DIPLOMATFrontend):
         except ImportError:
             return None
 
-        return DIPLOMATBaselineCommands(
+        return DIPLOMATCommands(
             _verifier=_verify_sleap_like,
             analyze_videos=analyze_videos,
             analyze_frames=analyze_frames,

@@ -1,16 +1,20 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
 
-import sleap.nn.data.resizing
 from typing_extensions import TypedDict
 import numpy as np
-import tensorflow as tf
-from sleap import Video as SleapVideo
-from sleap.nn.data.pipelines import Provider
-from sleap.nn.data.providers import VideoReader as SleapVideoReader
-from sleap.nn.inference import Predictor as SleapPredictor
-from sleap.nn.inference import InferenceLayer as SleapInferenceLayer
-from sleap.skeleton import Skeleton as SleapSkeleton
+
+from .sleap_importer import (
+    tf,
+    SleapDataConfig,
+    SleapVideo,
+    Provider,
+    SleapVideoReader,
+    SleapPredictor,
+    SleapInferenceLayer,
+    SleapSkeleton
+)
+
 from diplomat.processing import TrackingData
 
 
@@ -20,10 +24,10 @@ class SleapMetadata(TypedDict):
     orig_skeleton: SleapSkeleton
 
 
-def _extract_metadata(predictor: SleapPredictor) -> SleapMetadata:
-    skel_list = predictor.data_config.labels.skeletons
+def sleap_metadata_from_config(config: SleapDataConfig) -> SleapMetadata:
+    skel_list = config.labels.skeletons
 
-    if(len(skel_list) < 1):
+    if (len(skel_list) < 1):
         raise ValueError("No part information for this SLEAP project, can't run diplomat!")
 
     skeleton1 = skel_list[0]
@@ -31,7 +35,7 @@ def _extract_metadata(predictor: SleapPredictor) -> SleapMetadata:
 
     return SleapMetadata(
         bp_names=skeleton1.node_names,
-        skeleton=edge_name_list if(len(edge_name_list) > 0) else None,
+        skeleton=edge_name_list if (len(edge_name_list) > 0) else None,
         orig_skeleton=skeleton1
     )
 
@@ -40,14 +44,16 @@ class SleapModelExtractor(ABC):
     """
     Takes a SLEAP Predictor, and modifies it so that it outputs TrackingData instead of SLEAP predictions.
     """
-    supported_models: Optional[Set[Type[SleapPredictor]]] = None
+    @classmethod
+    def supported_models(cls) -> Set[SleapPredictor]:
+        return set()
 
     @abstractmethod
     def __init__(self, model: SleapPredictor):
         self.__p = model
 
     def get_metadata(self) -> SleapMetadata:
-        return _extract_metadata(self.__p)
+        return sleap_metadata_from_config(self.__p.data_config)
 
     @abstractmethod
     def extract(self, data: Union[Provider]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
@@ -61,10 +67,12 @@ def _normalize_conf_map(conf_map: tf.Tensor) -> tf.Tensor:
 
 
 class BottomUpModelExtractor(SleapModelExtractor):
-    from sleap.nn.inference import BottomUpPredictor, BottomUpMultiClassPredictor
-    supported_models: Optional[Set[SleapPredictor]] = {BottomUpPredictor, BottomUpMultiClassPredictor}
+    @classmethod
+    def supported_models(cls) -> Set[SleapPredictor]:
+        from sleap.nn.inference import BottomUpPredictor, BottomUpMultiClassPredictor
+        return {BottomUpPredictor, BottomUpMultiClassPredictor}
 
-    def __init__(self, model: Union[BottomUpPredictor, BottomUpMultiClassPredictor]):
+    def __init__(self, model: SleapPredictor):
         super().__init__(model)
         self._predictor = model
 
@@ -98,14 +106,17 @@ def _extract_model_outputs(inf_layer: SleapInferenceLayer, images: tf.Tensor) ->
 
 
 class TopDownModelExtractor(SleapModelExtractor):
-    from sleap.nn.inference import TopDownPredictor, TopDownMultiClassPredictor
-    supported_models: Optional[Set[SleapPredictor]] = {TopDownPredictor, TopDownMultiClassPredictor}
+    @classmethod
+    def supported_models(cls) -> Set[SleapPredictor]:
+        from sleap.nn.inference import TopDownPredictor, TopDownMultiClassPredictor
+        return {TopDownPredictor, TopDownMultiClassPredictor}
 
-    def __init__(self, model: Union[TopDownPredictor, TopDownMultiClassPredictor]):
+    def __init__(self, model: SleapPredictor):
         super().__init__(model)
         self._predictor = model
         # TODO: Eventually fix top down support to actually work.
-        raise NotImplementedError("SLEAP's top down model is currently not supported. Please train using a different model type to use DIPLOMAT.")
+        raise NotImplementedError("SLEAP's top down model is currently not supported. Please train using a "
+                                  "different model type to use DIPLOMAT.")
 
     @staticmethod
     def _merge_tiles(
@@ -161,10 +172,12 @@ class TopDownModelExtractor(SleapModelExtractor):
 
 
 class SingleInstanceModelExtractor(SleapModelExtractor):
-    from sleap.nn.inference import SingleInstancePredictor
-    supported_models: Optional[Set[SleapPredictor]] = {SingleInstancePredictor}
+    @classmethod
+    def supported_models(cls) -> Set[SleapPredictor]:
+        from sleap.nn.inference import SingleInstancePredictor
+        return {SingleInstancePredictor}
 
-    def __init__(self, model: Union[SingleInstancePredictor]):
+    def __init__(self, model: SleapPredictor):
         super().__init__(model)
         self._predictor = model
 
@@ -195,7 +208,7 @@ class PredictorExtractor:
         self._refinement_kernel_size = refinement_kernel_size
 
         for model_extractor in EXTRACTORS:
-            if(type(predictor) in model_extractor.supported_models):
+            if(type(predictor) in model_extractor.supported_models()):
                 self._model_extractor = model_extractor(self._predictor)
                 break
         else:
@@ -247,6 +260,7 @@ class PredictorExtractor:
         return tf.math.divide_no_nan(results[:, :, :, :, :2], results[:, :, :, :, 2:])
 
     def extract(self, data: Union[Provider, SleapVideo]) -> Iterator[TrackingData]:
+        from sleap import Video as SleapVideo
         if(isinstance(data, SleapVideo)):
             data = SleapVideoReader(data)
 

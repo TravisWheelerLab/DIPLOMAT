@@ -1,11 +1,11 @@
-import tensorflow as tf
+from .sleap_importer import tf
 import platform
 import time
 from datetime import datetime
 from inspect import signature
 from pathlib import Path
 from typing import Optional, Type, List, Tuple, Iterable, Dict
-import sleap
+from .sleap_importer import sleap
 import numpy as np
 from diplomat.processing import Predictor, Config, Pose
 from diplomat.utils.shapes import shape_iterator
@@ -16,6 +16,7 @@ def _frame_iter(
     skeleton: sleap.Skeleton,
     track_to_idx: Dict[sleap.Track, int]
 ) -> Iterable[sleap.PredictedInstance]:
+    import sleap
     for inst in frame.instances:
         if((inst.track is not None) and isinstance(inst, sleap.PredictedInstance) and (inst.skeleton == skeleton)):
             yield track_to_idx[inst.track], inst
@@ -46,6 +47,18 @@ def _paths_to_str(paths):
         return [str(p) for p in paths]
     else:
         return str(paths)
+
+
+def _load_config(paths):
+    try:
+        paths = [paths] if(isinstance(paths, str)) else paths
+
+        if(len(paths) < 1):
+            raise ValueError(f"No configuration files passed to open!")
+
+        return [sleap.load_config(p) for p in paths]
+    except IOError as e:
+        raise type(e)(f"Unable to load provided sleap config: '{repr(e)}'")
 
 
 def _get_default_value(func, attr, fallback):
@@ -254,6 +267,7 @@ def _attach_run_info(
     command: List[str]
 ) -> sleap.Labels:
     import diplomat
+    import sleap
 
     labels.provenance.update({
         "sleap_version": sleap.__version__,

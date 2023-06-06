@@ -27,7 +27,7 @@ with mock(MOCK_PACKAGES):
 
     import diplomat.predictors.fpe.frame_passes as frame_passes
     from diplomat.predictors.fpe.frame_pass import FramePass
-    from diplomat.frontends import DIPLOMATBaselineCommands
+    from diplomat.frontends import DIPLOMATCommands
 
 def load_plugins_with_mocks(module, clazz):
     from diplomat.utils.pluginloader import load_plugin_classes
@@ -195,7 +195,7 @@ def get_frame_pass_rst(plugin: Type[FramePass]) -> str:
         settings = format_settings(plugin.get_config_options())
     )
 
-def get_frontend_rst(name: str, methods: DIPLOMATBaselineCommands):
+def get_frontend_rst(name: str, methods: DIPLOMATCommands):
     from dataclasses import asdict
 
     module_name = "diplomat." + name
@@ -207,7 +207,7 @@ def get_frontend_rst(name: str, methods: DIPLOMATBaselineCommands):
         module_name_eqs = "=" * len(module_name),
         desc = clean_doc_str(doc),
         function_list = "\n".join(
-            f"    ~{func.__module__}.{func.__name__}" for name, func in asdict(methods).items() if(not func.__name__.startswith("_"))
+            f"    ~{func.__module__}.{func.__name__}" for name, func in methods if(not func.__name__.startswith("_"))
         )
     )
 

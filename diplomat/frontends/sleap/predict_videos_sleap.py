@@ -5,7 +5,6 @@ import diplomat.processing.type_casters as tc
 from diplomat.utils.cli_tools import extra_cli_args, Flag
 from diplomat.processing.progress_bar import TQDMProgressBar
 from diplomat.processing import get_predictor, Config, Predictor
-import sleap
 
 from .sleap_providers import PredictorExtractor
 from .visual_settings import VISUAL_SETTINGS
@@ -58,6 +57,7 @@ def analyze_videos(
     """
     _setup_gpus(use_cpu, gpu_index)
 
+    import sleap
     batch_size = _get_default_value(sleap.load_model, "batch_size", 4) if(batch_size is None) else batch_size
     num_outputs = 1 if(num_outputs is None) else num_outputs
 
@@ -103,6 +103,7 @@ def _analyze_single_video(
     predictor_settings: Optional[dict],
     output_suffix: str
 ):
+    import sleap
     video_path = Path(video_path).resolve()
     video = sleap.load_video(str(video_path))
     output_path = video_path.parent / (video_path.name + f".diplomat_{predictor_cls.get_name()}{output_suffix}.slp")

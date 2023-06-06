@@ -191,6 +191,15 @@ class FixFrame(FramePass):
         # Copy over data to start, ignoring skeleton...
         for bp_i in range(fb_data.num_bodyparts):
             fixed_frame[bp_i] = fb_data.frames[frame_idx][bp_i].copy()
+
+            __, __, prob, __, __ = fixed_frame[bp_i].src_data.unpack()
+            if(prob is None):
+                # Fallback fix frame: We just create a single cell with 0 probability, forcing viterbi to use entry
+                # states...
+                src_data = SparseTrackingData().pack([0], [0], [0], [0], [0])
+                fixed_frame[bp_i].src_data = src_data
+                fb_data.frames[frame_idx][bp_i].src_data = src_data
+
             fixed_frame[bp_i].disable_occluded = True
 
         if(skeleton is not None):

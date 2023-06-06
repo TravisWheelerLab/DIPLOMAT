@@ -9,11 +9,20 @@ from diplomat.processing import get_predictor, Config, TQDMProgressBar, Predicto
 from diplomat.utils.video_info import is_video
 from diplomat.utils import frame_store_fmt
 
-from .run_utils import _get_default_value, _paths_to_str, _get_video_metadata, _get_predictor_settings, PoseLabels, Timer, _attach_run_info
-from .sleap_providers import PredictorExtractor, SleapMetadata
-from .visual_settings import VISUAL_SETTINGS
+from .run_utils import (
+    _get_default_value,
+    _paths_to_str,
+    _get_video_metadata,
+    _get_predictor_settings,
+    PoseLabels,
+    Timer,
+    _attach_run_info,
+    _load_config
+)
 
-import sleap
+from .sleap_importer import sleap
+from .sleap_providers import sleap_metadata_from_config, SleapMetadata
+from .visual_settings import VISUAL_SETTINGS
 
 
 @dataclass
@@ -54,14 +63,13 @@ def analyze_frames(
 
                    {extra_cli_args}
     """
+    import sleap
     batch_size = _get_default_value(sleap.load_model, "batch_size", 4) if (batch_size is None) else batch_size
     num_outputs = 1 if (num_outputs is None) else num_outputs
 
-    print("Loading Model...")
-    model = sleap.load_model(_paths_to_str(config), batch_size=batch_size)
-    # Get the model extractor...
-    mdl_extractor = PredictorExtractor(model, refinement_kernel_size)
-    mdl_metadata = mdl_extractor.get_metadata()
+    print("Loading Config...")
+    config = _load_config(_paths_to_str(config))[0]
+    mdl_metadata = sleap_metadata_from_config(config.data)
 
     predictor_cls = get_predictor("SegmentedFramePassEngine" if (predictor is None) else predictor)
     print(f"Using predictor: '{predictor_cls.get_name()}'")

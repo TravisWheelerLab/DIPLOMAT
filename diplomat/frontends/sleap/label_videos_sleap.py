@@ -1,19 +1,20 @@
-import functools
 from pathlib import Path
-from typing import TypeVar, Type, Tuple
+from typing import Tuple
 import cv2
-import sleap
+from .sleap_importer import sleap
 
 import diplomat.processing.type_casters as tc
 from diplomat.utils.cli_tools import extra_cli_args
 from diplomat.processing import Config, TQDMProgressBar
 from diplomat.utils.colormaps import iter_colormap
+from diplomat.utils.video_io import ContextVideoWriter
 from diplomat.utils.shapes import shape_iterator, CV2DotShapeDrawer
 
 from .visual_settings import FULL_VISUAL_SETTINGS
 from .run_utils import (
     _paths_to_str,
-    _to_diplomat_poses
+    _to_diplomat_poses,
+    _load_config
 )
 
 
@@ -47,10 +48,7 @@ def label_videos(
 
                    {extra_cli_args}
     """
-    model = sleap.load_model(_paths_to_str(config))
-
-    if(model is None):
-        raise ValueError("Model passed was invalid!")
+    _load_config(_paths_to_str(config))
 
     videos = _paths_to_str(videos)
     videos = [videos] if(isinstance(videos, str)) else videos
@@ -59,38 +57,6 @@ def label_videos(
 
     for video in videos:
         _label_video_single(video, visual_settings, body_parts_to_plot, video_extension)
-
-
-T = TypeVar("T")
-
-
-@functools.lru_cache(None)
-def _create_manager(clazz: Type[T]) -> Type[T]:
-    class cv2_context_manager(clazz):
-        def __enter__(self):
-            if(not self.isOpened()):
-                self.release()
-                raise IOError("Unable to open video capture...")
-            return self
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            self.release()
-
-        def read(self):
-            if(not self.isOpened()):
-                raise IOError("Video capture is not open.")
-            return super().read()
-
-        def write(self, frame):
-            if (not self.isOpened()):
-                raise IOError("Video writer is not open.")
-            return super().write(frame)
-
-    return cv2_context_manager
-
-
-ContextVideoWriter = _create_manager(cv2.VideoWriter)
-ContextVideoCapture = _create_manager(cv2.VideoCapture)
 
 
 def _label_video_single(

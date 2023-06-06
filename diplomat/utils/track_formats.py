@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Tuple
 import pandas as pd
 from io import BufferedWriter, BufferedReader
 from diplomat.processing import Pose
@@ -52,4 +52,27 @@ def load_diplomat_table(path_or_buf: Union[str, BufferedReader]) -> pd.DataFrame
 
     :return: A pd.DataFrame, being the diplomat-pandas pose table stored at the given location.
     """
-    return pd.read_csv(path_or_buf, index_col=False, header=[0, 1, 2])
+    return pd.read_csv(path_or_buf, index_col=None, header=[0, 1, 2])
+
+
+def to_diplomat_pose(table: pd.DataFrame) -> Tuple[Pose, List[str], int]:
+    """
+    Convert a diplomat pandas table to a diplomat Pose object.
+
+    :param table: A diplomat pandas table, typically as loaded from a CSV.
+
+    :return: A tuple containing a diplomat Pose object, a list of string giving the body part names in order,
+             and an integer giving the number of bodies, our outputs.
+    """
+    num_outputs = len(table.columns.unique(0))
+    names = table.columns.unique(1)
+
+    poses_enc = table.to_numpy()
+    poses_enc = poses_enc.reshape(
+        (table.shape[0], num_outputs, len(names), 3)
+    ).transpose((0, 2, 1, 3)).reshape(table.shape)
+
+    poses = Pose.empty_pose(table.shape[0], len(names) * num_outputs)
+    poses.get_all()[:] = poses_enc
+
+    return (poses, names, num_outputs)

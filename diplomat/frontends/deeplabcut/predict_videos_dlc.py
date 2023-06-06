@@ -12,8 +12,7 @@ import diplomat.processing.type_casters as tc
 from diplomat.utils.shapes import shape_iterator
 
 # DLC Imports
-from .dlc_importer import predict, checkcropping, load_config, auxiliaryfunctions
-import tensorflow as tf
+from .dlc_importer import predict, checkcropping, load_config, auxiliaryfunctions, tf
 from tqdm import tqdm
 import pandas as pd
 

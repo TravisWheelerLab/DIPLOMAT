@@ -1,13 +1,14 @@
 from pathlib import Path
 
-import sleap
+from .sleap_importer import sleap
 
 import diplomat.processing.type_casters as tc
 from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table
 
 from .run_utils import (
     _paths_to_str,
-    _to_diplomat_poses
+    _to_diplomat_poses,
+    _load_config
 )
 
 
@@ -24,10 +25,8 @@ def convert_results(
                    zip file.
     :param videos: Paths to the sleap label files, or .slp files, to convert to csv files, NOT the video files.
     """
-    model = sleap.load_model(_paths_to_str(config))
-
-    if (model is None):
-        raise ValueError("Model passed was invalid!")
+    # Load config just to verify it's valid...
+    _load_config(_paths_to_str(config))
 
     label_paths = _paths_to_str(videos)
     label_paths = [label_paths] if(isinstance(label_paths, str)) else label_paths

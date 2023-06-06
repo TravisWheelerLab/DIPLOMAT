@@ -42,7 +42,7 @@ def get_dynamic_cli_tree() -> dict:
 
     for frontend_name, funcs in diplomat._LOADED_FRONTENDS.items():
         frontend_commands = {
-            name: func for name, func in asdict(funcs).items() if(not name.startswith("_"))
+            name: func for name, func in funcs if(not name.startswith("_"))
         }
 
         doc_str = getattr(getattr(diplomat, frontend_name), "__doc__", None)

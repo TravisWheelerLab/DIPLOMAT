@@ -36,7 +36,7 @@ def list_loaded_frontends():
         print("Description:")
         print(f"\t{frontend_docs[name]}")
         print("Supported Functions:")
-        for k, v in asdict(funcs).items():
+        for k, v in funcs:
             if(k.startswith("_")):
                 continue
             print(f"\t{k}")
