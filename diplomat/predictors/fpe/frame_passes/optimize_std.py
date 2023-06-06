@@ -49,7 +49,7 @@ class OptimizeStandardDeviation(FramePass):
 
         result = super().run_pass(fb_data, prog_bar, in_place, reset_bar)
 
-        approx_std = self._histogram.get_quantile(0.5)[2] / self.MAGIC_CONST  # Median...
+        approx_std = (self._histogram.get_quantile(0.5)[2] / self.MAGIC_CONST) * self.config.std_multiplier
         result.metadata.optimal_std = (*self._histogram.get_bin_for_value(approx_std)[:2], approx_std)
 
         if(self.config.DEBUG):
@@ -116,6 +116,10 @@ class OptimizeStandardDeviation(FramePass):
                 1, tc.RoundedDecimal(5),
                 "A decimal, the offset of the first bin used in the histogram for computing "
                 "the mode, in pixels. Defaults to 1."
+            ),
+            "std_multiplier": (
+                3, tc.RangedFloat(0, np.inf),
+                "A positive float, the computed standard deviation is multiplied by this value before "
             ),
             "DEBUG": (False, bool, "Set to True to print the optimal standard deviation found...")
         }

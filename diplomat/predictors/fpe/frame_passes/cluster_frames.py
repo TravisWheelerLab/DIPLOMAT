@@ -296,7 +296,7 @@ class ClusterFrames(FramePass):
 
         return {
             "minimum_cluster_size": (
-                0.25, float, "The minimum size a cluster is allowed to be (As compared to average of all clusters)."
+                0.10, float, "The minimum size a cluster is allowed to be (As compared to average of all clusters)."
                              "If the cluster is smaller, it get thrown out and a forest is resolved using the rest of"
                              "the data."
             ),
