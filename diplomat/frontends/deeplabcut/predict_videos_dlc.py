@@ -83,15 +83,19 @@ def analyze_videos(
 
     tf.compat.v1.reset_default_graph()
 
+    project_dir = Path(config).resolve().parent
     config = load_config(config)
     iteration = config["iteration"]
     train_frac = config["TrainingFraction"][training_set_index]
+    config["project_path"] = project_dir
 
     model_directory = Path(config["project_path"]) / auxiliaryfunctions.get_model_folder(train_frac, shuffle, config, model_prefix)
+    model_directory = model_directory.resolve()
 
     try:
         model_config = load_config(model_directory / "test" / "pose_cfg.yaml")
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        print(e)
         raise FileNotFoundError(f"Invalid model selection: (Iteration {iteration}, Training Fraction {train_frac}, Shuffle: {shuffle})")
 
     try:

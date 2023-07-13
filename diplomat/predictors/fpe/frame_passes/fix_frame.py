@@ -1,5 +1,6 @@
 import heapq
-from typing import List, Optional, Tuple, Dict, Set
+from typing import List, Optional, Tuple, Dict
+from scipy.optimize import linear_sum_assignment
 from diplomat.predictors.fpe.frame_pass import FramePass, PassOrderError
 from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
@@ -81,7 +82,8 @@ class FixFrame(FramePass):
         storage_graph: StorageGraph,
         frame_list: List[ForwardBackwardFrame],
         num_outputs: int,
-        down_scaling: float
+        down_scaling: float,
+        fixed_group: int = 0
     ) -> List[List[Dict[int, float]]]:
         # Construct a graph...
         graphs = []
@@ -93,13 +95,13 @@ class FixFrame(FramePass):
             for node_group1 in range(len(storage_graph)):
                 for node_group2, (__, __, avg) in storage_graph[node_group1]:
                     for node_off1 in range(num_outputs):
-                        if(node_group1 == 0 and node_off1 != i):
+                        if(node_group1 == fixed_group and node_off1 != i):
                             continue
 
                         idx1 = node_group1 * num_outputs + node_off1
 
                         for node_off2 in range(num_outputs):
-                            if(node_group2 == 0 and node_off2 != i):
+                            if(node_group2 == fixed_group and node_off2 != i):
                                 continue
 
                             idx2 = node_group2 * num_outputs + node_off2
@@ -111,6 +113,39 @@ class FixFrame(FramePass):
             graphs.append(graph)
 
         return graphs
+
+    @classmethod
+    def get_fixed_group(
+        cls,
+        storage_graph: StorageGraph,
+        frame_list: List[ForwardBackwardFrame],
+        num_outputs: int,
+        down_scaling: float
+    ) -> int:
+        degrees = [len(storage_graph[i]) for i in range(len(storage_graph))]
+
+        num_groups = len(frame_list) // num_outputs
+        group_dist_scores = np.full(num_groups, np.inf, np.float32)
+
+        for g_i in range(num_groups):
+            for i_out in range(num_outputs):
+                for j_out in range(i_out + 1, num_outputs):
+                    m1 = cls.get_max_location(frame_list[g_i * num_outputs + i_out], down_scaling)
+                    m2 = cls.get_max_location(frame_list[g_i * num_outputs + j_out], down_scaling)
+                    if(m1[0] is None or m2[0] is None):
+                        group_dist_scores[g_i] = -np.inf
+                    else:
+                        group_dist_scores[g_i] = min(cls.dist(m1, m2), group_dist_scores[g_i])
+
+        best = (0, 0)
+        best_i = 0
+
+        for i, new in enumerate(zip(degrees, group_dist_scores)):
+            if(new > best):
+                best = new
+                best_i = i
+
+        return best_i
 
     @classmethod
     def _shortest_paths(
@@ -182,8 +217,12 @@ class FixFrame(FramePass):
         cls,
         fb_data: ForwardBackwardData,
         frame_idx: int,
-        skeleton: Optional[StorageGraph]
+        skeleton: Optional[StorageGraph],
+        algorithm: str = "greedy"
     ) -> List[ForwardBackwardFrame]:
+        if(algorithm not in ("greedy", "hungarian")):
+            raise ValueError("Algorithm passed not a support algorithm, use greedy or hungarian.")
+
         fixed_frame = [None] * fb_data.num_bodyparts
         num_outputs = fb_data.metadata.num_outputs
         down_scaling = fb_data.metadata.down_scaling
@@ -203,45 +242,102 @@ class FixFrame(FramePass):
             fixed_frame[bp_i].disable_occluded = True
 
         if(skeleton is not None):
-            select_mask = np.zeros((num_outputs, fb_data.num_bodyparts), bool)
+            fixed_group = cls.get_fixed_group(skeleton, fb_data.frames[frame_idx], num_outputs, down_scaling)
+
             score_graphs = cls.get_bidirectional_score_graphs(
                 skeleton,
                 fb_data.frames[frame_idx],
                 num_outputs,
-                down_scaling
+                down_scaling,
+                fixed_group
             )
 
-            for __ in range(fb_data.num_bodyparts):
-                # Compute the shortest node paths for every skeleton...
-                skel_scores = np.asarray(cls._best_skeleton_scores(
-                    [cls._shortest_paths(score_graph, i) for i, score_graph in enumerate(score_graphs)],
-                    score_graphs,
-                    skeleton,
-                    num_outputs
-                ))
+            if(algorithm == "greedy"):
+                print("Old Algorithm...")
+                select_mask = np.zeros((num_outputs, fb_data.num_bodyparts), bool)
+                for __ in range(fb_data.num_bodyparts):
+                    # Compute the shortest node paths for every skeleton...
+                    skel_scores = np.asarray(cls._best_skeleton_scores(
+                        [cls._shortest_paths(score_graph, fixed_group * num_outputs + i)
+                         for i, score_graph in enumerate(score_graphs)],
+                        score_graphs,
+                        skeleton,
+                        num_outputs
+                    ))
 
-                # Find the best location...
-                best_body, best_part = cls._masked_argmin(skel_scores, ~select_mask)
+                    # Find the best location...
+                    best_body, best_part = cls._masked_argmin(skel_scores, ~select_mask)
 
-                # Copy the select body part to the correct skeleton.
-                group_start = ((best_part // num_outputs) * num_outputs)
-                select_mask[:, best_part] = True
-                select_mask[best_body, group_start:group_start+num_outputs] = True
-                new_i = group_start + best_body
-                fixed_frame[new_i] = fb_data.frames[frame_idx][best_part]
-                fixed_frame[new_i].disable_occluded = True
+                    # Copy the select body part to the correct skeleton.
+                    group_start = ((best_part // num_outputs) * num_outputs)
+                    select_mask[:, best_part] = True
+                    select_mask[best_body, group_start:group_start+num_outputs] = True
+                    new_i = group_start + best_body
+                    fixed_frame[new_i] = fb_data.frames[frame_idx][best_part]
+                    fixed_frame[new_i].disable_occluded = True
 
-                # Modify graphs based on the selected part...
-                # Construct a zero score link between the newly added part and the original fixed part of the skeleton.
-                score_graphs[best_body][best_body][best_part] = 0
-                score_graphs[best_body][best_part][best_body] = 0
-                # Delete all of its edges in other graphs....
-                for i, score_graph in enumerate(score_graphs):
-                    if(i == best_body):
-                        continue
-                    for other_part in list(score_graph[best_part]):
-                        del score_graph[other_part][best_part]
-                        del score_graph[best_part][other_part]
+                    # Modify graphs based on the selected part...
+                    # Construct a zero score link between the newly
+                    # added part and the original fixed part of the skeleton.
+                    hub_part = fixed_group * num_outputs + best_body
+                    score_graphs[best_body][hub_part][best_part] = 0
+                    score_graphs[best_body][best_part][hub_part] = 0
+                    # Delete all of its edges in other graphs....
+                    for i, score_graph in enumerate(score_graphs):
+                        if(i == best_body):
+                            continue
+                        for other_part in list(score_graph[best_part]):
+                            del score_graph[other_part][best_part]
+                            del score_graph[best_part][other_part]
+            else:
+                print("New algorithm...")
+                select_mask = np.zeros(fb_data.num_bodyparts // num_outputs, dtype=bool)
+                select_mask[fixed_group] = True
+
+                for group_iter in range((fb_data.num_bodyparts // num_outputs) - 1):
+                    # Compute the shortest node paths for every skeleton...
+                    skel_scores = np.asarray(cls._best_skeleton_scores(
+                        [cls._shortest_paths(score_graph, fixed_group * num_outputs + i)
+                         for i, score_graph in enumerate(score_graphs)],
+                        score_graphs,
+                        skeleton,
+                        num_outputs
+                    ))
+
+                    grouped_skel_scores = skel_scores.reshape((num_outputs, -1, num_outputs))
+                    net_part_type_error = np.nanmin(grouped_skel_scores, axis=2).sum(axis=0)
+                    print(grouped_skel_scores)
+                    print(net_part_type_error)
+
+                    min_group = cls._masked_argmin(net_part_type_error, ~select_mask)[0]
+
+                    select_mask[min_group] = True
+                    print(min_group)
+                    print(grouped_skel_scores[:, min_group, :].reshape(num_outputs, num_outputs))
+                    opt_rows, opt_cols = linear_sum_assignment(
+                        grouped_skel_scores[:, min_group, :].reshape(num_outputs, num_outputs)
+                    )
+                    print(opt_rows, opt_cols)
+
+                    for row_idx, col_idx in zip(opt_rows, opt_cols):
+                        new_i = min_group + row_idx
+                        best_part = min_group + col_idx
+                        fixed_frame[new_i] = fb_data.frames[frame_idx][best_part]
+                        fixed_frame[new_i].disable_occluded = True
+
+                        # Modify graphs based on the selected part...
+                        # Construct a zero score link between the newly
+                        # added part and the original fixed part of the skeleton.
+                        hub_part = fixed_group * num_outputs + row_idx
+                        score_graphs[row_idx][hub_part][best_part] = 0
+                        score_graphs[row_idx][best_part][hub_part] = 0
+                        # Delete all of its edges in other graphs....
+                        for i, score_graph in enumerate(score_graphs):
+                            if (i == row_idx):
+                                continue
+                            for other_part in list(score_graph[best_part]):
+                                del score_graph[other_part][best_part]
+                                del score_graph[best_part][other_part]
 
         return fixed_frame
 
@@ -462,7 +558,8 @@ class FixFrame(FramePass):
         self._fixed_frame = self.create_fix_frame(
             fb_data,
             self._max_frame_idx,
-            fb_data.metadata.skeleton if("skeleton" in fb_data.metadata) else None
+            fb_data.metadata.skeleton if("skeleton" in fb_data.metadata) else None,
+            self.config.skeleton_assignment_algorithm
         )
 
         # Now the pass...
@@ -485,5 +582,10 @@ class FixFrame(FramePass):
                 None,
                 tc.Union(tc.Literal(None), tc.RangedInteger(0, np.inf)),
                 "Specify the fixed frame manually by setting to an integer index."
+            ),
+            "skeleton_assignment_algorithm": (
+                "greedy",
+                tc.Literal("greedy", "hungarian"),
+                "The algorithm to use for assigning body parts to skeletons when creating the fix frame."
             )
         }

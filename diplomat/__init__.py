@@ -35,7 +35,6 @@ def _load_frontends():
     from diplomat.utils.pluginloader import load_plugin_classes
     from diplomat.utils._function_tools import replace_function_name_and_module
     from types import ModuleType
-    from dataclasses import asdict
     from multiprocessing import current_process
 
     if(current_process().name != "MainProcess"):
