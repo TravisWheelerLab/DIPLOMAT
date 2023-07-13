@@ -253,7 +253,6 @@ class FixFrame(FramePass):
             )
 
             if(algorithm == "greedy"):
-                print("Old Algorithm...")
                 select_mask = np.zeros((num_outputs, fb_data.num_bodyparts), bool)
                 for __ in range(fb_data.num_bodyparts):
                     # Compute the shortest node paths for every skeleton...
@@ -290,7 +289,6 @@ class FixFrame(FramePass):
                             del score_graph[other_part][best_part]
                             del score_graph[best_part][other_part]
             else:
-                print("New algorithm...")
                 select_mask = np.zeros(fb_data.num_bodyparts // num_outputs, dtype=bool)
                 select_mask[fixed_group] = True
 
@@ -306,22 +304,17 @@ class FixFrame(FramePass):
 
                     grouped_skel_scores = skel_scores.reshape((num_outputs, -1, num_outputs))
                     net_part_type_error = np.nanmin(grouped_skel_scores, axis=2).sum(axis=0)
-                    print(grouped_skel_scores)
-                    print(net_part_type_error)
 
                     min_group = cls._masked_argmin(net_part_type_error, ~select_mask)[0]
 
                     select_mask[min_group] = True
-                    print(min_group)
-                    print(grouped_skel_scores[:, min_group, :].reshape(num_outputs, num_outputs))
                     opt_rows, opt_cols = linear_sum_assignment(
                         grouped_skel_scores[:, min_group, :].reshape(num_outputs, num_outputs)
                     )
-                    print(opt_rows, opt_cols)
 
                     for row_idx, col_idx in zip(opt_rows, opt_cols):
-                        new_i = min_group + row_idx
-                        best_part = min_group + col_idx
+                        new_i = min_group * num_outputs + row_idx
+                        best_part = min_group * num_outputs + col_idx
                         fixed_frame[new_i] = fb_data.frames[frame_idx][best_part]
                         fixed_frame[new_i].disable_occluded = True
 
@@ -584,7 +577,7 @@ class FixFrame(FramePass):
                 "Specify the fixed frame manually by setting to an integer index."
             ),
             "skeleton_assignment_algorithm": (
-                "greedy",
+                "hungarian",
                 tc.Literal("greedy", "hungarian"),
                 "The algorithm to use for assigning body parts to skeletons when creating the fix frame."
             )

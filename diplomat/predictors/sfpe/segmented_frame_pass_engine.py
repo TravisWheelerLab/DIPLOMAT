@@ -1340,10 +1340,10 @@ class SegmentedFramePassEngine(Predictor):
                 "The mode to utilize during sparsification."
             ),
             "assignment_algorithm": (
-                "greedy",
+                "hungarian",
                 type_casters.Literal("greedy", "hungarian"),
                 "The algorithm to use for assigning parts to bodies and stitching parts/bodies across segments."
-                "Greedy is faster, hungarian provides better results."
+                "Greedy is faster/simpler, hungarian provides better results."
             )
         }
 
