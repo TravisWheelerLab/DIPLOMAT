@@ -207,7 +207,6 @@ class StorageGraph:
         for other_n_i in self._connections[current_node]:
             self._dfs_helper(traversal_function, visited, other_n_i, current_node)
 
-
     def edges(self) -> Iterable[Edge]:
         """
         Iterate the edges of this graph.
@@ -277,7 +276,7 @@ class Histogram:
         self._bin_size = bin_size
         self._bin_offset = bin_offset
 
-    def add(self, value: float):
+    def add(self, value: float, weight: int = 1):
         # Compute the bin the value falls into...
         val_bin = int((value - self._bin_offset) / self._bin_size)
 

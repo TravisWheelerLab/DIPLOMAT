@@ -121,13 +121,17 @@ class CreateSkeleton(FramePass):
                     if(p is None):
                         continue
 
+                    d = np.inf
+
                     for bp2 in range(s2, s2 + total_bp):
                         (p2, x2, y2) = self._max_locations[bp2]
 
                         if(p2 is None):
                             continue
 
-                        hist.add(((x - x2) ** 2 + (y - y2) ** 2) ** 0.5)
+                        d = min(((x - x2) ** 2 + (y - y2) ** 2) ** 0.5, d)
+
+                    hist.add(d)
 
                 for bp1 in range(s2, s2 + total_bp):
                     (p, x, y) = self._prior_max_locations[bp1]
@@ -135,13 +139,17 @@ class CreateSkeleton(FramePass):
                     if(p is None):
                         continue
 
+                    d = np.inf
+
                     for bp2 in range(s1, s1 + total_bp):
                         (p2, x2, y2) = self._max_locations[bp2]
 
                         if(p2 is None):
                             continue
 
-                        hist.add(((x - x2) ** 2 + (y - y2) ** 2) ** 0.5)
+                        d = min(((x - x2) ** 2 + (y - y2) ** 2) ** 0.5, d)
+
+                    hist.add(d)
 
             self._current_frame = frame_index
             self._prior_max_locations = [val for val in self._max_locations]
@@ -188,7 +196,7 @@ class CreateSkeleton(FramePass):
                 "the tracking project. If false, specifies no skeleton should be made, basically disabling this pass. "
                 "If True, connect all body parts to each other. If a list of strings, connect the body parts in that "
                 "list to every other body part in that list. If a list of strings to strings, specifies exact links "
-                "that should be made between body parts. Defaults to True."
+                "that should be made between body parts. Defaults to None."
             ),
             "part_weights": (
                 None,
