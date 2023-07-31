@@ -131,7 +131,8 @@ class CreateSkeleton(FramePass):
 
                         d = min(((x - x2) ** 2 + (y - y2) ** 2) ** 0.5, d)
 
-                    hist.add(d)
+                    if(np.isfinite(d)):
+                        hist.add(d)
 
                 for bp1 in range(s2, s2 + total_bp):
                     (p, x, y) = self._prior_max_locations[bp1]
@@ -149,7 +150,8 @@ class CreateSkeleton(FramePass):
 
                         d = min(((x - x2) ** 2 + (y - y2) ** 2) ** 0.5, d)
 
-                    hist.add(d)
+                    if(np.isfinite(d)):
+                        hist.add(d)
 
             self._current_frame = frame_index
             self._prior_max_locations = [val for val in self._max_locations]

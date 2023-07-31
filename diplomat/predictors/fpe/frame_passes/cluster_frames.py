@@ -226,11 +226,14 @@ class ClusterFrames(FramePass):
 
         lookup_table = _NumpyDict(to_keys(x, y), prob, 0)
 
+        # We perform a 3x3 max-convolution to find peaks.
         for i in range(-1, 2):
             for j in range(-1, 2):
                 if(i == 0 and j == 0):
                     continue
-                keep_arr = keep_arr & (lookup_table[to_keys(x + j, y + i)] <= prob)
+                neighbor = lookup_table[to_keys(x + j, y + i)]
+                below_to_right = (i >= 0) & (j >= 0)
+                keep_arr = keep_arr & (neighbor <= prob if(below_to_right) else neighbor < prob)
 
         top_indexes = np.flatnonzero(keep_arr)
 

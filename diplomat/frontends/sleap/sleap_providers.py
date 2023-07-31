@@ -60,10 +60,8 @@ class SleapModelExtractor(ABC):
         pass
 
 
-def _normalize_conf_map(conf_map: tf.Tensor) -> tf.Tensor:
-    conf_map = tf.maximum(conf_map, 0)
-    max_val = tf.reduce_max(conf_map, axis=(1, 2), keepdims=True)
-    return conf_map / max_val
+def _fix_conf_map(conf_map: tf.Tensor) -> tf.Tensor:
+    return tf.clip_by_value(conf_map, 0, 1)
 
 
 class BottomUpModelExtractor(SleapModelExtractor):
@@ -85,7 +83,7 @@ class BottomUpModelExtractor(SleapModelExtractor):
             raise ValueError("Scaling is not consistent!")
 
         return (
-            _normalize_conf_map(conf_map),
+            _fix_conf_map(conf_map),
             offsets if(offsets is None) else offsets,
             (1 / first_scale_val) * (1 / inf_layer.input_scale) * inf_layer.cm_output_stride
         )
@@ -165,7 +163,7 @@ class TopDownModelExtractor(SleapModelExtractor):
         conf_map, offset_map = _extract_model_outputs(inf_layer, imgs)
 
         return (
-            _normalize_conf_map(self._merge_tiles(conf_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride)),
+            _fix_conf_map(self._merge_tiles(conf_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride)),
             self._merge_tiles(offset_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride),
             (1 / inf_layer.input_scale) * inf_layer.output_stride
         )
@@ -192,7 +190,7 @@ class SingleInstanceModelExtractor(SleapModelExtractor):
             raise ValueError("Scaling is not consistent!")
 
         return (
-            _normalize_conf_map(conf_map),
+            _fix_conf_map(conf_map),
             offset_map,
             (1 / first_scale_val) * (1 / inf_layer.input_scale) * inf_layer.output_stride
         )
@@ -270,6 +268,8 @@ class PredictorExtractor:
         if(pred.inference_model is None):
             pred._initialize_inference_model()
 
+        print("NOPE")
+
         for ex in pred.pipeline.make_dataset():
             probs, offsets, downscale = self._model_extractor.extract(ex)
 
@@ -280,6 +280,7 @@ class PredictorExtractor:
             h, w = data.video.shape[1:3]
             trim_h, trim_w = int(np.ceil(h / downscale)), int(np.ceil(w / downscale))
             probs = probs[:, :trim_h, :trim_w]
+
             offsets = offsets[:, :trim_h, :trim_w]
 
             yield TrackingData(

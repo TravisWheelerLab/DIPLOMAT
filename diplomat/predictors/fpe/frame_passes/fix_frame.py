@@ -11,8 +11,9 @@ import diplomat.processing.type_casters as tc
 
 class FixFrame(FramePass):
     """
-    Scores frames by peak separation, and then selects a single frame to remain clustered (with peaks separated). The rest of the frames are restored,
-    and :py:plugin:`~diplomat.predictors.frame_passes.MITViterbi` uses the fixed frame as it's ground truth frame.
+    Scores frames by peak separation, and then selects a single frame to remain clustered (with peaks separated). The
+    rest of the frames are restored, and :py:plugin:`~diplomat.predictors.frame_passes.MITViterbi` uses the fixed
+    frame as it's ground truth frame.
     """
     SCORES_PER_CHUNK = 20
 
@@ -46,17 +47,18 @@ class FixFrame(FramePass):
         cls,
         frame: ForwardBackwardFrame,
         down_scaling: float
-    ) -> Tuple[Optional[float], Optional[float]]:
+    ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
         y, x, prob, x_off, y_off = frame.src_data.unpack()
 
         if(prob is None):
-            return (None, None)
+            return (None, None, None)
 
         max_idx = np.argmax(prob)
 
         return (
             x[max_idx] + 0.5 + (x_off[max_idx] / down_scaling),
-            y[max_idx] + 0.5 + (y_off[max_idx] / down_scaling)
+            y[max_idx] + 0.5 + (y_off[max_idx] / down_scaling),
+            prob[max_idx]
         )
 
     @classmethod
@@ -135,13 +137,14 @@ class FixFrame(FramePass):
                     if(m1[0] is None or m2[0] is None):
                         group_dist_scores[g_i] = -np.inf
                     else:
-                        group_dist_scores[g_i] = min(cls.dist(m1, m2), group_dist_scores[g_i])
+                        group_dist_scores[g_i] = min(cls.dist(m1, m2) * m1[2] * m2[2], group_dist_scores[g_i])
 
         best = (0, 0)
         best_i = 0
 
         for i, new in enumerate(zip(degrees, group_dist_scores)):
-            if(new > best):
+            # We don't want to allow a high degree node to be used if it's distance is 0 for some of the nodes...
+            if(new[1] > 0 and new > best):
                 best = new
                 best_i = i
 
@@ -352,6 +355,9 @@ class FixFrame(FramePass):
         for bp_group_off in range(num_bp):
 
             min_dist = np.inf
+            total_conf = 0
+            count = 0
+
             # For body part groupings...
             for i in range(num_outputs - 1):
                 f1_loc = cls.get_max_location(
@@ -373,15 +379,19 @@ class FixFrame(FramePass):
                         continue
 
                     min_dist = min(cls.dist(f1_loc, f2_loc), min_dist)
+                    total_conf += f1_loc[2] * f2_loc[2]
+                    count += 1
 
             if(np.isinf(min_dist)):
                 min_dist = 0
-            if(min_dist == 0):
+            if(min_dist == 0 or count == 0):
                 # BAD! We found a frame that failed to cluster properly...
                 score = -np.inf
 
-            score += min_dist
-            score2 += min_dist
+            # Minimum distance, weighted by average skeleton-pair confidence...
+            if(count > 0):
+                score += min_dist * (total_conf / count)
+                score2 += min_dist * (total_conf / count)
 
         # If skeleton is implemented...
         if (skeleton is not None):
