@@ -204,13 +204,6 @@ def _analyze_video(
 
     video_name = Path(video).stem
 
-    try:
-        __ = auxiliaryfunctions.load_analyzed_data(dest_folder, video_name, dlc_scorer)
-        print(f"Results for video {video} already exist.")
-        return dlc_scorer
-    except FileNotFoundError:
-        pass
-
     h5_path = dest_folder / (video_name + dlc_scorer + ".h5")
 
     print("Loading the video...")

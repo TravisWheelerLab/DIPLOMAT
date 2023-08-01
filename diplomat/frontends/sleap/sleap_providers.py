@@ -268,8 +268,6 @@ class PredictorExtractor:
         if(pred.inference_model is None):
             pred._initialize_inference_model()
 
-        print("NOPE")
-
         for ex in pred.pipeline.make_dataset():
             probs, offsets, downscale = self._model_extractor.extract(ex)
 

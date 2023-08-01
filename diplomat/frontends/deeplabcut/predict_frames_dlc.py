@@ -173,135 +173,134 @@ def _analyze_frame_store(
         str(frame_store_path.parent), v_name_sanitized, dlc_scorer, dlc_scorer_legacy
     )
 
-    if not_analyzed:
-        # Read the frame store into memory:
-        with frame_store_path.open("rb") as fb:
-            print(f"Processing '{frame_store_path.name}'")
-            start = time.time()
+    # Read the frame store into memory:
+    with frame_store_path.open("rb") as fb:
+        print(f"Processing '{frame_store_path.name}'")
+        start = time.time()
 
-            # Read in the header, setup the settings.
-            frame_reader = frame_store_fmt.DLFSReader(fb)
+        # Read in the header, setup the settings.
+        frame_reader = frame_store_fmt.DLFSReader(fb)
 
-            (
-                num_f,
-                f_h,
-                f_w,
-                f_rate,
-                stride,
-                vid_h,
-                vid_w,
-                off_y,
-                off_x,
-                bp_lst,
-            ) = frame_reader.get_header().to_list()
+        (
+            num_f,
+            f_h,
+            f_w,
+            f_rate,
+            stride,
+            vid_h,
+            vid_w,
+            off_y,
+            off_x,
+            bp_lst,
+        ) = frame_reader.get_header().to_list()
 
-            pd_index = _get_pandas_header(
-                bp_lst, num_outputs, multi_output_format, dlc_scorer
-            )
+        pd_index = _get_pandas_header(
+            bp_lst, num_outputs, multi_output_format, dlc_scorer
+        )
 
-            predictor_settings = _get_predictor_settings(
-                cfg, predictor_cls, predictor_settings
-            )
+        predictor_settings = _get_predictor_settings(
+            cfg, predictor_cls, predictor_settings
+        )
 
-            video_metadata = Config({
-                "fps": f_rate,
-                "duration": float(num_f) / f_rate,
-                "size": (vid_h, vid_w),
-                "output-file-path": data_name,
-                "orig-video-path": str(video_name) if (video_name is not None) else None,  # This may be None if we were unable to find the video...
-                "cropping-offset": None if (off_x is None or off_y is None) else (off_y, off_x),
-                "dotsize": cfg["dotsize"],
-                "colormap": cfg.get("diplomat_colormap", cfg["colormap"]),
-                "shape_list": shape_iterator(cfg.get("shape_list", None), num_outputs),
-                "alphavalue": cfg["alphavalue"],
-                "pcutoff": cfg["pcutoff"],
-                "line_thickness": cfg.get("line_thickness", 1),
-                "skeleton": cfg.get("skeleton", None)
-            })
+        video_metadata = Config({
+            "fps": f_rate,
+            "duration": float(num_f) / f_rate,
+            "size": (vid_h, vid_w),
+            "output-file-path": data_name,
+            "orig-video-path": str(video_name) if (video_name is not None) else None,  # This may be None if we were unable to find the video...
+            "cropping-offset": None if (off_x is None or off_y is None) else (off_y, off_x),
+            "dotsize": cfg["dotsize"],
+            "colormap": cfg.get("diplomat_colormap", cfg["colormap"]),
+            "shape_list": shape_iterator(cfg.get("shape_list", None), num_outputs),
+            "alphavalue": cfg["alphavalue"],
+            "pcutoff": cfg["pcutoff"],
+            "line_thickness": cfg.get("line_thickness", 1),
+            "skeleton": cfg.get("skeleton", None)
+        })
 
-            # Create the plugin instance...
-            print(f"Plugin {predictor_cls.get_name()} Settings: {predictor_settings}")
-            predictor_inst = predictor_cls(
-                bp_lst, num_outputs, num_f, predictor_settings, video_metadata
-            )
+        # Create the plugin instance...
+        print(f"Plugin {predictor_cls.get_name()} Settings: {predictor_settings}")
+        predictor_inst = predictor_cls(
+            bp_lst, num_outputs, num_f, predictor_settings, video_metadata
+        )
 
-            # The pose prediction final output array...
-            pose_prediction_data = np.zeros((num_f, 3 * len(bp_lst) * num_outputs))
+        # The pose prediction final output array...
+        pose_prediction_data = np.zeros((num_f, 3 * len(bp_lst) * num_outputs))
 
-            # Begin running through frames...
-            p_bar = tqdm.tqdm(total=num_f)
-            frames_done = 0
+        # Begin running through frames...
+        p_bar = tqdm.tqdm(total=num_f)
+        frames_done = 0
 
-            while frame_reader.has_next():
-                frame = frame_reader.read_frames()
-                pose = predictor_inst.on_frames(frame)
-                if pose is not None:
-                    # If the predictor returned a pose, add it to the final data.
-                    pose_prediction_data[
-                        frames_done : frames_done + pose.get_frame_count()
-                    ] = pose.get_all()
-                    frames_done += pose.get_frame_count()
-
-                p_bar.update()
-
-            p_bar.close()
-
-            # Post-Processing Phase:
-            # Phase 2: Post processing...
-
-            # Get all of the final poses that are still held by the predictor
-            post_pbar = TQDMProgressBar(total=num_f - frames_done)
-            final_poses = predictor_inst.on_end(post_pbar)
-            post_pbar.close()
-
-            # Add any post-processed frames
-            if final_poses is not None:
+        while frame_reader.has_next():
+            frame = frame_reader.read_frames()
+            pose = predictor_inst.on_frames(frame)
+            if pose is not None:
+                # If the predictor returned a pose, add it to the final data.
                 pose_prediction_data[
-                    frames_done : frames_done + final_poses.get_frame_count()
-                ] = final_poses.get_all()
-                frames_done += final_poses.get_frame_count()
+                    frames_done : frames_done + pose.get_frame_count()
+                ] = pose.get_all()
+                frames_done += pose.get_frame_count()
 
-            # Check and make sure the predictor returned all frames, otherwise throw an error.
-            if frames_done != num_f:
-                raise ValueError(
-                    f"The predictor algorithm did not return the same amount of frames as are in the frame store.\n"
-                    f"Expected Amount: {num_f}, Actual Amount Returned: {frames_done}"
-                )
+            p_bar.update()
 
-            stop = time.time()
-            frame_reader.close()
+        p_bar.close()
 
-            if cfg["cropping"]:
-                coords = [cfg["x1"], cfg["x2"], cfg["y1"], cfg["y2"]]
-            else:
-                coords = [0, vid_w, 0, vid_h]
+        # Post-Processing Phase:
+        # Phase 2: Post processing...
 
-            sub_meta = {
-                "start": start,
-                "stop": stop,
-                "run_duration": stop - start,
-                "Scorer": dlc_scorer,
-                "DLC-model-config file": None,  # We don't have access to this, so don't even try....
-                "fps": f_rate,
-                "batch_size": 1,
-                "multi_output_format": multi_output_format,
-                "frame_dimensions": (f_h * stride, f_w * stride),
-                "nframes": num_f,
-                "iteration (active-learning)": cfg["iteration"],
-                "training set fraction": train_frac,
-                "cropping": cfg["cropping"],
-                "cropping_parameters": coords,
-            }
-            metadata = {"data": sub_meta}
+        # Get all of the final poses that are still held by the predictor
+        post_pbar = TQDMProgressBar(total=num_f - frames_done)
+        final_poses = predictor_inst.on_end(post_pbar)
+        post_pbar.close()
 
-            # We are Done!!! Save data and return...
-            auxiliaryfunctions.SaveData(
-                pose_prediction_data,
-                metadata,
-                data_name,
-                pd_index,
-                range(num_f),
-                save_as_csv,
+        # Add any post-processed frames
+        if final_poses is not None:
+            pose_prediction_data[
+                frames_done : frames_done + final_poses.get_frame_count()
+            ] = final_poses.get_all()
+            frames_done += final_poses.get_frame_count()
+
+        # Check and make sure the predictor returned all frames, otherwise throw an error.
+        if frames_done != num_f:
+            raise ValueError(
+                f"The predictor algorithm did not return the same amount of frames as are in the frame store.\n"
+                f"Expected Amount: {num_f}, Actual Amount Returned: {frames_done}"
             )
+
+        stop = time.time()
+        frame_reader.close()
+
+        if cfg["cropping"]:
+            coords = [cfg["x1"], cfg["x2"], cfg["y1"], cfg["y2"]]
+        else:
+            coords = [0, vid_w, 0, vid_h]
+
+        sub_meta = {
+            "start": start,
+            "stop": stop,
+            "run_duration": stop - start,
+            "Scorer": dlc_scorer,
+            "DLC-model-config file": None,  # We don't have access to this, so don't even try....
+            "fps": f_rate,
+            "batch_size": 1,
+            "multi_output_format": multi_output_format,
+            "frame_dimensions": (f_h * stride, f_w * stride),
+            "nframes": num_f,
+            "iteration (active-learning)": cfg["iteration"],
+            "training set fraction": train_frac,
+            "cropping": cfg["cropping"],
+            "cropping_parameters": coords,
+        }
+        metadata = {"data": sub_meta}
+
+        # We are Done!!! Save data and return...
+        auxiliaryfunctions.SaveData(
+            pose_prediction_data,
+            metadata,
+            data_name,
+            pd_index,
+            range(num_f),
+            save_as_csv,
+        )
 
     return dlc_scorer

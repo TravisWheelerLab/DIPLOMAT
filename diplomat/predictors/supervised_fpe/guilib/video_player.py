@@ -18,6 +18,7 @@ except ImportError:
     __package__ = "diplomat.predictors.supervised_fpe.guilib"
     from .probability_displayer import ProbabilityDisplayer
 
+
 class ControlDeque:
     """
     A control deque. This deque is used to store video frames while they are coming in
