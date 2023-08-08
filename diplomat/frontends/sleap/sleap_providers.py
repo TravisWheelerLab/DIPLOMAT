@@ -112,9 +112,6 @@ class TopDownModelExtractor(SleapModelExtractor):
     def __init__(self, model: SleapPredictor):
         super().__init__(model)
         self._predictor = model
-        # TODO: Eventually fix top down support to actually work.
-        raise NotImplementedError("SLEAP's top down model is currently not supported. Please train using a "
-                                  "different model type to use DIPLOMAT.")
 
     @staticmethod
     def _merge_tiles(
@@ -139,33 +136,83 @@ class TopDownModelExtractor(SleapModelExtractor):
 
         return result
 
+    @classmethod
+    def _interpolate_crop(cls, x: tf.Tensor, y: tf.Tensor, crops: tf.Tensor) -> tf.Tensor:
+        x = tf.reshape(x % 1, [-1, 1, 1, 1])
+        y = tf.reshape(y % 1, [-1, 1, 1, 1])
+
+        return (
+            x * y * crops[:, :-1, :-1]
+            + (1 - x) * y * crops[:, :-1, 1:]
+            + x * (1 - y) * crops[:, 1:, :-1]
+            + (1 - x) * (1 - y) * crops[:, 1:, 1:]
+        )
+
     def extract(self, data: Union[Dict, np.ndarray]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
+        import tensorflow as tf
+
         inf_layer = self._predictor.inference_model.instance_peaks
 
         imgs = data["image"] if(isinstance(data, dict)) else data
-        imgs = inf_layer.preprocess(imgs)
 
-        # Split image into slices to cover entire image....
-        batch_size, orig_h, orig_w, orig_d = imgs.shape
-        h, w, __ = inf_layer.keras_model.input[0].shape
+        # Compute centroid confidence map...
+        centroid_model = self._predictor.inference_model.centroid_crop
+        centroid_model.return_crops = True
+        centroid_results = centroid_model.call(imgs)
 
-        imgs = tf.image.extract_patches(
-            imgs,
-            sizes=[1, h, w, 1],
-            strides=[1, h, w, 1],
-            rates=[1, 1, 1, 1],
-            padding="SAME"
+        first_scale_val = float(tf.reshape(data["scale"], -1)[0])
+        if(not tf.experimental.numpy.allclose(data["scale"], first_scale_val)):
+            raise ValueError("Scaling is not consistent!")
+
+        crops, crop_offsets = centroid_results["crops"], centroid_results["crop_offsets"]
+
+        batch_indexes = crops.value_rowids()
+        batch_size = crops.nrows()
+
+        crops = crops.merge_dims(0, 1)
+        crop_offsets = crop_offsets.merge_dims(0, 1)
+
+        crops = inf_layer.preprocess(crops)
+        sub_conf_maps, __ = _extract_model_outputs(inf_layer, crops)
+
+        model_downscaling = (1 / inf_layer.input_scale) * inf_layer.output_stride
+
+        conf_h = int(np.ceil(imgs.shape[1] / model_downscaling) + 1)
+        conf_w = int(np.ceil(imgs.shape[2] / model_downscaling) + 1)
+        img_buffer = tf.zeros([batch_size, conf_h, conf_w, sub_conf_maps.shape[-1]], dtype=tf.float32)
+
+        if(len(crops) == 0):
+            return (img_buffer, None,  (1 / first_scale_val) * model_downscaling)
+
+        sub_conf_maps = tf.pad(sub_conf_maps, tf.constant([[0, 0], [1, 1], [1, 1], [0, 0]]))
+        crop_coords = tf.stack([
+            tf.repeat(tf.range(sub_conf_maps.shape[1] - 1), sub_conf_maps.shape[2] - 1),
+            tf.tile(tf.range(sub_conf_maps.shape[2] - 1), [sub_conf_maps.shape[1] - 1])
+        ], axis=-1)
+
+        crop_offsets = crop_offsets / model_downscaling
+        lookup_coords = (
+            tf.expand_dims(tf.cast(crop_offsets[..., ::-1], dtype=tf.int32), 1) + crop_coords
         )
 
-        tiles_high, tiles_wide = imgs.shape[1:3]
-        imgs = tf.reshape(imgs, [batch_size * tiles_high * tiles_wide, h, w, orig_d])
+        index_vectors = tf.concat([
+            tf.broadcast_to(tf.reshape(batch_indexes, [-1, 1, 1]), [*lookup_coords.shape[:-1], 1]),
+            lookup_coords
+        ], axis=-1)
 
-        conf_map, offset_map = _extract_model_outputs(inf_layer, imgs)
+        img_buffer = tf.tensor_scatter_nd_update(
+            img_buffer,
+            index_vectors,
+            tf.reshape(
+                self._interpolate_crop(crop_offsets[..., 0], crop_offsets[..., 1], sub_conf_maps),
+                [sub_conf_maps.shape[0], -1, sub_conf_maps.shape[-1]]
+            )
+        )
 
         return (
-            _fix_conf_map(self._merge_tiles(conf_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride)),
-            self._merge_tiles(offset_map, batch_size, (tiles_wide, tiles_high), (orig_w, orig_h), inf_layer.output_stride),
-            (1 / inf_layer.input_scale) * inf_layer.output_stride
+            img_buffer,
+            None,
+            (1 / first_scale_val) * model_downscaling
         )
 
 
@@ -199,6 +246,57 @@ class SingleInstanceModelExtractor(SleapModelExtractor):
 EXTRACTORS = [BottomUpModelExtractor, SingleInstanceModelExtractor, TopDownModelExtractor]
 
 
+def _convolve_2d(img: tf.Tensor, kernel: tf.Tensor):
+    """
+    Fast-ish manual 2D convolution written using tensorflow's extract_patches, because tf's convolution function gives
+    errors when attempting to use directly.
+    """
+    orig_img_shape = tuple(img.shape)
+    img = tf.reshape(tf.transpose(img, perm=[0, 3, 1, 2]), [-1, orig_img_shape[1], orig_img_shape[2]])
+
+    conv_view = tf.image.extract_patches(
+        tf.expand_dims(img, -1),
+        sizes=[1, kernel.shape[0], kernel.shape[1], 1],
+        strides=[1, 1, 1, 1],
+        rates=[1, 1, 1, 1],
+        padding="SAME"
+    )
+
+    return tf.transpose(
+        tf.reshape(tf.reduce_sum(
+            tf.expand_dims(conv_view, -1) * tf.reshape(kernel, [-1, kernel.shape[-1]]),
+            -2
+        ), [-1, orig_img_shape[3], orig_img_shape[1], orig_img_shape[2], kernel.shape[-1]]),
+        perm=[0, 2, 3, 1, 4]
+    )
+
+
+def _create_integral_offsets(probs: tf.Tensor, stride: float, kernel_size: int) -> tf.Tensor:
+    """
+    Compute estimated offsets for parts based on confidence values in source map. Does this via a
+    center-of-mass style calculation locally for each pixel.
+    """
+    # Concept: We can do localized position integration via 3 convolutions...
+    # Two kernels for summing positions * weights in
+    if(kernel_size % 2 == 0):
+        kernel_size += 1
+
+    # Construct kernels for computing centers of mass computed around a point...
+    y_kernel = tf.reshape(
+        tf.repeat((tf.range(kernel_size, dtype=probs.dtype) - (kernel_size // 2)) * stride, kernel_size),
+        (kernel_size, kernel_size)
+    )
+    x_kernel = tf.transpose(y_kernel)
+    # Simple summation kernel, adds all values in an area...
+    ones_kernel = tf.ones((kernel_size, kernel_size), dtype=probs.dtype)
+
+    filters = tf.stack([x_kernel, y_kernel, ones_kernel], axis=-1)
+
+    results = _convolve_2d(probs, filters)
+
+    return tf.math.divide_no_nan(results[:, :, :, :, :2], results[:, :, :, :, 2:])
+
+
 class PredictorExtractor:
     def __init__(self, predictor: SleapPredictor, refinement_kernel_size: int):
         super().__init__()
@@ -215,48 +313,6 @@ class PredictorExtractor:
     def get_metadata(self) -> SleapMetadata:
         return self._model_extractor.get_metadata()
 
-
-    @staticmethod
-    def _convolve_2d(img: tf.Tensor, kernel: tf.Tensor):
-        """
-        Fast-ish manual 2D convolution written in python, because tf's convolution function gives stupid and unresolvable errors...
-        """
-        shift_h = kernel.shape[0] // 2
-        shift_w = kernel.shape[1] // 2
-
-        padding = tf.transpose(tf.constant([[0, shift_h, shift_w, 0, 0]] * 2))
-        img = tf.reshape(tf.repeat(img, kernel.shape[-1], axis=-1), img.shape + (3,))
-        result = tf.zeros(img.shape, dtype=img.dtype)
-        img = tf.pad(img, padding)
-
-        # We iterate over the kernel for optimal performance...
-        for i in range(kernel.shape[0]):
-            for j in range(kernel.shape[1]):
-                end_i = img.shape[1] - ((shift_h * 2) - i)
-                end_j = img.shape[2] - ((shift_w * 2) - j)
-                result += kernel[i, j] * img[:, i:end_i, j:end_j]
-
-        return result
-
-    @classmethod
-    def _create_integral_offsets(cls, probs: tf.Tensor, stride: float, kernel_size: int) -> tf.Tensor:
-        # Concept: We can do localized position integration via 3 convolutions...
-        # Two kernels for summing positions * weights in
-        if(kernel_size % 2 == 0):
-            kernel_size += 1
-
-        # Construct kernels for computing centers of mass computed around a point...
-        y_kernel = tf.reshape(tf.repeat((tf.range(kernel_size, dtype=probs.dtype) - (kernel_size // 2)) * stride, kernel_size), (5, 5))
-        x_kernel = tf.transpose(y_kernel)
-        # Simple summation kernel, adds all values in an area...
-        ones_kernel = tf.ones((kernel_size, kernel_size), dtype=probs.dtype)
-
-        filters = tf.stack([x_kernel, y_kernel, ones_kernel], axis=-1)
-
-        results = cls._convolve_2d(probs, filters)
-
-        return tf.math.divide_no_nan(results[:, :, :, :, :2], results[:, :, :, :, 2:])
-
     def extract(self, data: Union[Provider, SleapVideo]) -> Iterator[TrackingData]:
         from sleap import Video as SleapVideo
         if(isinstance(data, SleapVideo)):
@@ -272,7 +328,7 @@ class PredictorExtractor:
             probs, offsets, downscale = self._model_extractor.extract(ex)
 
             if(offsets is None and self._refinement_kernel_size > 0):
-                offsets = self._create_integral_offsets(probs, downscale, self._refinement_kernel_size)
+                offsets = _create_integral_offsets(probs, downscale, self._refinement_kernel_size)
 
             # Trim the resulting outputs so the match expected area for poses from the original video.
             h, w = data.video.shape[1:3]
