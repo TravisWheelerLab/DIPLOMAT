@@ -576,6 +576,8 @@ class MITViterbi(FramePass):
 
         for __, bp_res in results:
             for i, (current_total, bp_sub_res) in enumerate(zip(final_result, bp_res)):
+                if(np.all(np.isneginf(bp_sub_res))):
+                    continue
                 merged_result = current_total + bp_sub_res
                 final_result[i] = merged_result
 
