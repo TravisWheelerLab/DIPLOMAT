@@ -233,9 +233,18 @@ def video_loader(video_hdl: cv2.VideoCapture, frame_queue: ControlDeque, time_lo
         if(frame is None):
             valid_frame, frame = video_hdl.read()
 
-        # If this is not a valid frame(reached end of video), or the video player has sent a command, stop and get
+        if(not valid_frame):
+            # If we didn't receive a frame (reached end of video) generate a dummy frame to load into the queue...
+            # This avoids a deadlock if the reported duration of the video is longer then the video actually is...
+            frame = np.zeros((
+                int(video_hdl.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                int(video_hdl.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                3
+            ), dtype=np.uint8)
+
+        # If the video player has sent a command, stop and get
         # the command, and jump to the spot. Otherwise, immediately push another frame onto the queue.
-        if((not valid_frame) or (time_loc.poll())):
+        if(time_loc.poll()):
             new_loc = time_check(time_loc)
             if(new_loc is None):
                 video_hdl.release()
@@ -246,8 +255,10 @@ def video_loader(video_hdl: cv2.VideoCapture, frame_queue: ControlDeque, time_lo
             frame_queue.push_right_relaxed(frame)
             frame = None
 
+
 # Represents (x, y, width, height)
 Box = Tuple[int, int, int, int]
+
 
 class VideoPlayer(wx.Control):
     """
