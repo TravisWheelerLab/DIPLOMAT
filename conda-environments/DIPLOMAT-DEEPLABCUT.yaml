@@ -12,5 +12,7 @@ dependencies:
   - nb_conda
   - ffmpeg
   - wxpython<4.2.0
+  - git
+  - scipy
   - pip:
     - "diplomat-track[dlc, gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
