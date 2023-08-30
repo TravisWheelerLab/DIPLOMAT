@@ -15,7 +15,7 @@ import warnings
 warnings.simplefilter("error", ImportWarning)
 
 
-MOCK_PACKAGES = ["deeplabcut", "sleap", "tensorflow", "scipy", "pandas", "wx"]
+MOCK_PACKAGES = ["deeplabcut", "sleap", "tensorflow", "numba", "pandas", "wx"]
 
 with mock(MOCK_PACKAGES):
     from diplomat.predictors.fpe.sparse_storage import AttributeDict

@@ -1,6 +1,6 @@
 import os
 from typing import Optional, Tuple, List
-from scipy.sparse import csgraph
+from diplomat.utils.graph_ops import connected_components, min_spanning_tree
 from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.arr_utils import _NumpyDict
 from diplomat.predictors.fpe.frame_pass import FramePass, RangeSlicer, PassOrderError
@@ -120,8 +120,8 @@ class ClusterFrames(FramePass):
         graph: np.ndarray,
         num_trees: int
     ) -> Tuple[np.ndarray, np.ndarray]:
-        tree = csgraph.minimum_spanning_tree(graph).toarray()
-        n_components, labels = csgraph.connected_components(tree, False)
+        tree = min_spanning_tree(graph)
+        n_components, labels = connected_components(tree)
 
         del_edges = num_trees - n_components
 
@@ -132,7 +132,7 @@ class ClusterFrames(FramePass):
                 np.argpartition(tree, -del_edges, axis=None)[-del_edges:], tree.shape
             )
             tree[worst_edges] = 0
-            return tree, csgraph.connected_components(tree, False)[1]
+            return tree, connected_components(tree)[1]
         else:
             scores = np.bincount(labels, weights=np.sum(graph, axis=1), minlength=n_components)
 
@@ -169,9 +169,8 @@ class ClusterFrames(FramePass):
 
         trans = fpe_math.table_transition((x_true, y_true), (x_true, y_true), cost_table)
         graph = (2 + trans) - (np.expand_dims(prob, 1)) - (np.expand_dims(prob, 0))
-        np.fill_diagonal(graph, 0)
 
-        forest, components = cls._minimum_spanning_forest(graph, num_clusters)
+        __, components = cls._minimum_spanning_forest(graph, num_clusters)
 
         prob_max = np.array([np.max(prob[components == i]) for i in range(num_clusters)])
         prob_max = prob_max / ((np.sum(prob_max) - prob_max) / (prob_max.size - 1))

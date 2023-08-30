@@ -1,6 +1,5 @@
 import heapq
 from typing import List, Optional, Tuple, Dict
-from scipy.optimize import linear_sum_assignment
 from diplomat.predictors.fpe.frame_pass import FramePass, PassOrderError
 from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
@@ -311,7 +310,7 @@ class FixFrame(FramePass):
                     min_group = cls._masked_argmin(net_part_type_error, ~select_mask)[0]
 
                     select_mask[min_group] = True
-                    opt_rows, opt_cols = linear_sum_assignment(
+                    opt_rows, opt_cols = (
                         grouped_skel_scores[:, min_group, :].reshape(num_outputs, num_outputs)
                     )
 

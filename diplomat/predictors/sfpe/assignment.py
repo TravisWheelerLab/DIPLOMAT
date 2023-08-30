@@ -1,6 +1,6 @@
 from typing import Tuple
 import numpy as np
-from scipy.optimize import linear_sum_assignment
+from diplomat.utils.graph_ops import min_cost_matching
 
 
 def greedy(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -18,7 +18,7 @@ def greedy(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def hungarian(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    return linear_sum_assignment(matrix)
+    return min_cost_matching(matrix)
 
 
 ASSIGNMENT_ALGORITHMS = {
