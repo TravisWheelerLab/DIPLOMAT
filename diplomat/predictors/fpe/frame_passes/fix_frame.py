@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple, Dict
 from diplomat.predictors.fpe.frame_pass import FramePass, PassOrderError
 from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
+from diplomat.utils.graph_ops import min_cost_matching
 import numpy as np
 from diplomat.processing import ProgressBar, ConfigSpec
 import diplomat.processing.type_casters as tc
@@ -310,7 +311,7 @@ class FixFrame(FramePass):
                     min_group = cls._masked_argmin(net_part_type_error, ~select_mask)[0]
 
                     select_mask[min_group] = True
-                    opt_rows, opt_cols = (
+                    opt_rows, opt_cols = min_cost_matching(
                         grouped_skel_scores[:, min_group, :].reshape(num_outputs, num_outputs)
                     )
 
