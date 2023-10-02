@@ -1,6 +1,6 @@
 import os
 from typing import Optional, Tuple, List
-from diplomat.utils.graph_ops import connected_components, min_spanning_tree
+from diplomat.utils.graph_ops import connected_components, min_spanning_tree, to_valid_graph
 from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.arr_utils import _NumpyDict
 from diplomat.predictors.fpe.frame_pass import FramePass, RangeSlicer, PassOrderError
@@ -120,7 +120,7 @@ class ClusterFrames(FramePass):
         graph: np.ndarray,
         num_trees: int
     ) -> Tuple[np.ndarray, np.ndarray]:
-        tree = min_spanning_tree(graph)
+        tree = min_spanning_tree(to_valid_graph(graph))
         n_components, labels = connected_components(tree)
 
         del_edges = num_trees - n_components
@@ -128,10 +128,13 @@ class ClusterFrames(FramePass):
         if(del_edges == 0):
             return tree, labels
         elif(del_edges > 0):
+            no_inf_tree = tree.copy()
+            no_inf_tree[~np.tri(no_inf_tree.shape[0], k=0, dtype=bool) | np.isinf(no_inf_tree)] = -np.inf
             worst_edges = np.unravel_index(
-                np.argpartition(tree, -del_edges, axis=None)[-del_edges:], tree.shape
+                np.argpartition(no_inf_tree, -del_edges, axis=None)[-del_edges:], no_inf_tree.shape
             )
-            tree[worst_edges] = 0
+            tree[worst_edges] = np.inf
+            tree = to_valid_graph(tree)
             return tree, connected_components(tree)[1]
         else:
             scores = np.bincount(labels, weights=np.sum(graph, axis=1), minlength=n_components)

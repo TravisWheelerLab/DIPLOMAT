@@ -110,50 +110,6 @@ def _min_spanning_tree(graph: np.ndarray) -> np.ndarray:
     return tree
 
 
-def max_spanning_tree_slow(graph: np.ndarray) -> np.ndarray:
-    tree = np.zeros(graph.shape, graph.dtype)
-
-    np.fill_diagonal(graph, 0)
-
-    # The next node to explore the edges of, we start with a sub-tree with a single node, index 0.
-    explore_node = 0
-
-    # Tracks the index of the source node of the maximum scoring edge exiting the sub-tree to each node outside.
-    max_source = np.zeros(graph.shape[-1], np.int64)
-    # Tracks the score of the maximum scoring edges exiting the sub-tree to every node outside the tree.
-    max_links = np.zeros(graph.shape[-1], graph.dtype)
-    # Used for indexing out highest scoring edges exiting the sub-tree.
-    range_idx = np.arange(graph.shape[-1])
-
-    # Used to mask out nodes in the sub-tree, nodes outside the growing tree stay 1, rest are 0.
-    mask = np.ones(graph.shape[-1], dtype=np.int8)
-    mask[explore_node] = 0
-
-    for i in range(len(graph) - 1):
-        # Get all edges for the node we just added to the tree.
-        prop_vals = graph[explore_node]
-        # Update best cut edges (best proposed edges going to every node outside the tree), scores and source nodes.
-        max_source = np.where(prop_vals > max_links, explore_node, max_source)
-        max_links = graph[max_source, range_idx]
-
-        # Get max scoring edge masking all nodes already in the growing sub-tree (we set those locations to -1)
-        next_node = np.argmax(max_links * mask - (~mask))
-        # Get source node...
-        max_linking_node = max_source[next_node]
-
-        # Add the edge to the tree (were working with an adjacency matrix)...
-        tree[max_linking_node, next_node] = graph[max_linking_node, next_node]
-        tree[next_node, max_linking_node] = graph[next_node, max_linking_node]
-
-        # Mask the node we just grew our solution to, and mark that node as the next node to explore for additional
-        # edges...
-        mask[next_node] = 0
-        explore_node = next_node
-
-    # Return the max-spanning tree! (Or max-spanning forest if initial graph was a forest).
-    return tree
-
-
 @numba.njit
 def _min_row_subtract(g: np.ndarray) -> np.ndarray:
     """
@@ -247,7 +203,19 @@ def min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
                 col_zeros[j] = np.iinfo(col_zeros.dtype).max
                 break
 
-    return (row_solution, col_solution)
+    return (np.arange(cost_matrix.shape[0], dtype=np.int64), col_solution)
+
+
+def to_valid_graph(g: np.ndarray) -> np.ndarray:
+    """
+    Convert an arbitrary adjacency matrix to a valid undirected graph. Diagonal is set to positive infinity
+    and graph is made symmetric by copying the lower triangle of the graph to the upper triangle.
+    """
+    g = g.copy()
+    np.fill_diagonal(g, np.inf)
+    i_upper = np.triu_indices(g.shape[0], 1)
+    g[i_upper] = g.T[i_upper]
+    return g
 
 
 if(__name__ == "__main__"):
