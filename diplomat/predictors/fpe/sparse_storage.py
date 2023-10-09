@@ -18,7 +18,8 @@ Indexer = Union[slice, int, List[int], Tuple[int], None]
 
 class SparseModes(IntEnum):
     """
-    An enum for encoding the different ways of making frames sparse. See SparseTrackingData.sparsify to see what each of these modes does.
+    An enum for encoding the different ways of making frames sparse. See SparseTrackingData.sparsify to see what each
+    of these modes does.
     """
     IGNORE_OFFSETS: int = 0
     OFFSET_DOMINATION: int = 1
@@ -222,17 +223,21 @@ class SparseTrackingData:
         :param frame: The frame of the TrackingData to sparsify
         :param bodypart: The bodypart of the TrackingData to sparsify
         :param threshold: The threshold to use when scarifying. All values below the threshold are removed.
-        :param max_cell_count: The maximum number of cells allowed in this sparsified frame. Defaults to None, so no limiting is done. If the number
-                               of cells is larger than this value, the top-k cells will be pulls so k matches this value.
+        :param max_cell_count: The maximum number of cells allowed in this sparsified frame. Defaults to None, so no
+                               limiting is done. If the number of cells is larger than this value, the top-k cells
+                               will be pulls so k matches this value.
         :param mode: The mode to utilize when making the data sparse. The following modes currently exist:
             - SparseModes.IGNORE_OFFSETS: Ignores offsets, placing values based on the grid cell the value is stored in.
                                           This is the default mode.
-            - SparseModes.OFFSET_DOMINATION: Add on offsets to the initial grid cell to determine what cell the data actually landed in.
-                                             If multiple cells point to the same location, select the maximum of them.
-            - SparseModes.OFFSET_COMBINATION: Add on offsets to the initial grid cell to determine what cell the data actually landed in.
-                                              If multiple cells point to the same location, use the average of their values.
-            - SparseModes.OFFSET_SUMMATION: Same as OFFSET_DOMINATION, except cell probabilities are determined by adding all the cells that
-                                            point to a cell and then normalizing this sum array.
+            - SparseModes.OFFSET_DOMINATION: Add on offsets to the initial grid cell to determine what cell the data
+                                             actually landed in. If multiple cells point to the same location, select
+                                             the maximum of them.
+            - SparseModes.OFFSET_COMBINATION: Add on offsets to the initial grid cell to determine what cell the data
+                                              actually landed in. If multiple cells point to the same location, use the
+                                              average of their values.
+            - SparseModes.OFFSET_SUMMATION: Same as OFFSET_DOMINATION, except cell probabilities are determined by
+                                            adding all the cells that point to a cell and then normalizing this sum
+                                            array.
 
         :return: A new SparseTrackingData object containing the data of the TrackingData object.
         """
@@ -292,7 +297,8 @@ class SparseTrackingData:
                 y_off = y_off[ordered_coords][unique_locs]
             else:
                 # Mode is offset domination, only keep maximums...
-                # We include -probs, as that sorts makes sure the first unique value is always the one with the highest probability...
+                # We include -probs, as that sorts makes sure the first unique value is always the one with the
+                # highest probability...
                 ordered_coords = np.lexsort([-probs, true_y, true_x])
 
                 true_x = true_x[ordered_coords]
@@ -332,6 +338,7 @@ class SparseTrackingData:
     def __repr__(self):
         return f"SparseTrackingData(coords={self.coords}, probs={self.probs}, offsets={self.offsets})"
 
+
 # Improves memory performance by using slots instead of a dictionary to store attributes...
 def add_slots(cls):
     # Need to create a new class, since we can't set __slots__
@@ -358,6 +365,7 @@ def add_slots(cls):
         cls.__qualname__ = qualname
     return cls
 
+
 @add_slots
 @dataclass
 class ForwardBackwardFrame:
@@ -379,7 +387,6 @@ class ForwardBackwardFrame:
     ignore_clustering: bool = False  # Has user edited this cell? If so, disable clustering for this frame...
     disable_occluded: bool = False  # If user has edited this frame, shouldn't try using the hidden state...
     enter_state: float = 0  # State used if no data is found in-frame...
-
 
     def copy(self) -> "ForwardBackwardFrame":
         """
@@ -485,6 +492,7 @@ def sparse_to_string(
     kwargs["format_type"] = fmt
     data2 = data.desparsify(w, h, 8)
     return pretty_frame_string(data2, 0, 0, **kwargs)
+
 
 class AttributeDict(dict):
     """

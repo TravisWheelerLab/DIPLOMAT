@@ -33,6 +33,7 @@ def normalized_shanon_entropy(dists: np.ndarray):
     dists[dists == 0] = 1
     return (-np.sum(dists * np.log2(dists), -1)) / np.log2(dists.shape[-1])
 
+
 class EntropyOfTransitions(ScoreEngine):
     def __init__(self, frame_engine: ScoreAbleFramePassEngine):
         super().__init__()
@@ -163,7 +164,6 @@ class MaximumJumpInStandardDeviations(ScoreEngine):
             c_x = poses.get_x_at(f_i, slice(None))
             c_y = poses.get_y_at(f_i, slice(None))
             c_p = poses.get_prob_at(f_i, slice(None))
-
 
             dists = np.sqrt((c_x - prior_x) ** 2 + (c_y - prior_y) ** 2)
             dists /= self._std

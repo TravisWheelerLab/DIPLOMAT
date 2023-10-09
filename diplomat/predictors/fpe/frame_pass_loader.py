@@ -1,6 +1,7 @@
 from .frame_pass import FramePass, ConfigError
 from typing import List, Any, Dict, Mapping, Iterable
 
+
 class FramePassBuilder:
     def __init__(self, name: str, config: Dict[str, Any]):
         supported_passes = {c.get_name(): c for c in FramePass.get_subclasses()}

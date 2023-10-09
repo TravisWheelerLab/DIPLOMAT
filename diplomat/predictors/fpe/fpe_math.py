@@ -32,6 +32,7 @@ def gaussian_formula(
     else:
         return np.maximum(np.log2(amplitude) - (inner_x_delta + inner_y_delta) * np.log(np.e), np.log2(lowest_value))
 
+
 def skeleton_formula(
     x: float,
     y: float,

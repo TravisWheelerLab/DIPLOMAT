@@ -14,7 +14,6 @@ import math
 FALLBACK_CODEC = "mp4v"
 FALLBACK_EXT = ".mp4"
 
-# TODO: Add support for specifying custom output extension and codec...
 
 @tc.typecaster_function
 def split_videos(

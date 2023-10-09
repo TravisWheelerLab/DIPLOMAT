@@ -1,5 +1,5 @@
 """
-Provides utilities for printing results to the console in a well formated manner.
+Provides utilities for printing results to the console in a well formatted manner.
 """
 import shutil
 import sys
@@ -13,7 +13,9 @@ class IndentPrinter:
         self._indent = indent
 
     def __call__(self, *args, sep=' ', end='\n'):
-        term_width = max(1, (self._term_width if(self._term_width is not None) else shutil.get_terminal_size().columns) - 2)
+        term_width = max(
+            1, (self._term_width if(self._term_width is not None) else shutil.get_terminal_size().columns) - 2
+        )
 
         resulting_str = sep.join(str(arg) for arg in args) + end
 

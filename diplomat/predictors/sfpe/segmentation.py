@@ -114,7 +114,9 @@ class EndPointSegmentor(Segmentor):
             prior_border = max(prior_border, 0)
 
             while((next_border - prior_border) > self._size):
-                segments.add([prior_border, prior_border + self._size, prior_border if(prior_border == orig_prior) else -1])
+                segments.add(
+                    [prior_border, prior_border + self._size, prior_border if(prior_border == orig_prior) else -1]
+                )
                 prior_border += self._size
 
             segments.add([prior_border, next_border, prior_border if(prior_border == orig_prior) else -1])

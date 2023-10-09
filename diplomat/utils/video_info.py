@@ -4,6 +4,7 @@ Provides functions for extracting certain metadata from videos.
 import cv2
 from os import PathLike
 
+
 def is_video(video_path: PathLike) -> bool:
     """
     Check if a specified file is a video file.
@@ -17,13 +18,15 @@ def is_video(video_path: PathLike) -> bool:
     cap.release()
     return is_vid
 
+
 def get_frame_count_robust(video: PathLike) -> int:
     """
     Get an accurate frame count for a video.
 
     :param video: The video to get the frame count for.
 
-    :return: An accurate frame count. Accuracy is better as this method opens the video and runs through all the frames in the file.
+    :return: An accurate frame count. Accuracy is better as this method opens the video and runs through all the
+             frames in the file.
     """
     vid = cv2.VideoCapture(str(video))
     output = 0

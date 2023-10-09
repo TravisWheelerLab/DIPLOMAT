@@ -12,7 +12,8 @@ class DotShapeDrawer(ABC):
     Abstract class defining an interface for drawing various markers, or dots, based on shape.
     """
 
-    # Unit polygons for certain types of items that for which built-in drawing functions don't exist in most programming languages...
+    # Unit polygons for certain types of items that for which built-in drawing functions don't exist in most
+    # programming languages...
     _TRIANGLE_POLY = np.array([[0, -1], [-0.8660254037844386, 0.5], [0.8660254037844386, 0.5]])
     _STAR_POLY = np.array([
         [0, -1.0],
@@ -34,10 +35,11 @@ class DotShapeDrawer(ABC):
         """
         Get a drawer for the provided shape type.
 
-        :param shape: The shape to get a drawing function for be default, all drawers must support "circle", "square", "triangle", and "star".
+        :param shape: The shape to get a drawing function for be default, all drawers must support "circle", "square",
+                      "triangle", and "star".
 
-        :return: A function or callable which accepts 3 floats (x coordinate, y coordinate, shape radius), that draws a shape marker to the specified
-                 location when called.
+        :return: A function or callable which accepts 3 floats (x coordinate, y coordinate, shape radius), that draws a
+                 shape marker to the specified location when called.
         """
         return getattr(self, "_draw_" + shape)
 
@@ -73,26 +75,34 @@ class DotShapeDrawer(ABC):
     def _draw_star(self, x: float, y: float, r: float):
         pass
 
-DotShapeDrawer.SHAPE_TYPES = tuple(["_".join(val.split("_")[2:]) for val in dir(DotShapeDrawer) if(val.startswith("_draw_"))])
+
+DotShapeDrawer.SHAPE_TYPES = tuple(
+    ["_".join(val.split("_")[2:]) for val in dir(DotShapeDrawer) if(val.startswith("_draw_"))]
+)
+
 
 def shape_str(shape: str) -> str:
     shape = str(shape)
     if(shape not in DotShapeDrawer.SHAPE_TYPES):
-        raise ValueError(f"Shape name '{shape}' not valid, supported shape names are: {list(DotShapeDrawer.SHAPE_TYPES)}")
+        raise ValueError(
+            f"Shape name '{shape}' not valid, supported shape names are: {list(DotShapeDrawer.SHAPE_TYPES)}"
+        )
     return shape
 
 
 class shape_iterator:
     """
-    Allows one to iterate over a list of shape strings indefinitely, and in groups. Used to iterate over shapes on a per individual basis.
+    Allows one to iterate over a list of shape strings indefinitely, and in groups. Used to iterate over shapes on a
+    per individual basis.
     """
     def __new__(cls, sequence: Optional[Iterable[str]], rep_count: int = None):
         """
         Get a new shape iterator.
 
         :param sequence: The sequence of shapes to iterate over. If this is None, uses the default shape list.
-        :param rep_count: The number of values to iterate through before restarting at the beginning of the sequence. If larger than the sequence
-                          length, the iteration will wrap around the sequence, and continue until this value is reached and then reset.
+        :param rep_count: The number of values to iterate through before restarting at the beginning of the sequence.
+                          If larger than the sequence length, the iteration will wrap around the sequence, and
+                          continue until this value is reached and then reset.
         """
         if(sequence is None):
             return cls.__new__(cls, ("circle", "triangle", "square", "star"), 1 if(rep_count is None) else rep_count)
@@ -126,7 +136,8 @@ class shape_iterator:
 
 class CV2DotShapeDrawer(DotShapeDrawer):
     """
-    A shape dot or marker implementation that utilizes opencv2 for drawing. It can draw to images stored as 2D numpy arrays.
+    A shape dot or marker implementation that utilizes opencv2 for drawing. It can draw to images stored as 2D
+    numpy arrays.
     """
     def __init__(
         self,
@@ -139,7 +150,8 @@ class CV2DotShapeDrawer(DotShapeDrawer):
         Create a cv2 marker, or shape drawer.
 
         :param img: The image to draw results onto, a 2D numpy array, indexed by y coordinate first.
-        :param color: The color of the dots to be drawn. Should be a tuple of 4 integers between 0 and 255 being the rgba color.
+        :param color: The color of the dots to be drawn. Should be a tuple of 4 integers between 0 and 255 being the
+                      rgba color.
         :param line_thickness: The thickness of the border of the dots.
         :param line_type: The type of line to ask cv2 to draw.
         """
@@ -153,7 +165,14 @@ class CV2DotShapeDrawer(DotShapeDrawer):
 
     def _draw_square(self, x: float, y: float, r: float):
         r = r * self._INSIDE_SQUARE_RADIUS_RATIO
-        cv2.rectangle(self._img, (int(x - r), int(y - r)), (int(x + r), int(y + r)), self._color, self._line_thickness, self._line_type)
+        cv2.rectangle(
+            self._img,
+            (int(x - r), int(y - r)),
+            (int(x + r), int(y + r)),
+            self._color,
+            self._line_thickness,
+            self._line_type
+        )
 
     def _draw_triangle(self, x: float, y: float, r: float):
         points = (self._TRIANGLE_POLY * r + np.array([x, y])).astype(int)
@@ -162,7 +181,6 @@ class CV2DotShapeDrawer(DotShapeDrawer):
             cv2.fillPoly(self._img, [points], self._color, self._line_type)
         else:
             cv2.polylines(self._img, [points], True, self._color, self._line_thickness, self._line_type)
-
 
     def _draw_star(self, x: float, y: float, r: float):
         points = (self._STAR_POLY * r + np.array([x, y])).astype(int)

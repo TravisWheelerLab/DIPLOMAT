@@ -20,7 +20,16 @@ classifiers = [
 ]
 requires-python = ">=3.7"
 dynamic = ["version", "description"]
-dependencies = ["opencv-python", "matplotlib", "typing_extensions>=3.8", "tqdm", "PyYAML", "pandas", "numba"]
+dependencies = [
+    "opencv-python",
+    "matplotlib",
+    "typing_extensions>=3.8",
+    "tqdm",
+    "PyYAML",
+    "pandas",
+    "numpy",
+    "numba"
+]
 
 [tool.flit.module]
 name = "diplomat"
@@ -34,7 +43,7 @@ diplomat = "diplomat._cli_runner:main"
 [project.optional-dependencies]
 # Latest version has build issues...
 gui = ["wxpython<4.2.0"]
-dlc = ["deeplabcut"]
+dlc = ["deeplabcut[tf]"]
 sleap = ["sleap"]
 all = ["wxpython<4.2.0", "deeplabcut", "sleap"]
 

@@ -19,6 +19,7 @@ def _create_cv2_manager(clazz: Type[T]) -> Type[T]:
     class cv2_context_manager:
         def __init__(self, *args, **kwargs):
             self._inst = clazz(*args, **kwargs)
+
         def __enter__(self):
             if(not self.isOpened()):
                 self.release()

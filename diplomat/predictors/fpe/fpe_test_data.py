@@ -309,6 +309,7 @@ TEST_FRAME_SEQUENCES = [
     # TODO: Add more...
 ]
 
+
 def print_test_set():
     from diplomat.utils import extract_frames
 
@@ -318,6 +319,7 @@ def print_test_set():
             for bp_idx in range(frm.get_bodypart_count()):
                 print(f"Frame {j} Body Part {bp_idx}")
                 extract_frames.pretty_print_frame(frm, 0, bp_idx)
+
 
 if(__name__ == "__main__"):
     print_test_set()

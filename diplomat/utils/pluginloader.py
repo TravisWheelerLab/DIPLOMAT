@@ -37,7 +37,8 @@ def load_plugin_classes(
 
                           import warnings
                           warnings.simplefilter("always", ImportWarning)
-    :param recursive: Boolean, if true recursively search subpackages for the class. Otherwise, only the first level is searched.
+    :param recursive: Boolean, if true recursively search subpackages for the class. Otherwise, only the first level is
+                      searched.
 
     :return: A list of class types that directly extend the provided base class and where found in the specified
              module folder.
@@ -81,8 +82,8 @@ def load_plugin_classes(
 
             try:
                 # We check if the field is a type or class,
-                # it's module matches the current module (it was created here, this makes sure the location classes are loaded from is consistent),
-                # it extends or is the base class for this type of plugin,
+                # it's module matches the current module (it was created here, this makes sure the location classes
+                # are loaded from is consistent), it extends or is the base class for this type of plugin,
                 # and it is not the plugin base class.
                 if (
                     isinstance(field, type)
@@ -93,7 +94,8 @@ def load_plugin_classes(
                     # It is a plugin, add it to the list...
                     plugins.add(field)
             except Exception:
-                # Some classes throw an error when passed to issubclass, just ignore them as they're clearly not a plugin.
+                # Some classes throw an error when passed to issubclass, just ignore them as they're
+                # clearly not a plugin.
                 pass
 
     return plugins

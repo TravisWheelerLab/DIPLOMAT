@@ -6,7 +6,9 @@ class FPEString:
         self._prefix = prefix
 
     def __sphinx_str__(self) -> str:
-        return f"{self._prefix} See :ref:`Frame Passes` to see the list of currently supported frame passes and options."
+        return (
+            f"{self._prefix} See :ref:`Frame Passes` to see the list of currently supported frame passes and options."
+        )
 
     def __repr__(self):
         return self.__str__()
@@ -29,5 +31,8 @@ class FPEString:
 
             desc_lst.append("\t]]]\n")
 
-        return f"{self._prefix} The following frame passes and options are currently supported:\n\n" + "\n".join(desc_lst)
+        return (
+            f"{self._prefix} The following frame passes and options are currently supported:\n\n"
+            + "\n".join(desc_lst)
+        )
 

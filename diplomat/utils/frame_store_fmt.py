@@ -11,7 +11,7 @@ the DeepLabCut Frame Store format.
     Header:
         ['DLFH'] -> Diplomat Header
         [num_frames] - the number of frames. 8 Bytes (long unsigned integer)
-        [num_bp] - number of bodyparts contained per frame. 4 Bytes (unsigned integer)
+        [num_bp] - number of body parts contained per frame. 4 Bytes (unsigned integer)
         [frame_height] - The height of a frame. 4 Bytes (unsigned integer)
         [frame_width] - The width of a frame. 4 Bytes (unsigned integer)
         [frame_rate] - The frame rate, in frames per second. 8 Bytes (double float).
@@ -89,6 +89,7 @@ from typing import Tuple
 from diplomat.utils.frame_store_api import *
 import numpy as np
 import zlib
+
 
 class DLFSConstants:
     """

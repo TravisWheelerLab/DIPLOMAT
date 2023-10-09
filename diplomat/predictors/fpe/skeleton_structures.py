@@ -2,6 +2,7 @@ from typing import NamedTuple, Union, Iterable, Any, Dict, Tuple, List, Callable
 import numpy as np
 import bisect
 
+
 class Edge(NamedTuple):
     """
     A namedtuple. Represents an edge in a graph, specifically a StorageGraph. Contains 2 entries:
@@ -37,8 +38,10 @@ a tuple with 2 integers or strings, or combinations of both.
 """
 EdgeLike = Union[Edge, Tuple[Union[int, str], Union[int, str]]]
 
+
 class InvalidEdgeError(ValueError):
     pass
+
 
 class InvalidNodeError(ValueError):
     pass

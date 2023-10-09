@@ -5,8 +5,10 @@ from diplomat.processing import *
 
 oint = Optional[int]
 
+
 class PassOrderError(ValueError):
     pass
+
 
 class RangeSlicer:
     """
@@ -118,6 +120,7 @@ class FramePass(ABC):
         return self._config
 
     T = TypeVar("T")
+
     @classmethod
     @abstractmethod
     def get_config_options(cls) -> Optional[Dict[str, Tuple[T, Callable[[Any], T], str]]]:
@@ -132,6 +135,7 @@ class FramePass(ABC):
         from diplomat.utils.pluginloader import load_plugin_classes
         from . import frame_passes
         return load_plugin_classes(frame_passes, cls)
+
 
 class ConfigError(ValueError):
     pass

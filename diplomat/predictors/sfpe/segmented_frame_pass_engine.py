@@ -1,5 +1,6 @@
 import itertools
 import os
+import shutil
 from enum import Enum
 from pathlib import Path
 from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable, BinaryIO
@@ -1159,13 +1160,15 @@ class SegmentedFramePassEngine(Predictor):
     ):
         """
         Private method, exports frames if the user specifies a frame export path.
-
-        TODO
         """
         if(p_bar is not None):
             p_bar.reset(frames.num_frames)
 
         with path.open("wb") as f:
+            if(video_metadata["orig-video-path"] is not None):
+                with open(video_metadata["orig-video-path"], "rb") as v:
+                    shutil.copyfileobj(v, f)
+
             with cls._get_frame_writer(
                 frames.num_frames, frames.metadata, video_metadata, file_format, f, export_all
             ) as fw:

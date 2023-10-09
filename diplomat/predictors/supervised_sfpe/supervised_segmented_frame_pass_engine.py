@@ -31,10 +31,11 @@ class SegmentedSubList(UserList):
     def __setitem__(self, key: int, value):
         self.data[self._segment_alignment[key]] = value
 
+
 class SegmentedList(UserList):
-    def __init__(self, l: List, segments: np.ndarray, segment_alignments: np.ndarray):
+    def __init__(self, data: List, segments: np.ndarray, segment_alignments: np.ndarray):
         super().__init__()
-        self.data = l
+        self.data = data
         self._segments = segments
         self._segment_alignments = segment_alignments
 
@@ -50,6 +51,7 @@ class SegmentedList(UserList):
 
     def __delitem__(self, key):
         raise NotImplementedError
+
 
 class SegmentedDict(MutableMapping):
     def __init__(self, wrapper_dict: dict, segments: np.ndarray, segment_alignments: np.ndarray, rev_segment_alignments: np.ndarray):
