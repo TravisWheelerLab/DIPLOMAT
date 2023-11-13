@@ -40,22 +40,32 @@ class FrameExporter(Predictor):
         self._crop_off = (None, None) if (self._crop_off is None) else self._crop_off
 
         self._frame_writer = None
-        # Making the output file...
-        orig_out_path = Path(video_metadata["output-file-path"])
-        vid_path = Path(video_metadata["orig-video-path"])
-
-        self._out_file: BinaryIO = (
-            orig_out_path.parent / (vid_path.name + "~" + settings.filename_suffix + ".dlfs")
-        ).open("w+b")
-
-        if(settings.include_video):
-            with vid_path.open("rb") as video_file:
-                shutil.copyfileobj(video_file, self._out_file)
+        self._out_file = None
 
         # Initialize the frame counter...
         self._current_frame = 0
 
-    def on_frames(self, scmap: TrackingData) -> Optional[Pose]:
+    def _open(self):
+        orig_out_path = Path(self.video_metadata["output-file-path"])
+        vid_path = Path(self.video_metadata["orig-video-path"])
+
+        self._out_file = (
+            orig_out_path.parent / (vid_path.name + "~" + self.settings.filename_suffix + ".dlfs")
+        ).open("w+b")
+
+        if(self.settings.include_video):
+            with vid_path.open("rb") as video_file:
+                shutil.copyfileobj(video_file, self._out_file)
+
+    def _close(self):
+        if(self._frame_writer is not None):
+            self._frame_writer.close()
+            self._frame_writer = None
+        if(self._out_file is not None):
+            self._out_file.close()
+            self._out_file = None
+
+    def _on_frames(self, scmap: TrackingData) -> Optional[Pose]:
         # If we are just starting, write the header, body part names chunk, and magic for frame data chunk...
         s = self.settings
 
@@ -99,10 +109,7 @@ class FrameExporter(Predictor):
             scmap.get_max_scmap_points(num_max=self.num_outputs)
         )
 
-    def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
-        self._frame_writer.close()
-        self._out_file.flush()
-        self._out_file.close()
+    def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         return None
 
     @classmethod

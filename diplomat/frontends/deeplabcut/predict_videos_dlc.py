@@ -254,18 +254,19 @@ def _analyze_video(
 
     start = time.time()
 
-    predicted_data, num_frames = _get_poses(
-        config,
-        model_config,
-        sess,
-        inputs,
-        outputs,
-        cap,
-        num_frames,
-        int(model_config["batch_size"]),
-        predictor_inst,
-        cnn_extractor_method=predict.extract_cnn_outputmulti
-    )
+    with predictor_inst as pred:
+        predicted_data, num_frames = _get_poses(
+            config,
+            model_config,
+            sess,
+            inputs,
+            outputs,
+            cap,
+            num_frames,
+            int(model_config["batch_size"]),
+            pred,
+            cnn_extractor_method=predict.extract_cnn_outputmulti
+        )
 
     stop = time.time()
 

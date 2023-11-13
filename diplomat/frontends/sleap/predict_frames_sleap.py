@@ -151,8 +151,12 @@ def _analyze_frame_store(
                 None if(off_x is None) else (off_y, off_x)
             )
 
-            pred = predictor_cls(
-                mdl_metadata["bp_names"], num_outputs, num_f, _get_predictor_settings(predictor_cls, predictor_settings), video_metadata
+            predictor = predictor_cls(
+                mdl_metadata["bp_names"],
+                num_outputs,
+                num_f,
+                _get_predictor_settings(predictor_cls, predictor_settings),
+                video_metadata
             )
 
             bp_to_idx = {val: i for (i, val) in enumerate(bp_lst)}
@@ -168,26 +172,27 @@ def _analyze_frame_store(
             labels = PoseLabels(fake_video, num_outputs, mdl_metadata["orig_skeleton"])
             total_frames = 0
 
-            with Timer() as timer:
-                with TQDMProgressBar(total=num_f) as prog_bar:
-                    print("Running the predictor on frames...")
-                    while(frame_reader.has_next()):
-                        batch = frame_reader.read_frames(min(batch_size, num_f - total_frames))
+            with predictor as pred:
+                with Timer() as timer:
+                    with TQDMProgressBar(total=num_f) as prog_bar:
+                        print("Running the predictor on frames...")
+                        while(frame_reader.has_next()):
+                            batch = frame_reader.read_frames(min(batch_size, num_f - total_frames))
 
-                        # Fix the batch to only have what is needed...
-                        batch.set_source_map(batch.get_source_map()[:, :, :, idx_to_keep])
-                        if(batch.get_offset_map() is not None):
-                            batch.set_offset_map(batch.get_offset_map()[:, :, :, idx_to_keep])
+                            # Fix the batch to only have what is needed...
+                            batch.set_source_map(batch.get_source_map()[:, :, :, idx_to_keep])
+                            if(batch.get_offset_map() is not None):
+                                batch.set_offset_map(batch.get_offset_map()[:, :, :, idx_to_keep])
 
-                        result = pred.on_frames(batch)
+                            result = pred.on_frames(batch)
+                            labels.append(result)
+                            prog_bar.update(batch.get_frame_count())
+                            total_frames += batch.get_frame_count()
+
+                    with TQDMProgressBar(total=num_f - len(labels)) as post_pbar:
+                        print(f"Running post-processing algorithms...")
+                        result = pred.on_end(post_pbar)
                         labels.append(result)
-                        prog_bar.update(batch.get_frame_count())
-                        total_frames += batch.get_frame_count()
-
-                with TQDMProgressBar(total=num_f - len(labels)) as post_pbar:
-                    print(f"Running post-processing algorithms...")
-                    result = pred.on_end(post_pbar)
-                    labels.append(result)
 
             if (total_frames != len(labels)):
                 raise ValueError(

@@ -308,8 +308,16 @@ class FPEEditor(wx.Frame):
         self.Bind(PointViewNEdit.EVT_POINT_INIT, lambda a: self.video_controls.Enable(False))
         self.Bind(PointViewNEdit.EVT_POINT_END, lambda a: self._refocus(a))
         self.Bind(PointViewNEdit.EVT_POINT_CHANGE, self._on_prob_chg)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
 
         self.video_controls.Bind(PointViewNEdit.EVT_FRAME_CHANGE, self._on_frame_chg)
+
+    def _on_close(self, event: wx.CloseEvent):
+        with wx.MessageDialog("Are you sure you want to exit and save your results?", wx.YES_NO) as dlg:
+            if(dlg.ShowModal() != wx.YES):
+                event.Veto()
+                return
+        event.Skip()
 
     def _refocus(self, evt):
         """

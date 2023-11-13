@@ -11,11 +11,14 @@ from diplomat.utils.colormaps import to_colormap
 from pathlib import Path
 import cv2
 
+
 def optional_dict(val: Optional[dict]) -> dict:
     return {} if(val is None) else dict(val)
 
+
 def codec_string(val: str) -> int:
     return cv2.VideoWriter_fourcc(*val)
+
 
 class PlotterArgMax(Predictor):
     """
@@ -123,8 +126,11 @@ class PlotterArgMax(Predictor):
         else:
             return (x_cent[mask], y_cent[mask], x_off[mask], y_off[mask])
 
+    def _close(self):
+        if(self._vid_writer is not None):
+            self._vid_writer.release()
 
-    def on_frames(self, scmap: TrackingData) -> Pose:
+    def _on_frames(self, scmap: TrackingData) -> Pose:
         settings = self.settings
         vid_meta = self.video_metadata
 
@@ -218,8 +224,7 @@ class PlotterArgMax(Predictor):
             scmap.get_max_scmap_points(num_max=self.num_outputs)
         )
 
-    def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
-        self._vid_writer.release()
+    def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         return None
 
     @classmethod

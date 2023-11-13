@@ -1,7 +1,9 @@
 import dataclasses
+from collections import UserDict
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Tuple, Union, List, Optional, Dict, Any
+from typing import Tuple, Union, List, Optional, Dict, Any, TypeVar
+from typing_extensions import Protocol
 
 try:
     from typing import Literal
@@ -15,6 +17,20 @@ from diplomat.utils.extract_frames import pretty_frame_string, FrameStringFormat
 
 # Represents a valid numpy indexing type.
 Indexer = Union[slice, int, List[int], Tuple[int], None]
+
+T = TypeVar("T")
+
+
+class SettableSequence(Protocol[T]):
+    def __getitem__(self, item: Indexer) -> T:
+        pass
+
+    def __setitem__(self, key: Indexer, value: T):
+        pass
+
+    def __len__(self) -> int:
+        pass
+
 
 class SparseModes(IntEnum):
     """
@@ -106,7 +122,7 @@ class SparseTrackingData:
         if (len(coords.shape) != 2 or coords.shape[0] != offsets_plus_probs.shape[0] or coords.shape[1] != 2):
             raise ValueError("Coordinate array must be n by 2...")
 
-        # Set the arrays to the data an make new numpy accessors which point to the new numpy arrays
+        # Set the arrays to the data and make new numpy accessors which point to the new numpy arrays
         self._coords = coords
         self._coords_access = self.NumpyAccessor(self._coords)
         self._offsets_probs = offsets_plus_probs
@@ -332,6 +348,59 @@ class SparseTrackingData:
 
         return new_sparse_data
 
+    def to_bytes(self, float_dtype: str, int_dtype: str) -> bytes:
+        if(float_dtype.lstrip("<>") not in ["f2", "f4", "f8"]):
+            raise ValueError("Invalid float datatype!")
+        if(int_dtype.lstrip("<>") not in ["u2", "u4", "u8"]):
+            raise ValueError("Invalid integer datatype!")
+
+        if(self._offsets_probs is None):
+            # Null is encoded as all 1's
+            return np.asarray(0, dtype="<u4").tobytes()
+
+        length = self._offsets_probs.shape[0]
+        enc_length = np.asarray(length, dtype="<u4").tobytes()
+
+        return b"".join([
+            enc_length,
+            self._coords.astype(int_dtype).tobytes(),
+            self._offsets_probs.astype(float_dtype).tobytes()
+        ])
+
+    def from_bytes_include_length(
+        self,
+        float_dtype: str,
+        int_dtype: str,
+        data: Union[bytes, memoryview]
+    ) -> Tuple["SparseTrackingData", int]:
+        if(float_dtype.lstrip("<>") not in ["f2", "f4", "f8"]):
+            raise ValueError("Invalid float datatype!")
+        if(int_dtype.lstrip("<>") not in ["u2", "u4", "u8"]):
+            raise ValueError("Invalid integer datatype!")
+
+        length = np.frombuffer(data, "<u4", 1)[0]
+        if(length == 0):
+            self._coords = None
+            self._offsets_probs = None
+            self._off_access = None
+            self._coords_access = None
+            self._prob_access = None
+            return self, 4
+
+        float_offset = 4 + length * 2 * np.dtype(int_dtype).itemsize
+
+        self._coords = np.frombuffer(data, np.dtype(int_dtype), length * 2, 4).reshape((length, 2))
+        self._coords_access = self.NumpyAccessor(self._coords)
+        self._offsets_probs = np.frombuffer(data, np.dtype(float_dtype), length * 3, float_offset).reshape((length, 3))
+        self._off_access = self.NumpyAccessor(self._offsets_probs, (slice(1, 3),))
+        self._prob_access = self.NumpyAccessor(self._offsets_probs, (0,))
+
+        return self, float_offset + length * 3 * np.dtype(float_dtype).itemsize
+
+    def from_bytes(self, float_dtype: str, int_dtype: str, data: bytes) -> "SparseTrackingData":
+        return self.from_bytes_include_length(float_dtype, int_dtype, data)[0]
+
+
     def __str__(self):
         return self.__repr__()
 
@@ -443,8 +512,8 @@ class ForwardBackwardFrame:
         self,
         w: int,
         h: int,
-        width_limit = 80,
-        format_type = FrameStringFormats.REGULAR_COMPACT
+        width_limit: int = 80,
+        format_type: Tuple[str, int, BorderStyle] = FrameStringFormats.REGULAR_COMPACT
     ) -> str:
         string_list = [f"{type(self).__name__}("]
 
@@ -476,6 +545,79 @@ class ForwardBackwardFrame:
 
         return "\n".join(string_list)
 
+    @staticmethod
+    def _save_arr(arr: Optional[np.ndarray], dtype: str) -> bytes:
+        if(arr is None):
+            return np.asarray([0], dtype=dtype).tobytes()
+        return b"".join([
+            np.asarray(len(arr.shape), dtype="<u4").tobytes(),
+            np.asarray(arr.shape, dtype="<u4").tobytes(),
+            arr.astype(dtype)
+        ])
+
+    @staticmethod
+    def _save_sparse_track(std: Optional[SparseTrackingData], float_dtype: str, int_dtype: str) -> bytes:
+        if(std is None):
+            return np.asarray([0xFFFFFFFF], dtype="<u4").tobytes()
+        return std.to_bytes(float_dtype, int_dtype)
+
+    def to_bytes(self, float_dtype: str, int_dtype: str) -> bytes:
+        byte_list = [
+            np.asarray([self.ignore_clustering, self.disable_occluded], dtype="?").tobytes(),
+            np.asarray([self.enter_state], dtype=float_dtype).tobytes(),
+            self.orig_data.to_bytes(float_dtype, int_dtype),
+            self.src_data.to_bytes(float_dtype, int_dtype),
+            self._save_arr(self.frame_probs, float_dtype),
+            self._save_arr(self.occluded_coords, int_dtype),
+            self._save_arr(self.occluded_probs, float_dtype)
+        ]
+
+        return b"".join(byte_list)
+
+    @staticmethod
+    def _load_array(data: bytes, dtype: str, offset: int) -> Tuple[Optional[np.ndarray], int]:
+        shape_size = np.frombuffer(data, "<u4", 1, offset)
+
+        if(shape_size == 0):
+            return (None, 4)
+
+        shape = tuple(np.frombuffer(data, "<u4", 1, offset + 4))
+        size = int(np.prod(shape))
+        data = np.frombuffer(data, dtype, size, offset + 4 * (shape_size + 1)).reshape(shape)
+        return data, 4 * (shape_size + 1) + size * np.dtype(dtype).itemsize
+
+    @staticmethod
+    def _load_sparse_track(
+        data: bytes,
+        float_dtype: str,
+        int_dtype: str,
+        offset: int
+    ) -> Tuple[Optional[SparseTrackingData], int]:
+        size_indicator = np.frombuffer(data, "<u4", 1, offset)[0]
+        if(size_indicator == 0xFFFFFFFF):
+            return (None, 4)
+
+        return SparseTrackingData().from_bytes_include_length(float_dtype, int_dtype, memoryview(data)[offset:])
+
+    def from_bytes(self, float_dtype: str, int_dtype: str, data: bytes) -> "ForwardBackwardFrame":
+        self.ignore_clustering, self.disable_occluded = np.frombuffer(data, np.dtype("?"), 2)
+        self.enter_state = np.frombuffer(data, float_dtype, 1, 2)[0]
+
+        offset = 2 + np.dtype(float_dtype).itemsize
+        self.orig_data, size = self._load_sparse_track(data, float_dtype, int_dtype, offset)
+        offset += size
+        self.src_data, size = self._load_sparse_track(data, float_dtype, int_dtype, offset)
+        offset += size
+
+        self.frame_probs, size = self._load_array(data, float_dtype, offset)
+        offset += size
+        self.occluded_coords, size = self._load_array(data, int_dtype, offset)
+        offset += size
+        self.occluded_probs, size = self._load_array(data, float_dtype, offset)
+        offset += size
+
+        return self
+
 
 def sparse_to_string(
     data: SparseTrackingData,
@@ -494,7 +636,7 @@ def sparse_to_string(
     return pretty_frame_string(data2, 0, 0, **kwargs)
 
 
-class AttributeDict(dict):
+class AttributeDict(UserDict):
     """
     An attribute dictionary. Dictionary keys can be accessed as properties or attributes, with the '.' operator.
 
@@ -503,12 +645,12 @@ class AttributeDict(dict):
         attr_dict.key <--- Returns "value"
     """
     def __getattr__(self, item):
-        if(item.startswith("_")):
+        if(item.startswith("_") or item == "data"):
             return super().__getattribute__(item)
         return super().__getitem__(item)
 
     def __setattr__(self, key, value):
-        if(key.startswith("_")):
+        if(key.startswith("_") or key == "data"):
             return super().__setattr__(key, value)
         return super().__setitem__(key, value)
 
@@ -538,12 +680,12 @@ class ForwardBackwardData:
 
         self._frames = [
             [
-                ForwardBackwardFrame(None, None, None, None, None, None) for __ in range(num_bp)
+                ForwardBackwardFrame(None, None, None, None, None) for __ in range(num_bp)
             ] for __ in range(num_frames)
         ]
 
     @property
-    def frames(self):
+    def frames(self) -> SettableSequence[SettableSequence[ForwardBackwardFrame]]:
         """
         Get/Set the frames of this ForwardBackwardData, a 2D list of ForwardBackwardFrame. Indexing is frame, then body
         part.
@@ -551,7 +693,7 @@ class ForwardBackwardData:
         return self._frames
 
     @frames.setter
-    def frames(self, frames: List[List[ForwardBackwardFrame]]):
+    def frames(self, frames: SettableSequence[SettableSequence[ForwardBackwardFrame]]):
         """
         Frames setter...
         """

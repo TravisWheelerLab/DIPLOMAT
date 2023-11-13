@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List, Callable, Tuple, TypeVar
+from typing_extensions import final
 from diplomat.processing.containers import Config, ConfigSpec
 from diplomat.processing.track_data import TrackingData
 from diplomat.processing.pose import Pose
@@ -70,6 +71,7 @@ class Predictor(ABC):
         self.__num_frames = int(num_frames)
         self.__settings = settings
         self.__video_meta = video_metadata
+        self.__resources_allocated = False
 
     @property
     def bodyparts(self) -> List[str]:
@@ -118,7 +120,7 @@ class Predictor(ABC):
         """
         return self.__video_meta
 
-    @abstractmethod
+    @final
     def on_frames(self, scmap: TrackingData) -> Optional[Pose]:
         """
         Executed on every batch of frames in the video, plugins should process or store the probability map data and
@@ -130,9 +132,15 @@ class Predictor(ABC):
         :return: A Pose object representing a collection of predicted poses for frames and body parts, or None if
                  TrackingData objects need to be stored since this plugin requires post-processing.
         """
-        pass
+        raise RuntimeError("Attempting to call on_frames before allocating resources (use a with statement).")
 
     @abstractmethod
+    def _on_frames(self, scmap: TrackingData) -> Optional[Pose]:
+        """
+        See `on_frames`. This function is what should be implemented by predictor subclasses.
+        """
+
+    @final
     def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         """
         Executed once all frames have been run through. Should be used for post-processing. Useful if a plugin needs to
@@ -146,7 +154,13 @@ class Predictor(ABC):
         :return: A Pose object representing a collection of poses for frames and body parts, or None if all the
                  predictions were made and returned as Pose object in 'on_frames'.
         """
-        pass
+        raise RuntimeError("Attempting to call on_end before allocating resources (use a with statement).")
+
+    @abstractmethod
+    def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
+        """
+        See `on_end`. This function is what should be implemented by predictor subclasses.
+        """
 
     @classmethod
     def get_name(cls) -> str:
@@ -225,3 +239,39 @@ class Predictor(ABC):
         :return: A boolean, True if multiple outputs per body part is supported, otherwise False...
         """
         return False
+
+    def _open(self):
+        """
+        Should be implemented by subclasses that would like to open resources when initializing a predictor.
+        This function is guaranteed to be called before `on_frames` and `on_end` is called.
+        """
+        pass
+
+    def _close(self):
+        """
+        Should be implemented by subclasses that would like to close resources when a predictor is finished running.
+        This function is guaranteed to be called if `_open` is called.
+        """
+        pass
+
+    @final
+    def __enter__(self):
+        """
+        Can be used by subclasses to allocate resources that need to be closed, the function returns the current
+        predictor object. All frontends must trigger this function using a with statement before running a predictor.
+        (this includes calling the on_frames and on_end methods).
+        """
+        # Allow calling on_end and on_frames...
+        self._open()
+        self.on_end = self._on_end
+        self.on_frames = self._on_frames
+        return self
+
+    @final
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Can be used by subclasses to close resources when done.
+        """
+        self._close()
+        del self.on_end
+        del self.on_frames

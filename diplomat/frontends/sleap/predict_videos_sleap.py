@@ -109,7 +109,7 @@ def _analyze_single_video(
     output_path = video_path.parent / (video_path.name + f".diplomat_{predictor_cls.get_name()}{output_suffix}.slp")
 
     video_metadata = _get_video_metadata(video_path, output_path, num_outputs, video, visual_settings, mdl_metadata)
-    pred = predictor_cls(
+    predictor = predictor_cls(
         mdl_metadata["bp_names"], num_outputs, video.num_frames,
         _get_predictor_settings(predictor_cls, predictor_settings), video_metadata
     )
@@ -117,19 +117,20 @@ def _analyze_single_video(
     labels = PoseLabels(video, num_outputs, mdl_metadata["orig_skeleton"])
     total_frames = 0
 
-    with Timer() as timer:
-        with TQDMProgressBar(total=video.num_frames) as prog_bar:
-            print("Running the model...")
-            for batch in mdl_extractor.extract(video):
-                result = pred.on_frames(batch)
-                labels.append(result)
-                prog_bar.update(batch.get_frame_count())
-                total_frames += batch.get_frame_count()
+    with predictor as pred:
+        with Timer() as timer:
+            with TQDMProgressBar(total=video.num_frames) as prog_bar:
+                print("Running the model...")
+                for batch in mdl_extractor.extract(video):
+                    result = pred.on_frames(batch)
+                    labels.append(result)
+                    prog_bar.update(batch.get_frame_count())
+                    total_frames += batch.get_frame_count()
 
-        with TQDMProgressBar(total=video.num_frames - len(labels)) as post_pbar:
-            print(f"Running post-processing algorithms...")
-            result = pred.on_end(post_pbar)
-            labels.append(result)
+            with TQDMProgressBar(total=video.num_frames - len(labels)) as post_pbar:
+                print(f"Running post-processing algorithms...")
+                result = pred.on_end(post_pbar)
+                labels.append(result)
 
     if (total_frames != len(labels)):
         raise ValueError(

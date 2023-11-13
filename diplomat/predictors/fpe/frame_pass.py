@@ -64,7 +64,8 @@ class FramePass(ABC):
     def _set_step_controls(self, start: oint, stop: oint, step: oint, prior_offset: oint):
         self._start, self._stop, self._step, self._prior_off = start, stop, step, prior_offset
 
-    def run_pass(self,
+    def run_pass(
+        self,
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
         in_place: bool = True,

@@ -22,6 +22,7 @@ try:
     from ..fpe.skeleton_structures import StorageGraph
     from ..fpe.fpe_help import FPEString
     from ..fpe.arr_utils import _NumpyDict
+    from .disk_sparse_storage import DiskBackedForwardBackwardData
 except ImportError:
     __package__ = "diplomat.predictors.sfpe"
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -32,6 +33,7 @@ except ImportError:
     from ..fpe.skeleton_structures import StorageGraph
     from ..fpe.fpe_help import FPEString
     from ..fpe.arr_utils import _NumpyDict
+    from .disk_sparse_storage import DiskBackedForwardBackwardData
 
 
 class NestedProgressIndicator(ProgressBar):
@@ -278,7 +280,13 @@ class PoolWithProgress:
         self._sub_progress_bars = [InternalProgressIndicator(self._ctx) for __ in range(process_count)]
 
         self._process_count = process_count
-        self._pool = SimplePool(self._ctx, pool_with_progress_thread, [(p,) for p in self._sub_progress_bars], max_worker_reuse, max_queue_size)
+        self._pool = SimplePool(
+            self._ctx,
+            pool_with_progress_thread,
+            [(p,) for p in self._sub_progress_bars],
+            max_worker_reuse,
+            max_queue_size
+        )
         self._refresh_rate = refresh_rate_seconds
         self._sub_ticks = int(sub_ticks)
 
@@ -286,6 +294,13 @@ class PoolWithProgress:
 
     @staticmethod
     def get_optimal_ctx():
+        import sys
+
+        if(getattr(sys.flags, "nogil", False)):
+            # No gil? Awesome, we can just use threads!
+            import multiprocessing.dummy as context
+            return context
+
         try:
             return get_context("forkserver")
         except ValueError:
@@ -405,18 +420,46 @@ class SegmentedFramePassEngine(Predictor):
         p = settings.export_frame_path
         self.EXPORT_LOC = Path(p).resolve() if(p is not None) else None
 
-        self._frame_holder = ForwardBackwardData(num_frames, self._num_total_bp)
-
-        self._frame_holder.metadata.threshold = self.THRESHOLD
-        self._frame_holder.metadata.bodyparts = bodyparts
-        self._frame_holder.metadata.num_outputs = num_outputs
-        self._frame_holder.metadata.project_skeleton = self.video_metadata.get("skeleton", None)
+        self._frame_holder = None
+        self._file_obj = None
 
         self._segments = None
         self._segment_scores = None
         self._segment_bp_order = None
 
         self._current_frame = 0
+
+    def _open(self):
+        if(self.settings.storage_mode == "memory"):
+            self._frame_holder = ForwardBackwardData(self.num_frames, self._num_total_bp)
+        else:
+            output_path = Path(self.video_metadata["output-file-path"]).resolve()
+            video_path = Path(self.video_metadata["orig-video-path"]).resolve()
+            disk_path = output_path.parent / (output_path.stem + ".dipui")
+
+            self._file_obj = disk_path.open("w+b")
+            print(disk_path)
+
+            with video_path.open("rb") as f:
+                shutil.copyfileobj(f, self._file_obj)
+
+            self._frame_holder = DiskBackedForwardBackwardData(
+                self.num_frames,
+                self._num_total_bp,
+                self._file_obj,
+                self.settings.memory_cache_size
+            )
+
+        self._frame_holder.metadata.threshold = self.THRESHOLD
+        self._frame_holder.metadata.bodyparts = self.bodyparts
+        self._frame_holder.metadata.num_outputs = self.num_outputs
+        self._frame_holder.metadata.project_skeleton = self.video_metadata.get("skeleton", None)
+
+    def _close(self):
+        if(isinstance(self._frame_holder, DiskBackedForwardBackwardData)):
+            self._frame_holder.close()
+        if(self._file_obj is not None):
+            self._file_obj.close()
 
     def _sparcify_and_store(self, fb_frame: ForwardBackwardFrame, scmap: TrackingData, frame_idx: int, bp_idx: int):
         fb_frame.orig_data = SparseTrackingData.sparsify(
@@ -429,7 +472,7 @@ class SegmentedFramePassEngine(Predictor):
         )
         fb_frame.src_data = fb_frame.orig_data
 
-    def on_frames(self, scmap: TrackingData) -> Optional[Pose]:
+    def _on_frames(self, scmap: TrackingData) -> Optional[Pose]:
         if(self._width is None):
             self._width = scmap.get_frame_width()
             self._height = scmap.get_frame_height()
@@ -1057,8 +1100,6 @@ class SegmentedFramePassEngine(Predictor):
         """
         Get a frame writer that can export frames from the Forward Backward instance. Used internally to support frame
         export functionality.
-
-        TODO
         """
         from diplomat.utils import frame_store_fmt
 
@@ -1214,7 +1255,7 @@ class SegmentedFramePassEngine(Predictor):
                         if(p_bar is not None):
                             p_bar.update()
 
-    def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
+    def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         self._run_frame_passes(progress_bar)
 
         if(self.EXPORT_LOC is not None):
@@ -1239,7 +1280,6 @@ class SegmentedFramePassEngine(Predictor):
             progress_bar,
             relaxed_radius=self.settings.relaxed_maximum_radius
         )
-
 
     @classmethod
     def get_settings(cls) -> ConfigSpec:
@@ -1347,6 +1387,16 @@ class SegmentedFramePassEngine(Predictor):
                 type_casters.Literal("greedy", "hungarian"),
                 "The algorithm to use for assigning parts to bodies and stitching parts/bodies across segments."
                 "Greedy is faster/simpler, hungarian provides better results."
+            ),
+            "storage_mode": (
+                "disk",
+                type_casters.Literal("disk", "memory"),
+                "Location to store frames while the algorithm is running."
+            ),
+            "memory_cache_size": (
+                100,
+                type_casters.RangedInteger(1, np.inf),
+                "Size of lifo cache used to temporarily store frames loaded from disk if running in disk storage_mode."
             )
         }
 

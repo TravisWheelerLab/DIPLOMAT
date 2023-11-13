@@ -71,7 +71,7 @@ class FramePassEngine(Predictor):
         )
         fb_frame.src_data = fb_frame.orig_data
 
-    def on_frames(self, scmap: TrackingData) -> Optional[Pose]:
+    def _on_frames(self, scmap: TrackingData) -> Optional[Pose]:
         if(self._width is None):
             self._width = scmap.get_frame_width()
             self._height = scmap.get_frame_height()
@@ -387,8 +387,7 @@ class FramePassEngine(Predictor):
                 True
             )
 
-
-    def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
+    def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         self._run_frame_passes(progress_bar)
 
         if(self.EXPORT_LOC is not None):
@@ -412,7 +411,6 @@ class FramePassEngine(Predictor):
 
     @classmethod
     def get_settings(cls) -> ConfigSpec:
-
         return {
             "threshold": (
                 0.001,

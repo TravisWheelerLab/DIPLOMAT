@@ -220,52 +220,53 @@ def _analyze_frame_store(
 
         # Create the plugin instance...
         print(f"Plugin {predictor_cls.get_name()} Settings: {predictor_settings}")
-        predictor_inst = predictor_cls(
+        predictor = predictor_cls(
             bp_lst, num_outputs, num_f, predictor_settings, video_metadata
         )
 
-        # The pose prediction final output array...
-        pose_prediction_data = np.zeros((num_f, 3 * len(bp_lst) * num_outputs))
+        with predictor as predictor_inst:
+            # The pose prediction final output array...
+            pose_prediction_data = np.zeros((num_f, 3 * len(bp_lst) * num_outputs))
 
-        # Begin running through frames...
-        p_bar = tqdm.tqdm(total=num_f)
-        frames_done = 0
+            # Begin running through frames...
+            p_bar = tqdm.tqdm(total=num_f)
+            frames_done = 0
 
-        while frame_reader.has_next():
-            frame = frame_reader.read_frames()
-            pose = predictor_inst.on_frames(frame)
-            if pose is not None:
-                # If the predictor returned a pose, add it to the final data.
+            while frame_reader.has_next():
+                frame = frame_reader.read_frames()
+                pose = predictor_inst.on_frames(frame)
+                if pose is not None:
+                    # If the predictor returned a pose, add it to the final data.
+                    pose_prediction_data[
+                        frames_done : frames_done + pose.get_frame_count()
+                    ] = pose.get_all()
+                    frames_done += pose.get_frame_count()
+
+                p_bar.update()
+
+            p_bar.close()
+
+            # Post-Processing Phase:
+            # Phase 2: Post processing...
+
+            # Get all of the final poses that are still held by the predictor
+            post_pbar = TQDMProgressBar(total=num_f - frames_done)
+            final_poses = predictor_inst.on_end(post_pbar)
+            post_pbar.close()
+
+            # Add any post-processed frames
+            if final_poses is not None:
                 pose_prediction_data[
-                    frames_done : frames_done + pose.get_frame_count()
-                ] = pose.get_all()
-                frames_done += pose.get_frame_count()
+                    frames_done : frames_done + final_poses.get_frame_count()
+                ] = final_poses.get_all()
+                frames_done += final_poses.get_frame_count()
 
-            p_bar.update()
-
-        p_bar.close()
-
-        # Post-Processing Phase:
-        # Phase 2: Post processing...
-
-        # Get all of the final poses that are still held by the predictor
-        post_pbar = TQDMProgressBar(total=num_f - frames_done)
-        final_poses = predictor_inst.on_end(post_pbar)
-        post_pbar.close()
-
-        # Add any post-processed frames
-        if final_poses is not None:
-            pose_prediction_data[
-                frames_done : frames_done + final_poses.get_frame_count()
-            ] = final_poses.get_all()
-            frames_done += final_poses.get_frame_count()
-
-        # Check and make sure the predictor returned all frames, otherwise throw an error.
-        if frames_done != num_f:
-            raise ValueError(
-                f"The predictor algorithm did not return the same amount of frames as are in the frame store.\n"
-                f"Expected Amount: {num_f}, Actual Amount Returned: {frames_done}"
-            )
+            # Check and make sure the predictor returned all frames, otherwise throw an error.
+            if frames_done != num_f:
+                raise ValueError(
+                    f"The predictor algorithm did not return the same amount of frames as are in the frame store.\n"
+                    f"Expected Amount: {num_f}, Actual Amount Returned: {frames_done}"
+                )
 
         stop = time.time()
         frame_reader.close()

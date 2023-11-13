@@ -6,11 +6,14 @@ import numpy as np
 from numpy.lib.stride_tricks import as_strided
 from diplomat.processing import *
 
+
 def optional_dict(val: Optional[dict]) -> dict:
     return {} if(val is None) else dict(val)
 
+
 def codec_string(val: str) -> int:
     return cv2.VideoWriter_fourcc(*val)
+
 
 _CV2_FONTS = {
     item: getattr(cv2, item)
@@ -24,15 +27,19 @@ _CV2_COLORMAPS = {
     if (item.startswith("COLORMAP"))
 }
 
+
 def cv2_font(val: str) -> int:
     return _CV2_FONTS[str(val)]
+
 
 def cv2_colormap(val: str) -> int:
     return _CV2_COLORMAPS[str(val)]
 
+
 bgr_color = type_casters.Tuple(
     *([type_casters.RangedInteger(0, 255)] * 3)
 )
+
 
 class FastPlotterArgMax(Predictor):
     """
@@ -101,6 +108,10 @@ class FastPlotterArgMax(Predictor):
         # Will store colormap per run to avoid reallocating large arrays over and over....
         self._colormap_temp = None
         self._colormap_view = None
+
+    def _close(self):
+        if(self._vid_writer is not None):
+            self._vid_writer.release()
 
     def _compute_video_measurements(self, scmap_width: int, scmap_height: int):
         """
@@ -268,7 +279,7 @@ class FastPlotterArgMax(Predictor):
             s.font_thickness,
         )
 
-    def on_frames(self, scmap: TrackingData) -> Optional[Pose]:
+    def _on_frames(self, scmap: TrackingData) -> Optional[Pose]:
         # If the video writer has not been created, create it now and compute all needed video dimensions...
         if self._vid_writer is None:
             self._compute_video_measurements(
@@ -303,8 +314,7 @@ class FastPlotterArgMax(Predictor):
             scmap.get_max_scmap_points(num_max=self.num_outputs)
         )
 
-    def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
-        self._vid_writer.release()
+    def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         return None
 
     @classmethod
