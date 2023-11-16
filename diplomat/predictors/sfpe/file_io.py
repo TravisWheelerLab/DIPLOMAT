@@ -1,11 +1,14 @@
 import json
 import multiprocessing
-from typing import BinaryIO, Tuple, Optional, Mapping
+from multiprocessing.shared_memory import SharedMemory
+from typing import BinaryIO, Tuple, Optional, Mapping, Type
 from io import SEEK_CUR, SEEK_END, SEEK_SET
 import numpy as np
+import numba
 
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame
 import zlib
+import numba
 
 
 DIPLOMAT_STATE_HEADER = b"DPST"
@@ -21,6 +24,17 @@ DIPST_END_CHUNK = b"DEND"
 Offset = np.dtype("<u8")
 
 
+class DummyLock:
+    """
+    Lock class that does nothing, this is used to disable locking functionality if a lock is not passed.
+    """
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
 class DiplomatFPEState:
     def __init__(
         self,
@@ -29,16 +43,30 @@ class DiplomatFPEState:
         compression_level: int = 6,
         float_type: str = "<f4",
         int_type: str = "<u4",
-        immediate_mode: bool = False
+        immediate_mode: bool = False,
+        lock: Optional[multiprocessing.Lock] = None,
+        memory_backing: Optional[SharedMemory] = None
     ):
         self._file_obj = file_obj
         self._compression_level = compression_level
-        self._frame_offsets = np.zeros((frame_count + 1, 2), dtype=Offset) if(frame_count > 0) else None
         self._file_start = 0
         self._float_type = float_type
         self._int_type = int_type
         self._free_space = {}
         self._immediate_mode = immediate_mode
+        self._lock = lock if(lock is not None) else DummyLock
+        self._from_pickle = False
+
+        self._shared_mem = memory_backing
+        self._frame_offsets = None
+        if(frame_count > 0):
+            if(self._shared_mem is None):
+                self._frame_offsets = np.zeros((frame_count + 1, 2), dtype=Offset)
+            else:
+                self._frame_offsets = np.ndarray(
+                    (frame_count + 1, 2), dtype=Offset, buffer=self._shared_mem.buf, order="C"
+                )
+                self._frame_offsets[:] = 0
 
         self._find_chunks(frame_count)
         self._compute_free_space()
@@ -103,9 +131,16 @@ class DiplomatFPEState:
             raise IOError("Corrupted offset chunk!")
 
         length = int.from_bytes(self._file_obj.read(Offset.itemsize), "little", signed=False)
-        self._frame_offsets = np.copy(np.frombuffer(
+
+        if(self._frame_offsets is None):
+            if(self._shared_mem is not None):
+                self._frame_offsets = np.ndarray((1 + length, 2), dtype=Offset, buffer=self._shared_mem.buf, order="C")
+            else:
+                self._frame_offsets = np.zeros((1 + length, 2), dtype=Offset)
+
+        self._frame_offsets[:] = np.frombuffer(
             self._file_obj.read((2 + length * 2) * Offset.itemsize), Offset
-        ).reshape((length + 1, 2)))
+        ).reshape((length + 1, 2))
 
     def _write_offsets(self):
         self._file_obj.seek(self._file_start + 4)
@@ -243,4 +278,25 @@ class DiplomatFPEState:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+    def __getstate__(self):
+        state = self.__dict__
+
+        if(state["_shared_mem"] is None):
+            raise RuntimeError("Attempting to pickle a diplomat file state without memory backing.")
+
+        state["_file_obj"] = state["_file_obj"].name
+        state["_from_pickle"] = True
+        return state
+
+    def __setstate__(self, state: dict):
+        self.__dict__ = state
+        self._file_obj = open(str(self._file_obj), "r+b")
+
+    def __del__(self):
+        if(self._from_pickle):
+            try:
+                self._file_obj.close()
+            except IOError:
+                pass
 
