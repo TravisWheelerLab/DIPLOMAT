@@ -1,5 +1,5 @@
-from typing import Tuple, Optional, Protocol
-
+from typing import Tuple, Optional
+from typing_extensions import Protocol
 import numpy as np
 import numba
 from numba.core.types.containers import Tuple as NumbaTuple
@@ -80,10 +80,10 @@ def insert(tree: Tree, key: int, val: int):
 oint = Optional[int]
 
 
-def nearest_pop(tree: Tree, key: int, left: bool = False) -> Tuple[oint, oint]:
-    if(tree.size == 0):
-        raise ValueError("Tree is empty!")
-    index = _nearest_search(tree.data, tree.root, key, bool(left))
+def nearest_pop(tree: Tree, key: int, val: Optional[int] = None, left: bool = False) -> Tuple[oint, oint]:
+    if(tree.size <= 0):
+        return (None, None)
+    index = _nearest_search(tree.data, tree.root, key, val is not None, val if(val is not None) else 0, bool(left))
 
     if(index == -1):
         return (None, None)
@@ -91,9 +91,22 @@ def nearest_pop(tree: Tree, key: int, left: bool = False) -> Tuple[oint, oint]:
     # Try removing the selected node...
     key, val = tree.data[index, _KEY], tree.data[index, _VALUE]
     _remove(tree, index, tree.size - 1)
-    tree.size -= 1
+    tree.size = tree.size - 1
 
     return key, val
+
+
+def remove(tree: Tree, key: int, val: int) -> bool:
+    if(tree.size <= 0):
+        return False
+    index = _nearest_search(tree.data, tree.root, key, True, val, True)
+
+    if(index == -1 or (tree.data[index, _KEY] != key) or (tree.data[index, _VALUE] != val)):
+        return False
+
+    _remove(tree, index, tree.size - 1)
+    tree.size = tree.size - 1
+    return True
 
 
 def inorder_traversal(tree: Tree) -> np.ndarray:
@@ -172,8 +185,8 @@ def _rebalance(tree: np.ndarray, current_idx: int) -> int:
         return current_idx
 
 
-@numba.njit(numba.int64(numba.int64[:, :], numba.int64, numba.int64, numba.boolean))
-def _nearest_search(tree: np.ndarray, current_idx: int, key: int, left: bool) -> int:
+@numba.njit(numba.int64(numba.int64[:, :], numba.int64, numba.int64, numba.boolean, numba.int64, numba.boolean))
+def _nearest_search(tree: np.ndarray, current_idx: int, key: int, use_val: bool, val: int, left: bool) -> int:
     if(current_idx < 0):
         return -1
 
@@ -181,13 +194,24 @@ def _nearest_search(tree: np.ndarray, current_idx: int, key: int, left: bool) ->
         branch = _MORE
         current_selection = current_idx if(left) else -1
     elif(tree[current_idx, _KEY] == key):
-        branch = _MORE if(left) else _LESS_OR_EQ
-        current_selection = current_idx
+        if(use_val):
+            if(tree[current_idx, _VALUE] < val):
+                branch = _MORE
+                current_selection = current_idx if (left) else -1
+            elif(tree[current_idx, _VALUE] > val):
+                branch = _LESS_OR_EQ
+                current_selection = -1 if (left) else current_idx
+            else:
+                branch = _MORE if (left) else _LESS_OR_EQ
+                current_selection = current_idx
+        else:
+            branch = _MORE if(left) else _LESS_OR_EQ
+            current_selection = current_idx
     else:
         branch = _LESS_OR_EQ
         current_selection = -1 if(left) else current_idx
 
-    sub_selection = _nearest_search(tree, tree[current_idx, branch], key, left)
+    sub_selection = _nearest_search(tree, tree[current_idx, branch], key, use_val, val, left)
 
     return sub_selection if(sub_selection >= 0) else current_selection
 
@@ -231,7 +255,6 @@ def _remove(full_tree: Tree, index: int, last_idx: int):
         if(parent_val < 0):
             tree[index, :] = 0
             full_tree.root = 0
-            full_tree.size = 0
             return
         elif(tree[parent_val, _LESS_OR_EQ] == index):
             tree[parent_val, _LESS_OR_EQ] = -1
@@ -344,11 +367,13 @@ def _tree_test():
     insert(t, 20, 300)
     insert(t, 500, 20)
     insert(t, 30, 300)
+    insert(t, 33, 10)
     insert(t, 50, 20)
     insert(t, 20, 200)
     assert nearest_pop(t, 18) == (20, 200)
     assert nearest_pop(t, 25) == (25, 10)
-    assert nearest_pop(t, 16, True) == (14, 90)
+    assert nearest_pop(t, 16, left=True) == (14, 90)
+    assert nearest_pop(t, 33, 10) == (33, 10)
     assert nearest_pop(t, 600) == (None, None)
     assert np.all(inorder_traversal(t) == [
         [20, 300],

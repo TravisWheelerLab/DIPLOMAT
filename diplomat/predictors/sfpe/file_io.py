@@ -1,14 +1,13 @@
 import json
 import multiprocessing
-from multiprocessing.shared_memory import SharedMemory
-from typing import BinaryIO, Tuple, Optional, Mapping, Type
+from typing import BinaryIO, Tuple, Optional, Mapping
 from io import SEEK_CUR, SEEK_END, SEEK_SET
 import numpy as np
-import numba
+from typing_extensions import Protocol
 
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame
+from diplomat.predictors.sfpe.avl_tree import BufferTree, NumpyTree, insert, nearest_pop, remove
 import zlib
-import numba
 
 
 DIPLOMAT_STATE_HEADER = b"DPST"
@@ -35,7 +34,14 @@ class DummyLock:
         pass
 
 
+class SharedMemory(Protocol):
+    buf: memoryview
+
+
 class DiplomatFPEState:
+
+    INFINITY = np.iinfo(np.int64).max
+
     def __init__(
         self,
         file_obj: BinaryIO,
@@ -44,7 +50,7 @@ class DiplomatFPEState:
         float_type: str = "<f4",
         int_type: str = "<u4",
         immediate_mode: bool = False,
-        lock: Optional[multiprocessing.Lock] = None,
+        lock: Optional[multiprocessing.RLock] = None,
         memory_backing: Optional[SharedMemory] = None
     ):
         self._file_obj = file_obj
@@ -52,7 +58,6 @@ class DiplomatFPEState:
         self._file_start = 0
         self._float_type = float_type
         self._int_type = int_type
-        self._free_space = {}
         self._immediate_mode = immediate_mode
         self._lock = lock if(lock is not None) else DummyLock
         self._from_pickle = False
@@ -69,43 +74,71 @@ class DiplomatFPEState:
                 self._frame_offsets[:] = 0
 
         self._find_chunks(frame_count)
+
+        offset1 = self._frame_offsets.nbytes
+        offset2 = offset1 + BufferTree.get_buffer_size(self._frame_offsets.shape[0] + 1)
+
+        self._free_space = (
+            BufferTree(memory_backing.buf[offset1:offset2])
+            if(memory_backing is not None) else
+            NumpyTree(self._frame_offsets.shape[0] + 1)
+        )
+        self._free_space_offsets = (
+            BufferTree(memory_backing.buf[offset2:])
+            if(memory_backing is not None) else
+            NumpyTree(self._frame_offsets[0] + 1)
+        )
+        if(
+            self._free_space.data.shape[0] <= self._frame_offsets.shape[0]
+            or self._free_space_offsets.data.shape[0] <= self._frame_offsets.shape[0]
+        ):
+            raise ValueError("Free space buffer not large enough...")
         self._compute_free_space()
 
     def _find_chunks(self, frame_count: int):
-        self._file_obj.seek(-8, SEEK_END)
-        data = self._file_obj.read(12)
+        with self._lock:
+            self._file_obj.seek(-8, SEEK_END)
+            data = self._file_obj.read(12)
 
-        if(data[:4] == DIPST_END_CHUNK):
-            self._file_start = int.from_bytes(data[4:], "little", signed=False)
+            if(data[:4] == DIPST_END_CHUNK):
+                self._file_start = int.from_bytes(data[4:], "little", signed=False)
 
-        self._file_obj.seek(self._file_start)
-        dip_header = self._file_obj.read(4)
+            self._file_obj.seek(self._file_start)
+            dip_header = self._file_obj.read(4)
 
-        if(len(dip_header) == 0 or dip_header != DIPLOMAT_STATE_HEADER):
-            if(frame_count <= 0):
-                raise IOError("No ui state found in this file.")
-            self._file_obj.seek(0, SEEK_END)
-            self._file_start = self._file_obj.tell()
-            self._write_new_header()
+            if(len(dip_header) == 0 or dip_header != DIPLOMAT_STATE_HEADER):
+                if(frame_count <= 0):
+                    raise IOError("No ui state found in this file.")
+                self._file_obj.seek(0, SEEK_END)
+                self._file_start = self._file_obj.tell()
+                self._write_new_header()
 
-        self._load_offsets()
-        if((self._frame_offsets.shape[0] - 1) != frame_count):
-            raise ValueError("Loaded file doesn't have same frame count!")
+            self._load_offsets()
+            if((self._frame_offsets.shape[0] - 1) != frame_count):
+                raise ValueError("Loaded file doesn't have same frame count!")
 
     def _compute_free_space(self):
-        # Sort the frame offsets...
-        order = np.argsort(self._frame_offsets[:, 0])
+        with self._lock:
+            # Sort the frame offsets...
+            order = np.argsort(self._frame_offsets[:, 0])
+            prior_offset, prior_size = self._data_offset(), 0
 
-        for i, i2 in enumerate(order):
-            offset, size = self._frame_offsets[i2]
-            if(i + 1 >= len(order)):
+            for i, i2 in enumerate(order):
                 offset, size = self._frame_offsets[i2]
-                self._free_space[i2] = (int(max(offset, self._data_offset()) + size), np.inf)
-                break
+                if(i + 1 >= len(order)):
+                    offset, size = self._frame_offsets[i2]
+                    insert(self._free_space, self.INFINITY, int(max(offset, self._data_offset()) + size))
+                    insert(self._free_space_offsets, int(max(offset, self._data_offset()) + size), self.INFINITY)
+                    break
 
-            offset2, size2 = self._frame_offsets[i2 + 1]
-            if(offset + size < offset2):
-                self._free_space[i2] = ((offset + size, offset2 - (offset + size)))
+                if(size == 0):
+                    continue
+
+                if(prior_offset + prior_size < offset):
+                    insert(self._free_space, offset - (prior_offset + prior_size), prior_offset + prior_size)
+                    insert(self._free_space_offsets, prior_offset + prior_size, offset - (prior_offset + prior_size))
+
+                prior_offset, prior_size = offset, size
 
     def _data_offset(self) -> int:
         return int(
@@ -117,107 +150,137 @@ class DiplomatFPEState:
         )
 
     def _write_new_header(self):
-        self._file_obj.write(DIPLOMAT_STATE_HEADER)
-        # Offset chunk...
-        self._file_obj.write(DIPST_OFFSET_CHUNK)
-        self._write_offsets()
-        # Data chunk...
-        self._file_obj.write(DIPST_DATA_CHUNK)
+        with self._lock:
+            self._file_obj.write(DIPLOMAT_STATE_HEADER)
+            # Offset chunk...
+            self._file_obj.write(DIPST_OFFSET_CHUNK)
+            self._write_offsets()
+            # Data chunk...
+            self._file_obj.write(DIPST_DATA_CHUNK)
 
     def _load_offsets(self):
-        self._file_obj.seek(self._file_start + 4)
-        magic = self._file_obj.read(4)
-        if(magic != DIPST_OFFSET_CHUNK):
-            raise IOError("Corrupted offset chunk!")
+        with self._lock:
+            self._file_obj.seek(self._file_start + 4)
+            magic = self._file_obj.read(4)
+            if(magic != DIPST_OFFSET_CHUNK):
+                raise IOError("Corrupted offset chunk!")
 
-        length = int.from_bytes(self._file_obj.read(Offset.itemsize), "little", signed=False)
+            length = int.from_bytes(self._file_obj.read(Offset.itemsize), "little", signed=False)
 
-        if(self._frame_offsets is None):
-            if(self._shared_mem is not None):
-                self._frame_offsets = np.ndarray((1 + length, 2), dtype=Offset, buffer=self._shared_mem.buf, order="C")
-            else:
-                self._frame_offsets = np.zeros((1 + length, 2), dtype=Offset)
+            if(self._frame_offsets is None):
+                if(self._shared_mem is not None):
+                    self._frame_offsets = np.ndarray(
+                        (1 + length, 2), dtype=Offset, buffer=self._shared_mem.buf, order="C"
+                    )
+                else:
+                    self._frame_offsets = np.zeros((1 + length, 2), dtype=Offset)
 
-        self._frame_offsets[:] = np.frombuffer(
-            self._file_obj.read((2 + length * 2) * Offset.itemsize), Offset
-        ).reshape((length + 1, 2))
+            self._frame_offsets[:] = np.frombuffer(
+                self._file_obj.read((2 + length * 2) * Offset.itemsize), Offset
+            ).reshape((length + 1, 2))
 
     def _write_offsets(self):
-        self._file_obj.seek(self._file_start + 4)
-        magic = self._file_obj.read(4)
-        if(magic != DIPST_OFFSET_CHUNK):
-            raise IOError("Corrupted offset chunk!")
+        with self._lock:
+            self._file_obj.seek(self._file_start + 4)
+            magic = self._file_obj.read(4)
+            if(magic != DIPST_OFFSET_CHUNK):
+                raise IOError("Corrupted offset chunk!")
 
-        self._file_obj.write(int(self._frame_offsets.shape[0] - 1).to_bytes(8, "little", signed=False))  # Size
-        self._file_obj.write(self._frame_offsets.astype(Offset).tobytes())
+            self._file_obj.write(int(self._frame_offsets.shape[0] - 1).to_bytes(8, "little", signed=False))  # Size
+            self._file_obj.write(self._frame_offsets.astype(Offset).tobytes())
 
-    def _find_free_space(
+    def _add_free_space(
         self,
-        size_needed: int,
-        preset_position: Optional[Tuple[int, int, int]] = None
-    ) -> Tuple[int, int, int]:
-        for prior_frame, (offset, size) in sorted(self._free_space.items(), key=lambda k: k[1][0]):
-            if(preset_position is not None and offset > preset_position[1]):
-                return preset_position
-            if(size == -1 or size_needed <= size):
-                return (prior_frame, offset, size)
+        offset: int,
+        size: int
+    ):
+        if(size <= 0):
+            return
+
+        offset_below, size_below = nearest_pop(self._free_space_offsets, offset, size, left=True)
+        offset_above, size_above = nearest_pop(self._free_space_offsets, offset, size, left=False)
+        remove(self._free_space, size_below, offset_below)
+        remove(self._free_space, size_above, offset_above)
+
+        if(offset_below is not None):
+            if(offset_below + size_below >= offset):
+                offset = offset_below
+                if(self.INFINITY in [size, size_below]):
+                    size = self.INFINITY
+                else:
+                    size = max(offset + size, offset_below + size_below) - offset_below
+            else:
+                insert(self._free_space, size_below, offset_below)
+                insert(self._free_space_offsets, offset_below, size_below)
+
+        if(offset_above is not None):
+            if(offset_above <= (offset + size)):
+                if(self.INFINITY in [size, size_above]):
+                    size = self.INFINITY
+                else:
+                    size = max(offset_above + size_above, offset + size) - offset
+            else:
+                insert(self._free_space, size_above, offset_above)
+                insert(self._free_space_offsets, offset_above, size_above)
+
+        insert(self._free_space, size, offset)
+        insert(self._free_space_offsets, offset, size)
+
+    def _find_free_space(self, size_needed: int) -> Tuple[int, int]:
+        size, offset = nearest_pop(self._free_space, size_needed)
+        remove(self._free_space_offsets, offset, size)
+        if(size is None):
+            raise RuntimeError("No free space!")
+        return offset, size
 
     def _write_chunk(self, index: int, chunk_type: bytes, data: bytes):
-        full_data = chunk_type + data
-        if(index > self._frame_offsets.shape[0]):
-            raise ValueError("Growth not supported yet...")
+        with self._lock:
+            full_data = chunk_type + data
+            if(index > self._frame_offsets.shape[0]):
+                raise ValueError("Growth not supported yet...")
 
-        offset, size = self._frame_offsets[index]
-        needed_size = len(full_data) if(index > 0) else int(2 ** np.ceil(np.log2(len(full_data))))
+            offset, size = self._frame_offsets[index]
+            needed_size = len(full_data) if(index > 0) else int(2 ** np.ceil(np.log2(len(full_data))))
 
-        if(needed_size > size):
-            after_idx, new_offset, available_size = self._find_free_space(needed_size)
+            if(needed_size > size or needed_size < size):
+                self._add_free_space(offset, size)
+                new_offset, available_size = self._find_free_space(needed_size)
 
-            if(after_idx == index):
-                # Were needing to move the item at the end of the file, we can move the offset down to take the space
-                # it's already sitting in, and just have it 'grow' out.
-                new_offset = self._frame_offsets[index, 0]
+                if(available_size == self.INFINITY):
+                    self._add_free_space(new_offset + needed_size, self.INFINITY)
+                elif(needed_size < available_size):
+                    self._add_free_space(new_offset + needed_size, available_size - needed_size)
 
-            del self._free_space[after_idx]
-            if(available_size == np.inf):
-                self._free_space[index] = (new_offset + needed_size, np.inf)
-            elif(needed_size < available_size):
-                self._free_space[index] = (new_offset + needed_size, available_size - needed_size)
+                self._frame_offsets[index] = (new_offset, needed_size)
 
-            self._frame_offsets[index] = (new_offset, needed_size)
-        elif(needed_size < size):
-            after_idx, new_offset, available_size = self._find_free_space(needed_size, (index, offset, size))
-            if(after_idx in self._free_space):
-                del self._free_space[after_idx]
-            self._free_space[index] = (new_offset + needed_size, available_size - needed_size)
-            self._frame_offsets[index] = (new_offset, needed_size)
+            offset, size = self._frame_offsets[index]
 
-        offset, size = self._frame_offsets[index]
+            if(self._immediate_mode):
+                self._write_offsets()
+                self._write_end()
 
-        if(self._immediate_mode):
-            self._write_offsets()
-            self._write_end()
-
-        self._file_obj.seek(offset)
-        self._file_obj.write(full_data)
+            self._file_obj.seek(offset)
+            self._file_obj.write(full_data)
 
     def _load_chunk(self, index: int) -> Tuple[bytes, bytes]:
-        if(index > self._frame_offsets.shape[0]):
-            raise ValueError("Index out of bounds")
+        with self._lock:
+            if(index > self._frame_offsets.shape[0]):
+                raise ValueError("Index out of bounds")
 
-        header_type = DIPST_FRAME_HEADER if(index != 0) else DIPST_METADATA_HEADER
-        offset, size = self._frame_offsets[index]
+            header_type = DIPST_FRAME_HEADER if(index != 0) else DIPST_METADATA_HEADER
+            offset, size = self._frame_offsets[index]
 
-        if(size == 0):
-            return (header_type, b"")
+            if(size == 0):
+                return (header_type, b"")
 
-        self._file_obj.seek(self._file_start + offset)
-        data = self._file_obj.read(size)
+            self._file_obj.seek(int(self._file_start + offset))
+            data = self._file_obj.read(size)
 
-        if(data[:len(header_type)] != header_type):
-            raise IOError(f"Found incorrect chunk type for chunk {index}.")
+            if(data[:len(header_type)] != header_type):
+                print(data)
+                raise IOError(f"Found incorrect chunk type for chunk {index}.")
 
-        return (header_type, data[4:])
+            return (header_type, data[4:])
 
     def _encode_meta_chunk(self, data: dict = None) -> bytes:
         if(data is None):
@@ -239,9 +302,10 @@ class DiplomatFPEState:
         return ForwardBackwardFrame().from_bytes(self._float_type, self._int_type, zlib.decompress(data))
 
     def _write_end(self):
-        self._file_obj.seek(0, SEEK_END)
-        self._file_obj.write(DIPST_END_CHUNK)
-        self._file_obj.write(self._file_start.to_bytes(8, "little", signed=False))
+        with self._lock:
+            self._file_obj.seek(0, SEEK_END)
+            self._file_obj.write(DIPST_END_CHUNK)
+            self._file_obj.write(self._file_start.to_bytes(8, "little", signed=False))
 
     def __getitem__(self, item: int) -> ForwardBackwardFrame:
         if(item < 0):
@@ -253,7 +317,7 @@ class DiplomatFPEState:
         if(item < 0):
             raise IndexError("Negative indexes not supported...")
         data = self._encode_frame(value)
-        self._write_chunk(item, DIPST_FRAME_HEADER, data)
+        self._write_chunk(1 + item, DIPST_FRAME_HEADER, data)
 
     def __len__(self) -> int:
         return self._frame_offsets.shape[0]
@@ -273,6 +337,10 @@ class DiplomatFPEState:
     def close(self):
         self.flush()
 
+    @classmethod
+    def get_shared_memory_size(cls, frame_count: int) -> int:
+        return (((frame_count + 1) * 2) * Offset.itemsize) + BufferTree.get_buffer_size(frame_count + 2) * 2
+
     def __enter__(self):
         return self
 
@@ -280,7 +348,7 @@ class DiplomatFPEState:
         self.close()
 
     def __getstate__(self):
-        state = self.__dict__
+        state = self.__dict__.copy()
 
         if(state["_shared_mem"] is None):
             raise RuntimeError("Attempting to pickle a diplomat file state without memory backing.")

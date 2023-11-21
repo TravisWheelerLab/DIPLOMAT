@@ -1,7 +1,12 @@
 from collections import deque
-from typing import BinaryIO, Any, Dict, Optional
-from diplomat.predictors.fpe.sparse_storage import ForwardBackwardData, AttributeDict, ForwardBackwardFrame, SettableSequence
-from diplomat.predictors.sfpe.file_io import DiplomatFPEState
+from typing import BinaryIO, Any, Dict, Optional, Union
+from diplomat.predictors.fpe.sparse_storage import (
+    ForwardBackwardData,
+    AttributeDict,
+    ForwardBackwardFrame,
+    SettableSequence
+)
+from diplomat.predictors.sfpe.file_io import DiplomatFPEState, SharedMemory
 import multiprocessing
 
 
@@ -45,6 +50,16 @@ class LIFOCache:
 
     def flush(self, backing: SettableSequence):
         self._clean_to(0, backing)
+
+    @property
+    def size(self) -> int:
+        return self._size
+
+    def __getstate__(self):
+        state = self.__dict__
+        state["_data"] = {}
+        state["_queue"] = deque()
+        return state
 
 
 class CacheList:
@@ -106,14 +121,17 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
     """
     A version of ForwardBackwardData that stores its results on disk instead of
     """
+    @classmethod
+    def get_shared_memory_size(cls, num_frames: int, num_bps: int):
+        return DiplomatFPEState.get_shared_memory_size(num_frames * num_bps)
 
     def __init__(
         self,
         num_frames: int,
         num_bp: int,
-        file_obj: BinaryIO,
+        file_obj: Union[BinaryIO, DiplomatFPEState],
         cache_size: int = 100,
-        lock: Optional[multiprocessing.Lock] = None,
+        lock: Optional[multiprocessing.RLock] = None,
         **kwargs
     ):
         """
@@ -122,18 +140,20 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         :param num_frames: Number of frames to allocate space for.
         :param num_bp: Number of body parts to allocate space for.
         :param file_obj: The file to use to store files on disk.
+        :param cache_size: The size of the cache to use to temporarily store files on disk.
+        :param lock: Lock to use when accessing the file (read or write). Defaults to no lock...
         :param kwargs: Additional arguments passed to the storage backend.
         """
         super().__init__(0, 0)
         self._num_bps = num_bp
         self._num_frames = num_frames
-        self._lock = DummyLock() if(lock is None) else lock
         self._cache = LIFOCache(cache_size)
         self.allow_pickle = True
 
-        self._file_obj = file_obj
-
-        self._frames = DiplomatFPEState(self._file_obj, frame_count=num_frames * num_bp, **kwargs)
+        if(isinstance(file_obj, DiplomatFPEState)):
+            self._frames = file_obj
+        else:
+            self._frames = DiplomatFPEState(file_obj, frame_count=num_frames * num_bp, lock=lock, **kwargs)
         self._metadata = MonitoredAttributeDict(self._frames)
 
     def __enter__(self):
@@ -212,6 +232,6 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         """
         self._flush_cache()
         self._flush_meta()
-        res = type(self)(self._num_frames, self._num_bps, self._file_obj)
+        res = type(self)(self._num_frames, self._num_bps, self._frames, self._cache.size)
         res.allow_pickle = self.allow_pickle
         return res

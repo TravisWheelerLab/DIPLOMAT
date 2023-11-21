@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable, BinaryIO
 import numpy as np
 from diplomat.processing import *
-from multiprocessing import get_context, Queue
+from multiprocessing import get_context, Queue, Manager
 from multiprocessing.context import BaseContext
 import time
 import diplomat.utils.frame_store_api as frame_store_api
@@ -22,7 +22,7 @@ try:
     from ..fpe.skeleton_structures import StorageGraph
     from ..fpe.fpe_help import FPEString
     from ..fpe.arr_utils import _NumpyDict
-    from .disk_sparse_storage import DiskBackedForwardBackwardData
+    from .disk_sparse_storage import DiskBackedForwardBackwardData, SharedMemory
 except ImportError:
     __package__ = "diplomat.predictors.sfpe"
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -33,7 +33,7 @@ except ImportError:
     from ..fpe.skeleton_structures import StorageGraph
     from ..fpe.fpe_help import FPEString
     from ..fpe.arr_utils import _NumpyDict
-    from .disk_sparse_storage import DiskBackedForwardBackwardData
+    from .disk_sparse_storage import DiskBackedForwardBackwardData, SharedMemory
 
 
 class NestedProgressIndicator(ProgressBar):
@@ -297,10 +297,9 @@ class PoolWithProgress:
         import sys
 
         if(getattr(sys.flags, "nogil", False)):
-            # No gil? Awesome, we can just use threads!
+            # No gil? Awesome, we can just use threads for way better performance!!!
             import multiprocessing.dummy as context
             return context
-
         try:
             return get_context("forkserver")
         except ValueError:
@@ -387,6 +386,24 @@ class AntiCloseObject:
         pass
 
 
+class _SharedMemoryWithArray:
+    def __init__(self, array):
+        self.array = array
+
+    @property
+    def buf(self) -> memoryview:
+        return memoryview(self.array)
+
+
+def allocate_shared_memory(context: BaseContext, size: int) -> SharedMemory:
+    try:
+        from multiprocessing.shared_memory import SharedMemory
+        return SharedMemory(f"diplomat_frame_state_{context.current_process().pid}", True, size)
+    except ImportError:
+        from shared_memory import SharedMemory
+        return SharedMemory(f"diplomat_frame_state_{context.current_process().pid}", True, size)
+
+
 class SegmentedFramePassEngine(Predictor):
     """
     A predictor that applies a collection of frame passes to the frames
@@ -422,6 +439,8 @@ class SegmentedFramePassEngine(Predictor):
 
         self._frame_holder = None
         self._file_obj = None
+        self._shared_memory = None
+        self._manager = None
 
         self._segments = None
         self._segment_scores = None
@@ -438,16 +457,23 @@ class SegmentedFramePassEngine(Predictor):
             disk_path = output_path.parent / (output_path.stem + ".dipui")
 
             self._file_obj = disk_path.open("w+b")
-            print(disk_path)
 
             with video_path.open("rb") as f:
                 shutil.copyfileobj(f, self._file_obj)
+
+            ctx = PoolWithProgress.get_optimal_ctx()
+            self._manager = ctx.Manager()
+            self._shared_memory = allocate_shared_memory(
+                ctx, DiskBackedForwardBackwardData.get_shared_memory_size(self.num_frames, self._num_total_bp)
+            )
 
             self._frame_holder = DiskBackedForwardBackwardData(
                 self.num_frames,
                 self._num_total_bp,
                 self._file_obj,
-                self.settings.memory_cache_size
+                self.settings.memory_cache_size,
+                lock=self._manager.RLock(),
+                memory_backing=self._shared_memory
             )
 
         self._frame_holder.metadata.threshold = self.THRESHOLD
@@ -460,6 +486,10 @@ class SegmentedFramePassEngine(Predictor):
             self._frame_holder.close()
         if(self._file_obj is not None):
             self._file_obj.close()
+        if(self._shared_memory is not None and hasattr(self._shared_memory, "close")):
+            self._shared_memory.close()
+        if(self._manager is not None):
+            self._manager.shutdown()
 
     def _sparcify_and_store(self, fb_frame: ForwardBackwardFrame, scmap: TrackingData, frame_idx: int, bp_idx: int):
         fb_frame.orig_data = SparseTrackingData.sparsify(
