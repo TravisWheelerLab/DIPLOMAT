@@ -60,21 +60,24 @@ class BufferTree:
 
 
 def tree_to_string(tree: Tree) -> str:
-    return f"{type(tree).__name__}(root={tree.root}, size={tree.size}, data=\n{tree.data}\n)"
+    return f"{type(tree).__name__}(root={tree.root}, size={tree.size}, data=\n{tree.data[:tree.size]}\n)"
 
 
-def insert(tree: Tree, key: int, val: int):
+def insert(tree: Tree, key: int, val: int) -> bool:
     if(tree.size >= tree.data.shape[0]):
         raise ValueError("Tree is full.")
 
     tree.data[tree.size] = (key, val, 1, -1, -1, -1)
     tree.root, was_inserted = _insert(tree.data, tree.root, tree.size)
+    assert tree.root >= 0
     tree.data[tree.root, _PARENT] = -1
 
     if(was_inserted):
         tree.size = tree.size + 1
     else:
         tree.data[tree.size, :] = 0
+
+    return was_inserted
 
 
 oint = Optional[int]
@@ -99,7 +102,7 @@ def nearest_pop(tree: Tree, key: int, val: Optional[int] = None, left: bool = Fa
 def remove(tree: Tree, key: int, val: int) -> bool:
     if(tree.size <= 0):
         return False
-    index = _nearest_search(tree.data, tree.root, key, True, val, True)
+    index = _nearest_search(tree.data, tree.root, key, True, val, False)
 
     if(index == -1 or (tree.data[index, _KEY] != key) or (tree.data[index, _VALUE] != val)):
         return False
@@ -111,6 +114,8 @@ def remove(tree: Tree, key: int, val: int) -> bool:
 
 def inorder_traversal(tree: Tree) -> np.ndarray:
     inorder_lst = np.zeros((tree.size, 2), dtype=np.int64)
+    if(tree.size == 0):
+        return inorder_lst
     _inorder_traversal(tree.data, tree.root, 0, inorder_lst)
     return inorder_lst
 
@@ -143,7 +148,8 @@ def _rotate_left(tree: np.ndarray, current_index: int) -> int:
     right_left_child = tree[right_child, _LESS_OR_EQ]
 
     tree[current_index, _MORE] = right_left_child
-    tree[right_left_child, _PARENT] = current_index
+    if(right_left_child >= 0):
+        tree[right_left_child, _PARENT] = current_index
 
     tree[right_child, _LESS_OR_EQ] = current_index
     tree[current_index, _PARENT] = right_child
@@ -160,7 +166,8 @@ def _rotate_right(tree: np.ndarray, current_index: int) -> int:
     left_right_child = tree[left_child, _MORE]
 
     tree[current_index, _LESS_OR_EQ] = left_right_child
-    tree[left_right_child, _PARENT] = current_index
+    if(left_right_child >= 0):
+        tree[left_right_child, _PARENT] = current_index
 
     tree[left_child, _MORE] = current_index
     tree[current_index, _PARENT] = left_child
@@ -222,7 +229,7 @@ def _rebalance_all_from(tree: np.ndarray, index: int) -> int:
     parent = tree[current, _PARENT]
 
     while(True):
-        direction = _LESS_OR_EQ if(tree[parent, _LESS_OR_EQ] == current) else _MORE
+        direction = _LESS_OR_EQ if(parent >= 0 and tree[parent, _LESS_OR_EQ] == current) else _MORE
         new_subtree_parent = _rebalance(tree, current)
 
         if(parent < 0):
@@ -243,11 +250,7 @@ def _remove(full_tree: Tree, index: int, last_idx: int):
     if(index < 0):
         return
 
-    direction = _LESS_OR_EQ
-    new_root, removed_item = _remove_outward_leaf(tree, tree[index, direction], _MORE)
-    if(removed_item < 0):
-        direction = _MORE
-        new_root, removed_item = _remove_outward_leaf(tree, tree[index, direction], _LESS_OR_EQ)
+    removed_item = _find_substitute_leaf(tree, index)
 
     if(removed_item < 0):
         # No children, we can just delete the current node...
@@ -264,10 +267,6 @@ def _remove(full_tree: Tree, index: int, last_idx: int):
         full_tree.root = _rebalance_all_from(tree, parent_val)
         removed_item = index
     else:
-        tree[index, direction] = new_root
-        tree[new_root, _PARENT] = index
-        _recompute_depth(tree, index)
-
         tree[index, _KEY] = tree[removed_item, _KEY]
         tree[index, _VALUE] = tree[removed_item, _VALUE]
         full_tree.root = _rebalance_all_from(tree, index)
@@ -275,6 +274,10 @@ def _remove(full_tree: Tree, index: int, last_idx: int):
     # Swap ending value into deleted space...
     tree[removed_item, :] = tree[last_idx, :]
     tree[last_idx, :] = 0
+
+    if(removed_item == last_idx):
+        # Removed item same as last index, avoid swap code...
+        return
 
     swapped_parent = tree[removed_item, _PARENT]
     if(swapped_parent < 0):
@@ -297,7 +300,10 @@ def _remove_outward_leaf(tree: np.ndarray, current_index: int, direction: int) -
 
     if(tree[current_index, direction] < 0):
         # Perform the removal...
+        opposite_direction = _MORE if(direction == _LESS_OR_EQ) else _LESS_OR_EQ
         tree[current_index, _PARENT] = -1
+        if(tree[current_index, opposite_direction] >= 0):
+            return (tree[current_index, opposite_direction], current_index)
         return (-1, current_index)
 
     new_root, removed_item = _remove_outward_leaf(tree, tree[current_index, direction], direction)
@@ -327,8 +333,24 @@ def _inorder_traversal(tree: np.ndarray, index: int, list_index: int, lst: np.nd
     return list_index
 
 
-def remove_nearest_higher_key(tree: Tree, key: int):
-    pass
+@numba.njit(numba.int64(numba.int64[:, :], numba.int64))
+def _find_substitute_leaf(tree: np.ndarray, index: int):
+    new_root, removed_item = _remove_outward_leaf(tree, tree[index, _LESS_OR_EQ], _MORE)
+    tree[index, _LESS_OR_EQ] = new_root
+    if(new_root >= 0):
+        tree[new_root, _PARENT] = index
+
+    if(removed_item >= 0):
+        _recompute_depth(tree, index)
+        return removed_item
+
+    new_root, removed_item = _remove_outward_leaf(tree, tree[index, _MORE], _LESS_OR_EQ)
+    tree[index, _MORE] = new_root
+    if(new_root >= 0):
+        tree[new_root, _PARENT] = index
+
+    _recompute_depth(tree, index)
+    return removed_item
 
 
 @numba.njit(NumbaTuple((numba.int64, numba.boolean))(numba.int64[:, :], numba.int64, numba.int64))
@@ -349,6 +371,7 @@ def _insert(tree: np.ndarray, current_idx: int, ins_index: int) -> Tuple[int, bo
     next_idx = tree[current_idx, branch]
 
     root_idx, did_insert = _insert(tree, next_idx, ins_index)
+    assert root_idx >= 0
     tree[current_idx, branch] = root_idx
     tree[root_idx, _PARENT] = current_idx
     _recompute_depth(tree, current_idx)
@@ -359,7 +382,7 @@ def _insert(tree: np.ndarray, current_idx: int, ins_index: int) -> Tuple[int, bo
 
 
 def _tree_test():
-    #t = NumpyTree(20)
+    # Small, easy to check test...
     t = BufferTree(bytearray(BufferTree.get_buffer_size(20)))
     insert(t, 20, 200)
     insert(t, 14, 90)
@@ -381,6 +404,22 @@ def _tree_test():
         [50, 20],
         [500, 20]
     ])
+
+    # Test 2: Large Sort test...
+    np.random.seed(0)
+    t2 = BufferTree(bytearray(BufferTree.get_buffer_size(10000)))
+    for i in range(10000):
+        insert(t2, np.random.randint(1, 1000), np.random.randint(1, 1000))
+
+    assert t2.size == 9951
+
+    for i in range(5000):
+        res = nearest_pop(t2, np.random.randint(1, 1000), np.random.randint(1, 1000))
+
+    assert t2.size == 4951
+    assert t2.data[t2.root, _DEPTH] == 15
+    t2_ordered = inorder_traversal(t2)
+    assert np.all(t2_ordered[np.lexsort((t2_ordered[:, 1], t2_ordered[:, 0]))] == t2_ordered)
 
 
 if(__name__ == "__main__"):

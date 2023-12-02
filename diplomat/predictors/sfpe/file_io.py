@@ -1,10 +1,10 @@
 import json
 import multiprocessing
-from typing import BinaryIO, Tuple, Optional, Mapping
+from typing import BinaryIO, Tuple, Optional, Mapping, Any
 from io import SEEK_CUR, SEEK_END, SEEK_SET
 import numpy as np
 from typing_extensions import Protocol
-
+from importlib import import_module
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame
 from diplomat.predictors.sfpe.avl_tree import BufferTree, NumpyTree, insert, nearest_pop, remove
 import zlib
@@ -38,6 +38,34 @@ class SharedMemory(Protocol):
     buf: memoryview
 
 
+class FPEMetadataEncoder(json.JSONEncoder):
+    def default(self, o: Any) -> Any:
+        to_json = getattr(o, "__tojson__", None)
+        if(to_json is None):
+            return super().default(o)
+        d = to_json()
+
+        return {
+            "___name": type(o).__qualname__,
+            "___module": type(o).__module__,
+            "___data": d
+        }
+
+
+def reconstruct_from_json(data: dict) -> dict:
+    print("YEP")
+    for k, val in data:
+        if(isinstance(val, dict) and "___name" in data):
+            mod = import_module(val["___module"])
+            cls = mod
+            for attr in val["___name"].split("."):
+                cls = getattr(cls, attr)
+
+            data[k] = cls.__fromjson__(val["___data"])
+
+    return data
+
+
 class DiplomatFPEState:
 
     INFINITY = np.iinfo(np.int64).max
@@ -61,6 +89,7 @@ class DiplomatFPEState:
         self._immediate_mode = immediate_mode
         self._lock = lock if(lock is not None) else DummyLock
         self._from_pickle = False
+        self._closed = False
 
         self._shared_mem = memory_backing
         self._frame_offsets = None
@@ -86,7 +115,7 @@ class DiplomatFPEState:
         self._free_space_offsets = (
             BufferTree(memory_backing.buf[offset2:])
             if(memory_backing is not None) else
-            NumpyTree(self._frame_offsets[0] + 1)
+            NumpyTree(self._frame_offsets.shape[0] + 1)
         )
         if(
             self._free_space.data.shape[0] <= self._frame_offsets.shape[0]
@@ -127,8 +156,9 @@ class DiplomatFPEState:
                 offset, size = self._frame_offsets[i2]
                 if(i + 1 >= len(order)):
                     offset, size = self._frame_offsets[i2]
-                    insert(self._free_space, self.INFINITY, int(max(offset, self._data_offset()) + size))
-                    insert(self._free_space_offsets, int(max(offset, self._data_offset()) + size), self.INFINITY)
+                    data_offset = self._data_offset() - self._file_start
+                    insert(self._free_space, self.INFINITY, int(max(offset + size, data_offset)))
+                    insert(self._free_space_offsets, int(max(offset + size, data_offset)), self.INFINITY)
                     break
 
                 if(size == 0):
@@ -145,7 +175,8 @@ class DiplomatFPEState:
             self._file_start
             + len(DIPLOMAT_STATE_HEADER)
             + len(DIPST_OFFSET_CHUNK)
-            + int(self._frame_offsets.size * Offset.itemsize)
+            + Offset.itemsize
+            + int(self._frame_offsets.nbytes)
             + len(DIPST_DATA_CHUNK)
         )
 
@@ -181,12 +212,14 @@ class DiplomatFPEState:
 
     def _write_offsets(self):
         with self._lock:
-            self._file_obj.seek(self._file_start + 4)
-            magic = self._file_obj.read(4)
+            self._file_obj.seek(self._file_start + len(DIPLOMAT_STATE_HEADER))
+            magic = self._file_obj.read(len(DIPST_OFFSET_CHUNK))
             if(magic != DIPST_OFFSET_CHUNK):
                 raise IOError("Corrupted offset chunk!")
 
-            self._file_obj.write(int(self._frame_offsets.shape[0] - 1).to_bytes(8, "little", signed=False))  # Size
+            self._file_obj.write(
+                int(self._frame_offsets.shape[0] - 1).to_bytes(Offset.itemsize, "little", signed=False)
+            )  # Size
             self._file_obj.write(self._frame_offsets.astype(Offset).tobytes())
 
     def _add_free_space(
@@ -199,11 +232,10 @@ class DiplomatFPEState:
 
         offset_below, size_below = nearest_pop(self._free_space_offsets, offset, size, left=True)
         offset_above, size_above = nearest_pop(self._free_space_offsets, offset, size, left=False)
-        remove(self._free_space, size_below, offset_below)
-        remove(self._free_space, size_above, offset_above)
 
         if(offset_below is not None):
-            if(offset_below + size_below >= offset):
+            remove(self._free_space, size_below, offset_below)
+            if((offset_below + size_below) >= offset):
                 offset = offset_below
                 if(self.INFINITY in [size, size_below]):
                     size = self.INFINITY
@@ -214,6 +246,7 @@ class DiplomatFPEState:
                 insert(self._free_space_offsets, offset_below, size_below)
 
         if(offset_above is not None):
+            remove(self._free_space, size_above, offset_above)
             if(offset_above <= (offset + size)):
                 if(self.INFINITY in [size, size_above]):
                     size = self.INFINITY
@@ -228,9 +261,9 @@ class DiplomatFPEState:
 
     def _find_free_space(self, size_needed: int) -> Tuple[int, int]:
         size, offset = nearest_pop(self._free_space, size_needed)
-        remove(self._free_space_offsets, offset, size)
         if(size is None):
             raise RuntimeError("No free space!")
+        remove(self._free_space_offsets, offset, size)
         return offset, size
 
     def _write_chunk(self, index: int, chunk_type: bytes, data: bytes):
@@ -259,7 +292,7 @@ class DiplomatFPEState:
                 self._write_offsets()
                 self._write_end()
 
-            self._file_obj.seek(offset)
+            self._file_obj.seek(int(self._file_start + offset))
             self._file_obj.write(full_data)
 
     def _load_chunk(self, index: int) -> Tuple[bytes, bytes]:
@@ -277,7 +310,6 @@ class DiplomatFPEState:
             data = self._file_obj.read(size)
 
             if(data[:len(header_type)] != header_type):
-                print(data)
                 raise IOError(f"Found incorrect chunk type for chunk {index}.")
 
             return (header_type, data[4:])
@@ -286,12 +318,12 @@ class DiplomatFPEState:
         if(data is None):
             data = {}
 
-        return zlib.compress(json.dumps(data).encode(), self._compression_level)
+        return zlib.compress(json.dumps(data, cls=FPEMetadataEncoder).encode(), self._compression_level)
 
     def _decode_meta_chunk(self, data: bytes) -> dict:
         if(len(data) == 0):
             return {}
-        return json.loads(zlib.decompress(data).decode())
+        return reconstruct_from_json(json.loads(zlib.decompress(data).decode()))
 
     def _encode_frame(self, frame: ForwardBackwardFrame) -> bytes:
         return zlib.compress(frame.to_bytes(self._float_type, self._int_type), self._compression_level)
@@ -303,17 +335,23 @@ class DiplomatFPEState:
 
     def _write_end(self):
         with self._lock:
-            self._file_obj.seek(0, SEEK_END)
-            self._file_obj.write(DIPST_END_CHUNK)
-            self._file_obj.write(self._file_start.to_bytes(8, "little", signed=False))
+            self._file_obj.seek(-12, SEEK_END)
+            end_data = self._file_obj.read(12)
+            if(end_data[:len(DIPST_END_CHUNK)] != DIPST_END_CHUNK):
+                self._file_obj.write(DIPST_END_CHUNK)
+                self._file_obj.write(self._file_start.to_bytes(8, "little", signed=False))
 
     def __getitem__(self, item: int) -> ForwardBackwardFrame:
+        if(self._closed):
+            raise ValueError("State object is closed!")
         if(item < 0):
             raise IndexError("Negative indexes not supported...")
         __, data = self._load_chunk(1 + item)
         return self._decode_frame(data)
 
     def __setitem__(self, item: int, value: ForwardBackwardFrame):
+        if(self._closed):
+            raise ValueError("State object is closed!")
         if(item < 0):
             raise IndexError("Negative indexes not supported...")
         data = self._encode_frame(value)
@@ -323,19 +361,31 @@ class DiplomatFPEState:
         return self._frame_offsets.shape[0]
 
     def get_metadata(self) -> dict:
+        if(self._closed):
+            raise ValueError("State object is closed!")
         __, data = self._load_chunk(0)
         return self._decode_meta_chunk(data)
 
     def set_metadata(self, data: Mapping):
-        data = self._encode_meta_chunk(data)
+        if(self._closed):
+            raise ValueError("State object is closed!")
+        data = self._encode_meta_chunk(dict(data))
         self._write_chunk(0, DIPST_METADATA_HEADER, data)
 
     def flush(self):
+        if(self._closed):
+            raise ValueError("State object is closed!")
         self._write_offsets()
         self._write_end()
+        self._file_obj.flush()
 
     def close(self):
+        if(self._closed):
+            return
         self.flush()
+        if(self._from_pickle):
+            self._file_obj.close()
+        self._closed = True
 
     @classmethod
     def get_shared_memory_size(cls, frame_count: int) -> int:
@@ -346,6 +396,10 @@ class DiplomatFPEState:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -360,11 +414,4 @@ class DiplomatFPEState:
     def __setstate__(self, state: dict):
         self.__dict__ = state
         self._file_obj = open(str(self._file_obj), "r+b")
-
-    def __del__(self):
-        if(self._from_pickle):
-            try:
-                self._file_obj.close()
-            except IOError:
-                pass
 

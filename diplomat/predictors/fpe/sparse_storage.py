@@ -2,7 +2,7 @@ import dataclasses
 from collections import UserDict
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Tuple, Union, List, Optional, Dict, Any, TypeVar
+from typing import Tuple, Union, List, Optional, Dict, Any, TypeVar, Iterator
 from typing_extensions import Protocol
 
 try:
@@ -29,6 +29,9 @@ class SettableSequence(Protocol[T]):
         pass
 
     def __len__(self) -> int:
+        pass
+
+    def __iter__(self) -> Iterator:
         pass
 
 

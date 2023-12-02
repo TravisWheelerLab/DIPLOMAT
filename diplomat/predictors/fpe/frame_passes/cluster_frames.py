@@ -28,7 +28,7 @@ class ClusterFrames(FramePass):
 
     def _get_frame(self, index: int):
         return (
-            self._frame_data.frames[index],
+            list(self._frame_data.frames[index]),
             self._frame_data.metadata.num_outputs,
             self._cost_table,
             self.config,

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["flit_core >=3.2"]
+requires = ["flit_core >=3.4,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
@@ -18,7 +18,7 @@ classifiers = [
     "Typing :: Typed",
     "Private :: Do Not Upload"  # For now...
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.7"
 dynamic = ["version", "description"]
 dependencies = [
     "opencv-python",
@@ -28,7 +28,9 @@ dependencies = [
     "PyYAML",
     "pandas",
     "numpy",
-    "numba"
+    "numba",
+    # Add shared memory support to older versions of python...
+    'shared-memory-backport@git+https://github.com/SleepProgger/py_shared_memory.git ; python_version<"3.8"'
 ]
 
 [tool.flit.module]

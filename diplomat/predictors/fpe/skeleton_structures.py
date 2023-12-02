@@ -266,9 +266,21 @@ class StorageGraph:
         """
         return self._node_names
 
+    def __tojson__(self):
+        return {
+            "nodes": list(self._node_names),
+            "edges": list(self.values())
+        }
+
+    @classmethod
+    def __fromjson__(cls, data):
+        s = cls(data["nodes"])
+        for edge, val in data["edges"]:
+            s[edge] = val
+        return s
+
     def __str__(self):
         return f"Skeleton({str(dict(self.items()))}"
-
 
 
 class Histogram:

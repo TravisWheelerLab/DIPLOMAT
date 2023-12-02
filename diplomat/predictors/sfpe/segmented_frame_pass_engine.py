@@ -228,6 +228,7 @@ class SimplePool:
             for i, p in enumerate(self._processes):
                 if(not p.is_alive()):
                     if(p.exitcode != 0):
+                        print(f"Exit code of {p.exitcode}")
                         p.close()
                         raise ChildProcessError("Error occurred in child process...")
                     p.close()

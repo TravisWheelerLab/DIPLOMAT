@@ -1,5 +1,5 @@
 from collections import deque
-from typing import BinaryIO, Any, Dict, Optional, Union
+from typing import BinaryIO, Any, Dict, Optional, Union, Iterable
 from diplomat.predictors.fpe.sparse_storage import (
     ForwardBackwardData,
     AttributeDict,
@@ -37,7 +37,7 @@ class LIFOCache:
         return self._data[index]
 
     def set(self, index: int, backing: SettableSequence, value: Any):
-        if(index not in self._data[index]):
+        if(index not in self._data):
             self._queue.append(index)
         self._data[index] = value
 
@@ -47,6 +47,7 @@ class LIFOCache:
         while(len(self._queue) > amount):
             idx = self._queue.popleft()
             backing[idx] = self._data[idx]
+            del self._data[idx]
 
     def flush(self, backing: SettableSequence):
         self._clean_to(0, backing)
@@ -55,17 +56,35 @@ class LIFOCache:
     def size(self) -> int:
         return self._size
 
+    @property
+    def __len__(self):
+        return len(self._data)
+
     def __getstate__(self):
+        # We don't allow the cache to be pickled to other processes...
         state = self.__dict__
         state["_data"] = {}
         state["_queue"] = deque()
         return state
 
 
+class IndexIterator:
+    def __init__(self, obj: SettableSequence):
+        self._obj = obj
+        self._idx = 0
+
+    def __next__(self):
+        if(self._idx >= len(self._obj)):
+            raise StopIteration
+        res = self._obj[self._idx]
+        self._idx += 1
+        return res
+
+
 class CacheList:
     def __init__(
         self,
-        backing: SettableSequence,
+        backing: "DiskBackedForwardBackwardData",
         cache: LIFOCache,
         start: int = 0,
         stop: int = None,
@@ -74,47 +93,77 @@ class CacheList:
         self._backing = backing
         self._cache = cache
         stop = stop if(stop is not None) else len(backing)
+        step = step if(step is not None) else 1
         self._range = range(start, stop, step)
 
     def __getitem__(self, index):
         if(isinstance(index, slice)):
             r = self._range[index]
             return CacheList(self._backing, self._cache, r.start, r.stop, r.step)
-        return self._cache.get(self._range[index], self._backing)
+        else:
+            return self._cache.get(self._range[index], self._backing._frames)
 
     def __setitem__(self, key, value):
         if(isinstance(key, slice)):
             for i, index in enumerate(self._range[key]):
-                self._cache.set(index, self._backing, value[i])
-        self._cache.set(key, self._backing, value)
+                self._cache.set(index, self._backing._frames, value[i])
+        else:
+            self._cache.set(key, self._backing._frames, value)
 
     def __len__(self):
         return len(self._range)
+
+    def __iter__(self):
+        return IndexIterator(self)
 
 
 class CacheListContainer:
     def __init__(
         self,
-        backing: SettableSequence,
+        backing: "DiskBackedForwardBackwardData",
         cache: LIFOCache,
-        jump: int
+        jump: int,
+        start: int = 0,
+        stop: Optional[int] = None,
+        step: Optional[int] = None
     ):
         self._backing = backing
         self._cache = cache
         self._jump = jump
+        self._range = range(
+            start,
+            stop if(stop is not None) else self._backing_length_chunks(),
+            step if(step is not None) else 1
+        )
 
     def __getitem__(self, item: int):
-        if(item < 0 or item > len(self)):
-            raise IndexError("Index out of bounds.")
-        return CacheList(self._backing, self._cache, self._jump * item, self._jump * (item + 1), 1)
+        idx = self._range[item]
+        if(isinstance(idx, range)):
+            return CacheListContainer(
+                self._backing, self._cache, self._jump, idx.start, idx.stop, idx.step
+            )
+        return CacheList(self._backing, self._cache, self._jump * idx, self._jump * (idx + 1), 1)
 
-    def __setitem__(self, key: int, value: CacheList):
-        if(key < 0 or key > len(self)):
-            raise IndexError("Index out of bounds.")
-        CacheList(self._backing, self._cache, self._jump * key, self._jump * (key + 1), 1)[:] = value
+    def __setitem__(self, key: int, value: Union[CacheList, Iterable[CacheList]]):
+        idx = self._range[key]
+        if(isinstance(idx, range)):
+            if(isinstance(value, CacheList)):
+                value = [value] * len(idx)
+            for sub_idx, sub_value in zip(idx, value):
+                CacheList(
+                    self._backing, self._cache, self._jump * sub_idx, self._jump * (sub_idx + 1), 1
+                )[:] = sub_value
+        else:
+            CacheList(self._backing, self._cache, self._jump * idx, self._jump * (idx + 1), 1)[:] = value
+
+    def _backing_length_chunks(self) -> int:
+        return len(self._backing._frames) // self._jump
 
     def __len__(self):
-        return len(self._backing) // self._jump
+        return len(self._range)
+
+    def __iter__(self):
+        return IndexIterator(self)
 
 
 class DiskBackedForwardBackwardData(ForwardBackwardData):
@@ -169,7 +218,14 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
     def _flush_meta(self):
         self._frames.set_metadata(dict(self._metadata))
 
+    def _flush_all(self):
+        self._flush_cache()
+        self._flush_meta()
+        self._frames.flush()
+
     def close(self):
+        if(self._frames.closed):
+            return
         self._flush_cache()
         self._flush_meta()
         self._frames.close()
@@ -181,7 +237,7 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         part.
         """
         return CacheListContainer(
-            self._frames,
+            self,
             self._cache,
             self._num_bps
         )
@@ -230,8 +286,15 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         """
         Copy this ForwardBackwardData, returning a new one.
         """
-        self._flush_cache()
-        self._flush_meta()
+        self._flush_all()
         res = type(self)(self._num_frames, self._num_bps, self._frames, self._cache.size)
         res.allow_pickle = self.allow_pickle
         return res
+
+    def __reduce__(self, *args, **kwargs):
+        self._flush_all()
+        self.allow_pickle = True
+        return super().__reduce__(*args, **kwargs)
+
+    def __del__(self):
+        self.close()
