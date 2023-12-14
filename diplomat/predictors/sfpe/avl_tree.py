@@ -405,7 +405,8 @@ def _tree_test():
         [500, 20]
     ])
 
-    # Test 2: Large Sort test...
+    # Test 2: Make sure tree structure remains stable after a large number of insertions and then deletions,
+    # and it's inorder traversal is still in order...
     np.random.seed(0)
     t2 = BufferTree(bytearray(BufferTree.get_buffer_size(10000)))
     for i in range(10000):
@@ -420,6 +421,44 @@ def _tree_test():
     assert t2.data[t2.root, _DEPTH] == 15
     t2_ordered = inorder_traversal(t2)
     assert np.all(t2_ordered[np.lexsort((t2_ordered[:, 1], t2_ordered[:, 0]))] == t2_ordered)
+
+    # Test 3: Make sure a running nearest search from below returns same values as trivial algorithm...
+    for i in range(5000):
+        lookup_key = np.random.randint(1, 1000)
+        lookup_val = np.random.randint(1, 1000)
+        kb, vb = nearest_pop(t2, lookup_key, lookup_val, left=True)
+
+        if(kb is not None):
+            assert kb < lookup_key or (kb == lookup_key and vb <= lookup_val)
+
+        below_vals = np.flatnonzero((t2_ordered[:, 0] < lookup_key) | ((t2_ordered[:, 0] == lookup_key) & (t2_ordered[:, 1] <= lookup_val)))
+
+        if(kb is not None):
+            assert np.all(t2_ordered[below_vals[-1]] == [kb, vb])
+        else:
+            assert below_vals.size == 0
+
+        if(kb is not None):
+            insert(t2, kb, vb)
+
+    # Test 4: Make sure a running nearest search from above returns same values as trivial algorithm...
+    for i in range(5000):
+        lookup_key = np.random.randint(1, 1000)
+        lookup_val = np.random.randint(1, 1000)
+        ka, va = nearest_pop(t2, lookup_key, lookup_val, left=False)
+
+        if(ka is not None):
+            assert ka > lookup_key or (ka == lookup_key and va >= lookup_val)
+
+        above_vals = np.flatnonzero((t2_ordered[:, 0] > lookup_key) | ((t2_ordered[:, 0] == lookup_key) & (t2_ordered[:, 1] >= lookup_val)))
+
+        if(ka is not None):
+            assert np.all(t2_ordered[above_vals[0]] == [ka, va])
+        else:
+            assert above_vals.size == 0
+
+        if(ka is not None):
+            insert(t2, ka, va)
 
 
 if(__name__ == "__main__"):

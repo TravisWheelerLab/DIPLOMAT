@@ -15,11 +15,13 @@ class DEEPLABCUTFrontend(DIPLOMATFrontend):
             from diplomat.frontends.deeplabcut.label_videos_dlc import label_videos
             from diplomat.frontends.deeplabcut.tweak_results import tweak_videos
             from diplomat.frontends.deeplabcut.convert_results_dlc import convert_results
+            from diplomat.frontends.deeplabcut.save_from_restore import _save_from_restore
         except ImportError:
             return None
 
         return DIPLOMATCommands(
             _verifier=_verify_dlc_like,
+            _save_from_restore=_save_from_restore,
             analyze_videos=analyze_videos,
             analyze_frames=analyze_frames,
             label_videos=label_videos,

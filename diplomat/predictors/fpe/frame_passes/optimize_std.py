@@ -111,7 +111,10 @@ class OptimizeStandardDeviation(FramePass):
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
-            "bin_size": (2, tc.RoundedDecimal(5), "A decimal, the size of each bin used in the histogram for computing the mode, in pixels."),
+            "bin_size": (
+                2, tc.RoundedDecimal(5),
+                "A decimal, the size of each bin used in the histogram for computing the mode, in pixels."
+            ),
             "ignore_bins_below": (
                 1, tc.RoundedDecimal(5),
                 "A decimal, the offset of the first bin used in the histogram for computing "

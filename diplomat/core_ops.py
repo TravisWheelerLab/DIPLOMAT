@@ -1,6 +1,17 @@
 import os
 import sys
-from diplomat.processing.type_casters import typecaster_function, PathLike, Union, Optional, List, Dict, Any, get_typecaster_annotations, NoneType, get_typecaster_required_arguments
+from diplomat.processing.type_casters import (
+    typecaster_function,
+    PathLike,
+    Union,
+    Optional,
+    List,
+    Dict,
+    Any,
+    get_typecaster_annotations,
+    NoneType,
+    get_typecaster_required_arguments
+)
 from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags, Flag, positional_argument_count, CLIError
 from argparse import ArgumentParser
@@ -18,7 +29,7 @@ class ArgumentError(CLIError):
 def _get_casted_args(tc_func, extra_args, error_on_miss=True):
     """
     PRIVATE: Get correctly casted extra arguments for the provided typecasting function. Any arguments that don't
-    match those in the function get thrown out.
+    match those in the function raise an ArgumentError, unless error_on_miss is set to false.
     """
     def_tcs = get_typecaster_annotations(tc_func)
     extra = getattr(tc_func, "__extra_args", {})
@@ -50,7 +61,7 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
 
 def _find_frontend(
     contracts: Union[DIPLOMATContract, List[DIPLOMATContract]],
-    config: os.PathLike,
+    config: Union[List[os.PathLike], os.PathLike],
     **kwargs: typing.Any
 ) -> typing.Tuple[str, ModuleType]:
     from diplomat import _LOADED_FRONTENDS
@@ -450,3 +461,79 @@ def convert(
         videos=videos,
         **_get_casted_args(selected_frontend.convert_results, extra_args)
     )
+
+
+@typecaster_function
+def restore(
+    state: Union[List[PathLike], PathLike]
+):
+    """
+    Restore the state of the diplomat UI from a .dipui file. Allows for reloading the UI when diplomat crashes.
+
+    :param state: A path or list of paths to the ui states to restore.
+    """
+    from diplomat.predictors.sfpe.file_io import DiplomatFPEState
+    from diplomat import _LOADED_FRONTENDS
+    from diplomat.processing import TQDMProgressBar, Config
+    import time
+
+    try:
+        from diplomat.predictors.supervised_sfpe.supervised_segmented_frame_pass_engine\
+            import SupervisedSegmentedFramePassEngine
+    except ImportError:
+        raise UIImportError("Unable to load diplomat UI. Make sure diplomat ui packages are installed")
+
+    if(not isinstance(state, (list, tuple))):
+        state = [state]
+
+    for state_file_path in state:
+        with open(state_file_path, "r+b") as f:
+            with DiplomatFPEState(f) as dip_st:
+                meta = dip_st.get_metadata()
+                num_frames = len(dip_st) // (len(meta["bodyparts"]) * meta["num_outputs"])
+
+        # Check if the backend supports restoring...
+        frontend_str = meta.get("video_metadata", {}).get("frontend", None)
+        if(frontend_str is None):
+            raise ValueError("Unable to find the frontend used!")
+        if(frontend_str not in _LOADED_FRONTENDS):
+            raise ValueError(
+                f"Selected frontend '{frontend_str}' not loaded! Make sure frontend specific "
+                f"dependencies are installed."
+            )
+
+        commands = _LOADED_FRONTENDS[frontend_str]
+
+        if(not commands.verify_contract(DIPLOMATCommands._save_from_restore)):
+            raise ValueError(f"Frontend '{frontend_str}' doesn't support restoring the ui state.")
+
+        # Create the UI...
+        pred = SupervisedSegmentedFramePassEngine(
+            meta["bodyparts"],
+            meta["num_outputs"],
+            num_frames,
+            Config(meta["settings"], SupervisedSegmentedFramePassEngine.get_settings()),
+            Config(meta["video_metadata"]),
+            restore_path=str(state_file_path)
+        )
+
+        with pred as p:
+            start_time = time.time()
+            with TQDMProgressBar(total=num_frames) as prog_bar:
+                poses = p.on_end(prog_bar)
+            end_time = time.time()
+
+        if(poses is None):
+            raise ValueError("Pass didn't return any data!")
+
+        commands._save_from_restore(
+            pose=poses,
+            video_metadata=pred.video_metadata,
+            num_outputs=pred.num_outputs,
+            parts=pred.bodyparts,
+            frame_width=pred.width,
+            frame_height=pred.height,
+            downscaling=meta["down_scaling"],
+            start_time=start_time,
+            end_time=end_time
+        )

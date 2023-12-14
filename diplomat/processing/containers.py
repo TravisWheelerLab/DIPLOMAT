@@ -9,6 +9,7 @@ from diplomat.processing.type_casters import TypeCaster
 T = TypeVar("T")
 ConfigSpec = Dict[str, Tuple[T, TypeCaster[T], str]]
 
+
 class Config(UserDict):
     """
     Represents a configuration of settings. Is a dictionary with support for

@@ -219,7 +219,7 @@ class SimplePool:
         self,
         getter: Callable[[int], Iterable[Any]],
         setter: Callable[[int, Any], None],
-        length: int, update: Callable
+        length: int, update: Callable,
     ):
         next_idx = 0
         waiting_for = set()
@@ -421,6 +421,7 @@ class SegmentedFramePassEngine(Predictor):
         num_frames: int,
         settings: Config,
         video_metadata: Config,
+        restore_path: Optional[str] = None
     ):
         super().__init__(
             bodyparts, num_outputs, num_frames, settings, video_metadata
@@ -447,10 +448,38 @@ class SegmentedFramePassEngine(Predictor):
         self._segment_scores = None
         self._segment_bp_order = None
 
+        self._restore_path = restore_path
+
         self._current_frame = 0
 
     def _open(self):
-        if(self.settings.storage_mode == "memory"):
+        if(self._restore_path is not None):
+            # Ignore everything else,
+            self._restore_path = Path(self._restore_path).resolve()
+            self.video_metadata["orig-video-path"] = self._restore_path
+            orig_ext = Path(self.video_metadata["output-file-path"]).suffix
+            self.video_metadata["output-file-path"] = self._restore_path.parent / (self._restore_path.stem + orig_ext)
+            self.settings.storage_mode = "disk"
+
+            self._file_obj = self._restore_path.open("r+b")
+            ctx = PoolWithProgress.get_optimal_ctx()
+            self._manager = ctx.Manager()
+            self._shared_memory = allocate_shared_memory(
+                ctx, DiskBackedForwardBackwardData.get_shared_memory_size(self.num_frames, self._num_total_bp)
+            )
+
+            self._frame_holder = DiskBackedForwardBackwardData(
+                self.num_frames,
+                self._num_total_bp,
+                self._file_obj,
+                self.settings.memory_cache_size,
+                lock=self._manager.RLock(),
+                memory_backing=self._shared_memory
+            )
+
+            self._segments = np.array(self._frame_holder.metadata["segments"], dtype=np.int64)
+            self._segment_scores = np.array(self._frame_holder.metadata["segment_scores"], dtype=np.float32)
+        elif(self.settings.storage_mode == "memory"):
             self._frame_holder = ForwardBackwardData(self.num_frames, self._num_total_bp)
         else:
             output_path = Path(self.video_metadata["output-file-path"]).resolve()
@@ -477,6 +506,8 @@ class SegmentedFramePassEngine(Predictor):
                 memory_backing=self._shared_memory
             )
 
+        self._frame_holder.metadata.settings = dict(self.settings)
+        self._frame_holder.metadata.video_metadata = dict(self.video_metadata)
         self._frame_holder.metadata.threshold = self.THRESHOLD
         self._frame_holder.metadata.bodyparts = self.bodyparts
         self._frame_holder.metadata.num_outputs = self.num_outputs
@@ -805,6 +836,9 @@ class SegmentedFramePassEngine(Predictor):
             if(isinstance(progress_bar, NestedProgressIndicator)):
                 progress_bar.inc_rerun_counter()
 
+        if(isinstance(sub_frame, DiskBackedForwardBackwardData)):
+            # Force the frame to flush everything to disk before allowing neighboring passes to run...
+            sub_frame.close()
         return sub_frame
 
     def _get_segment(self, index: int):
@@ -819,6 +853,8 @@ class SegmentedFramePassEngine(Predictor):
 
     def _set_segment(self, index: int, frame_data: ForwardBackwardData):
         start, end, fix_frame = self._segments[index]
+        if(isinstance(self._frame_holder, DiskBackedForwardBackwardData)):
+            return
         self._frame_holder.frames[start:end] = frame_data.frames
 
     def _iter_run_levels(
@@ -1287,21 +1323,29 @@ class SegmentedFramePassEngine(Predictor):
                             p_bar.update()
 
     def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
-        self._run_frame_passes(progress_bar)
+        if(self._restore_path is None):
+            self._run_frame_passes(progress_bar)
 
-        if(self.EXPORT_LOC is not None):
-            progress_bar.message(f"Exporting Frames to: '{str(self.EXPORT_LOC)}'")
-            self._export_frames(
-                self._frame_holder,
-                self._segments,
-                self._segment_bp_order,
-                self.video_metadata,
-                self.EXPORT_LOC,
-                "DLFS",
-                progress_bar,
-                self.settings.export_final_probs,
-                self.settings.export_all_info
-            )
+            if(self.EXPORT_LOC is not None):
+                progress_bar.message(f"Exporting Frames to: '{str(self.EXPORT_LOC)}'")
+                self._export_frames(
+                    self._frame_holder,
+                    self._segments,
+                    self._segment_bp_order,
+                    self.video_metadata,
+                    self.EXPORT_LOC,
+                    "DLFS",
+                    progress_bar,
+                    self.settings.export_final_probs,
+                    self.settings.export_all_info
+                )
+
+            self._frame_holder.metadata["segments"] = self._segments.tolist()
+            self._frame_holder.metadata["segment_scores"] = self._segment_scores.tolist()
+        else:
+            self._width = self._frame_holder.metadata.width
+            self._height = self._frame_holder.metadata.height
+            self._resolve_frame_orderings(progress_bar)
 
         progress_bar.message("Selecting Maximums")
         return self.get_maximums(

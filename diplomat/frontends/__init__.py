@@ -1,8 +1,20 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from collections import OrderedDict
-from diplomat.processing.type_casters import StrictCallable, PathLike, Union, List, Dict, Any, Optional, TypeCaster, NoneType
+from diplomat.processing import Pose
+from diplomat.processing.type_casters import (
+    StrictCallable,
+    PathLike,
+    Union,
+    List,
+    Dict,
+    Any,
+    Optional,
+    TypeCaster,
+    NoneType
+)
 import typing
+
 
 class Select(Union):
     def __eq__(self, other: TypeCaster):
@@ -29,6 +41,19 @@ VerifierFunction = StrictCallable(
     config=Union[List[PathLike], PathLike],
     _kwargs=True,
     _return=bool
+)
+
+SaveRestoredStateFunction = StrictCallable(
+    pose=Pose,
+    video_metadata=Dict[str, Any],
+    num_outputs=int,
+    parts=List[str],
+    frame_width=int,
+    frame_height=int,
+    downscaling=float,
+    start_time=float,
+    end_time=float,
+    _return=NoneType
 )
 
 AnalyzeVideosFunction = lambda ret: StrictCallable(
@@ -74,6 +99,7 @@ class DIPLOMATContract:
 class CommandManager(type):
 
     __no_type_check__ = False
+
     def __new__(cls, *args, **kwargs):
         obj = super().__new__(cls, *args, **kwargs)
 
@@ -85,7 +111,7 @@ class CommandManager(type):
 
         return obj
 
-    def __getattr__(self, item):
+    def __getattr__(self, item) -> DIPLOMATContract:
         annot = typing.get_type_hints(self)[item]
         return DIPLOMATContract(item, annot)
 
@@ -101,6 +127,7 @@ class DIPLOMATCommands(metaclass=CommandManager):
     by passing the methods to this classes constructor.
     """
     _verifier: required(VerifierFunction)
+    _save_from_restore: SaveRestoredStateFunction
     analyze_videos: AnalyzeVideosFunction(NoneType)
     analyze_frames: AnalyzeFramesFunction(NoneType)
     label_videos: LabelVideosFunction(NoneType)
@@ -135,6 +162,9 @@ class DIPLOMATCommands(metaclass=CommandManager):
     def __getattr__(self, item: str):
         return self._commands.get(item)
 
+    def __contains__(self, item: str):
+        return item in self._commands
+
     def verify(self, contract: DIPLOMATContract, config: Union[List[PathLike], PathLike], **kwargs: Any) -> bool:
         """
         Verify this backend can handle the provided command type, config file, and arguments.
@@ -146,14 +176,24 @@ class DIPLOMATCommands(metaclass=CommandManager):
 
         :return: A boolean, True if the backend can handle the provided command and arguments, otherwise False.
         """
+        if(self.verify_contract(contract)):
+            return self._verifier(config, **kwargs)
+        return False
+
+    def verify_contract(self, contract: DIPLOMATContract):
+        """
+        Verify this frontend has the provided contract, or function with a specified name and arguments.
+
+        :param contract: The contract for the command. Includes the name of the method and the type of the method,
+                         which will typically be a strict callable.
+        """
         if(contract.method_name in self._commands):
             func = self._commands[contract.method_name]
             try:
                 contract.method_type(func)
+                return True
             except Exception:
                 return False
-
-            return self._verifier(config, **kwargs)
 
         return False
 

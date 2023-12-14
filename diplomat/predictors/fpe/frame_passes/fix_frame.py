@@ -482,10 +482,8 @@ class FixFrame(FramePass):
         max_dist = np.sqrt(fb_data.metadata.width ** 2 + fb_data.metadata.height ** 2)
 
         if(thread_count > 0):
-            print("Pool starting...")
             from ...sfpe.segmented_frame_pass_engine import PoolWithProgress
             with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
-                print("Pool context entered...")
                 pool.fast_map(
                     cls.compute_list_of_scores,
                     lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, down_scaling, skeleton, max_dist),

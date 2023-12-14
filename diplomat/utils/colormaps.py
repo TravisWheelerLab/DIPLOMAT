@@ -3,9 +3,43 @@ Provides utility functions for colormap conversion and iteration.
 """
 import matplotlib as mpl
 import numpy as np
-from matplotlib.colors import Colormap, ListedColormap, to_rgba
+from matplotlib.colors import Colormap, ListedColormap, to_rgba, LinearSegmentedColormap
 from typing import Union, Tuple, Sequence
 import itertools
+
+
+# Extend matplotlib colormap to support diplomat's json serialization
+def _listed_to_json(self):
+    return {
+        "colors": self.colors,
+        "name": self.name,
+        "N": self.N
+    }
+
+
+def _listed_from_json(cls, data):
+    return cls(data["colors"], data["name"], data["N"])
+
+
+ListedColormap.__tojson__ = _listed_to_json
+ListedColormap.__fromjson__ = classmethod(_listed_from_json)
+
+
+def _linear_to_json(self):
+    return {
+        "segmentdata": self._segmentdata,
+        "name": self.name,
+        "N": self.N,
+        "gamma": self._gamma
+    }
+
+
+def _linear_from_json(cls, data):
+    return cls(data["name"], data["segmentdata"], data["N"], data["gamma"])
+
+
+LinearSegmentedColormap.__tojson__ = _linear_to_json
+LinearSegmentedColormap.__fromjson__ = classmethod(_linear_from_json)
 
 
 def to_colormap(cmap: Union[None, str, list, Colormap] = None) -> Colormap:

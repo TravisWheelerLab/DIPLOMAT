@@ -31,6 +31,9 @@ class SegmentedSubList(UserList):
     def __setitem__(self, key: int, value):
         self.data[self._segment_alignment[key]] = value
 
+    def __len__(self):
+        return len(self.data)
+
 
 class SegmentedList(UserList):
     def __init__(self, data: List, segments: np.ndarray, segment_alignments: np.ndarray):
@@ -54,7 +57,13 @@ class SegmentedList(UserList):
 
 
 class SegmentedDict(MutableMapping):
-    def __init__(self, wrapper_dict: dict, segments: np.ndarray, segment_alignments: np.ndarray, rev_segment_alignments: np.ndarray):
+    def __init__(
+        self,
+        wrapper_dict: dict,
+        segments: np.ndarray,
+        segment_alignments: np.ndarray,
+        rev_segment_alignments: np.ndarray
+    ):
         super().__init__()
         self.data = wrapper_dict
         self._segments = segments
@@ -118,14 +127,15 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         num_outputs: int,
         num_frames: int,
         settings: Config,
-        video_metadata: Config
+        video_metadata: Config,
+        restore_path: Optional[str] = None
     ):
-        super().__init__(bodyparts, num_outputs, num_frames, settings, video_metadata)
+        super().__init__(bodyparts, num_outputs, num_frames, settings, video_metadata, restore_path)
 
         if(video_metadata["orig-video-path"] is None):
             raise ValueError("Unable to find the original video file, which is required by this plugin!")
 
-        self._video_path = video_metadata["orig-video-path"]
+        self._video_path = video_metadata["orig-video-path"] if(restore_path is None) else restore_path
         self._video_hdl: Optional[cv2.VideoCapture] = None
         self._final_probabilities = None
         self._fb_editor: Optional[FPEEditor] = None
@@ -181,11 +191,20 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
     @property
     def frame_data(self) -> ForwardBackwardData:
-        return SegmentedFramePassData(self._frame_holder, self._segments, self._reverse_segment_bp_order)
+        return SegmentedFramePassData(
+            self._frame_holder,
+            self._segments,
+            self._reverse_segment_bp_order
+        )
 
     @property
     def changed_frames(self) -> MutableMapping[Tuple[int, int], ForwardBackwardFrame]:
-        return SegmentedDict(self._changed_frames, self._segments, self._reverse_segment_bp_order, self._segment_bp_order)
+        return SegmentedDict(
+            self._changed_frames,
+            self._segments,
+            self._reverse_segment_bp_order,
+            self._segment_bp_order
+        )
 
     def get_maximum_with_defaults(self, frame) -> Tuple[int, int, float, float, float]:
         return self.get_maximum(frame, self.settings.relaxed_maximum_radius)
@@ -232,7 +251,12 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         return (int(x), int(y), off_x, off_y, prob)
 
-    def _make_plot_of(self, figsize: Tuple[float, float], dpi: int, title: str, track_data: SparseTrackingData) -> wx.Bitmap:
+    def _make_plot_of(
+        self,
+        figsize: Tuple[float, float],
+        dpi: int, title: str,
+        track_data: SparseTrackingData
+    ) -> wx.Bitmap:
         # Get the frame...
         import matplotlib
         matplotlib.use("agg")
@@ -259,14 +283,20 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         return bitmap
 
-    def _custom_multicluster_plot(self, figsize: Tuple[float, float], dpi: int, title: str, track_datas: List[SparseTrackingData]) -> wx.Bitmap:
+    def _custom_multicluster_plot(
+        self,
+        figsize: Tuple[float, float],
+        dpi: int,
+        title: str,
+        track_datas: List[SparseTrackingData]
+    ) -> wx.Bitmap:
         # Get the frame...
         import matplotlib
         matplotlib.use("agg")
         import matplotlib.pyplot as plt
 
         cmaps = ['Blues', 'Reds', 'Greys', 'Oranges', 'Purples', 'Greens']
-        overlap_color = [0.224, 1, 0.078, 1] # None of the cmaps use neon green, for good reason...
+        overlap_color = [0.224, 1, 0.078, 1]  # None of the cmaps use neon green, for good reason...
 
         figure = plt.figure(figsize=figsize, dpi=dpi)
         axes = figure.gca()
@@ -291,7 +321,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             track_data[track_data == 0] = -np.inf
 
             img += cmap(track_data)
-
 
         img[counts > 1] = overlap_color
         axes.imshow(img)
@@ -331,6 +360,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             if ((frame_idx, bp_idx) in self.changed_frames):
                 f = self.changed_frames[(frame_idx, bp_idx)]
                 frames, occluded, orig_data = f.frame_probs, f.occluded_probs, f.orig_data
+                if(f == all_data):
+                    raise ValueError("Should not be possible!")
             else:
                 frames, occluded, orig_data = all_data.frame_probs, all_data.occluded_probs, all_data.orig_data
 
@@ -353,7 +384,9 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Modified Source Frame", track_data))
 
             if(len(fix_frame_data) >= self.num_outputs):
-                new_bitmap_list.append(self._custom_multicluster_plot(figsize, dpi, bp_name + " Fix Frame Clustering", fix_frame_data))
+                new_bitmap_list.append(
+                    self._custom_multicluster_plot(figsize, dpi, bp_name + " Fix Frame Clustering", fix_frame_data)
+                )
                 fix_frame_data.clear()
 
         # Now that we have appended all the above bitmaps to a list, update the ScrollImageList widget of the editor
@@ -440,7 +473,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         # Perform a run with the old data put back in place...
         current_dict = self._changed_frames
         # If we are doing an undo, use old_dict, otherwise use the data already in current dict...
-        # the fb run doesn't use the data in _current_frames, but uses it to determine which segments need to be rerun...
+        # the fb run doesn't use the data in _current_frames, but uses it to determine which segments
+        # need to be rerun...
         self._changed_frames = self.changed_frames if(len(self._changed_frames) > 0) else old_dict
         self._on_run_fb(False)
         self._changed_frames = old_dict
@@ -456,7 +490,12 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         for (frm, bp), sparse_frame in current_data.items():
             frames[frm][bp] = sparse_frame
 
-        for (frm, bp), sparse_frame in SegmentedDict(current_data, self._segments, self._reverse_segment_bp_order, self._segment_bp_order).items():
+        for (frm, bp), sparse_frame in SegmentedDict(
+            current_data,
+            self._segments,
+            self._reverse_segment_bp_order,
+            self._segment_bp_order
+        ).items():
             x, y, prob = self.scmap_to_video_coord(
                 *self.get_maximum_with_defaults(
                     sparse_frame
@@ -553,8 +592,15 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         # Return false to not clear the history....
         return False
 
-    def on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
-        self._run_frame_passes(progress_bar)
+    def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
+        if(self._restore_path is None):
+            self._run_frame_passes(progress_bar)
+            self._frame_holder.metadata["segments"] = self._segments.tolist()
+            self._frame_holder.metadata["segment_scores"] = self._segment_scores.tolist()
+        else:
+            self._width = self._frame_holder.metadata.width
+            self._height = self._frame_holder.metadata.height
+            self._resolve_frame_orderings(progress_bar)
 
         progress_bar.message("Selecting Maximums")
         poses = self.get_maximums(
@@ -596,6 +642,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         self._fb_editor.Show()
 
         app.MainLoop()
+        self._video_hdl.release()
 
         return self._fb_editor.video_player.video_viewer.get_all_poses()
 

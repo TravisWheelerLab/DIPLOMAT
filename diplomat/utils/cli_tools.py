@@ -227,8 +227,9 @@ class CLIEngine:
         try:
             res, extra = self._parser.parse_known_args(arg_list)
         except TypeError as e:
-            # Python 3.7 argparse doesn't handle subcommand namespaces correctly when no arguments are passed to them (throws type error), we
-            # insert an empty string argument and reparse to get a more helpful error message and force argparse to print the usage string...
+            # Python 3.7 argparse doesn't handle subcommand namespaces correctly when no arguments are passed to them
+            # (throws type error), we insert an empty string argument and reparse to get a more helpful error message
+            # and force argparse to print the usage string...
             if(not (str(e) == "sequence item 0: expected str instance, NoneType found")):
                 raise
             res, extra = self._parser.parse_known_args([*arg_list, ""])
@@ -236,7 +237,8 @@ class CLIEngine:
 
         if(func is not None):
             if(extra):
-                # Attempt to reparse after adding the extra arguments in (if this is a function that accepts arbitrary flags)...
+                # Attempt to reparse after adding the extra arguments in
+                # (if this is a function that accepts arbitrary flags)...
                 res = self._reparse(arg_list, extra, func)
             del res._func
             try:
@@ -285,7 +287,8 @@ def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True) -> Callable[
     :param auto_cast: Boolean flag, if true don't automatically convert extra cli args to their correct types.
                       This means the method needs to do the conversion itself.
 
-    :return: A decorator which attaches these arguments to the function, so they are included when turning it into a CLI function...
+    :return: A decorator which attaches these arguments to the function, so they are included when turning it into a
+             CLI function...
     """
     def attach_extra(func: Callable):
         func.__extra_args = config_spec
@@ -302,7 +305,8 @@ def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True) -> Callable[
                     continue
 
                 extra_doc = ("\n" + (" " * index)).join(
-                    f" - {name} (Type: {get_type_name(caster)}, Default: {default}): {desc}" for name, (default, caster, desc) in config_spec.items()
+                    f" - {name} (Type: {get_type_name(caster)}, Default: {default}): {desc}"
+                    for name, (default, caster, desc) in config_spec.items()
                 )
                 doc_str_lst[i] = line.format(extra_cli_args=extra_doc)
 

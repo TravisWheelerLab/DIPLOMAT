@@ -97,15 +97,16 @@ class CacheList:
         self._range = range(start, stop, step)
 
     def __getitem__(self, index):
-        if(isinstance(index, slice)):
-            r = self._range[index]
+        r = self._range[index]
+        if(isinstance(r, range)):
             return CacheList(self._backing, self._cache, r.start, r.stop, r.step)
         else:
-            return self._cache.get(self._range[index], self._backing._frames)
+            return self._cache.get(r, self._backing._frames)
 
     def __setitem__(self, key, value):
-        if(isinstance(key, slice)):
-            for i, index in enumerate(self._range[key]):
+        key = self._range[key]
+        if(isinstance(key, range)):
+            for i, index in enumerate(key):
                 self._cache.set(index, self._backing._frames, value[i])
         else:
             self._cache.set(key, self._backing._frames, value)

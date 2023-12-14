@@ -622,7 +622,10 @@ class StrictCallable(ConvertibleTypeCaster):
 
         if(self._wild_kwargs_req):
             if(get_typecaster_kwd_arg_name(arg) is None):
-                raise ValueError("Passed callable does not specify a variable keyword argument (**kwargs), which is required by this callable.")
+                raise ValueError(
+                    "Passed callable does not specify a variable keyword argument "
+                    "(**kwargs), which is required by this callable."
+                )
 
         for name, expected_annot in self._required_args.items():
             if(name not in annots):

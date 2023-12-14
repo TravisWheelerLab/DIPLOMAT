@@ -24,6 +24,7 @@ def get_static_cli_tree() -> dict:
         "tweak": diplomat.tweak,
         "yaml": diplomat.yaml,
         "convert": diplomat.convert,
+        "restore": diplomat.restore,
         "frontends": {
             "__description": "Contains subcommands for listing available frontends and inspecting the functions "
                              "each frontend supports.",

@@ -231,10 +231,10 @@ class StorageGraph:
         Get an iterable of both edges and values for this graph...
 
         :returns: An iterable of tuples containing 2 items:
-                    - An Edge named tuple, the edge in the graph.
+                    - An Edge: named tuple, the edge in the graph.
                     - Anything, the value at the above given edge in the graph
         """
-        return zip(self.edges(), self.values())
+        return ((edge, self._connections[edge.node1][edge.node2]) for edge in self)
 
     def name_to_index(self, idx: Union[str, int]) -> int:
         """
@@ -269,7 +269,7 @@ class StorageGraph:
     def __tojson__(self):
         return {
             "nodes": list(self._node_names),
-            "edges": list(self.values())
+            "edges": list(self.items())
         }
 
     @classmethod

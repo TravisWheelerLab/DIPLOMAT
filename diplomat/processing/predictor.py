@@ -64,7 +64,7 @@ class Predictor(ABC):
                                   and 1.
                                 - :code:`"line_thickness"`: The thickness of the outline to plot occluded predictions with, an integer.
                                 - :code:`"skeleton"`: None or a list of tuples, specifying body parts to connect in a skeleton.
-
+                                - :code:`"frontend"`: The name of the frontend calling this predictor.
         """
         self.__bodyparts = [str(b) for b in bodyparts]
         self.__num_outputs = int(num_outputs)

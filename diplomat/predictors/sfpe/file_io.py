@@ -1,6 +1,7 @@
 import json
 import multiprocessing
-from typing import BinaryIO, Tuple, Optional, Mapping, Any
+from pathlib import Path
+from typing import BinaryIO, Tuple, Optional, Mapping, Any, Union, Callable
 from io import SEEK_CUR, SEEK_END, SEEK_SET
 import numpy as np
 from typing_extensions import Protocol
@@ -40,10 +41,17 @@ class SharedMemory(Protocol):
 
 class FPEMetadataEncoder(json.JSONEncoder):
     def default(self, o: Any) -> Any:
+        if(isinstance(o, Path)):
+            return str(o)
+
         to_json = getattr(o, "__tojson__", None)
         if(to_json is None):
             return super().default(o)
         d = to_json()
+
+        if(not type(o).__module__.startswith("diplomat.")):
+            if(not type(o).__module__.startswith("matplotlib.colors")):
+                raise IOError("Can only write diplomat internal modules to disk!")
 
         return {
             "___name": type(o).__qualname__,
@@ -52,16 +60,24 @@ class FPEMetadataEncoder(json.JSONEncoder):
         }
 
 
-def reconstruct_from_json(data: dict) -> dict:
-    print("YEP")
-    for k, val in data:
-        if(isinstance(val, dict) and "___name" in data):
-            mod = import_module(val["___module"])
-            cls = mod
-            for attr in val["___name"].split("."):
-                cls = getattr(cls, attr)
+def reconstruct_from_json(data: Union[dict, list]) -> Union[dict, list]:
+    iterator = data.items() if(isinstance(data, dict)) else enumerate(data)
+    for k, val in iterator:
+        if(isinstance(val, dict)):
+            if("___name" in val):
+                if(not val["___module"].startswith("diplomat.")):
+                    if(not val["___module"].startswith("matplotlib.colors")):
+                        raise IOError("Only internal diplomat modules can be stored!")
+                mod = import_module(val["___module"])
+                cls = mod
+                for attr in val["___name"].split("."):
+                    cls = getattr(cls, attr)
 
-            data[k] = cls.__fromjson__(val["___data"])
+                data[k] = cls.__fromjson__(val["___data"])
+            else:
+                data[k] = reconstruct_from_json(val)
+        elif(isinstance(val, list)):
+            data[k] = reconstruct_from_json(val)
 
     return data
 
@@ -69,6 +85,7 @@ def reconstruct_from_json(data: dict) -> dict:
 class DiplomatFPEState:
 
     INFINITY = np.iinfo(np.int64).max
+    METADATA_GROW_SIZE = 2
 
     def __init__(
         self,
@@ -76,10 +93,10 @@ class DiplomatFPEState:
         frame_count: int = 0,
         compression_level: int = 6,
         float_type: str = "<f4",
-        int_type: str = "<u4",
+        int_type: str = "<i4",
         immediate_mode: bool = False,
         lock: Optional[multiprocessing.RLock] = None,
-        memory_backing: Optional[SharedMemory] = None
+        memory_backing: Optional[Union[SharedMemory, Callable[[int], SharedMemory]]] = None
     ):
         self._file_obj = file_obj
         self._compression_level = compression_level
@@ -87,7 +104,7 @@ class DiplomatFPEState:
         self._float_type = float_type
         self._int_type = int_type
         self._immediate_mode = immediate_mode
-        self._lock = lock if(lock is not None) else DummyLock
+        self._lock = lock if(lock is not None) else DummyLock()
         self._from_pickle = False
         self._closed = False
 
@@ -97,6 +114,11 @@ class DiplomatFPEState:
             if(self._shared_mem is None):
                 self._frame_offsets = np.zeros((frame_count + 1, 2), dtype=Offset)
             else:
+                if(callable(self._shared_mem)):
+                    self._shared_mem = self._shared_mem(
+                        (frame_count + 1) * Offset.itemsize * 2
+                        + BufferTree.get_buffer_size(frame_count + 2) * 2
+                    )
                 self._frame_offsets = np.ndarray(
                     (frame_count + 1, 2), dtype=Offset, buffer=self._shared_mem.buf, order="C"
                 )
@@ -126,7 +148,7 @@ class DiplomatFPEState:
 
     def _find_chunks(self, frame_count: int):
         with self._lock:
-            self._file_obj.seek(-8, SEEK_END)
+            self._file_obj.seek(-12, SEEK_END)
             data = self._file_obj.read(12)
 
             if(data[:4] == DIPST_END_CHUNK):
@@ -143,7 +165,7 @@ class DiplomatFPEState:
                 self._write_new_header()
 
             self._load_offsets()
-            if((self._frame_offsets.shape[0] - 1) != frame_count):
+            if((frame_count > 0) and ((self._frame_offsets.shape[0] - 1) != frame_count)):
                 raise ValueError("Loaded file doesn't have same frame count!")
 
     def _compute_free_space(self):
@@ -200,6 +222,11 @@ class DiplomatFPEState:
 
             if(self._frame_offsets is None):
                 if(self._shared_mem is not None):
+                    if(callable(self._shared_mem)):
+                        self._shared_mem = self._shared_mem(
+                            (length + 1) * Offset.itemsize * 2
+                            + BufferTree.get_buffer_size(length + 2) * 2
+                        )
                     self._frame_offsets = np.ndarray(
                         (1 + length, 2), dtype=Offset, buffer=self._shared_mem.buf, order="C"
                     )
@@ -236,11 +263,11 @@ class DiplomatFPEState:
         if(offset_below is not None):
             remove(self._free_space, size_below, offset_below)
             if((offset_below + size_below) >= offset):
-                offset = offset_below
                 if(self.INFINITY in [size, size_below]):
                     size = self.INFINITY
                 else:
-                    size = max(offset + size, offset_below + size_below) - offset_below
+                    size = int(max(offset + size, offset_below + size_below) - offset_below)
+                offset = offset_below
             else:
                 insert(self._free_space, size_below, offset_below)
                 insert(self._free_space_offsets, offset_below, size_below)
@@ -251,7 +278,7 @@ class DiplomatFPEState:
                 if(self.INFINITY in [size, size_above]):
                     size = self.INFINITY
                 else:
-                    size = max(offset_above + size_above, offset + size) - offset
+                    size = int(max(offset_above + size_above, offset + size) - offset)
             else:
                 insert(self._free_space, size_above, offset_above)
                 insert(self._free_space_offsets, offset_above, size_above)
@@ -260,7 +287,7 @@ class DiplomatFPEState:
         insert(self._free_space_offsets, offset, size)
 
     def _find_free_space(self, size_needed: int) -> Tuple[int, int]:
-        size, offset = nearest_pop(self._free_space, size_needed)
+        size, offset = nearest_pop(self._free_space, size_needed, left=False)
         if(size is None):
             raise RuntimeError("No free space!")
         remove(self._free_space_offsets, offset, size)
@@ -273,7 +300,7 @@ class DiplomatFPEState:
                 raise ValueError("Growth not supported yet...")
 
             offset, size = self._frame_offsets[index]
-            needed_size = len(full_data) if(index > 0) else int(2 ** np.ceil(np.log2(len(full_data))))
+            needed_size = len(full_data) if(index > 0) else int(1 << int(np.ceil(np.log2(len(full_data)))))
 
             if(needed_size > size or needed_size < size):
                 self._add_free_space(offset, size)
@@ -287,6 +314,10 @@ class DiplomatFPEState:
                 self._frame_offsets[index] = (new_offset, needed_size)
 
             offset, size = self._frame_offsets[index]
+            from multiprocessing.process import current_process
+            p = current_process()
+            with open("DEBUG.txt", "a") as f:
+                print(f"PROCESS {p.name} PID {p.pid}, WRITE FRAME {index} to {offset} with size {size}", file=f)
 
             if(self._immediate_mode):
                 self._write_offsets()
@@ -294,6 +325,8 @@ class DiplomatFPEState:
 
             self._file_obj.seek(int(self._file_start + offset))
             self._file_obj.write(full_data)
+            if(not isinstance(self._lock, DummyLock)):
+                self._file_obj.flush()
 
     def _load_chunk(self, index: int) -> Tuple[bytes, bytes]:
         with self._lock:
@@ -303,6 +336,11 @@ class DiplomatFPEState:
             header_type = DIPST_FRAME_HEADER if(index != 0) else DIPST_METADATA_HEADER
             offset, size = self._frame_offsets[index]
 
+            from multiprocessing.process import current_process
+            p = current_process()
+            with open("DEBUG.txt", "a") as f:
+                print(f"PROCESS {p.name} PID {p.pid}, READ FRAME {index} from {offset} with size {size}", file=f)
+
             if(size == 0):
                 return (header_type, b"")
 
@@ -310,9 +348,31 @@ class DiplomatFPEState:
             data = self._file_obj.read(size)
 
             if(data[:len(header_type)] != header_type):
-                raise IOError(f"Found incorrect chunk type for chunk {index}.")
+                print(data)
+                raise IOError(f"Found incorrect chunk type for chunk {index}, (offset {offset}, size {size}).")
 
             return (header_type, data[4:])
+
+    def _space_coverage(self):
+        from diplomat.predictors.sfpe.avl_tree import inorder_traversal
+        free_space = inorder_traversal(self._free_space_offsets)
+        end = free_space[-1, 0]
+        arr = np.zeros(shape=end, dtype=np.uint8)
+
+        for offset, size in free_space[:-1]:
+            arr[offset:offset + size] += 1
+        for offset, size in self._frame_offsets:
+            arr[offset:offset + size] += 2
+
+        offset_space = self._data_offset() - self._file_start
+        return [np.sum(arr[offset_space:] == i) for i in range(4)]
+
+    def _is_fully_covered_no_overlap(self):
+        cov = self._space_coverage()
+        if(cov[0] != 0 or cov[-1] != 0):
+            raise ValueError(cov)
+        else:
+            print("COVERAGE:", cov)
 
     def _encode_meta_chunk(self, data: dict = None) -> bytes:
         if(data is None):
@@ -358,7 +418,7 @@ class DiplomatFPEState:
         self._write_chunk(1 + item, DIPST_FRAME_HEADER, data)
 
     def __len__(self) -> int:
-        return self._frame_offsets.shape[0]
+        return (self._frame_offsets.shape[0] - 1)
 
     def get_metadata(self) -> dict:
         if(self._closed):
@@ -373,19 +433,21 @@ class DiplomatFPEState:
         self._write_chunk(0, DIPST_METADATA_HEADER, data)
 
     def flush(self):
-        if(self._closed):
-            raise ValueError("State object is closed!")
-        self._write_offsets()
-        self._write_end()
-        self._file_obj.flush()
+        with self._lock:
+            if(self._closed):
+                raise ValueError("State object is closed!")
+            self._write_offsets()
+            self._write_end()
+            self._file_obj.flush()
 
     def close(self):
-        if(self._closed):
-            return
-        self.flush()
-        if(self._from_pickle):
-            self._file_obj.close()
-        self._closed = True
+        with self._lock:
+            if(self._closed):
+                return
+            self.flush()
+            if(self._from_pickle):
+                self._file_obj.close()
+            self._closed = True
 
     @classmethod
     def get_shared_memory_size(cls, frame_count: int) -> int:
@@ -408,10 +470,21 @@ class DiplomatFPEState:
             raise RuntimeError("Attempting to pickle a diplomat file state without memory backing.")
 
         state["_file_obj"] = state["_file_obj"].name
+        state["_frame_offsets"] = (state["_frame_offsets"].shape[0] - 1)
+        state["_free_space"] = None
+        state["_frame_space_offsets"] = None
         state["_from_pickle"] = True
         return state
 
     def __setstate__(self, state: dict):
         self.__dict__ = state
-        self._file_obj = open(str(self._file_obj), "r+b")
+        frame_count = self._frame_offsets
+        offset1 = (frame_count + 1) * Offset.itemsize * 2
+        offset2 = offset1 + BufferTree.get_buffer_size(frame_count + 2)
 
+        self._frame_offsets = np.ndarray(
+            (frame_count + 1, 2), dtype=Offset, buffer=self._shared_mem.buf[:offset1], order="C"
+        )
+        self._free_space = BufferTree(self._shared_mem.buf[offset1:offset2])
+        self._free_space_offsets = BufferTree(self._shared_mem.buf[offset2:])
+        self._file_obj = open(str(self._file_obj), "r+b")

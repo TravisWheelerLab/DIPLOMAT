@@ -95,7 +95,7 @@ class shape_iterator:
     Allows one to iterate over a list of shape strings indefinitely, and in groups. Used to iterate over shapes on a
     per individual basis.
     """
-    def __new__(cls, sequence: Optional[Iterable[str]], rep_count: int = None):
+    def __init__(self, sequence: Optional[Iterable[str]] = None, rep_count: int = None):
         """
         Get a new shape iterator.
 
@@ -104,15 +104,13 @@ class shape_iterator:
                           If larger than the sequence length, the iteration will wrap around the sequence, and
                           continue until this value is reached and then reset.
         """
-        if(sequence is None):
-            return cls.__new__(cls, ("circle", "triangle", "square", "star"), 1 if(rep_count is None) else rep_count)
-        if(isinstance(sequence, cls)):
-            return cls.__new__(cls, sequence._seq, sequence._rep if(rep_count is None) else rep_count)
+        if(isinstance(sequence, type(self))):
+            self._seq = sequence._seq
+            self._rep = sequence._rep
+            return
 
-        inst = super().__new__(cls)
-        inst._seq = sequence
-        inst._rep = 1 if(rep_count is None) else rep_count
-        return inst
+        self._seq = sequence if(sequence is not None) else ("circle", "triangle", "square", "star")
+        self._rep = 1 if(rep_count is None) else rep_count
 
     def __iter__(self) -> Iterator[str]:
         self._count = 0
@@ -132,6 +130,16 @@ class shape_iterator:
 
         self._count += 1
         return shape_str(val)
+
+    def __tojson__(self):
+        return {
+            "sequence": self._seq,
+            "rep_count": self._rep
+        }
+
+    @classmethod
+    def __fromjson__(cls, data):
+        return cls(data["sequence"], data["rep_count"])
 
 
 class CV2DotShapeDrawer(DotShapeDrawer):

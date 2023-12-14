@@ -1,4 +1,7 @@
 from typing import Optional, List, Type, Dict, Any
+
+import cv2
+
 from .dlc_importer import auxiliaryfunctions
 from diplomat.processing import Predictor, TQDMProgressBar, Config
 import diplomat.processing.type_casters as tc
@@ -149,6 +152,12 @@ def _resolve_videos(
             if suspect_video.exists():
                 video_paths[idx] = suspect_video
 
+    # Finally, check if the frame store itself can be opened as a video (new dual encoding). Overrides prior searches...
+    for idx, path in enumerate(frame_store_paths):
+        test_cap = cv2.VideoCapture(path)
+        if(test_cap.grab()):
+            video_paths[idx] = path
+
     return video_paths
 
 
@@ -207,7 +216,8 @@ def _analyze_frame_store(
             "duration": float(num_f) / f_rate,
             "size": (vid_h, vid_w),
             "output-file-path": data_name,
-            "orig-video-path": str(video_name) if (video_name is not None) else None,  # This may be None if we were unable to find the video...
+            # This may be None if we were unable to find the video...
+            "orig-video-path": str(video_name) if (video_name is not None) else None,
             "cropping-offset": None if (off_x is None or off_y is None) else (off_y, off_x),
             "dotsize": cfg["dotsize"],
             "colormap": cfg.get("diplomat_colormap", cfg["colormap"]),
@@ -215,7 +225,8 @@ def _analyze_frame_store(
             "alphavalue": cfg["alphavalue"],
             "pcutoff": cfg["pcutoff"],
             "line_thickness": cfg.get("line_thickness", 1),
-            "skeleton": cfg.get("skeleton", None)
+            "skeleton": cfg.get("skeleton", None),
+            "frontend": "deeplabcut"
         })
 
         # Create the plugin instance...

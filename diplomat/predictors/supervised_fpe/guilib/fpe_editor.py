@@ -313,8 +313,14 @@ class FPEEditor(wx.Frame):
         self.video_controls.Bind(PointViewNEdit.EVT_FRAME_CHANGE, self._on_frame_chg)
 
     def _on_close(self, event: wx.CloseEvent):
-        with wx.MessageDialog("Are you sure you want to exit and save your results?", wx.YES_NO) as dlg:
-            if(dlg.ShowModal() != wx.YES):
+        with wx.MessageDialog(
+            self,
+            "Are you sure you want to exit and save your results?",
+            "Confirmation",
+            wx.YES_NO
+        ) as dlg:
+            selection = dlg.ShowModal()
+            if(selection != wx.ID_YES):
                 event.Veto()
                 return
         event.Skip()
@@ -743,7 +749,7 @@ class FPEEditor(wx.Frame):
         self.video_player.video_viewer.set_all_poses(Pose(poses[:, :, 0], poses[:, :, 1], poses[:, :, 2]))
 
     def _save_and_close(self):
-        self.Destroy()
+        self.Close()
 
     def _move_to_poor_label(self, forward: bool):
         self.video_player.video_viewer.pause()

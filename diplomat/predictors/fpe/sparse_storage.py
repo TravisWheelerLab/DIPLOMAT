@@ -354,7 +354,7 @@ class SparseTrackingData:
     def to_bytes(self, float_dtype: str, int_dtype: str) -> bytes:
         if(float_dtype.lstrip("<>") not in ["f2", "f4", "f8"]):
             raise ValueError("Invalid float datatype!")
-        if(int_dtype.lstrip("<>") not in ["u2", "u4", "u8"]):
+        if(int_dtype.lstrip("<>") not in ["u2", "u4", "u8", "i2", "i4", "i8"]):
             raise ValueError("Invalid integer datatype!")
 
         if(self._offsets_probs is None):
@@ -378,7 +378,7 @@ class SparseTrackingData:
     ) -> Tuple["SparseTrackingData", int]:
         if(float_dtype.lstrip("<>") not in ["f2", "f4", "f8"]):
             raise ValueError("Invalid float datatype!")
-        if(int_dtype.lstrip("<>") not in ["u2", "u4", "u8"]):
+        if(int_dtype.lstrip("<>") not in ["u2", "u4", "u8", "i2", "i4", "i8"]):
             raise ValueError("Invalid integer datatype!")
 
         length = np.frombuffer(data, "<u4", 1)[0]
@@ -555,7 +555,7 @@ class ForwardBackwardFrame:
         return b"".join([
             np.asarray(len(arr.shape), dtype="<u4").tobytes(),
             np.asarray(arr.shape, dtype="<u4").tobytes(),
-            arr.astype(dtype)
+            arr.astype(dtype).tobytes()
         ])
 
     @staticmethod
@@ -579,12 +579,16 @@ class ForwardBackwardFrame:
 
     @staticmethod
     def _load_array(data: bytes, dtype: str, offset: int) -> Tuple[Optional[np.ndarray], int]:
-        shape_size = np.frombuffer(data, "<u4", 1, offset)
+        offset = int(offset)
+        shape_size = np.frombuffer(data, "<u4", 1, offset)[0]
 
         if(shape_size == 0):
             return (None, 4)
 
-        shape = tuple(np.frombuffer(data, "<u4", 1, offset + 4))
+        if(shape_size > 2):
+            raise ValueError("???")
+
+        shape = tuple(np.frombuffer(data, "<u4", shape_size, offset + 4))
         size = int(np.prod(shape))
         data = np.frombuffer(data, dtype, size, offset + 4 * (shape_size + 1)).reshape(shape)
         return data, 4 * (shape_size + 1) + size * np.dtype(dtype).itemsize

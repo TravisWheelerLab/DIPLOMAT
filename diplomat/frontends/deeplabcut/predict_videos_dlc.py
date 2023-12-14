@@ -236,7 +236,8 @@ def _analyze_video(
         "alphavalue": config["alphavalue"],
         "pcutoff": config["pcutoff"],
         "line_thickness": config.get("line_thickness", 1),
-        "skeleton": config.get("skeleton", None)
+        "skeleton": config.get("skeleton", None),
+        "frontend": "deeplabcut"
     })
 
     # Grab the plugin settings for this plugin...

@@ -129,7 +129,11 @@ def _skeleton_conv(skeleton, fallback_skeleton, part_list):
         # Force into one of two forms...
         for val in skeleton:
             if(isinstance(val, str)):
-                return [(_validate_part(a), _validate_part(b)) for i, a in enumerate(skeleton) for j, b in enumerate(skeleton[i + 1:], i + 1)]
+                return [
+                    (_validate_part(a), _validate_part(b))
+                    for i, a in enumerate(skeleton)
+                    for j, b in enumerate(skeleton[i + 1:], i + 1)
+                ]
             else:
                 return [(_validate_part(a), _validate_part(b)) for a, b in skeleton]
 
@@ -161,7 +165,8 @@ def _get_video_metadata(
         "alphavalue": visual_settings.alphavalue,
         "pcutoff": visual_settings.pcutoff,
         "line_thickness": visual_settings.get("line_thickness", 1),
-        "skeleton": skel
+        "skeleton": skel,
+        "frontend": "sleap"
     })
 
 
@@ -227,9 +232,9 @@ class PoseLabels:
 
 
 class Timer:
-    def __init__(self):
-        self._start_time = None
-        self._end_time = None
+    def __init__(self, start_time: Optional[float] = None, end_time: Optional[float] = None):
+        self._start_time = start_time
+        self._end_time = end_time
 
     def __enter__(self):
         self._start_time = time.time()
