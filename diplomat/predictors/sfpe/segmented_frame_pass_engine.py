@@ -520,6 +520,8 @@ class SegmentedFramePassEngine(Predictor):
             self._file_obj.close()
         if(self._shared_memory is not None and hasattr(self._shared_memory, "close")):
             self._shared_memory.close()
+            if(hasattr(self._shared_memory, "unlink")):
+                self._shared_memory.unlink()
         if(self._manager is not None):
             self._manager.shutdown()
 

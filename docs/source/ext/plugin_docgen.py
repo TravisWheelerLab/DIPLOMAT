@@ -29,6 +29,9 @@ with mock(MOCK_PACKAGES):
     from diplomat.predictors.fpe.frame_pass import FramePass
     from diplomat.frontends import DIPLOMATCommands
 
+    import diplomat.utils.graph_ops
+
+
 def load_plugins_with_mocks(module, clazz):
     from diplomat.utils.pluginloader import load_plugin_classes
     with mock(MOCK_PACKAGES):
@@ -43,6 +46,7 @@ class PyPlugin(PyClasslike):
         res = super().get_index_text(modname, name_cls)
         return res.replace("class", "plugin")
 
+
 class PySetting(PyAttribute):
     def get_signature_prefix(self, sig: str) -> List[nodes.Node]:
         return [nodes.Text("setting"), addnodes.desc_sig_space()]
@@ -55,6 +59,7 @@ class PySetting(PyAttribute):
             clsname = '.'.join([modname, clsname])
 
         return 'Setting %s (in plugin %s)' % (attrname, clsname)
+
 
 def patch_python_sphinx_domain():
     def _resolve_xref(self, env: BuildEnvironment, fromdocname, builder, typ, target, node, contnode):
@@ -143,6 +148,7 @@ templates = {
     "cli_entry": "cli-entry-template.rst"
 }
 
+
 def load_templates(src: Path):
     for k in templates:
         with ((src / "_templates") / templates[k]).open("r") as f:
@@ -195,9 +201,8 @@ def get_frame_pass_rst(plugin: Type[FramePass]) -> str:
         settings = format_settings(plugin.get_config_options())
     )
 
-def get_frontend_rst(name: str, methods: DIPLOMATCommands):
-    from dataclasses import asdict
 
+def get_frontend_rst(name: str, methods: DIPLOMATCommands):
     module_name = "diplomat." + name
     doc = getattr(getattr(diplomat, name), "__doc__", "")
     doc = "" if(doc is None) else doc

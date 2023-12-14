@@ -469,8 +469,9 @@ def restore(
 ):
     """
     Restore the state of the diplomat UI from a .dipui file. Allows for reloading the UI when diplomat crashes.
+    Settings and backend will be restored automatically based on the settings and info passed during the first run.
 
-    :param state: A path or list of paths to the ui states to restore.
+    :param state: A path or list of paths to the ui states to restore. Files should be of ".dipui" format.
     """
     from diplomat.predictors.sfpe.file_io import DiplomatFPEState
     from diplomat import _LOADED_FRONTENDS

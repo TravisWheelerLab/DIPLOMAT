@@ -7,3 +7,5 @@ tqdm
 pyyaml
 h5py
 pandas
+numpy
+numba
