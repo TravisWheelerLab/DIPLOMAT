@@ -8,7 +8,7 @@ channels:
 dependencies:
   - pip
   - sleap
-  - wxpython<4.2.0
+  - wxpython
   - git
   - pip:
     - "diplomat-track @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"

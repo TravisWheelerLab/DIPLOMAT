@@ -36,20 +36,22 @@ pip install "diplomat-track[sleap, gui] @ git+https://github.com/TravisWheelerLa
 pip install "diplomat-track[dlc, gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
 ```
 
-**NOTE:** DIPLOMAT also includes two environment configuration files for setting up DIPLOMAT with conda.
-To create an environment using conda, run one of these two commands:
+**NOTE:** DIPLOMAT also includes two environment configuration files for setting up DIPLOMAT with 
+[mamba](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html), which can
+be installed on Windows, Linux, or MacOS using the [Miniforge](https://github.com/conda-forge/miniforge) installer.
+To create an environment using mamba, run one of these two commands:
 ```bash
 # Create the environment for using DIPLOMAT with DeepLabCut
-conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
+mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
 # OR Create an environment for using DIPLOMAT with SLEAP instead...
-conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
+mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
 ```
 And then activate the environment with one of these two commands:
 ```bash
 # Activate the DeepLabCut/DIPLOMAT environment...
-conda activate DIPLOMAT-DEEPLABCUT
+mamba activate DIPLOMAT-DEEPLABCUT
 # Activate the SLEAP/DIPLOMAT environment...
-conda activate DIPLOMAT-SLEAP
+mamba activate DIPLOMAT-SLEAP
 ```
 
 For a more thorough explanation of the installation process, see the [documentation](https://diplomat.readthedocs.io/en/latest/installation.html).

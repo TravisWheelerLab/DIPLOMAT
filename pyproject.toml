@@ -44,8 +44,8 @@ diplomat = "diplomat._cli_runner:main"
 
 [project.optional-dependencies]
 # Latest version has build issues...
-gui = ["wxpython<4.2.0"]
+gui = ["wxpython"]
 dlc = ["deeplabcut[tf]"]
-sleap = ["sleap"]
-all = ["wxpython<4.2.0", "deeplabcut", "sleap"]
+sleap = ["sleap[pypi]"]
+all = ["wxpython", "deeplabcut", "sleap[pypi]"]
 
