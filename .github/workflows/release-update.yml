@@ -1,0 +1,30 @@
+name: Build and Publish New Releases
+
+on:
+  push:
+    branches:
+      - main
+
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Actions Ecosystem Action Get Latest Tag
+        uses: actions-ecosystem/action-get-latest-tag@v1.6.0
+        with:
+          semver_only: true
+          with_initial_version: false
+      - name: extract-python-version
+        run: |
+          VERSION=$(cat diplomat/__init__.py | grep "__version__" | cut -d "=" -f 2 | tr -d '" ')
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            then
+              echo "$VERSION is not a valid version!"
+              exit 1
+          fi
+          echo $VERSION
+          echo "PYTHON_VERSION=$VERSION" >> $GITHUB_ENV
