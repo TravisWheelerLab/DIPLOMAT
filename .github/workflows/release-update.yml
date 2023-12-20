@@ -1,6 +1,5 @@
 name: Auto Tag New Releases
 
-
 on:
   push:
     branches:
