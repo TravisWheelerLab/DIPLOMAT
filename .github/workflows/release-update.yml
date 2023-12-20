@@ -28,9 +28,19 @@ jobs:
               echo "$VERSION is not a valid version!"
               exit 1
           fi
-          echo $VERSION
-          echo $RELEASE_VERSION
+          PROPOSED_TAG="v$VERSION"
+          echo "Python package version: $VERSION"
+          echo "Github release version: $RELEASE_VERSION"
+          echo "Next proposed tag: "
           echo "PYTHON_VERSION=$VERSION" >> $GITHUB_ENV
           echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "NEXT_TAG=$PROPOSED_TAG" >> $GITHUB_ENV
         env:
           LATEST_RELEASE: ${{ steps.get-latest-tag.outputs.tag }}
+      - name: Create new tag on version mismatch.
+        uses: actions-ecosystem/action-push-tag@v1
+        if: ${{ env.RELEASE_VERSION != env.VERSION }}
+        with:
+          tag: ${{ env.PROPOSED_TAG }}
+          message: ${{ github.event.head_commit.message }}
+
