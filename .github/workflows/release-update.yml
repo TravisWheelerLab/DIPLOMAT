@@ -12,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ssh-key: "${{ secrets.COMMIT_KEY }}"
           fetch-depth: 0
       - name: Get Latest Tag
         id: get-latest-tag
