@@ -12,11 +12,10 @@ dependencies:
   - jupyter
   - ffmpeg
   - wxpython
-  - git
   - numpy<=1.20
   - numba
   - tensorflow-gpu
   - keras
   - pip:
     - deeplabcut
-    - "diplomat-track @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+    - diplomat-track

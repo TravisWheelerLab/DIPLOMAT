@@ -62,9 +62,9 @@ DIPLOMAT with DeepLabCut support by simply using pip, using one of the two comma
 .. code-block:: sh
 
     # Install DIPLOMAT with DeepLabCut with GUI support.
-    pip install "diplomat-track[dlc, gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+    pip install diplomat-track[dlc, gui]
     # Install DIPLOMAT with DeepLabCut without UI support.
-    pip install "diplomat-track[dlc] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+    pip install diplomat-track[dlc]
 
 
 With Support for SLEAP Projects
@@ -110,6 +110,6 @@ trying to install DIPLOMAT with SLEAP support on Windows, prefer using the mamba
 .. code-block:: sh
 
     # Install DIPLOMAT with SLEAP with GUI support.
-    pip install "diplomat-track[sleap, gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+    pip install diplomat-track[sleap, gui]
     # Install DIPLOMAT with SLEAP without UI support.
-    pip install "diplomat-track[sleap] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+    pip install diplomat-track[sleap]

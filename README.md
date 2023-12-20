@@ -24,16 +24,16 @@ DIPLOMAT also includes a UI for performing tracking and several other tools for 
 To install DIPLOMAT with PIP right now, you can and install it with pip using one of the following commands below:
 ```bash
 # For working with SLEAP projects:
-pip install "diplomat-track[sleap] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+pip install diplomat-track[sleap]
 # For working with DeepLabCut projects:
-pip install "diplomat-track[dlc] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+pip install diplomat-track[dlc]
 ```
 To install DIPLOMAT with GUI elements and supervised tracking support, use one of the commands below:
 ```bash
 # For using DIPLOMAT with SLEAP
-pip install "diplomat-track[sleap, gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+pip install diplomat-track[sleap, gui]
 # Again, replace sleap with dlc to install with DeepLabCut support.
-pip install "diplomat-track[dlc, gui] @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+pip install diplomat-track[dlc, gui]
 ```
 
 **NOTE:** DIPLOMAT also includes two environment configuration files for setting up DIPLOMAT with 

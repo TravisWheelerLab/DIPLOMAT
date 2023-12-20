@@ -5,3 +5,5 @@ Changes in this version of diplomat:
  - New `diplomat restore` command for restoring the UI from `.dipui` files. This requires running predictions with the
    storage mode set to `"disk"`, which is the default now.
  - New installation process with mamba that is more consistent and stable across platforms.
+ - New pypi package, `diplomat-track`.
+ - 

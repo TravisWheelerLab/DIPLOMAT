@@ -9,7 +9,6 @@ dependencies:
   - pip
   - sleap
   - wxpython
-  - git
   - pip:
-    - "diplomat-track @ git+https://github.com/TravisWheelerLab/DIPLOMAT.git"
+    - diplomat-track
     - "wheel==0.35" # The conda one appears to be broken...
