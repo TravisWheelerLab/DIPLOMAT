@@ -6,4 +6,4 @@ Changes in this version of diplomat:
    storage mode set to `"disk"`, which is the default now.
  - New installation process with mamba that is more consistent and stable across platforms.
  - New pypi package, `diplomat-track`.
- - 
+ - New release pipeline for easier release deployment.
