@@ -39,10 +39,10 @@ jobs:
           echo "NEXT_TAG=$PROPOSED_TAG" >> "$GITHUB_OUTPUT"
         env:
           LATEST_RELEASE: ${{ steps.get-latest-tag.outputs.tag }}
-      - name: Create new tag on version mismatch.
-        uses: actions-ecosystem/action-push-tag@v1
+      - name: Rebuild and Publish to PYPI
         if: ${{ steps.release-info.outputs.RELEASE_VERSION != steps.release-info.outputs.PYTHON_VERSION }}
+        uses: ./.github/workflows/publish-to-pypi.yml
         with:
-          tag: ${{ steps.release-info.outputs.NEXT_TAG }}
-          message: ${{ github.event.head_commit.message }}
+          new-release-tag: ${{ steps.release-info.outputs.NEXT_TAG }}
+        secrets: inherit
 
