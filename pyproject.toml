@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Typing :: Typed"
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 dynamic = ["version", "description"]
 dependencies = [
     "opencv-python",
@@ -29,8 +29,8 @@ dependencies = [
     "pandas",
     "numpy",
     "numba",
-    # Add shared memory support to older versions of python...
-    'shared-memory-backport@git+https://github.com/SleepProgger/py_shared_memory.git ; python_version<"3.8"'
+    # Add shared memory support to older versions of python (3.7)...
+    #'shared-memory-backport@git+https://github.com/SleepProgger/py_shared_memory.git ; python_version<"3.8"'
 ]
 
 [tool.flit.module]
