@@ -39,13 +39,18 @@ jobs:
           echo "NEXT_TAG=$PROPOSED_TAG" >> "$GITHUB_OUTPUT"
         env:
           LATEST_RELEASE: ${{ steps.get-latest-tag.outputs.tag }}
+    outputs:
+      RELEASE_VERSION: ${{ steps.release-info.outputs.RELEASE_VERSION }}
+      PYTHON_VERSION: ${{ steps.release-info.outputs.PYTHON_VERSION }}
+      NEXT_TAG: ${{ steps.release-info.outputs.NEXT_TAG }}
 
   create-new-release:
       uses: ./.github/workflows/publish-to-pypi.yml
       needs:
         - version-check
-      if: ${{ steps.release-info.outputs.RELEASE_VERSION != steps.release-info.outputs.PYTHON_VERSION }}
+      if: ${{ needs.version-check.outputs.RELEASE_VERSION != needs.version-check.outputs.PYTHON_VERSION }}
       with:
-        new-release-tag: ${{ steps.release-info.outputs.NEXT_TAG }}
+        new-release-tag: ${{ needs.version-check.outputs.NEXT_TAG }}
       secrets: inherit
+
 
