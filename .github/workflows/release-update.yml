@@ -44,5 +44,4 @@ jobs:
         uses: ./.github/workflows/publish-to-pypi.yml
         with:
           new-release-tag: ${{ steps.release-info.outputs.NEXT_TAG }}
-        secrets: inherit
 
