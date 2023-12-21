@@ -7,7 +7,7 @@ on:
 
 
 jobs:
-  create-new-tag:
+  version-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +39,13 @@ jobs:
           echo "NEXT_TAG=$PROPOSED_TAG" >> "$GITHUB_OUTPUT"
         env:
           LATEST_RELEASE: ${{ steps.get-latest-tag.outputs.tag }}
-      - name: Rebuild and Publish to PYPI
-        if: ${{ steps.release-info.outputs.RELEASE_VERSION != steps.release-info.outputs.PYTHON_VERSION }}
-        uses: ./.github/workflows/publish-to-pypi.yml
-        with:
-          new-release-tag: ${{ steps.release-info.outputs.NEXT_TAG }}
+
+  create-new-release:
+      uses: ./.github/workflows/publish-to-pypi.yml
+      needs:
+        - version-check
+      if: ${{ steps.release-info.outputs.RELEASE_VERSION != steps.release-info.outputs.PYTHON_VERSION }}
+      with:
+        new-release-tag: ${{ steps.release-info.outputs.NEXT_TAG }}
+      secrets: inherit
 
