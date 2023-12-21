@@ -1,4 +1,4 @@
-Changes in this version of diplomat:
+Changes for this version of diplomat:
  - The `SegmentedSupervisedFramePassEngine` and `SegmentedFramePassEngine` support saving state to disk using
    `--storage_mode=disk`, and is now the default. This does negatively affect performance on some platforms,
    so a full in memory run can be done by setting the `storage_mode` setting to `"memory"`.
