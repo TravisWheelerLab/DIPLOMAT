@@ -43,9 +43,9 @@ bgr_color = type_casters.Tuple(
 
 class FastPlotterArgMax(Predictor):
     """
-    Identical to :py:plugin:`~diplomat.predictors.PlotterArgMax`, but avoids using matplotlib to generate probability maps, and instead
-    directly uses cv2 to generate the plots. This means it runs much faster, but doesn't offer as much
-    customization nor a 3D mode...
+    Identical to :py:plugin:`~diplomat.predictors.PlotterArgMax`, but avoids using matplotlib to generate probability
+    maps, and instead directly uses cv2 to generate the plots. This means it runs much faster,
+    but doesn't offer as much customization nor a 3D mode...
     """
 
     TEST_TEXT = "".join(chr(i) for i in range(32, 127))

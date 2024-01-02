@@ -90,3 +90,14 @@ off of model results produced by a specific tracking software package and projec
     :widths: auto
 
 {diplomat.frontends}
+
+
+WX GUI Components
+-----------------
+
+.. autosummary::
+    :toctree: _autosummary
+    :template: custom-module-template.rst
+    :recursive:
+
+    diplomat.wx_gui

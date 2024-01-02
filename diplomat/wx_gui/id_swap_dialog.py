@@ -1,10 +1,18 @@
+"""
+Contains the identity swap dialog. Displayed in the stripped down version of DIPLOMAT's UI (shown when running
+:cli:`diplomat tweak`).
+"""
+
 import wx
 from typing import List, Iterable, Tuple
 from dataclasses import dataclass
-from diplomat.predictors.supervised_fpe.guilib.point_edit import WxDotShapeDrawer
+from diplomat.wx_gui.point_edit import WxDotShapeDrawer
 
 
 class IdSwapDialog(wx.Dialog):
+    """
+    Identity swap dialog. Provides a dialog which can get reordered parts and individuals.
+    """
     def __init__(
         self,
         *args,

@@ -1,3 +1,8 @@
+"""
+Includes DIPLOMAT's main GUI editor window. Displayed when a supervised run is performed or restored.
+The GUI allows for editing and rerunning tracking on the fly by the user.
+"""
+
 from pathlib import Path
 import wx
 import cv2
@@ -6,18 +11,18 @@ from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable
 
 from diplomat.utils.colormaps import iter_colormap
 from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table
-from .id_swap_dialog import IdSwapDialog
-from .point_edit import PointEditor, PointViewNEdit, PoseLabeler
-from .progress_dialog import FBProgressDialog
-from .score_lib import ScoreEngine, ScoreEngineDisplayer
-from .scroll_image_list import ScrollImageList
+from diplomat.wx_gui.id_swap_dialog import IdSwapDialog
+from diplomat.wx_gui.point_edit import PointEditor, PointViewNEdit, PoseLabeler
+from diplomat.wx_gui.progress_dialog import FBProgressDialog
+from diplomat.wx_gui.score_lib import ScoreEngine, ScoreEngineDisplayer
+from diplomat.wx_gui.scroll_image_list import ScrollImageList
 from diplomat.processing import Pose, ProgressBar
-from .helpdialog import HelpDialog
-from .video_player import VideoController
+from diplomat.wx_gui.helpdialog import HelpDialog
+from diplomat.wx_gui.video_player import VideoController
 from wx.lib.scrolledpanel import ScrolledPanel
 from collections import deque
-from . import icons
-from .identity_swapper import IdentitySwapper
+from diplomat.wx_gui import icons
+from diplomat.wx_gui.identity_swapper import IdentitySwapper
 
 
 class History:
@@ -167,7 +172,7 @@ Box = Optional[Tuple[int, int, int, int]]
 
 class FPEEditor(wx.Frame):
     """
-    Main Forward-Backward Editor Frame.
+    Main Forward Backward Editor Frame.
     """
 
     TOOLBAR_ICON_SIZE = (32, 32)
@@ -781,7 +786,7 @@ class FPEEditor(wx.Frame):
 
 class MultiScoreDisplay(wx.Panel):
     """
-    Internal-ish Class:
+    Internal-ish Class.
 
     A MultiScoreDisplay. Is simply a scrollable list of ScoreEngineDisplayer.
     Convenience class used by the FBEditor class.

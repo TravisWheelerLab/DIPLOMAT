@@ -1,8 +1,8 @@
 import traceback
 
 from typing import Union, List, Tuple, Dict, Optional
-from .guilib.fpe_editor import FPEEditor
-from .guilib.progress_dialog import FBProgressDialog
+from diplomat.wx_gui.fpe_editor import FPEEditor
+from diplomat.wx_gui.progress_dialog import FBProgressDialog
 from ..fpe.frame_pass_engine import FramePassEngine, SparseTrackingData
 from ..fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData
 from .labelers import Approximate, Point, NearestInSource

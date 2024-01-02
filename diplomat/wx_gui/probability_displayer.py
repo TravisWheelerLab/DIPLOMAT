@@ -1,3 +1,7 @@
+"""
+Provides a plotting widget, which displays a filled line graph. Used for displaying metrics at the bottom of the UI.
+"""
+
 from enum import IntEnum
 from typing import Iterable, NamedTuple, Optional
 import wx
@@ -10,11 +14,13 @@ class DrawMode(IntEnum):
     USER_MODIFIED = 2
     USER_MODIFIED_AND_POORLY_LABELED = 3
 
+
 class DrawCommand(NamedTuple):
     draw_mode: DrawMode
     points: np.ndarray
     point_before: np.ndarray
     point_after: np.ndarray
+
 
 class DrawingInfo(NamedTuple):
     x_center: float

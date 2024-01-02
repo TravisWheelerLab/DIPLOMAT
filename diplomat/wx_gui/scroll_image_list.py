@@ -1,3 +1,7 @@
+"""
+Provides a scrollable image list in wx widgets. Supports displaying multiple images in a row...
+"""
+
 from typing import List, Optional
 import wx
 from diplomat.utils._bit_or import _bit_or

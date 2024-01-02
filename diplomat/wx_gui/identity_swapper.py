@@ -1,7 +1,9 @@
-from typing import List, Tuple, Any, Callable, Optional, Iterable
+"""
+Includes history-based event for swapping part tracks. Used in stripped down (aka. cli:`diplomat tweak`) UI.
+"""
 
+from typing import List, Tuple, Any, Callable, Iterable
 from diplomat.predictors.supervised_fpe.labelers import EditableFramePassEngine
-from diplomat.processing import ProgressBar
 
 
 def _invert(order: List[int]) -> List[int]:
@@ -14,6 +16,9 @@ def _invert(order: List[int]) -> List[int]:
 
 
 class IdentitySwapper:
+    """
+    Swaps tracks to match a new ordering. Can be added to UI history and undone/redone.
+    """
     def __init__(self, frame_engine: EditableFramePassEngine):
         self._frame_engine = frame_engine
         self._extra_hook = None

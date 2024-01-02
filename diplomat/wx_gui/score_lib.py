@@ -1,7 +1,12 @@
+"""
+Provides an abstract class for implementing scores, or metrics that can be displayed/monitored in DIPLOMAT's UI.
+These are the scores displayed at the bottom of the UI..
+"""
+
 from abc import ABC, abstractmethod
 from typing import Any, Optional, Iterable
-from .labeler_lib import SettingCollection
-from .probability_displayer import ProbabilityDisplayer
+from diplomat.wx_gui.labeler_lib import SettingCollection
+from diplomat.wx_gui.probability_displayer import ProbabilityDisplayer
 import wx
 from diplomat.processing import *
 import numpy as np
@@ -31,7 +36,8 @@ class ScoreEngine(ABC):
     @abstractmethod
     def compute_bad_indexes(self, scores: np.ndarray) -> np.ndarray:
         """
-        TODO: DOCS!
+        Given all the scores, return a numpy array of integers specifying the indexes of frames which score "bad" or
+        poorly for this metric. Typically done via a configurable threshold.
         """
         pass
 
@@ -110,7 +116,6 @@ class ScoreEngineDisplayer(wx.Control):
         bad_labels = self._score_engine.compute_bad_indexes(data)
         self._prob_displayer.set_data(data)
         self._prob_displayer.set_bad_locations(bad_labels)
-
 
     def update_at(self, frame: int, value: float):
         self._prob_displayer.set_data_at(frame, value)

@@ -3,7 +3,7 @@ from typing_extensions import Protocol
 
 from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
-from diplomat.predictors.supervised_fpe.guilib import labeler_lib
+from diplomat.wx_gui import labeler_lib
 
 import numpy as np
 

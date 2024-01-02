@@ -1,3 +1,6 @@
+"""
+Provides a point editing widget. This is a video player with a body part and labeler selections available on the side.
+"""
 from typing import Tuple, List, Optional, Union, Any, Iterable
 
 import numpy as np

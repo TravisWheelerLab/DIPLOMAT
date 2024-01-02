@@ -6,8 +6,8 @@ from diplomat.processing import *
 
 class ArgMax(Predictor):
     """
-    Default processor for DeepLabCut, and the code originally used by DeepLabCut for prediction of points. Predicts
-    the point from the probability frames simply by selecting the max probability in each frame.
+    Dummy predictor for DIPLOMAT. Predicts the point from the probability frames simply by selecting the
+    max probability in each frame.
     """
     def _on_frames(self, scmap: TrackingData) -> Optional[Pose]:
         # Using new object library to get the max... Drastically simplified logic...

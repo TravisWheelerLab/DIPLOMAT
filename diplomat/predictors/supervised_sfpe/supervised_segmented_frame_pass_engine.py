@@ -1,15 +1,14 @@
 import traceback
 
-# We first check if this is a headless environment, and if so don't even allow this module to be imported...
 from collections import UserList
 from pathlib import Path
 
-from diplomat.predictors.supervised_fpe.guilib.progress_dialog import FBProgressDialog
+from diplomat.wx_gui.progress_dialog import FBProgressDialog
 from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, NearestInSource
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
-from diplomat.predictors.supervised_fpe.guilib.fpe_editor import FPEEditor
+from diplomat.wx_gui.fpe_editor import FPEEditor
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData
 from diplomat.processing import *
 

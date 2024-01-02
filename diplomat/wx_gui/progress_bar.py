@@ -1,3 +1,8 @@
+"""
+An implementation of DIPLOMAT's progress bar API using wx widgets. Allows for displaying the progress of diplomat
+processes.
+"""
+
 from typing import Iterable
 import wx
 import time

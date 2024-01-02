@@ -30,6 +30,7 @@ with mock(MOCK_PACKAGES):
     from diplomat.frontends import DIPLOMATCommands
 
     import diplomat.utils.graph_ops
+    import diplomat.wx_gui
 
 
 def load_plugins_with_mocks(module, clazz):
@@ -158,6 +159,7 @@ def load_templates(src: Path):
 def clean_doc_str(doc: str) -> str:
     return " ".join(doc.strip().split())
 
+
 def format_settings(settings: Optional[ConfigSpec]) -> str:
     if(settings is None):
         return "    This plugin can't be passed any settings."
@@ -284,8 +286,10 @@ EXTRA = {
 
 FIX_ALL = {
     diplomat.utils,
-    diplomat.processing
+    diplomat.processing,
+    diplomat.wx_gui
 }
+
 
 def fix_all_on_module(module):
     from types import ModuleType, FunctionType
@@ -301,7 +305,10 @@ def fix_all_on_module(module):
                 continue
 
             try:
-                setattr(module, attr_name, importer.find_module(name).load_module(name))
+                with mock(MOCK_PACKAGES):
+                    import wx.lib.newevent
+                    wx.lib.newevent.NewCommandEvent = lambda: (None, None)
+                    setattr(module, attr_name, importer.find_module(name).load_module(name))
                 val = getattr(module, attr_name)
                 fix_all_on_module(val)
             except:
@@ -328,6 +335,7 @@ def fix_all_on_module(module):
                 module.__all__.append(attr_name)
         except:
             pass
+
 
 def write_api_rst(api_dir: Path, document_lists: AttributeDict) -> None:
     with (api_dir / "api.rst").open("w") as f:
@@ -389,6 +397,7 @@ def _cli_rst_helper(cli_dir: Path, func_tree: dict, entries: AttributeDict, pref
             # Function, let's document it...
             entries[full_namespace].append(write_cli_entry(cli_dir, prefix + " " + name, func_or_dict))
 
+
 def write_cli_rst(cli_dir: Path) -> None:
     from diplomat._cli_runner import get_dynamic_cli_tree
 
@@ -438,7 +447,6 @@ def on_config_init(app: Sphinx, config: Config) -> None:
 
         document_lists.files[name] = "\n".join(f"    {final_folder_name}/{file}" for file, doc in file_list)
 
-
     for name, module in EXTRA.items():
         listing = getattr(module, "__all__", dir(module))
         document_lists[name] = "\n".join(
@@ -448,6 +456,7 @@ def on_config_init(app: Sphinx, config: Config) -> None:
 
     write_api_rst(build_dir.parent, document_lists)
     write_cli_rst(cli_dir)
+
 
 def setup(app: Sphinx) -> dict:
     app.setup_extension("sphinx.ext.autodoc")

@@ -6,14 +6,14 @@ feedback on a laptop or somewhere else.
 """
 import shutil
 from pathlib import Path
-from typing import List, BinaryIO, Optional
+from typing import List, Optional
 from diplomat.processing import *
 from diplomat.utils.frame_store_fmt import DLFSWriter, DLFSHeader
 
 
 class FrameExporter(Predictor):
     """
-    Exports DeepLabCut probability maps to a binary format that can be passed back into DeepLabCut again to perform
+    Exports probability maps to a binary format that can be passed back into DeepLabCut again to perform
     frame predictions later. This allows for a video to be run through the neural network (expensive) on a headless
     server or supercomputer, and then run through a predictor with gui feedback on a laptop or somewhere else.
     """

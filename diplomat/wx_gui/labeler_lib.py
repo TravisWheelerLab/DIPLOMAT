@@ -1,3 +1,8 @@
+"""
+Provides abstract and utility classes for creating GUI labelers. These allow the user to edit the source confidence
+maps by clicking and dragging over the video.
+"""
+
 from abc import ABC, abstractmethod
 from typing import Any, Optional, Tuple, Callable, Dict
 import wx
@@ -14,7 +19,7 @@ class SettingWidget(ABC):
     def set_hook(self, hook: Callable[[], None]):
         """
         Set the hook function for this setting, this is called whenever the
-        setting is changed...
+        setting is changed.
         """
         pass
 
@@ -36,7 +41,7 @@ class SettingWidget(ABC):
         Get the current value of this setting.
 
         :returns: Any, the current set value of this setting as based on the
-                  wx control...
+                  wx control.
         """
         pass
 
@@ -219,15 +224,16 @@ class PoseLabeler(ABC):
                             selected a location in the video frame, None
                             otherwise.
 
-        :returns: A tuples containing the following information:
-                    - Any data, representing the new state this pose labeler
-                      would set if this prediction is eventually finalized,
-                      is passed to the pose_change method on finalization.
-                    - A tuple of 3 floats, being the location (x, y) of the
-                      prediction in the video, and the probability.
-                      This is where the point is displayed in the UI. Must be
-                      floats, set the probability to 0 to avoid plotting a
-                      point.
+        :returns: A tuple containing the following information:
+
+                   - Any data, representing the new state this pose labeler
+                     would set if this prediction is eventually finalized,
+                     is passed to the pose_change method on finalization.
+                   - A tuple of 3 floats, being the location (x, y) of the
+                     prediction in the video, and the probability.
+                     This is where the point is displayed in the UI. Must be
+                     floats, set the probability to 0 to avoid plotting a
+                     point.
         """
         pass
 
@@ -414,7 +420,7 @@ class SettingCollectionWidget(wx.Control):
         self._force_layout_fix(None)
 
 
-def test_setting_viewer():
+def _test_setting_viewer():
     app = wx.App()
 
     setting_collection = SettingCollection(
@@ -437,5 +443,6 @@ def test_setting_viewer():
     window.Show()
     app.MainLoop()
 
+
 if(__name__ == "__main__"):
-    test_setting_viewer()
+    _test_setting_viewer()

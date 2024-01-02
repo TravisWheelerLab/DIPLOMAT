@@ -1,5 +1,11 @@
+"""
+Provides a dialog wrapping :class:`~diplomat.wx_gui.progress_bar.TqdmWxPanel`. Allows for displaying progress in
+a standalone manner (no additional GUI elements are needed).
+"""
+
 import wx
-from .progress_bar import TqdmWxPanel
+from diplomat.wx_gui.progress_bar import TqdmWxPanel
+
 
 class FBProgressDialog(wx.Dialog):
     """

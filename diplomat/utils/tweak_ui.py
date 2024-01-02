@@ -223,14 +223,14 @@ class TweakUI:
         try:
             import wx
             self._wx = wx
-            from diplomat.predictors.supervised_fpe.guilib.fpe_editor import FPEEditor
-            from diplomat.predictors.supervised_fpe.guilib.progress_dialog import FBProgressDialog
+            from diplomat.wx_gui.fpe_editor import FPEEditor
+            from diplomat.wx_gui.progress_dialog import FBProgressDialog
             self._editor_class = _simplify_editor_class(wx, FPEEditor)
             self._progress_dialog_cls = FBProgressDialog
 
             from diplomat.predictors.supervised_fpe.labelers import Point
             from diplomat.predictors.supervised_fpe.scorers import MaximumJumpInStandardDeviations, EntropyOfTransitions
-            from diplomat.predictors.supervised_fpe.guilib.identity_swapper import IdentitySwapper
+            from diplomat.wx_gui.identity_swapper import IdentitySwapper
             self._labeler_class = Point
             self._scorer_classes = [MaximumJumpInStandardDeviations, EntropyOfTransitions]
             self._id_class = IdentitySwapper

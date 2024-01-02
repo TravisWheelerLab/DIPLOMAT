@@ -223,7 +223,7 @@ def to_wx_bitmap(icon_bytes: bytes, icon_size: Tuple[int, int], fg_color: wx.Col
     return wx.Bitmap(img)
 
 
-if(__name__ == "__main__"):
+def _main():
     # Tests icon loading code above by displaying the help icon in a wx Frame...,
     app = wx.App()
     frame = wx.Frame(None, title="Image Test!")
@@ -231,3 +231,7 @@ if(__name__ == "__main__"):
     icon = wx.StaticBitmap(frame, wx.ID_ANY, bitmap)
     frame.Show(1)
     app.MainLoop()
+
+
+if(__name__ == "__main__"):
+    _main()

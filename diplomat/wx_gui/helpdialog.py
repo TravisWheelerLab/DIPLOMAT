@@ -1,3 +1,7 @@
+"""
+Includes the help dialog for DIPLOMAT's main gui editor. Displays toolbar actions and keyboard shortcuts.
+"""
+
 from typing import Tuple, Optional, List
 from diplomat.utils._bit_or import _bit_or
 import wx
