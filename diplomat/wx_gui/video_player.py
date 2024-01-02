@@ -2,7 +2,7 @@
 Module contains a wx video player widget and a wx video controller widget. Uses multi-threading to load frames to a
 deque while playing them, allowing for smoother playback...
 """
-from typing import Callable, Any, Optional, Tuple
+from typing import Callable, Any, Optional, Tuple, NamedTuple
 import wx
 from wx.lib.newevent import NewCommandEvent
 import cv2
@@ -11,12 +11,6 @@ from multiprocessing import Pipe
 from multiprocessing.connection import Connection
 from collections import deque
 import numpy as np
-
-try:
-    from .probability_displayer import ProbabilityDisplayer
-except ImportError:
-    __package__ = "diplomat.predictors.supervised_fpe.guilib"
-    from .probability_displayer import ProbabilityDisplayer
 
 
 class ControlDeque:
@@ -195,7 +189,24 @@ class ControlDeque:
             return result
 
 
-def time_check(time_controller: Connection) -> Optional[int]:
+class VideoControlMessage(NamedTuple):
+    frame: Optional[int] = -1
+    direction: int = 0
+
+    @classmethod
+    def stop(cls):
+        return cls()
+
+    @classmethod
+    def jump(cls, pos: int, run_forward: bool = True):
+        return cls(pos, 1 if(run_forward) else -1)
+
+    @classmethod
+    def destroy(cls):
+        return cls(None)
+
+
+def time_check(time_controller: Connection) -> VideoControlMessage:
     """
     Waits for a new time from the connection.
 
@@ -203,19 +214,26 @@ def time_check(time_controller: Connection) -> Optional[int]:
     :return: An integer being a new time to move to, or None otherwise.
     """
     value = -1
+    direction = True
 
     while((value is not None) and (value < 0)):
-        value = time_controller.recv()
+        value, direction = time_controller.recv()
 
-    return value
+    return VideoControlMessage(value, direction)
 
 
-def video_loader(video_hdl: cv2.VideoCapture, frame_queue: ControlDeque, time_loc: Connection):
+def video_loader(
+    video_hdl: cv2.VideoCapture,
+    future_frame_queue: ControlDeque,
+    past_frame_queue: ControlDeque,
+    time_loc: Connection
+):
     """
     The core video loading function. Loads the video on a separate thread in the background for smooth performance.
 
     :param video_hdl: The cv2 VideoCapture object to read frames from.
-    :param frame_queue: The ControlDeque to append frames to.
+    :param future_frame_queue: The ControlDeque to append frames to for the future.
+    :param past_frame_queue: The ControlDeque to append frames to for the past.
     :param time_loc: A multiprocessing Connection object, used to control this video loader. Sending a -1 through the
                     pipe pauses the loader, sending a positive integer sets the offset of this video loader to the
                     passed integer in milliseconds, and sending None closes this video loader and its associated thread.
@@ -226,6 +244,7 @@ def video_loader(video_hdl: cv2.VideoCapture, frame_queue: ControlDeque, time_lo
         return
 
     valid_frame, frame = None, None
+    forward = True
 
     # In the code below, order of poll() check is CRITICAL!
     while(video_hdl.isOpened()):
@@ -245,14 +264,20 @@ def video_loader(video_hdl: cv2.VideoCapture, frame_queue: ControlDeque, time_lo
         # If the video player has sent a command, stop and get
         # the command, and jump to the spot. Otherwise, immediately push another frame onto the queue.
         if(time_loc.poll()):
-            new_loc = time_check(time_loc)
+            new_loc, direction = time_check(time_loc)
             if(new_loc is None):
                 video_hdl.release()
                 return
-            video_hdl.set(cv2.CAP_PROP_POS_MSEC, new_loc)
+            if(direction != 0):
+                forward = direction > 0
+            video_hdl.set(cv2.CAP_PROP_POS_FRAMES, new_loc)
             frame = None
         else:
-            frame_queue.push_right_relaxed(frame)
+            if(forward):
+                future_frame_queue.push_right_relaxed(frame)
+            else:
+                past_frame_queue.push_left_relaxed(frame)
+                video_hdl.set(cv2.CAP_PROP_POS_FRAMES, max(0, int(video_hdl.get(cv2.CAP_PROP_POS_FRAMES)) - 2))
             frame = None
 
 
@@ -267,7 +292,7 @@ class VideoPlayer(wx.Control):
 
     # The number of frames to store in the forward and backward buffer.
     BUFFER_SIZE = 50
-    BACK_LOAD_AMT = 30
+    BACK_LOAD_AMT = 20
 
     # Events for the VideoPlayer class, one triggered for every frame change, and one triggered for every change in
     # play state (starting, stopping, pausing, etc....)
@@ -298,10 +323,10 @@ class VideoPlayer(wx.Control):
         self._height = video_hdl.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self._fps = video_hdl.get(cv2.CAP_PROP_FPS)
         self._crop_box = self._check_crop_box(crop_box, self._width, self._height)
+
         try:
             self._num_frames = int(video_hdl.get(cv2.CAP_PROP_FRAME_COUNT))
-
-            if (self._num_frames == 0):
+            if(self._num_frames == 0):
                 self._num_frames = get_frame_count(video_hdl)
         except:
             self._num_frames = get_frame_count(video_hdl)
@@ -312,7 +337,7 @@ class VideoPlayer(wx.Control):
         self._frozen = False
 
         self._front_queue = ControlDeque(self.BUFFER_SIZE)
-        self._back_queue = deque(maxlen=self.BACK_LOAD_AMT)
+        self._back_queue = ControlDeque(self.BACK_LOAD_AMT)
         self._current_loc = 0
 
         size = self._compute_min_size()
@@ -323,12 +348,15 @@ class VideoPlayer(wx.Control):
 
         # Create the video loader to start loading frames:
         receiver, self._sender = Pipe(False)
-        self._video_loader = threading.Thread(target=video_loader, args=(video_hdl, self._front_queue, receiver))
+        self._video_loader = threading.Thread(
+            target=video_loader, args=(video_hdl, self._front_queue, self._back_queue, receiver)
+        )
         self._video_loader.daemon = True
         self._video_loader.start()
         self._sender.send(0)
 
         self._current_frame = self._front_queue.pop_left_relaxed()
+        self._running_forward = True
 
         self.Bind(wx.EVT_TIMER, self._on_timer)
         self.Bind(wx.EVT_PAINT, self.on_paint)
@@ -437,7 +465,7 @@ class VideoPlayer(wx.Control):
 
     def _push_time_change_event(self):
         """ PRIVATE: Used to specify how long the event should """
-        new_event = self.FrameChangeEvent(id=self.Id, frame=self.get_offset_count(), time=self.get_offset_millis())
+        new_event = self.FrameChangeEvent(id=self.Id, frame=self.get_offset_count())
         wx.PostEvent(self, new_event)
 
     def _on_timer(self, event, trigger_run = True):
@@ -453,8 +481,17 @@ class VideoPlayer(wx.Control):
             if(self._current_loc >= (self._num_frames - 1)):
                 self.pause()
                 return
+            if(not self._running_forward):
+                self._sender.send(VideoControlMessage.stop())
+                self._front_queue.flush()
+                self._back_queue.flush()
+                self._sender.send(VideoControlMessage.jump(
+                    self._current_loc + len(self._front_queue) + 1, True)
+                )
+                self._running_forward = True
+
             # Get the next frame and set it as the current frame
-            self._back_queue.append(self._current_frame)
+            self._back_queue.push_right_force(self._current_frame)
             self._current_frame = self._front_queue.pop_left_relaxed()
             self._current_loc += 1
             # Post a frame change event.
@@ -518,14 +555,6 @@ class VideoPlayer(wx.Control):
         """
         return self._frozen
 
-    def get_offset_millis(self):
-        """
-        Get the offset we are into the video in milliseconds.
-
-        :returns: An float, being the total milliseconds we are into the video.
-        """
-        return self._frame_index_to_millis(self._current_loc)
-
     def get_offset_count(self):
         """
         Get the current frame index we are at in the video.
@@ -542,14 +571,6 @@ class VideoPlayer(wx.Control):
         """
         return int(self._num_frames)
 
-    def set_offset_millis(self, value: int):
-        """
-        Set the offset into the video in milliseconds.
-
-        :param value: An integer, being the milliseconds since the beginning of the video.
-        """
-        self.set_offset_frames(int(value / (1000 / self._fps)))
-
     def _full_jump(self, value: int):
         """
         PRIVATE: Executes a full jump, clearing both internal deques and refilling them with frames. This is done
@@ -565,14 +586,16 @@ class VideoPlayer(wx.Control):
         go_back_frames = min(value, self.BACK_LOAD_AMT)
         self._current_loc = value
 
-        self._sender.send(-1) # Tell the video loader to stop.
+        self._sender.send(VideoControlMessage.stop())  # Tell the video loader to stop.
 
-        self._front_queue.clear() # Completely wipe the queue
+        self._front_queue.clear()  # Completely wipe the queue
         self._back_queue.clear()
         # Tell the video loader to go to the new track location, and pop the extra frames we load on the back...
-        self._sender.send(self._frame_index_to_millis(value - go_back_frames))
+        self._sender.send(VideoControlMessage.jump(int(value - go_back_frames), True))
+        self._running_forward = True
+
         for i in range(go_back_frames):
-            self._back_queue.append(self._front_queue.pop_left_relaxed())
+            self._back_queue.push_right_force(self._front_queue.pop_left_relaxed())
 
         self._current_frame = self._front_queue.pop_left_relaxed()
 
@@ -581,7 +604,6 @@ class VideoPlayer(wx.Control):
         self._playing = current_state
         self.Refresh()
         self._core_timer.StartOnce(int(1000 / self._fps))
-
 
     def _fast_back(self, amount: int):
         """
@@ -595,26 +617,29 @@ class VideoPlayer(wx.Control):
         current_state = self.is_playing()
         self._playing = False
 
-        # Pause the video player, flush any push events it is trying to do.
-        self._sender.send(-1)
-
-        self._front_queue.flush()
+        # If loading thread not moving backward, configure it to do so...
+        if(self._running_forward):
+            # Pause the video player, flush any push events it is trying to do.
+            self._sender.send(VideoControlMessage.stop())
+            self._front_queue.flush()
+            self._back_queue.flush()
+            self._sender.send(VideoControlMessage.jump(
+                max(0, self._current_loc - len(self._back_queue) - 1),
+                False
+            ))
+            self._running_forward = False
 
         # Move back the passed amount of frames.
         for i in range(amount):
             self._front_queue.push_left_force(self._current_frame)
-            self._current_frame = self._back_queue.pop()
+            self._current_frame = self._back_queue.pop_right_relaxed()
         self._current_loc = self._current_loc - amount
-
-        # Move the video play to how far ahead it would be after moving back this many frames...
-        self._sender.send(self._frame_index_to_millis(min(self._num_frames, self._current_loc + len(self._front_queue) + 1)))
 
         self._push_time_change_event()
 
         self._playing = current_state
         self.Refresh()
         self._core_timer.StartOnce(int(1000 / self._fps))
-
 
     def _fast_forward(self, amount: int):
         """
@@ -628,9 +653,18 @@ class VideoPlayer(wx.Control):
         current_state = self.is_playing()
         self._playing = False
 
+        if (not self._running_forward):
+            self._sender.send(VideoControlMessage.stop())
+            self._front_queue.flush()
+            self._back_queue.flush()
+            self._sender.send(VideoControlMessage.jump(
+                self._current_loc + len(self._front_queue) + 1, True)
+            )
+            self._running_forward = True
+
         # Move the passed amount of frames forward. Video reader will automatically move forward with us...
         for i in range(amount):
-            self._back_queue.append(self._current_frame)
+            self._back_queue.push_right_force(self._current_frame)
             self._current_frame = self._front_queue.pop_left_relaxed()
         self._current_loc = self._current_loc + amount
 
@@ -656,7 +690,7 @@ class VideoPlayer(wx.Control):
             raise ValueError(f"Can't go back {amount} frames when at frame {self._current_loc}.")
         # Check if we can perform a 'fast' backtrack, where we have all of the frames in the queue. If not perform
         # a more computationally expensive full jump.
-        if(amount > len(self._back_queue)):
+        if(amount > self._back_queue.maxsize):
             self._full_jump(self._current_loc - amount)
         else:
             self._fast_back(amount)
@@ -698,18 +732,13 @@ class VideoPlayer(wx.Control):
         elif(value > self._current_loc):
             self.move_forward(value - self._current_loc)
 
-    def _frame_index_to_millis(self, frame_idx):
-        """
-        PRIVATE: Converts a frame index into milliseconds and returns the value.
-        """
-        return (1000 / self._fps) * frame_idx
-
     def __del__(self):
         """
         Delete this video player, deleting its video reading thread.
         """
         self._sender.send(None)
         self._front_queue.clear()
+        self._back_queue.clear()
         self._sender.close()
 
 
@@ -817,7 +846,7 @@ class VideoController(wx.Panel):
         """
         PRIVATE: Triggered when video player frame changes.
         """
-        frame, time = event.frame, event.time
+        frame = event.frame
         self._slider_control.SetValue(frame)
         self._back_btn.Enable(frame > 0)
         self._forward_btn.Enable(frame < (self._video_player.get_total_frames() - 1))
@@ -868,9 +897,9 @@ def get_frame_count(video_hdl):
     return i
 
 
-if(__name__ == "__main__"):
+def _main_test():
+    from diplomat.wx_gui.probability_displayer import ProbabilityDisplayer
     # We test the video player by playing a video with it.
-    # You will need to change the path below depending on what video you want it to play:
     vid_path = input("Enter a video path: ")
 
     print(get_frame_count(cv2.VideoCapture(vid_path)))
@@ -899,9 +928,11 @@ if(__name__ == "__main__"):
     wid_frame.Show(True)
 
     def destroy(evt):
-        global wid
-        del wid
         wid_frame.Destroy()
 
     wid_frame.Bind(wx.EVT_CLOSE, destroy)
     app.MainLoop()
+
+
+if(__name__ == "__main__"):
+    _main_test()

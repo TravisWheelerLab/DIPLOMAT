@@ -90,7 +90,7 @@ class ScrollImageList(wx.ScrolledCanvas):
         cw, ch = self.GetClientSize()
 
         if(len(self._bitmaps) == 0):
-            width, height =  100, 100
+            width, height = 100, 100
         elif(self._mode == wx.VERTICAL):
             width = cw
             height = (
@@ -134,7 +134,6 @@ class ScrollImageList(wx.ScrolledCanvas):
                     modified_height = int(bitmap.GetHeight() * (width / bitmap.GetWidth()))
 
                 pos_x, pos_y = self.CalcScrolledPosition(0, offset)
-                print(pos_x, pos_y)
                 if(pos_y + modified_height < 0):
                     pass
                 elif(pos_y > height):
