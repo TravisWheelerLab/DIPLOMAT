@@ -93,10 +93,16 @@ class ScrollImageList(wx.ScrolledCanvas):
             width, height =  100, 100
         elif(self._mode == wx.VERTICAL):
             width = cw
-            height = sum(int(bitmap.GetHeight() * (cw / bitmap.GetWidth())) for bitmap in self._bitmaps) + self._padding * len(self._bitmaps)
+            height = (
+                sum(int(bitmap.GetHeight() * (cw / bitmap.GetWidth())) for bitmap in self._bitmaps)
+                + self._padding * len(self._bitmaps)
+            )
         else:
             height = ch
-            width = sum(int(bitmap.GetWidth() * (ch / bitmap.GetHeight())) for bitmap in self._bitmaps) + self._padding * len(self._bitmaps)
+            width = (
+                sum(int(bitmap.GetWidth() * (ch / bitmap.GetHeight())) for bitmap in self._bitmaps)
+                + self._padding * len(self._bitmaps)
+            )
 
         self._dims = width, height
         self.SetVirtualSize(width, height)
@@ -123,20 +129,40 @@ class ScrollImageList(wx.ScrolledCanvas):
 
         if(self._mode == wx.VERTICAL):
             for bitmap in self._bitmaps:
+                modified_height = bitmap.GetHeight()
                 if(bitmap.GetWidth() != width):
                     modified_height = int(bitmap.GetHeight() * (width / bitmap.GetWidth()))
-                    bitmap = wx.Bitmap(bitmap.ConvertToImage().Scale(width, modified_height, self.image_quality))
 
-                dc.DrawBitmap(bitmap, 0, offset)
-                offset += bitmap.GetHeight() + self._padding
+                pos_x, pos_y = self.CalcScrolledPosition(0, offset)
+                print(pos_x, pos_y)
+                if(pos_y + modified_height < 0):
+                    pass
+                elif(pos_y > height):
+                    break
+                else:
+                    self._draw_bitmap(dc, bitmap, 0, offset, width, modified_height)
+
+                offset += modified_height + self._padding
         else:
             for bitmap in self._bitmaps:
+                modified_width = bitmap.GetWidth()
                 if(bitmap.GetHeight() != height):
                     modified_width = int(bitmap.GetWidth() * (height / bitmap.GetHeight()))
-                    bitmap = wx.Bitmap(bitmap.ConvertToImage().Scale(width, modified_width, self.image_quality))
 
-                dc.DrawBitmap(bitmap, offset, 0)
-                offset += bitmap.GetWidth() + self._padding
+                pos_x, pos_y = self.CalcScrolledPosition(offset, 0)
+                if(pos_x + modified_width < 0):
+                    pass
+                elif(pos_x > width):
+                    break
+                else:
+                    self._draw_bitmap(dc, bitmap, offset, 0, modified_width, height)
+
+                offset += modified_width + self._padding
+
+    def _draw_bitmap(self, dc: wx.DC, bitmap: wx.Bitmap, x: int, y: int, width: int, height: int):
+        if(bitmap.GetWidth() != width or bitmap.GetHeight() != height):
+            bitmap = wx.Bitmap(bitmap.ConvertToImage().Scale(width, height, self.image_quality))
+        dc.DrawBitmap(bitmap, x, y)
 
     def get_padding(self) -> int:
         """
@@ -211,6 +237,7 @@ def scroll_image_demo():
     frame.Show()
 
     app.MainLoop()
+
 
 if(__name__ == "__main__"):
     scroll_image_demo()
