@@ -174,14 +174,18 @@ def _simplify_editor_class(wx, editor_class):
             del self._bitmaps[idx2]
 
             self._video_splitter.Unsplit(self._plot_panel)
-            self.Bind(wx.EVT_CLOSE, self.on_close)
-            self._was_save = False
             self._do_save = do_save
 
-        def on_close(self, evt):
-            if (not self._was_save and evt.CanVeto()):
+        def _on_close(self, evt, was_save):
+            if(evt.CanVeto()):
+                msg = (
+                    "Are you sure you want to close and save your results?"
+                    if(was_save) else
+                    "Are you sure you want to close without saving your results?"
+                )
+
                 res = wx.MessageBox(
-                    "Are you sure you want to close without saving your results?",
+                    msg,
                     "Confirmation",
                     wx.ICON_QUESTION | wx.YES_NO,
                     self
@@ -189,22 +193,11 @@ def _simplify_editor_class(wx, editor_class):
 
                 if(res != wx.YES):
                     evt.Veto()
+                    return
                 else:
-                    evt.Skip(True)
-                return
+                    self._do_save(was_save, self.video_player.video_viewer.get_all_poses())
 
-            try:
-                self._do_save(self._was_save, self.video_player.video_viewer.get_all_poses())
-            finally:
-                evt.Skip(True)
-
-        def on_tool(self, evt):
-            if (evt.GetId() == self._save.GetId()):
-                self._was_save = True
-                self.Close()
-                return
-
-            super().on_tool(evt)
+            evt.Skip(True)
 
     return SimplifiedEditor
 

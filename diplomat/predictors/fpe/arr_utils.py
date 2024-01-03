@@ -108,3 +108,35 @@ class _NumpyDict:
         vals = self._values[indexes]
         vals[(self._keys[indexes] != query) | out_of_bounds] = self._default_value
         return vals
+
+
+def find_peaks(x: np.ndarray, y: np.ndarray, prob: np.ndarray, width: int, fill_value: float = 0):
+    """
+    Finds the peaks of a sparse frame, or locations where all neighboring values are less than the value at this
+    location (including diagonals).
+
+    :param x: The x indexes of each cell.
+    :param y: The y indexes of each cell.
+    :param prob: The probability, or score of each cell.
+    :param width: The width of the original frame, before it was made sparse.
+    :param fill_value: The fill value to fill non-existent cells with. Defaults to 0.
+
+    :returns: An array of indexes, being the locations of peaks.
+    """
+    keep_arr = np.ones(prob.shape, dtype=np.uint8)
+
+    def to_keys(_x, _y):
+        return _y * width + _x
+
+    lookup_table = _NumpyDict(to_keys(x, y), prob, fill_value)
+
+    # We perform a 3x3 max-convolution to find peaks.
+    for i in range(-1, 2):
+        for j in range(-1, 2):
+            if (i == 0 and j == 0):
+                continue
+            neighbor = lookup_table[to_keys(x + j, y + i)]
+            below_to_right = (i >= 0) & (j >= 0)
+            keep_arr = keep_arr & (neighbor <= prob if (below_to_right) else neighbor < prob)
+
+    return np.flatnonzero(keep_arr)

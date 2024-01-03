@@ -313,21 +313,28 @@ class FPEEditor(wx.Frame):
         self.Bind(PointViewNEdit.EVT_POINT_INIT, lambda a: self.video_controls.Enable(False))
         self.Bind(PointViewNEdit.EVT_POINT_END, lambda a: self._refocus(a))
         self.Bind(PointViewNEdit.EVT_POINT_CHANGE, self._on_prob_chg)
-        self.Bind(wx.EVT_CLOSE, self._on_close)
+
+        self.Bind(wx.EVT_CLOSE, self._on_close_caller)
+        self._was_save_button_flag = False
 
         self.video_controls.Bind(PointViewNEdit.EVT_FRAME_CHANGE, self._on_frame_chg)
 
-    def _on_close(self, event: wx.CloseEvent):
-        with wx.MessageDialog(
-            self,
-            "Are you sure you want to exit and save your results?",
-            "Confirmation",
-            wx.YES_NO
-        ) as dlg:
-            selection = dlg.ShowModal()
-            if(selection != wx.ID_YES):
-                event.Veto()
-                return
+    def _on_close_caller(self, event: wx.CloseEvent):
+        self._on_close(event, self._was_save_button_flag)
+        self._was_save_button_flag = False
+
+    def _on_close(self, event: wx.CloseEvent, was_save_button: bool):
+        if(event.CanVeto()):
+            with wx.MessageDialog(
+                self,
+                "Are you sure you want to exit and save your results?",
+                "Confirmation",
+                wx.YES_NO
+            ) as dlg:
+                selection = dlg.ShowModal()
+                if(selection != wx.ID_YES):
+                    event.Veto()
+                    return
         event.Skip()
 
     def _refocus(self, evt):
@@ -754,6 +761,7 @@ class FPEEditor(wx.Frame):
         self.video_player.video_viewer.set_all_poses(Pose(poses[:, :, 0], poses[:, :, 1], poses[:, :, 2]))
 
     def _save_and_close(self):
+        self._was_save_button_flag = True
         self.Close()
 
     def _move_to_poor_label(self, forward: bool):

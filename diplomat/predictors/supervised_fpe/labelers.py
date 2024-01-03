@@ -2,6 +2,7 @@ from typing import Tuple, Any, Optional, MutableMapping
 from typing_extensions import Protocol
 
 from diplomat.predictors.fpe import fpe_math
+from diplomat.predictors.fpe.arr_utils import find_peaks
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
 from diplomat.wx_gui import labeler_lib
 
@@ -219,8 +220,6 @@ class Approximate(labeler_lib.PoseLabeler):
         else:
             frame = self._frame_engine.frame_data.frames[frame_idx][bp_idx]
 
-        s = self._frame_engine
-
         if(x is None):
             x, y, prob = self._frame_engine.scmap_to_video_coord(
                 *self._frame_engine.get_maximum_with_defaults(frame),
@@ -336,19 +335,57 @@ class Approximate(labeler_lib.PoseLabeler):
         return True
 
 
-class NearestInSource(labeler_lib.PoseLabeler):
+class ApproximateSourceOnly(Approximate):
+    @staticmethod
+    def _absorb_frame_data(p1, c1, off1, p2, c2, off2):
+        comb_c = np.concatenate([c1.T, c2.T])
+        comb_p = np.concatenate([p1, p2])
+        comb_off = np.concatenate([off1.T, off2.T])
+        from_dlc = np.repeat([True, False], [len(p1), len(p2)])
+
+        sort_idx = np.lexsort([comb_c[:, 1], comb_c[:, 0]])
+        comb_c = comb_c[sort_idx]
+        comb_p = comb_p[sort_idx]
+        comb_off = comb_off[sort_idx]
+        from_dlc = from_dlc[sort_idx]
+
+        match_idx, = np.nonzero(np.all(comb_c[1:] == comb_c[:-1], axis=1))
+        match_idx_after = match_idx + 1
+
+        comb_p[match_idx] = comb_p[match_idx] + comb_p[match_idx_after]
+
+        return (
+            np.delete(comb_p, ~from_dlc, axis=0),
+            np.delete(comb_c, ~from_dlc, axis=0).T,
+            np.delete(comb_off, ~from_dlc, axis=0).T
+        )
+
+    @staticmethod
+    def _filter_cell_count(
+        x: np.ndarray,
+        y: np.ndarray,
+        probs: np.ndarray,
+        x_off: np.ndarray,
+        y_off: np.ndarray,
+        max_cell_count: int
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        return (x, y, probs, x_off, y_off)
+
+
+class NearestPeakInSource(labeler_lib.PoseLabeler):
     """
-    Nearest labeling mode, similar to approximate but always selects the nearest location in the source probability
+    Nearest labeling mode, similar to approximate but always selects the nearest peak location in the source probability
     map, assigning it a fixed value, and all the other locations a lower value...
     """
 
-    def __init__(self, frame_engine: EditableFramePassEngine, multi_source: bool = False):
+    def __init__(self, frame_engine: EditableFramePassEngine):
         super().__init__()
         self._frame_engine = frame_engine
         self._settings = labeler_lib.SettingCollection(
-            nearest_location_value=labeler_lib.FloatSpin(0.6, 1, 0.95, 0.001, 4)
+            minimum_peak_value=labeler_lib.FloatSpin(0, 1, 0.05, 0.001, 4),
+            selected_peak_value=labeler_lib.FloatSpin(0, 1, 0.95, 0.001, 4),
+            unselected_peak_value=labeler_lib.FloatSpin(0, 1, 0.05, 0.001, 4)
         )
-        self._multi_source = multi_source
 
     def predict_location(
         self,
@@ -359,8 +396,13 @@ class NearestInSource(labeler_lib.PoseLabeler):
         probability: float
     ) -> Tuple[Any, Tuple[float, float, float]]:
         meta = self._frame_engine.frame_data.metadata
-        frame = self._frame_engine.frame_data.frames[frame_idx][bp_idx]
-        nearest_val = self._settings.get_values().nearest_location_value
+        config = self._settings.get_values()
+
+        modified_frames = self._frame_engine.changed_frames
+        if((frame_idx, bp_idx) in modified_frames):
+            frame = modified_frames[(frame_idx, bp_idx)]
+        else:
+            frame = self._frame_engine.frame_data.frames[frame_idx][bp_idx]
 
         if(x is None):
             x, y, prob = self._frame_engine.scmap_to_video_coord(
@@ -369,42 +411,47 @@ class NearestInSource(labeler_lib.PoseLabeler):
             )
             return ((frame_idx, bp_idx, None, (x, y)), (x, y, 0))
 
-        if(self._multi_source):
-            frames = [
-                self._frame_engine.frame_data.frames[frame_idx][i]
-                for i in range(
-                    (bp_idx // meta.num_outputs) * meta.num_outputs,
-                    ((bp_idx // meta.num_outputs) + 1) * meta.num_outputs
-                )
-            ]
-        else:
-            frames = [frame]
+        ys, xs, probs, off_xs, off_ys = frame.orig_data.unpack()
 
-        best_d = np.inf
-        temp_f = None
+        peak_locs = find_peaks(xs, ys, probs, meta.width)
+        peak_locs = peak_locs[probs[peak_locs] >= config.minimum_peak_value]
+        if(len(peak_locs) <= 1):
+            # No peaks, or only one peak, perform basically a no-op, return prior frame state...
+            x, y, prob = self._frame_engine.scmap_to_video_coord(
+                *self._frame_engine.get_maximum_with_defaults(frame),
+                meta.down_scaling
+            )
+            return ((frame_idx, bp_idx, frame, (x, y)), (x, y, prob))
 
-        for frame in frames:
-            ys, xs, probs, off_xs, off_ys = frame.orig_data.unpack()
+        def to_exact(_x, _y, _x_off, _y_off):
+            return _x + 0.5 + (_x_off / meta.down_scaling), _y + 0.5 + (_y_off / meta.down_scaling)
 
-            def to_exact(_x, _y, _x_off, _y_off):
-                return _x + 0.5 + (_x_off / meta.down_scaling), _y + 0.5 + (_y_off / meta.down_scaling)
+        # Compute nearest location...
+        xp, yp, pp, xp_off, yp_off = self._frame_engine.video_to_scmap_coord((x, y, probability))
 
-            # Compute nearest location...
-            xp, yp, pp, xp_off, yp_off = self._frame_engine.video_to_scmap_coord((x, y, probability))
+        xp_ex, yp_ex = to_exact(xp, yp, xp_off, yp_off)
+        x_ex, y_ex = to_exact(xs[peak_locs], ys[peak_locs], off_xs[peak_locs], off_ys[peak_locs])
 
-            xp_ex, yp_ex = to_exact(xp, yp, xp_off, yp_off)
-            x_ex, y_ex = to_exact(xs, ys, off_xs, off_ys)
+        dists = (xp_ex - x_ex) ** 2 + (yp_ex - y_ex) ** 2
+        nearest_idx = np.argmin(dists)
 
-            dists = (xp_ex - x_ex) ** 2 + (yp_ex - y_ex) ** 2
-            nearest_idx = np.argmin(dists)
-            probs = np.full(len(probs), 1 - nearest_val)
-            probs[nearest_idx] = nearest_val
+        # Compute belonging of every cell...
+        owner_peak = np.argmin(
+            ((np.expand_dims(xs, 1) - np.expand_dims(xs[peak_locs], 0)) ** 2)
+            + ((np.expand_dims(ys, 1) - np.expand_dims(ys[peak_locs], 0)) ** 2),
+            axis=-1
+        )
 
-            if(dists[nearest_idx] < best_d):
-                best_d = dists[nearest_idx]
-                temp_f = ForwardBackwardFrame(
-                    src_data=SparseTrackingData().pack(ys, xs, probs, off_xs, off_ys), frame_probs=probs
-                )
+        # Compute how much we need to scale each peak and it's neighbors by to get the configured weighting...
+        multipliers = config.unselected_peak_value / probs[peak_locs]
+        multipliers[nearest_idx] = config.selected_peak_value / probs[peak_locs[nearest_idx]]
+
+        # Apply scaling to all peaks...
+        probs = probs * multipliers[owner_peak]
+
+        temp_f = ForwardBackwardFrame(
+            src_data=SparseTrackingData().pack(ys, xs, probs, off_xs, off_ys), frame_probs=probs
+        )
 
         x, y, prob = self._frame_engine.scmap_to_video_coord(
             *self._frame_engine.get_maximum_with_defaults(temp_f),

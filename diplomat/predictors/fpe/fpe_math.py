@@ -1,6 +1,7 @@
 from typing import Optional, Callable, Tuple, Iterable
 import numpy as np
 
+
 def gaussian_formula(
     prior_x: float,
     x: float,

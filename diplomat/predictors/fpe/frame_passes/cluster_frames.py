@@ -2,7 +2,7 @@ import os
 from typing import Optional, Tuple, List
 from diplomat.utils.graph_ops import connected_components, min_spanning_tree, to_valid_graph
 from diplomat.predictors.fpe import fpe_math
-from diplomat.predictors.fpe.arr_utils import _NumpyDict
+from diplomat.predictors.fpe.arr_utils import find_peaks
 from diplomat.predictors.fpe.frame_pass import FramePass, RangeSlicer, PassOrderError
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardData, ForwardBackwardFrame, AttributeDict
 from diplomat.processing import ConfigSpec, ProgressBar, Config
@@ -220,24 +220,8 @@ class ClusterFrames(FramePass):
         if(num_clusters == 1):
             return [(y, x, prob, x_off, y_off)]
 
-        # Compute the top-k for the frame...
-        keep_arr = np.ones(prob.shape, dtype=bool)
-
-        def to_keys(_x, _y):
-            return _y * width + _x
-
-        lookup_table = _NumpyDict(to_keys(x, y), prob, 0)
-
-        # We perform a 3x3 max-convolution to find peaks.
-        for i in range(-1, 2):
-            for j in range(-1, 2):
-                if(i == 0 and j == 0):
-                    continue
-                neighbor = lookup_table[to_keys(x + j, y + i)]
-                below_to_right = (i >= 0) & (j >= 0)
-                keep_arr = keep_arr & (neighbor <= prob if(below_to_right) else neighbor < prob)
-
-        top_indexes = np.flatnonzero(keep_arr)
+        # Find peak locations...
+        top_indexes = find_peaks(x, y, prob, width)
 
         coords = cls._get_spanning_forest_centers(
             x[top_indexes],

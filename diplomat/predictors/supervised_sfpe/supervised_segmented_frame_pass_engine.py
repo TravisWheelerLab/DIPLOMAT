@@ -4,7 +4,7 @@ from collections import UserList
 from pathlib import Path
 
 from diplomat.wx_gui.progress_dialog import FBProgressDialog
-from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, NearestInSource
+from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, NearestPeakInSource, ApproximateSourceOnly
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
@@ -357,10 +357,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             all_data = self.frame_data.frames[frame_idx][bp_idx]
 
             if ((frame_idx, bp_idx) in self.changed_frames):
-                f = self.changed_frames[(frame_idx, bp_idx)]
+                f = self.changed_frames[frame_idx, bp_idx]
                 frames, occluded, orig_data = f.frame_probs, f.occluded_probs, f.orig_data
-                if(f == all_data):
-                    raise ValueError("Should not be possible!")
             else:
                 frames, occluded, orig_data = all_data.frame_probs, all_data.occluded_probs, all_data.orig_data
 
@@ -378,7 +376,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 fix_frame_data.append(orig_data)
 
             # If user edited, show user edited frame...
-            if ((frame_idx, bp_idx) in self._changed_frames):
+            if ((frame_idx, bp_idx) in self.changed_frames):
                 track_data = all_data.orig_data
                 new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Modified Source Frame", track_data))
 
@@ -621,7 +619,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._get_names(),
             self.video_metadata,
             self._get_crop_box(),
-            [Approximate(self), Point(self), NearestInSource(self)],
+            [Approximate(self), ApproximateSourceOnly(self), Point(self), NearestPeakInSource(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
             None,
             list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs)

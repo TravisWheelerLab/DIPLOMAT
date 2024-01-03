@@ -1,5 +1,6 @@
 """
-Provides tools for replacing a functions module and name, while still allowing the function to be pickled and transferred around...
+Provides tools for replacing a functions module and name, while still allowing the function to be pickled and
+transferred around...
 """
 from types import FunctionType
 from typing import Any, Callable
