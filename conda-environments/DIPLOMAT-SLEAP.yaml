@@ -1,14 +1,12 @@
 # Environment for using diplomat with SLEAP projects.
 # Installs diplomat and SLEAP into the same environment.
 name: DIPLOMAT-SLEAP
-channels:
-  - sleap
-  - nvidia
-  - conda-forge
 dependencies:
   - pip
-  - sleap
+  - python=3.8
+  - cudatoolkit=11.3
+  - cudnn=8.2
   - wxpython
   - pip:
+    - sleap[pypi]
     - diplomat-track
-    - "wheel==0.35" # The conda one appears to be broken...
