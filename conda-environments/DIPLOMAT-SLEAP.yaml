@@ -3,7 +3,7 @@
 name: DIPLOMAT-SLEAP
 dependencies:
   - pip
-  - python=3.8
+  - python>=3.8
   - cudatoolkit=11.3
   - cudnn=8.2
   - wxpython
