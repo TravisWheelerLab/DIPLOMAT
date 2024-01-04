@@ -5,18 +5,18 @@ name: DIPLOMAT-SLEAP
 channels:
   - conda-forge
   - nvidia
-  - sleap
   - anaconda
 
 dependencies:
-  - wxpython
+  - conda-forge::wxpython
   - conda-forge::attrs >=21.2.0  #,<=21.4.0
   - conda-forge::cattrs ==1.1.1
   - conda-forge::imgaug ==0.4.0
   - conda-forge::jsmin
   - conda-forge::jsonpickle ==1.2
   - conda-forge::networkx
-  - anaconda::numpy >=1.19.5,<1.23.0
+  - conda-forge::numpy >=1.19.5,<1.23.0
+  - conda-forge::numba
   - conda-forge::opencv
   - conda-forge::pandas
   - conda-forge::pip
@@ -35,8 +35,8 @@ dependencies:
   - conda-forge::scikit-learn ==1.0
   - conda-forge::scikit-video
   - conda-forge::seaborn
-  - sleap::tensorflow >=2.6.3,<2.11  # No windows GPU support for >2.10
-  - conda-forge::tensorflow-hub  # Pinned in meta.yml, but no problems here... yet
+  - tensorflow-gpu >=2.6.0,<2.11  # No windows GPU support for >2.10
+  - tensorflow-hub  # Pinned in meta.yml, but no problems here... yet
 
   # Packages required by tensorflow to find/use GPUs
   - conda-forge::cudatoolkit ==11.3.1
