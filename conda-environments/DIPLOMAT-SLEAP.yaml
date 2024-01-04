@@ -3,6 +3,8 @@
 name: DIPLOMAT-SLEAP
 dependencies:
   - pip
+  - six
+  - setuptools
   - python>=3.8
   - cudatoolkit=11.3
   - cudnn=8.2
