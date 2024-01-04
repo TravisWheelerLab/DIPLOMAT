@@ -39,12 +39,18 @@ pip install diplomat-track[dlc, gui]
 **NOTE:** DIPLOMAT also includes two environment configuration files for setting up DIPLOMAT with 
 [mamba](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html), which can
 be installed on Windows, Linux, or MacOS using the [Miniforge](https://github.com/conda-forge/miniforge) installer.
-To create an environment using mamba, run one of these two commands:
+To create an environment using mamba, run one of these four commands:
 ```bash
 # Create the environment for using DIPLOMAT with DeepLabCut
+# GPU:
 mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
+# CPU only:
+mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT-CPU.yaml
 # OR Create an environment for using DIPLOMAT with SLEAP instead...
+# GPU:
 mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
+# CPU only:
+mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP-CPU.yaml
 ```
 And then activate the environment with one of these two commands:
 ```bash

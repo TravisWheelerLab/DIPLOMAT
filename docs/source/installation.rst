@@ -28,11 +28,15 @@ With Support for DeepLabCut Projects
 Using Mamba or Conda
 ~~~~~~~~~~~~~~~~~~~~
 
-Once you have mamba or a mamba compatible CLI installed, you'll want to open a terminal and type:
+Once you have mamba or a mamba compatible CLI installed, you'll want to open a terminal and type one of these
+two commands:
 
 .. code-block:: sh
 
+    # Install diplomat with GPU support...
     mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
+    # Install diplomat with CPU support only...
+    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT-CPU.yaml
 
 .. hint::
 
@@ -73,11 +77,14 @@ With Support for SLEAP Projects
 Using Mamba or Conda
 ~~~~~~~~~~~~~~~~~~~~
 
-Once you have a mamba installed, you'll want to open a terminal and type:
+Once you have a mamba installed, you'll want to open a terminal and type one of these two commands:
 
 .. code-block:: sh
 
+    # Install diplomat with GPU support...
     mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
+    # Install diplomat with CPU support only...
+    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP-CPU.yaml
 
 .. hint::
 
