@@ -387,9 +387,11 @@ class SettingCollectionWidget(wx.Control):
         # This is stupid, but by setting the sizer again we force the
         # window to resize to fit everything...
         self.SetSizerAndFit(self._main_layout)
+        self.Layout()
         # This is also stupid...
         window = wx.GetTopLevelParent(self)
         w, h = window.GetSize()
+        window.Layout()
         window.SetSize(w + 1, h + 1)
         window.SetSize(w, h)
 
