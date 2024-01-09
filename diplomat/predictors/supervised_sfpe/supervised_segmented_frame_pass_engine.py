@@ -595,6 +595,14 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._frame_holder.metadata["segments"] = self._segments.tolist()
             self._frame_holder.metadata["segment_scores"] = self._segment_scores.tolist()
         else:
+            progress_bar.reset(self._frame_holder.num_frames * self._frame_holder.num_bodyparts)
+            progress_bar.message("Restoring Partial Frames")
+            for frame_list in self._frame_holder.frames:
+                for frame in frame_list:
+                    if(frame.frame_probs is None):
+                        frame.frame_probs = frame.src_data.probs[:]
+                    progress_bar.update()
+
             self._width = self._frame_holder.metadata.width
             self._height = self._frame_holder.metadata.height
             self._resolve_frame_orderings(progress_bar)

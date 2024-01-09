@@ -59,7 +59,8 @@ def analyze_videos(
 
     import sleap
     batch_size = _get_default_value(sleap.load_model, "batch_size", 4) if(batch_size is None) else batch_size
-    num_outputs = 1 if(num_outputs is None) else num_outputs
+    if(num_outputs is None):
+        raise ValueError("'num_outputs' is not set! Please set it to the number of bodies you are tracking.")
 
     print("Loading Model...")
     model = sleap.load_model(_paths_to_str(config), batch_size=batch_size)

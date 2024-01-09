@@ -197,6 +197,31 @@ KS2noATUrCDBycCjbGCiK40ezCJ3/i/Aqp2BmU9QWExCWhZogBKeOldrCzsOGW4+AWFRCSlZeSUR
 3NrxABagAUKi4lIyssyEFWMDrNy8IAMkOAgrxQ6YOXj5BXlZyNUOAuS2VgYSAAD00GPz
 """
 
+SETTINGS_SIZE = (64, 64)
+SETTINGS_ICON = b"""
+eJzll11oFFcUgG/WNSEBKUJqjGti0gi1IoXaSOJGLNo+WSTZTX8otS+aGHzoj8aArdDKsomhD6WF
+UgMVXWkL27R9K8UaLLTrg5jfTZHGNjQ2G92wuzFKfpowd+7pmTtzZ+/MzizbvHpeZu495zv37vm5
+c5eQx0CKvP8TqH7nG480PDAfaS4tGPa0/MoAXpFmoiqFf6NFBfK/AAWgw9mJCgVQ/ix0/TDTzKHF
+nDinTdCvC+Wf5jhN+ozxzmXu8FShPImr3EGitQQHpW9lKHf4QsH8ZzpAYfnOyOQKcG8AdQXzYYOw
+yrMF8z9TJ76zUNzPnHD1QaVpUeTJg9clHZcHdaJKLHDz/RzqyPWgXuR+FxzjmW7VDGq+B6Y8b8Mr
+5hkkQ43V/j7FgqdS8g5g8KOTUQWjSyfWW/koTjLGbYSkL7dUFRNSXBW4nM56AMP92xZ8d07IEkfX
+ZdXeYzM2NXuwQeZ/tPFqyNauZWGLhcrOyFrPl8xSMgu8d9btO98fi/X3NPFsBRelSK68aovfoVnJ
+/4IWXW+HuefEcS019QsmPpVbi0/0gfCgaqvXjZuxxEf8KZwKGGN6d3MOjvKecB/CQVMGAz14qt7n
+23N6CF8zfpwMGwb7nXBCYnpqZsoIqU0BvX9YKJqxpOa2YytPc4MpZ1xs4Cj+9nGgo9lyJ5VjFOIY
+gzaeumsu/GscT2PeO3D1Slm1BXfQjn4zmsWgC3+C85cwcRj5w1ZdC2YB0xjRLB65dN8nPL7NhOwD
+OmRXDquAIQzwJRqd+d95AqsJOe9wWJwG6Mbe4/n8whHfrxc2tsx3AHvs2gaAb7GZ+BLqAQd86xRP
+XwpfbwD4ctQAMXzwTqSroe029ebOh3r20ziIOfO/4SOj55jB/I0LAdFju84OM1GsDM/8fuf9Rwkp
+yXYJo1CvqxpB7j6MX49D/LoAwkb8TNmkq560TGLzNIGak78RFfZiE8uWq+KD/EiejeBxkOBlIAsm
+fhrL5opkyMaE8pp8ZKaxzo/j19NSv75ZCm1Yv3OSofq50H6gB88IwjG0iwMd2yLhcQqj2BftxsrK
+0MBQir0p1Dt6e0++/tIbX6ncwz3s3xrs36R5AQji6nP4+SxN6HzfRm22OOdS9PIqTw/Gmfi182O4
+q8Hna+gawdc0Bk/LiyYf2zlTOvXtBfC1Li6fX6O1ONXKvdOR9a689w+OLGiF4W1PiEhNt2nfgnrj
+AD7oihsHDMCitgPi8XdHY7Fo917e7606zsbz4KRc5DZcZlWU9RiVqzg3r5BlseeZNim83vZ7Yl65
+kA/fKH1FMpHgNmymkm3BK1LZsL/z3R1OgE0s329dOtzxTRnHm5NF1OUdbrjnqjvOFMX4bXS8xIX/
+0DCAiYE7AFIoGGO3L12Mi7tDrzO+Ia2fjpPa4bP1TNJ0QJdC1ZrBoTnNAU26/YCd2tWJ/lVuuPtB
+bHhanJbP4FVWvVvrGr+a20ydNdXFcWO/L5oGuxdhoNwVxw69+HBXdnREx+9LfxwOnsuXfpQK6d2n
+J+yn/IS7FK1ovBJZK08mefg+XTN/lWfg3TXzZ6eXlv659dya+cdA/gPgZyV7
+"""
+
 
 def to_wx_bitmap(icon_bytes: bytes, icon_size: Tuple[int, int], fg_color: wx.Colour, bitmap_size: Tuple[int, int] = None):
     """
@@ -227,7 +252,7 @@ def _main():
     # Tests icon loading code above by displaying the help icon in a wx Frame...,
     app = wx.App()
     frame = wx.Frame(None, title="Image Test!")
-    bitmap = to_wx_bitmap(SAVE_TRACKS_ICON, SAVE_TRACKS_SIZE, frame.GetForegroundColour())
+    bitmap = to_wx_bitmap(SETTINGS_ICON, SETTINGS_SIZE, frame.GetForegroundColour())
     icon = wx.StaticBitmap(frame, wx.ID_ANY, bitmap)
     frame.Show(1)
     app.MainLoop()

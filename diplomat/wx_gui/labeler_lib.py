@@ -325,7 +325,7 @@ class SettingCollectionWidget(wx.Control):
         self,
         *args,
         title: str = "Advanced Settings",
-        collapsable = True,
+        collapsable: bool = True,
         **kwargs
     ):
         """
