@@ -6,6 +6,7 @@ from sphinx.ext.autodoc.mock import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent / "ext"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+
 def _get_version() -> str:
     with mock(autodoc_mock_imports):
         import diplomat

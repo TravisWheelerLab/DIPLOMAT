@@ -342,6 +342,9 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         # Call superclass draw to draw the video...
         super().on_draw(dc)
 
+        if(not isinstance(dc, wx.GCDC)):
+            dc = wx.GCDC(dc)
+
         width, height = self.GetClientSize()
         if((not width) or (not height)):
             return
@@ -366,7 +369,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
             if(np.isnan(x) or np.isnan(y)):
                 continue
 
-            wx_color = wx.Colour(*color)
+            wx_color = wx.Colour(*color[:3], alpha=int(255 * self._point_alpha))
 
             if(prob < self._plot_threshold):
                 dc.SetBrush(wx.TRANSPARENT_BRUSH)

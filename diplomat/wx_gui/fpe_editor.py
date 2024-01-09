@@ -12,12 +12,14 @@ from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable
 from diplomat.utils.colormaps import iter_colormap
 from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table
 from diplomat.wx_gui.id_swap_dialog import IdSwapDialog
+from diplomat.wx_gui.labeler_lib import SettingCollection
 from diplomat.wx_gui.point_edit import PointEditor, PointViewNEdit, PoseLabeler
 from diplomat.wx_gui.progress_dialog import FBProgressDialog
 from diplomat.wx_gui.score_lib import ScoreEngine, ScoreEngineDisplayer
 from diplomat.wx_gui.scroll_image_list import ScrollImageList
 from diplomat.processing import Pose, ProgressBar
 from diplomat.wx_gui.helpdialog import HelpDialog
+from diplomat.wx_gui.settings_dialog import SettingsDialog
 from diplomat.wx_gui.video_player import VideoController
 from wx.lib.scrolledpanel import ScrolledPanel
 from collections import deque
@@ -435,6 +437,9 @@ class FPEEditor(wx.Frame):
         export_csv_bmp = icons.to_wx_bitmap(icons.SAVE_TRACKS_ICON, icons.SAVE_TRACKS_SIZE,
                                             self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
 
+        settings_bmp = icons.to_wx_bitmap(icons.SETTINGS_ICON, icons.SETTINGS_SIZE,
+                                          self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
+
         spin_ctrl = wx.SpinCtrl(self._toolbar, min=1, max=50, initial=PointViewNEdit.DEF_FAST_MODE_SPEED_FRACTION)
         spin_ctrl.SetMaxSize(wx.Size(-1, self.TOOLBAR_ICON_SIZE[1]))
         spin_ctrl.Bind(wx.EVT_SPINCTRL, self._on_spin)
@@ -474,8 +479,10 @@ class FPEEditor(wx.Frame):
         self._toolbar.AddTool(self._save)
         self._toolbar.AddSeparator()
 
-        self._turtle = self._toolbar.CreateTool(wx.ID_ANY, "Edit CTRL Speed: ", turtle_bmp, turtle_bmp,
-                                                shortHelp="Modify the labeling speed when CTRL Key is pressed (fast labeling mode).")
+        self._turtle = self._toolbar.CreateTool(
+            wx.ID_ANY, "Edit CTRL Speed: ", turtle_bmp, turtle_bmp,
+            shortHelp="Modify the labeling speed when CTRL Key is pressed (fast labeling mode)."
+        )
         self._toolbar.AddTool(self._turtle)
         self._toolbar.EnableTool(self._turtle.GetId(), False)
         self._toolbar.AddControl(spin_ctrl)
@@ -488,6 +495,10 @@ class FPEEditor(wx.Frame):
         self._export_to_csv = self._toolbar.CreateTool(wx.ID_ANY, "Export Tracks to CSV", export_csv_bmp,
                                                        shortHelp="Export current tracks to a csv file from the UI.")
         self._toolbar.AddTool(self._export_to_csv)
+
+        self._visual_settings = self._toolbar.CreateTool(wx.ID_ANY, "Visual Settings", settings_bmp,
+                                                         shortHelp="Adjust some visual settings of the editor.")
+        self._toolbar.AddTool(self._visual_settings)
 
         self._help = self._toolbar.CreateTool(wx.ID_ANY, "Help", help_bmp, shortHelp="Display the help dialog.")
         self._toolbar.AddTool(self._help)
@@ -506,6 +517,7 @@ class FPEEditor(wx.Frame):
             self._turtle,
             self._export_btn,
             self._export_to_csv,
+            self._visual_settings,
             self._help
         ]
         self._bitmaps = [
@@ -519,6 +531,7 @@ class FPEEditor(wx.Frame):
             turtle_bmp,
             export_bmp,
             export_csv_bmp,
+            settings_bmp,
             help_bmp
         ]
 
@@ -697,8 +710,31 @@ class FPEEditor(wx.Frame):
             self._move_to_poor_label(False)
         elif(evt.GetId() == self._export_to_csv.GetId()):
             self._save_to_csv()
+        elif(evt.GetId() == self._visual_settings.GetId()):
+            self._change_visual_settings()
         elif((self._identity_swapper is not None) and (evt.GetId() == self._swap_id.GetId())):
             self._display_id_swap_dialog()
+
+    def _change_visual_settings(self):
+        from diplomat.wx_gui.labeler_lib import Slider, FloatSpin
+        from diplomat.wx_gui.settings_dialog import DropDown
+        from matplotlib import colormaps
+        point_video_viewer = self.video_player.video_viewer
+
+        sorted_colormaps = sorted(colormaps)
+
+        with SettingsDialog(self, title="Visual Settings", settings=SettingCollection(
+            colormap=DropDown([point_video_viewer.get_colormap()] + sorted_colormaps, ["CURRENT"] + sorted_colormaps),
+            point_radius=FloatSpin(1, 1000, point_video_viewer.get_point_radius(), increment=1, digits=0),
+            point_alpha=FloatSpin(0, 1, point_video_viewer.get_point_alpha(), increment=0.01, digits=2),
+            plot_threshold=FloatSpin(0, 1, point_video_viewer.get_plot_threshold(), increment=0.001, digits=3),
+            line_thickness=Slider(1, 10, point_video_viewer.get_line_thickness())
+        )) as dlg:
+            if(dlg.ShowModal() == wx.ID_OK):
+                for k, v in dlg.get_values().items():
+                    getattr(point_video_viewer, f"set_{k}")(v)
+                self.Refresh()
+                self.Update()
 
     def _save_to_csv(self):
         with wx.FileDialog(self, "Select FrameStore Save Location",
