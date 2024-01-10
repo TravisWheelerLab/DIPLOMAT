@@ -1,3 +1,7 @@
+"""
+Provides a dialog for displaying an arbitrary set of configurable settings to the user to be changed. Utilizes
+the :class:`~diplomat.wx_gui.labeler_lib.SettingWidget` API for specifying dialog settings and retrieving results.
+"""
 from typing import Any, Callable, List, Optional
 import wx
 from diplomat.processing import Config
@@ -5,7 +9,21 @@ from diplomat.wx_gui.labeler_lib import SettingWidget, SettingCollection, Settin
 
 
 class DropDown(SettingWidget):
+    """
+    A SettingWidget for representing a drop-down, or selection widget. Allows the user to select from a list of
+    options.
+    """
     def __init__(self, options: List[Any], option_names: Optional[List[str]] = None, default: int = 0, **kwargs):
+        """
+        Create a new drop down widget.
+
+        :param options: The list of objects to select from.
+        :param option_names: Optional, a list of names to actually display in the selection box. If not set or set to
+                             None, this widget gets display names by calling the `str` function on each object in the
+                             options list.
+        :param default: The index of the default selected value when the widget is first loaded. Defaults to 0, or the
+                        first element in the selection box.
+        """
         if(len(options) == 0):
             raise ValueError("No options offered!")
         if(option_names is None):
@@ -48,7 +66,19 @@ class DropDown(SettingWidget):
 
 
 class SettingsDialog(wx.Dialog):
+    """
+    A dialog of settings. Allows displaying a :class:`~diplomat.wx_gui.labeler_lib.SettingCollection` to a user in
+    a dialog.
+    """
     def __init__(self, *args, title: str = "Settings", settings: SettingCollection, **kwargs):
+        """
+        Create a new dialog.
+
+        :param title: The title of the dialog.
+        :param settings: The settings to display.
+
+        Additional positional and keyword arguments are passed directly to :class:`wx.Dialog` constructor.
+        """
         super().__init__(*args, title=title, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, **kwargs)
 
         self._parent_layout = wx.BoxSizer(wx.VERTICAL)
@@ -64,4 +94,9 @@ class SettingsDialog(wx.Dialog):
         self.SetSizerAndFit(self._parent_layout)
 
     def get_values(self) -> Config:
+        """
+        Get the values selected by the user in the settings dialog.
+
+        :return: A :class:`~diplomat.processing.containers.Config` object, containing the values selected by the user.
+        """
         return self._settings.get_values()
