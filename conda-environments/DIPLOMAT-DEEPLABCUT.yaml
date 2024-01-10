@@ -17,5 +17,5 @@ dependencies:
   - tensorflow-gpu
   - keras
   - pip:
-    - deeplabcut
+    - deeplabcut==2.3.8
     - diplomat-track

@@ -15,7 +15,7 @@ class DropDown(SettingWidget):
     """
     def __init__(self, options: List[Any], option_names: Optional[List[str]] = None, default: int = 0, **kwargs):
         """
-        Create a new drop down widget.
+        Create a new drop-down widget.
 
         :param options: The list of objects to select from.
         :param option_names: Optional, a list of names to actually display in the selection box. If not set or set to

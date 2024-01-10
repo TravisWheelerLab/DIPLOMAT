@@ -47,5 +47,5 @@ diplomat = "diplomat._cli_runner:main"
 gui = ["wxpython"]
 dlc = ["deeplabcut[tf]"]
 sleap = ["sleap[pypi]"]
-all = ["wxpython", "deeplabcut", "sleap[pypi]"]
+all = ["wxpython", "deeplabcut==2.3.8", "sleap[pypi]==1.3.3"]
 
