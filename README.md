@@ -21,22 +21,7 @@ DIPLOMAT also includes a UI for performing tracking and several other tools for 
 
 ## Installation
 
-To install DIPLOMAT with PIP right now, you can and install it with pip using one of the following commands below:
-```bash
-# For working with SLEAP projects:
-pip install diplomat-track[sleap]
-# For working with DeepLabCut projects:
-pip install diplomat-track[dlc]
-```
-To install DIPLOMAT with GUI elements and supervised tracking support, use one of the commands below:
-```bash
-# For using DIPLOMAT with SLEAP
-pip install diplomat-track[sleap, gui]
-# Again, replace sleap with dlc to install with DeepLabCut support.
-pip install diplomat-track[dlc, gui]
-```
-
-**NOTE:** DIPLOMAT also includes two environment configuration files for setting up DIPLOMAT with 
+DIPLOMAT also includes four environment configuration files for setting up DIPLOMAT with 
 [mamba](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html), which can
 be installed on Windows, Linux, or MacOS using the [Miniforge](https://github.com/conda-forge/miniforge) installer.
 To create an environment using mamba, run one of these four commands:
@@ -60,7 +45,8 @@ mamba activate DIPLOMAT-DEEPLABCUT
 mamba activate DIPLOMAT-SLEAP
 ```
 
-For a more thorough explanation of the installation process, see the [documentation](https://diplomat.readthedocs.io/en/latest/installation.html).
+For a more thorough explanation of the installation process and alternative installation methods, see the 
+[documentation](https://diplomat.readthedocs.io/en/latest/installation.html).
 
 ## Usage
 
@@ -69,14 +55,14 @@ For a more thorough explanation of the installation process, see the [documentat
 To run DIPLOMAT on a video once it is installed, simply use DIPLOMAT's `unsupervised` and `supervised` commands to track a video:
 ```bash
 # Run DIPLOMAT with no UI...
-diplomat unsupervised -c path/to/config -v path/to/video
+diplomat track -c path/to/config -v path/to/video
 # Run DIPLOMAT with UI...
-diplomat supervised -c path/to/config -v path/to/video
+diplomat track_and_interact -c path/to/config -v path/to/video
 ```
 
 Multiple videos can be tracked by passing them as a list:
 ```bash
-diplomat unsupervised -c path/to/config -v [path/to/video1, path/to/video2, "path/to/video3"]
+diplomat track -c path/to/config -v [path/to/video1, path/to/video2, "path/to/video3"]
 ```
 
 Once tracking is done, DIPLOMAT can create labeled videos via it's `annotate` subcommand:
@@ -84,12 +70,18 @@ Once tracking is done, DIPLOMAT can create labeled videos via it's `annotate` su
 diplomat annotate -c path/to/config -v path/to/video
 ```
 
+If you need to reopen the UI to make further major modifications, you can do so using the interact subcommand:
+```bash
+diplomat interact -s path/to/ui_state.dipui
+```
+This displays the full UI again for making further edits. Results are saved back to the same files.
+
 If you need to make minor modifications after tracking a video, you can do so using the tweak subcommand:
 ```bash
 diplomat tweak -c path/to/config -v path/to/video
 ```
-This will display a stripped down version of the supervised editing UI, allowing for minor tweaks to be made to the tracks, and then
-saved back to the same file.
+This will display a stripped down version of the interactive editing UI, allowing for minor tweaks to be made to the 
+tracks, and then saved back to the same file.
 
 For a list of additional ways DIPLOMAT can be used, see the [documentation](https://diplomat.readthedocs.io/en/latest/basic_usage.html).
 

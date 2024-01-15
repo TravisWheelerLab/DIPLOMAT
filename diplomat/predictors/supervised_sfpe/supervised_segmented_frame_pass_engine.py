@@ -114,7 +114,7 @@ class SegmentedFramePassData(ForwardBackwardData):
 
 class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
     """
-    The supervised version of the :plugin:`~diplomat.predictors.SegmentedFramePassEngine` predictor.
+    The supervised (aka interactive) version of the :plugin:`~diplomat.predictors.SegmentedFramePassEngine` predictor.
     Provides a GUI for modifying results at the end of the tracking process.
     """
 

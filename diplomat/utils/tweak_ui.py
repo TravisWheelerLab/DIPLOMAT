@@ -1,5 +1,5 @@
 """
-Contains utilities for loading user tracks into a lighter version of the supervised UI to allow for minor modifications
+Contains utilities for loading user tracks into a lighter version of the interactive UI to allow for minor modifications
 to user saved tracking data.
 """
 
@@ -246,7 +246,7 @@ class TweakUI:
         make_app: bool = True
     ):
         """
-        Load a lighter version of the supervised UI to allow for minor modifications to user saved tracking data.
+        Load a lighter version of the interactive UI to allow for minor modifications to user saved tracking data.
 
         :param parent: The parent wx widget of the UI. Can be None, indicating no parent widget, or an independent window.
         :param video_path: The path to the video to display in the editor.

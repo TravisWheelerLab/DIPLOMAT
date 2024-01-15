@@ -16,15 +16,15 @@ def get_static_cli_tree() -> dict:
             "test": diplomat.test_predictor_plugin,
             "list_settings": diplomat.get_predictor_settings
         },
+        "track_with": diplomat.track_with,
+        "track_and_interact": diplomat.track_and_interact,
         "track": diplomat.track,
-        "supervised": diplomat.supervised,
-        "unsupervised": diplomat.unsupervised,
         "annotate": diplomat.annotate,
         "split_videos": diplomat.split_videos,
         "tweak": diplomat.tweak,
         "yaml": diplomat.yaml,
         "convert": diplomat.convert,
-        "restore": diplomat.restore,
+        "interact": diplomat.interact,
         "frontends": {
             "__description": "Contains subcommands for listing available frontends and inspecting the functions "
                              "each frontend supports.",

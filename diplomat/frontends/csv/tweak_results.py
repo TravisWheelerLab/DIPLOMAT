@@ -19,7 +19,7 @@ def tweak_videos(
     **kwargs
 ):
     """
-    Make minor modifications and tweaks to arbitrary csv files using DIPLOMAT's supervised UI.
+    Make minor modifications and tweaks to arbitrary csv files using DIPLOMAT's light interactive UI.
 
     :param config: The path (or list of paths) to the csv file(s) to edit.
     :param videos: Paths to video file(s) corresponding to the provided csv files.

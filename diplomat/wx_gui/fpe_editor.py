@@ -1,5 +1,5 @@
 """
-Includes DIPLOMAT's main GUI editor window. Displayed when a supervised run is performed or restored.
+Includes DIPLOMAT's main GUI editor window. Displayed when an interactive run is performed or restored.
 The GUI allows for editing and rerunning tracking on the fly by the user.
 """
 
