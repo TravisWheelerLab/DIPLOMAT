@@ -597,14 +597,16 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
             if self.settings.storage_mode == "hybrid":
                 new_frame_holder = self.get_frame_holder()
+                progress_bar.reset(self._frame_holder.num_frames * self._frame_holder.num_bodyparts)
+                progress_bar.message("Saving to Disk")
 
+                new_frame_holder.metadata = self._frame_holder.metadata
                 for frame_idx in range(len(self._frame_holder.frames)):
                     for bodypart_idx in range(len(self._frame_holder.frames[frame_idx])):
-                        new_frame_holder[frame_idx][bodypart_idx] = self._frame_holder[frame_idx][bodypart_idx]
+                        new_frame_holder.frames[frame_idx][bodypart_idx] = self._frame_holder.frames[frame_idx][bodypart_idx]
+                        progress_bar.update()
                 
                 self._frame_holder = new_frame_holder
-
-
         else:
             progress_bar.reset(self._frame_holder.num_frames * self._frame_holder.num_bodyparts)
             progress_bar.message("Restoring Partial Frames")
