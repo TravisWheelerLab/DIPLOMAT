@@ -19,7 +19,8 @@ def tweak_videos(
     video_type: str = "",
 ):
     """
-    Make minor modifications and tweaks to tracked results produced by DEEPLABCUT (or DIPLOMAT) using the supervised UI.
+    Make minor modifications and tweaks to tracked results produced by DEEPLABCUT (or DIPLOMAT) using the interactive
+    UI.
 
     :param config: The path to the config.yaml file for the project.
     :param videos: A single video or list of videos to tweak, passed in order to modify.

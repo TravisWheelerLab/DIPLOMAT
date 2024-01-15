@@ -166,7 +166,7 @@ def yaml(
 
 @allow_arbitrary_flags
 @typecaster_function
-def track(
+def track_with(
     config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
@@ -178,6 +178,7 @@ def track(
 ):
     """
     Run DIPLOMAT tracking on videos and/or frame stores. Automatically select a frontend based on the passed arguments.
+    Allows for selecting a specific tracker, or predictor.
 
     :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
     :param videos: A single path or list of paths to video files to run analysis on.
@@ -243,7 +244,7 @@ def track(
 
 @allow_arbitrary_flags
 @typecaster_function
-def unsupervised(
+def track(
     config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
@@ -253,24 +254,28 @@ def unsupervised(
     **extra_args
 ):
     """
-    Run diplomat in unsupervised mode on the specified config and videos or frame stores. An alias for
-    DIPLOMAT track with the SegmentedFramePassEngine predictor.
+    Run diplomat in a non-interactive tracking mode on the specified config and videos or frame stores. An alias for
+    DIPLOMAT track_with with the SegmentedFramePassEngine predictor. The interactive UI can be restored later using
+    diplomat interact function or cli command.
 
-    :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
+    :param config: The path to the configuration file for the project. The format of this argument will depend on the
+                   frontend.
     :param videos: A single path or list of paths to video files to run analysis on.
     :param frame_stores: A single path or list of paths to frame store files to run analysis on.
     :param num_outputs: An integer, the number of bodies to track in the video. Defaults to 1.
-    :param settings: An optional dictionary, listing the settings to use for the SegmentedFramePassEngine predictor plugin.
-                     If not specified, the frontend will determine the settings in a frontend specific manner. To see the settings the
-                     SegmentedFramePassEngine supports, use the "diplomat predictors list_settings -p SegmentedFramePassEngine" command
-                     or "diplomat.get_predictor_settings('SegmentedFramePassEngine')". To get more information about how a frontend gets
-                     settings if not passed, set the help_extra parameter to True to print additional settings for the selected
-                     frontend instead of running tracking.
-    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with extra_help flag set to true.
+    :param settings: An optional dictionary, listing the settings to use for the SegmentedFramePassEngine predictor
+                     plugin. If not specified, the frontend will determine the settings in a frontend specific manner.
+                     To see the settings the SegmentedFramePassEngine supports, use the
+                     "diplomat predictors list_settings -p SegmentedFramePassEngine" command
+                     or "diplomat.get_predictor_settings('SegmentedFramePassEngine')". To get more information about
+                     how a frontend gets settings if not passed, set the help_extra parameter to True to print
+                     additional settings for the selected frontend instead of running tracking.
+    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of
+                       running tracking.
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically
+                       selected frontend. To see valid values, run track with extra_help flag set to true.
     """
-    track(
+    track_with(
         config=config,
         videos=videos,
         frame_stores=frame_stores,
@@ -284,7 +289,7 @@ def unsupervised(
 
 @allow_arbitrary_flags
 @typecaster_function
-def supervised(
+def track_and_interact(
     config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
@@ -294,8 +299,8 @@ def supervised(
     **extra_args
 ):
     """
-    Run diplomat in supervised mode on the specified config and videos or frame stores. An alias for
-    DIPLOMAT track with the SupervisedSegmentedFramePassEngine predictor.
+    Run diplomat in interactive tracking mode on the specified config and videos or frame stores. An alias for
+    DIPLOMAT track_with with the SupervisedSegmentedFramePassEngine predictor.
 
     :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
     :param videos: A single path or list of paths to video files to run analysis on.
@@ -311,7 +316,7 @@ def supervised(
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
                        To see valid values, run track with extra_help flag set to true.
     """
-    track(
+    track_with(
         config=config,
         videos=videos,
         frame_stores=frame_stores,
@@ -375,8 +380,9 @@ def tweak(
     **extra_args
 ):
     """
-    Make modifications to DIPLOMAT produced tracking results created for a video using a limited version supervised
-    labeling UI. Allows for touching up and fixing any minor issues that may arise after tracking and saving results.
+    Make modifications to DIPLOMAT produced tracking results created for a video using a limited version of the
+    interactive labeling UI. Allows for touching up and fixing any minor issues that may arise after tracking and
+    saving results.
 
     :param config: The path to the configuration file for the project. The format of this argument will depend on the
                    frontend.
@@ -464,12 +470,13 @@ def convert(
 
 
 @typecaster_function
-def restore(
+def interact(
     state: Union[List[PathLike], PathLike]
 ):
     """
-    Restore the state of the diplomat UI from a .dipui file. Allows for reloading the UI when diplomat crashes.
-    Settings and backend will be restored automatically based on the settings and info passed during the first run.
+    Open diplomat's interactive UI from a .dipui file. Allows for reloading the UI when diplomat crashes, or for
+    further editing. Settings and backend will be restored automatically based on the settings and info passed during
+    the first run.
 
     :param state: A path or list of paths to the ui states to restore. Files should be of ".dipui" format.
     """

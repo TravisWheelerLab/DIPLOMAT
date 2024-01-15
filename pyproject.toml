@@ -28,9 +28,7 @@ dependencies = [
     "PyYAML",
     "pandas",
     "numpy",
-    "numba",
-    # Add shared memory support to older versions of python (3.7)...
-    #'shared-memory-backport@git+https://github.com/SleepProgger/py_shared_memory.git ; python_version<"3.8"'
+    "numba"
 ]
 
 [tool.flit.module]

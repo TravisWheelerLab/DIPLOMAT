@@ -26,7 +26,7 @@ def tweak_videos(
     **kwargs
 ):
     """
-    Make minor modifications and tweaks to sleap results (stored in .slp files) using DIPLOMAT's supervised UI.
+    Make minor modifications and tweaks to sleap results (stored in .slp files) using DIPLOMAT's interactive UI.
 
     :param config: The path (or list of paths) to the sleap model(s) used for inference, each as either as a folder or zip file.
     :param videos: Paths to the sleap label files, or .slp files, to make minor modifications to, NOT the video files.
