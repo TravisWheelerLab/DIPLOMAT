@@ -416,13 +416,13 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
 
         for point in self._edit_points:
             labeler = self._pose_label_modes[self._current_pose_labeling_mode]
-            submit_data, (x, y, probability) = labeler.predict_location(
+            submit_data, (new_x, new_y, new_p) = labeler.predict_location(
                 self.get_offset_count(), point, x, y, probability
             )
             all_submit_data.append(submit_data)
-            all_points.append((x, y, probability))
+            all_points.append((new_x, new_y, new_p))
 
-            self._set_part(point, x, y, probability)
+            self._set_part(point, new_x, new_y, new_p)
 
         return all_submit_data, all_points
 

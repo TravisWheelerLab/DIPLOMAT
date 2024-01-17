@@ -1,8 +1,10 @@
+import shutil
 import traceback
 
 from collections import UserList
 from pathlib import Path
 
+from diplomat.predictors.sfpe.disk_sparse_storage import DiskBackedForwardBackwardData
 from diplomat.wx_gui.progress_dialog import FBProgressDialog
 from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, NearestPeakInSource, ApproximateSourceOnly
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
@@ -544,8 +546,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
     def _on_run_fb(self, submit_evt: bool = True) -> bool:
         """
-        PRIVATE: Method is run whenever the Frame Pass Engine is rerun on the data. Runs the Frame Passes only in chunks the user has modified and
-        then updates the UI to display the changed data.
+        PRIVATE: Method is run whenever the Frame Pass Engine is rerun on the data. Runs the Frame Passes only in
+        chunks the user has modified and then updates the UI to display the changed data.
 
         :param submit_evt: A boolean, determines if this should submit a new history event. Undo/Redo actions call
                            this method with this parameter set to false, otherwise is defaults to true.
@@ -589,24 +591,43 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         # Return false to not clear the history....
         return False
 
+    def _copy_to_disk(self, progress_bar: ProgressBar, new_frame_holder: ForwardBackwardData):
+        progress_bar.message("Saving to Disk")
+        progress_bar.reset(self._frame_holder.num_frames * self._frame_holder.num_bodyparts)
+
+        new_frame_holder.metadata = self._frame_holder.metadata
+        for frame_idx in range(len(self._frame_holder.frames)):
+            for bodypart_idx in range(len(self._frame_holder.frames[frame_idx])):
+                new_frame_holder.frames[frame_idx][bodypart_idx] = self._frame_holder.frames[frame_idx][
+                    bodypart_idx]
+                progress_bar.update()
+
+    def _on_manual_save(self):
+        output_path = Path(self.video_metadata["output-file-path"]).resolve()
+        video_path = Path(self.video_metadata["orig-video-path"]).resolve()
+        disk_path = output_path.parent / (output_path.stem + ".dipui")
+
+        with disk_path.open("w+b") as disk_ui_file:
+            with video_path.open("rb") as f:
+                shutil.copyfileobj(f, disk_ui_file)
+
+            with DiskBackedForwardBackwardData(
+                self.num_frames,
+                self._num_total_bp,
+                disk_ui_file,
+                self.settings.memory_cache_size
+            ) as disk_frame_holder:
+                with FBProgressDialog(self._fb_editor, title="Save to Disk") as dialog:
+                    dialog.Show()
+                    self._fb_editor.Enable(False)
+                    self._copy_to_disk(dialog.progress_bar, disk_frame_holder)
+                    self._fb_editor.Enable(True)
+
     def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         if(self._restore_path is None):
             self._run_frame_passes(progress_bar)
             self._frame_holder.metadata["segments"] = self._segments.tolist()
             self._frame_holder.metadata["segment_scores"] = self._segment_scores.tolist()
-
-            if self.settings.storage_mode == "hybrid":
-                new_frame_holder = self.get_frame_holder()
-                progress_bar.reset(self._frame_holder.num_frames * self._frame_holder.num_bodyparts)
-                progress_bar.message("Saving to Disk")
-
-                new_frame_holder.metadata = self._frame_holder.metadata
-                for frame_idx in range(len(self._frame_holder.frames)):
-                    for bodypart_idx in range(len(self._frame_holder.frames[frame_idx])):
-                        new_frame_holder.frames[frame_idx][bodypart_idx] = self._frame_holder.frames[frame_idx][bodypart_idx]
-                        progress_bar.update()
-                
-                self._frame_holder = new_frame_holder
         else:
             progress_bar.reset(self._frame_holder.num_frames * self._frame_holder.num_bodyparts)
             progress_bar.message("Restoring Partial Frames")
@@ -629,6 +650,12 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             relaxed_radius=self.settings.relaxed_maximum_radius
         )
 
+        if(self._restore_path is None and self.settings.storage_mode == "hybrid"):
+            new_frame_holder = self.get_frame_holder()
+            self._copy_to_disk(progress_bar, new_frame_holder)
+            self._frame_holder = new_frame_holder
+            self._frame_holder._frames.flush()
+
         self._video_hdl = cv2.VideoCapture(self._video_path)
 
         app = wx.App()
@@ -643,7 +670,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             [Approximate(self), ApproximateSourceOnly(self), Point(self), NearestPeakInSource(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
             None,
-            list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs)
+            list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs),
+            self._on_manual_save if(self.settings.storage_mode == "memory") else None
         )
 
         for s in self._fb_editor.score_displays:

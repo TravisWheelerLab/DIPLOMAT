@@ -163,18 +163,15 @@ def _simplify_editor_class(wx, editor_class):
     class SimplifiedEditor(editor_class):
         def __init__(self, do_save, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self._toolbar.RemoveTool(self._run.GetId())
-            self._toolbar.RemoveTool(self._export_btn.GetId())
-
-            idx = self._tools.index(self._run)
-            del self._tools[idx]
-            del self._bitmaps[idx]
-            idx2 = self._tools.index(self._export_btn)
-            del self._tools[idx2]
-            del self._bitmaps[idx2]
-
             self._video_splitter.Unsplit(self._plot_panel)
             self._do_save = do_save
+
+        def _get_tools(self, manual_save: Optional[Callable]):
+            tools = super()._get_tools(manual_save)
+            return [
+                tool for tool in tools
+                if(tool is self.SEPERATOR or tool.name not in ["Run Frame Passes", "Export Frames"])
+            ]
 
         def _on_close(self, evt, was_save):
             if(evt.CanVeto()):

@@ -2,12 +2,12 @@
 Includes DIPLOMAT's main GUI editor window. Displayed when an interactive run is performed or restored.
 The GUI allows for editing and rerunning tracking on the fly by the user.
 """
-
+import dataclasses
 from pathlib import Path
 import wx
 import cv2
 import numpy as np
-from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable
+from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable, NamedTuple, Literal, Union
 
 from diplomat.utils.colormaps import iter_colormap
 from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table
@@ -25,6 +25,17 @@ from wx.lib.scrolledpanel import ScrolledPanel
 from collections import deque
 from diplomat.wx_gui import icons
 from diplomat.wx_gui.identity_swapper import IdentitySwapper
+
+@dataclasses.dataclass
+class Tool:
+    name: str
+    icon: bytes
+    icon_size: Tuple[int, int]
+    help: str
+    on_click: Callable[[], None]
+    widget: Optional[wx.Window] = None
+    shortcut_code: tuple = ()
+    toolbar_obj: Optional[wx.ToolBarToolBase] = None
 
 
 class History:
@@ -180,6 +191,7 @@ class FPEEditor(wx.Frame):
     TOOLBAR_ICON_SIZE = (32, 32)
     HIST_POSE_CHANGE = "pose_change"
     HIST_IDENTITY_SWAP = "id_swap"
+    SEPERATOR = object()
 
     def __init__(
         self,
@@ -193,6 +205,7 @@ class FPEEditor(wx.Frame):
         score_engines: List[ScoreEngine],
         identity_swapper: Optional[IdentitySwapper] = None,
         part_groups: Optional[List[str]] = None,
+        manual_save: Optional[Callable] = None,
         w_id=wx.ID_ANY,
         title="",
         pos=wx.DefaultPosition,
@@ -303,7 +316,7 @@ class FPEEditor(wx.Frame):
         self._main_splitter.SplitHorizontally(self._video_splitter, self._sub_panel, -self._sub_panel.GetMinSize().GetHeight())
         self._splitter_sizer.Add(self._main_splitter, 1, wx.EXPAND)
 
-        self._build_toolbar()
+        self._build_toolbar(manual_save)
 
         self._main_panel.SetSizerAndFit(self._splitter_sizer)
         self.SetSizerAndFit(self._main_sizer)
@@ -352,19 +365,13 @@ class FPEEditor(wx.Frame):
         PRIVATE: Connects keyboard events to toolbar actions.
         """
         keyboard_shortcuts = [
-            (wx.ACCEL_ALT, ord("Z"), self._undo.GetId()),
-            (wx.ACCEL_ALT | wx.ACCEL_SHIFT, ord("Z"), self._redo.GetId()),
-            (wx.ACCEL_ALT, ord("S"), self._save.GetId()),
-            (wx.ACCEL_ALT, ord("R"), self._run.GetId()),
-            (wx.ACCEL_ALT, ord("H"), self._help.GetId()),
-            (wx.ACCEL_ALT, wx.WXK_RIGHT, self._f_frame.GetId()),
-            (wx.ACCEL_ALT, wx.WXK_LEFT, self._b_frame.GetId()),
-            (wx.ACCEL_ALT, ord("E"), self._export_btn.GetId())
+            (*tool.shortcut_code, tool.toolbar_obj.GetId()) for tool in self._tools_only()
+            if(len(tool.shortcut_code) != 0)
         ]
-
-        self._id_to_key = {wid: (mod_key, norm_key) for mod_key, norm_key, wid in keyboard_shortcuts}
-
         self.SetAcceleratorTable(wx.AcceleratorTable([wx.AcceleratorEntry(*s) for s in keyboard_shortcuts]))
+
+    def _tools_only(self):
+        return [tool for tool in self._tools if(tool is not self.SEPERATOR)]
 
     def _launch_help(self):
         """
@@ -373,9 +380,12 @@ class FPEEditor(wx.Frame):
         """
         entries = []
 
-        for tool, bmp in zip(self._tools, self._bitmaps):
-            entries.append((bmp, self._id_to_key.get(tool.GetId(), None),
-                            self._toolbar.GetToolShortHelp(tool.GetId())))
+        for tool, bmp in zip(self._tools_only(), self._bitmaps):
+            entries.append((
+                bmp,
+                tool.shortcut_code if(len(tool.shortcut_code) != 0) else None,
+                self._toolbar.GetToolShortHelp(tool.toolbar_obj.GetId())
+            ))
 
         empty_bitmap = wx.Bitmap.FromRGBA(32, 32)
 
@@ -396,7 +406,132 @@ class FPEEditor(wx.Frame):
         with HelpDialog(self, entries, self.TOOLBAR_ICON_SIZE) as d:
             d.ShowModal()
 
-    def _build_toolbar(self):
+    def _do_fb_run(self):
+        if (self._fb_runner is not None):
+            if (self._fb_runner()):
+                self._history.clear()
+
+    def _save_ui_to_disk(self):
+        if(self._manual_save_func is not None):
+            self._manual_save_func()
+
+    def _get_tools(self, manual_save: Optional[Callable]) -> List[Union[Tool, Literal[SEPERATOR]]]:
+        spin_ctrl = wx.SpinCtrl(self._toolbar, min=1, max=50, initial=PointViewNEdit.DEF_FAST_MODE_SPEED_FRACTION)
+        spin_ctrl.SetMaxSize(wx.Size(-1, self.TOOLBAR_ICON_SIZE[1]))
+        spin_ctrl.Bind(wx.EVT_SPINCTRL, self._on_spin)
+
+        self._manual_save_func = manual_save
+
+        tools = [
+            Tool(
+                "Prior Detected Frame",
+                icons.JUMP_BACK_ICON,
+                icons.JUMP_BACK_ICON_SIZE,
+                "Jump to the prior detected frame.",
+                lambda: self._move_to_poor_label(False),
+                shortcut_code=(wx.ACCEL_ALT, wx.WXK_RIGHT)
+            ),
+            Tool(
+                "Next Detected Frame",
+                icons.JUMP_FORWARD_ICON,
+                icons.JUMP_FORWARD_ICON_SIZE,
+                "Jump to the next detected frame.",
+                lambda: self._move_to_poor_label(True),
+                shortcut_code=(wx.ACCEL_ALT, wx.WXK_LEFT)
+            ),
+            self.SEPERATOR,
+            Tool(
+                "Undo",
+                icons.BACK_ICON,
+                icons.BACK_ICON_SIZE,
+                "Undo the last action.",
+                self._history.undo,
+                shortcut_code=(wx.ACCEL_ALT, ord("Z"))
+            ),
+            Tool(
+                "Redo",
+                icons.FORWARD_ICON,
+                icons.FORWARD_ICON_SIZE,
+                "Redo the last action.",
+                self._history.redo,
+                shortcut_code=(wx.ACCEL_ALT | wx.ACCEL_SHIFT, ord("Z"))
+            ),
+            self.SEPERATOR,
+            Tool(
+                "Run Frame Passes",
+                icons.RUN_ICON,
+                icons.RUN_ICON_SIZE,
+                "Rerun the frame passes on user modified results.",
+                self._do_fb_run,
+                shortcut_code=(wx.ACCEL_ALT, ord("R"))
+            ),
+            Tool(
+                "Swap Identities",
+                icons.SWAP_IDENTITIES_ICON,
+                icons.SWAP_IDENTITIES_SIZE,
+                "Swap body part positions for this frame and all frames in front of it.",
+                self._display_id_swap_dialog
+            ) if(self._identity_swapper is not None) else None,
+            Tool(
+                "Save and Continue",
+                icons.SAVE_CONT_ICON,
+                icons.SAVE_CONT_ICON_SIZE,
+                "Save the current UI state and continue editing.",
+                self._save_ui_to_disk,
+            ) if(manual_save is not None) else None,
+            Tool(
+                "Save Results",
+                icons.SAVE_ICON,
+                icons.SAVE_ICON_SIZE,
+                "Save the current results to file.",
+                self._save_and_close,
+                shortcut_code=(wx.ACCEL_ALT, ord("S"))
+            ),
+            self.SEPERATOR,
+            Tool(
+                "Edit CTRL Speed: ",
+                icons.TURTLE_ICON,
+                icons.TURTLE_ICON_SIZE,
+                "Modify the labeling speed when CTRL Key is pressed (fast labeling mode).",
+                lambda: None,
+                spin_ctrl
+            ),
+            self.SEPERATOR,
+            Tool(
+                "Export Frames",
+                icons.DUMP_FRAMES_ICON,
+                icons.DUMP_FRAMES_SIZE,
+                "Export the current modified frames from the UI.",
+                self._on_export,
+                shortcut_code=(wx.ACCEL_ALT, ord("E"))
+            ),
+            Tool(
+                "Export Tracks to CSV",
+                icons.SAVE_TRACKS_ICON,
+                icons.SAVE_TRACKS_SIZE,
+                "Export current tracks to a csv file from the UI.",
+                self._save_to_csv
+            ),
+            Tool(
+                "Visual Settings",
+                icons.SETTINGS_ICON,
+                icons.SETTINGS_SIZE,
+                "Adjust some visual settings of the editor.",
+                self._change_visual_settings
+            ),
+            Tool(
+                "Help",
+                icons.HELP_ICON,
+                icons.HELP_ICON_SIZE,
+                "Display the help dialog.",
+                self._launch_help,
+                shortcut_code=(wx.ACCEL_ALT, ord("H"))
+            )
+        ]
+
+        return [tool for tool in tools if(tool is not None)]
+
+    def _build_toolbar(self, manual_save: Optional[Callable]):
         """
         PRIVATE: Constructs the toolbar, adds all tools to the toolbar, and sets up toolbar events to trigger actions
         within the UI.
@@ -408,135 +543,44 @@ class FPEEditor(wx.Frame):
         except Exception:
             pass
 
-        self._toolbar: wx.ToolBar = self.CreateToolBar()
+        self._toolbar = self.CreateToolBar()
 
-        p_f_bmp = icons.to_wx_bitmap(icons.JUMP_BACK_ICON, icons.JUMP_BACK_ICON_SIZE,
-                                     self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-        n_f_bmp = icons.to_wx_bitmap(icons.JUMP_FORWARD_ICON, icons.JUMP_FORWARD_ICON_SIZE,
-                                     self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
+        self._tools = self._get_tools(manual_save)
+        self._bitmaps = []
 
-        b_bmp = icons.to_wx_bitmap(icons.BACK_ICON, icons.BACK_ICON_SIZE,
-                                   self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-        f_bmp = icons.to_wx_bitmap(icons.FORWARD_ICON, icons.FORWARD_ICON_SIZE,
-                                   self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
+        for tool in self._tools:
+            if(tool is self.SEPERATOR):
+                self._toolbar.AddSeparator()
+                continue
 
-        run_bmp = icons.to_wx_bitmap(icons.RUN_ICON, icons.RUN_ICON_SIZE,
-                                     self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-        save_bmp = icons.to_wx_bitmap(icons.SAVE_ICON, icons.SAVE_ICON_SIZE,
-                                      self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-
-        turtle_bmp = icons.to_wx_bitmap(icons.TURTLE_ICON, icons.TURTLE_ICON_SIZE,
-                                        self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-
-        export_bmp = icons.to_wx_bitmap(icons.DUMP_FRAMES_ICON, icons.DUMP_FRAMES_SIZE,
-                                        self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-
-        swap_id_bmp = icons.to_wx_bitmap(icons.SWAP_IDENTITIES_ICON, icons.SWAP_IDENTITIES_SIZE,
-                                         self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-
-        export_csv_bmp = icons.to_wx_bitmap(icons.SAVE_TRACKS_ICON, icons.SAVE_TRACKS_SIZE,
-                                            self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-
-        settings_bmp = icons.to_wx_bitmap(icons.SETTINGS_ICON, icons.SETTINGS_SIZE,
-                                          self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-
-        spin_ctrl = wx.SpinCtrl(self._toolbar, min=1, max=50, initial=PointViewNEdit.DEF_FAST_MODE_SPEED_FRACTION)
-        spin_ctrl.SetMaxSize(wx.Size(-1, self.TOOLBAR_ICON_SIZE[1]))
-        spin_ctrl.Bind(wx.EVT_SPINCTRL, self._on_spin)
-
-        help_bmp = icons.to_wx_bitmap(icons.HELP_ICON, icons.HELP_ICON_SIZE,
-                                      self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
-
-        self._b_frame = self._toolbar.CreateTool(wx.ID_ANY, "Prior Detected Frame", p_f_bmp,
-                                                 shortHelp="Jump to the prior detected frame.")
-        self._toolbar.AddTool(self._b_frame)
-        self._f_frame = self._toolbar.CreateTool(wx.ID_ANY, "Next Detected Frame", n_f_bmp,
-                                                 shortHelp="Jump to the next detected frame.")
-        self._toolbar.AddTool(self._f_frame)
-        self._toolbar.AddSeparator()
-
-        self._undo = self._toolbar.CreateTool(wx.ID_ANY, "Undo", b_bmp, shortHelp="Undo the last action.")
-        self._toolbar.AddTool(self._undo)
-        self._redo = self._toolbar.CreateTool(wx.ID_ANY, "Redo", f_bmp, shortHelp="Redo the last action.")
-        self._toolbar.AddTool(self._redo)
-        self._toolbar.AddSeparator()
-
-        self._run = self._toolbar.CreateTool(wx.ID_ANY, "Run Frame Passes", run_bmp,
-                                             shortHelp="Rerun the frame passes on user modified results.")
-        self._toolbar.AddTool(self._run)
-
-        if(self._identity_swapper is not None):
-            self._swap_id = self._toolbar.CreateTool(
-                wx.ID_ANY, "Swap Identities", swap_id_bmp,
-                shortHelp="Swap body part positions for this frame and all frames in front of it."
+            icon = icons.to_wx_bitmap(
+                tool.icon,
+                tool.icon_size,
+                self.GetForegroundColour(),
+                (32, 32)
             )
-            self._toolbar.AddTool(self._swap_id)
-        else:
-            self._swap_id = None
+            self._bitmaps.append(icon)
 
-        self._save = self._toolbar.CreateTool(wx.ID_ANY, "Save Results", save_bmp,
-                                              shortHelp="Save the current results to file.")
-        self._toolbar.AddTool(self._save)
-        self._toolbar.AddSeparator()
+            if(tool.widget is None):
+                tool_obj = self._toolbar.CreateTool(wx.ID_ANY, tool.name, icon, shortHelp=tool.help)
+            else:
+                tool_obj = self._toolbar.CreateTool(wx.ID_ANY, tool.name, icon, icon, shortHelp=tool.help)
+            tool.toolbar_obj = tool_obj
+            self._toolbar.AddTool(tool_obj)
 
-        self._turtle = self._toolbar.CreateTool(
-            wx.ID_ANY, "Edit CTRL Speed: ", turtle_bmp, turtle_bmp,
-            shortHelp="Modify the labeling speed when CTRL Key is pressed (fast labeling mode)."
-        )
-        self._toolbar.AddTool(self._turtle)
-        self._toolbar.EnableTool(self._turtle.GetId(), False)
-        self._toolbar.AddControl(spin_ctrl)
-        self._toolbar.AddSeparator()
+            if(tool.widget is not None):
+                self._toolbar.EnableTool(tool_obj.GetId(), False)
+                self._toolbar.AddControl(tool.widget)
 
-        self._export_btn = self._toolbar.CreateTool(wx.ID_ANY, "Export Frames", export_bmp,
-                                                    shortHelp="Export the current modified frames from the UI.")
-        self._toolbar.AddTool(self._export_btn)
-
-        self._export_to_csv = self._toolbar.CreateTool(wx.ID_ANY, "Export Tracks to CSV", export_csv_bmp,
-                                                       shortHelp="Export current tracks to a csv file from the UI.")
-        self._toolbar.AddTool(self._export_to_csv)
-
-        self._visual_settings = self._toolbar.CreateTool(wx.ID_ANY, "Visual Settings", settings_bmp,
-                                                         shortHelp="Adjust some visual settings of the editor.")
-        self._toolbar.AddTool(self._visual_settings)
-
-        self._help = self._toolbar.CreateTool(wx.ID_ANY, "Help", help_bmp, shortHelp="Display the help dialog.")
-        self._toolbar.AddTool(self._help)
+        for tool in self._tools_only():
+            if(tool.name == "Undo"):
+                self._undo = tool.toolbar_obj
+            elif(tool.name == "Redo"):
+                self._redo = tool.toolbar_obj
 
         self._update_hist_btns(self._history)
         self.Bind(wx.EVT_TOOL, self.on_tool)
 
-        self._tools = [
-            self._b_frame,
-            self._f_frame,
-            self._undo,
-            self._redo,
-            self._run,
-            self._swap_id,
-            self._save,
-            self._turtle,
-            self._export_btn,
-            self._export_to_csv,
-            self._visual_settings,
-            self._help
-        ]
-        self._bitmaps = [
-            p_f_bmp,
-            n_f_bmp,
-            b_bmp,
-            f_bmp,
-            run_bmp,
-            swap_id_bmp if(self._swap_id is not None) else None,
-            save_bmp,
-            turtle_bmp,
-            export_bmp,
-            export_csv_bmp,
-            settings_bmp,
-            help_bmp
-        ]
-
-        self._tools = list(filter(lambda a: a is not None, self._tools))
-        self._bitmaps = list(filter(lambda a: a is not None, self._bitmaps))
         self._toolbar.Realize()
 
     def _on_spin(self, evt: wx.SpinEvent):
@@ -690,30 +734,9 @@ class FPEEditor(wx.Frame):
         """
         PRIVATE: Triggered whenever a tool is clicked on in the toolbar....
         """
-        if(evt.GetId() == self._undo.GetId()):
-            self._history.undo()
-        elif(evt.GetId() == self._redo.GetId()):
-            self._history.redo()
-        elif(evt.GetId() == self._save.GetId()):
-            self._save_and_close()
-        elif(evt.GetId() == self._run.GetId()):
-            if(self._fb_runner is not None):
-                if(self._fb_runner()):
-                    self._history.clear()
-        elif(evt.GetId() == self._help.GetId()):
-            self._launch_help()
-        elif(evt.GetId() == self._export_btn.GetId()):
-            self._on_export()
-        elif(evt.GetId() == self._f_frame.GetId()):
-            self._move_to_poor_label(True)
-        elif(evt.GetId() == self._b_frame.GetId()):
-            self._move_to_poor_label(False)
-        elif(evt.GetId() == self._export_to_csv.GetId()):
-            self._save_to_csv()
-        elif(evt.GetId() == self._visual_settings.GetId()):
-            self._change_visual_settings()
-        elif((self._identity_swapper is not None) and (evt.GetId() == self._swap_id.GetId())):
-            self._display_id_swap_dialog()
+        for tool in self._tools_only():
+            if(evt.GetId() == tool.toolbar_obj.GetId()):
+                tool.on_click()
 
     def _change_visual_settings(self):
         from diplomat.wx_gui.labeler_lib import Slider, FloatSpin

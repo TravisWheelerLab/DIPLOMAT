@@ -453,8 +453,6 @@ class SegmentedFramePassEngine(Predictor):
         self._current_frame = 0
 
     def get_frame_holder(self):
-        ctx = PoolWithProgress.get_optimal_ctx()
-
         output_path = Path(self.video_metadata["output-file-path"]).resolve()
         video_path = Path(self.video_metadata["orig-video-path"]).resolve()
         disk_path = output_path.parent / (output_path.stem + ".dipui")
@@ -511,7 +509,6 @@ class SegmentedFramePassEngine(Predictor):
         elif(self.settings.storage_mode in ["memory","hybrid"]):
             self._frame_holder = ForwardBackwardData(self.num_frames, self._num_total_bp)
         else:
-
             self._frame_holder = self.get_frame_holder()
 
         self._frame_holder.metadata.settings = dict(self.settings)
@@ -1474,7 +1471,7 @@ class SegmentedFramePassEngine(Predictor):
                 "Greedy is faster/simpler, hungarian provides better results."
             ),
             "storage_mode": (
-                "disk",
+                "hybrid",
                 type_casters.Literal("disk", "hybrid", "memory"),
                 "Location to store frames while the algorithm is running."
             ),

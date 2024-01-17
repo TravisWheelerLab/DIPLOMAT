@@ -222,6 +222,23 @@ bHhanJbP4FVWvVvrGr+a20ydNdXFcWO/L5oGuxdhoNwVxw69+HBXdnREx+9LfxwOnsuXfpQK6d2n
 J+yn/IS7FK1ovBJZK08mefg+XTN/lWfg3TXzZ6eXlv659dya+cdA/gPgZyV7
 """
 
+SAVE_CONT_ICON_SIZE = (64, 64)
+SAVE_CONT_ICON = b"""
+eJxjYBgFEKBeue7oGUwwj40o3cKL//7HDjaxE6Fd+Q5Q5QljDNABFN7GQVA7/3WQTRuRhXhaV83R
+Y0gEie/iIqS/6z+G/jqgwBWI/v+HePFr5/mGqX86UOA9VD8hA4L+E9D//xg/Pv01BPX/PyuMR/9E
+wvrxGjCZCP3/r0kS0r8FWWwaUOAtQzJSQrouRUD/XSYksdB///+vYpiAnBJvSuPX/78OWVDHxY7V
+/AdKUr6viF///43+6koI4Njx/T8qeKCEXz9BMGlY6//7/C528OIfEfr/TRXBKgsCUksJ62/DqRsE
+5hHS/x5/OSf8i4D+w/i1Wz4FKZqMW/8enHoZrafehIbfjw2x3CTqZwy5gBKF75sFSNGvvA8jETwP
+I15/wAdsyWgmK5H6U/9gT4fbOYnSH4WrUvu/iYUI/Xro+R8JdBDWz3ELt/b//xwJ6q9H1TEbNSyu
+sxLQz48W9OIW11H4iaj6T6LrL0NzsTQDZweyE67AVXaCuD/R64eraPrlgGJWN5EEjGEq88HcLaiJ
+Qgk9xMBlL/dkRJTWw5QaQPjnApBL71J0/SoQxUZnYAL7YPoZL6OrhYLj8kgA5jyWvM8Q2Rdwt3rh
+0L8fI04hXtsBkUa0azpJ0g+sHV+CpCXgfMaGfyTptwEnBeQK2WTLT6L1C0yARAIPiii/bUgoEtiK
+U7/PE4jpb3G5DgzS0B2jChFX3A4TOIJXvya6fnD6YSr+Chdoxauf8R6aflD6VTqAJGCLVz9DE5p+
+aQbGtC9I/PuM+PVLfEPVL6GIWhTn49fOgNp4AraOvqBwHxFsVfM/Qw9CZBBESDsDgyOO0hsE5hHW
+zsBQjFP7cYKuBwP0OIABvM1pZJCFJVcAiyoCHQokYHYNQ/fXYgIxjwJYC5+j6P69UJ4E3SDAEbkJ
+WmL9/3u2Wo5E3WDAYhhRUF6W6CBIjmZaAgCitspG
+"""
+
 
 def to_wx_bitmap(icon_bytes: bytes, icon_size: Tuple[int, int], fg_color: wx.Colour, bitmap_size: Tuple[int, int] = None):
     """
@@ -252,7 +269,7 @@ def _main():
     # Tests icon loading code above by displaying the help icon in a wx Frame...,
     app = wx.App()
     frame = wx.Frame(None, title="Image Test!")
-    bitmap = to_wx_bitmap(SETTINGS_ICON, SETTINGS_SIZE, frame.GetForegroundColour())
+    bitmap = to_wx_bitmap(SAVE_CONT_ICON, SAVE_CONT_ICON_SIZE, frame.GetForegroundColour())
     icon = wx.StaticBitmap(frame, wx.ID_ANY, bitmap)
     frame.Show(1)
     app.MainLoop()
