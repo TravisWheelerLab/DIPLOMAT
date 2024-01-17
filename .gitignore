@@ -14,3 +14,5 @@ docs/source/api
 docs/.venv
 docs/venv/
 docs/ENV/
+
+**/__pycache__/

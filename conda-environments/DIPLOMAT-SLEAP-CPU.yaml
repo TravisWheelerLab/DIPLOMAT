@@ -34,9 +34,7 @@ dependencies:
   - conda-forge::scikit-learn ==1.0
   - conda-forge::scikit-video
   - conda-forge::seaborn
-  - tensorflow >=2.6.0,<2.11  # No windows GPU support for >2.10
   - tensorflow-hub  # Pinned in meta.yml, but no problems here... yet
-  - keras
   - pip:
       - sleap==1.3.3
       - diplomat-track
