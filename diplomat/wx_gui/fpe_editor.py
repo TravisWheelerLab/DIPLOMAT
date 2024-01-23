@@ -192,6 +192,14 @@ class FPEEditor(wx.Frame):
     HIST_POSE_CHANGE = "pose_change"
     HIST_IDENTITY_SWAP = "id_swap"
     SEPERATOR = object()
+    PLOT_SETTINGS_MAPPING = {
+        "colormap": "colormap",
+        "shape_list": "shape_list",
+        "plot_threshold": "pcutoff",
+        "point_radius": "dotsize",
+        "point_alpha": "alphavalue",
+        "line_thickness": "line_thickness"
+    }
 
     def __init__(
         self,
@@ -252,6 +260,7 @@ class FPEEditor(wx.Frame):
 
         self._fb_runner = None
         self._frame_exporter = None
+        self._on_plot_settings_change = None
 
         self._main_panel = wx.Panel(self, style=wx.WANTS_CHARS | wx.TAB_TRAVERSAL)
         self._main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -270,14 +279,7 @@ class FPEEditor(wx.Frame):
         self._main_splitter.SetSashGravity(1.0)
         self._main_splitter.SetMinimumPaneSize(20)
 
-        ps = {
-            "colormap": plot_settings["colormap"],
-            "shape_list": plot_settings["shape_list"],
-            "plot_threshold": plot_settings["pcutoff"],
-            "point_radius": plot_settings["dotsize"],
-            "point_alpha": plot_settings["alphavalue"],
-            "line_thickness": plot_settings["line_thickness"]
-        }
+        ps = {new_k: plot_settings[old_k] for new_k, old_k in self.PLOT_SETTINGS_MAPPING.items()}
         self.video_player = PointEditor(
             self._video_splitter,
             video_hdl=video_hdl,
@@ -655,6 +657,16 @@ class FPEEditor(wx.Frame):
         """
         self._frame_exporter = func
 
+    def set_plot_settings_changer(self, func: Optional[Callable[[Mapping[str, Any]], None]]):
+        """
+        Set the plot settings changing function, which allows for adjusting certain video metadata values when they
+        become adjusted.
+
+        :param func: Optional function that accepts a string to any mapping (dict), and returns nothing. Can be used
+                     for adjusting video metadata when a user adjusts visual settings in the UI.
+        """
+        self._on_plot_settings_change = func
+
     @property
     def history(self) -> History:
         """
@@ -756,6 +768,12 @@ class FPEEditor(wx.Frame):
             if(dlg.ShowModal() == wx.ID_OK):
                 for k, v in dlg.get_values().items():
                     getattr(point_video_viewer, f"set_{k}")(v)
+
+                if(self._on_plot_settings_change is not None):
+                    self._on_plot_settings_change(
+                        {self.PLOT_SETTINGS_MAPPING[k]: val for k, val in dlg.get_values().items()}
+                    )
+
                 self.Refresh()
                 self.Update()
 

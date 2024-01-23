@@ -623,6 +623,11 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                     self._copy_to_disk(dialog.progress_bar, disk_frame_holder)
                     self._fb_editor.Enable(True)
 
+    def _on_visual_settings_change(self, data):
+        old_data = self._frame_holder.metadata["video_metadata"]
+        old_data.update(data)
+        self._frame_holder.metadata["video_metadata"] = old_data
+
     def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         if(self._restore_path is None):
             self._run_frame_passes(progress_bar)
@@ -684,6 +689,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         self._fb_editor.history.register_redoer(self.RERUN_HIST_EVT, self._on_hist_fb)
         self._fb_editor.history.register_confirmer(self.RERUN_HIST_EVT, self._confirm_action)
         self._fb_editor.set_fb_runner(self._on_run_fb)
+        self._fb_editor.set_plot_settings_changer(self._on_visual_settings_change)
 
         self._fb_editor.Show()
 

@@ -105,7 +105,7 @@ DIPLOMAT has documentation on ReadTheDocs at [https://diplomat.readthedocs.io/en
 ## Development
 
 DIPLOMAT is written entirely in python. To set up an environment for developing DIPLOMAT, you can simply pull down this repository and install its
-requirements using poetry. For a further description of how to set up DIPLOMAT for development, see the 
+requirements using pip. For a further description of how to set up DIPLOMAT for development, see the 
 [Development Usage](https://diplomat.readthedocs.io/en/latest/advanced_usage.html#development-usage) section in the documentation.
 
 ## Contributing
