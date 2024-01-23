@@ -452,6 +452,33 @@ class SegmentedFramePassEngine(Predictor):
 
         self._current_frame = 0
 
+    def get_frame_holder(self):
+        output_path = Path(self.video_metadata["output-file-path"]).resolve()
+        video_path = Path(self.video_metadata["orig-video-path"]).resolve()
+        disk_path = output_path.parent / (output_path.stem + ".dipui")
+
+        self._file_obj = disk_path.open("w+b")
+
+        with video_path.open("rb") as f:
+            shutil.copyfileobj(f, self._file_obj)
+
+        ctx = PoolWithProgress.get_optimal_ctx()
+        self._manager = ctx.Manager()
+        self._shared_memory = allocate_shared_memory(
+            ctx, DiskBackedForwardBackwardData.get_shared_memory_size(self.num_frames, self._num_total_bp)
+        )
+
+        _frame_holder = DiskBackedForwardBackwardData(
+            self.num_frames,
+            self._num_total_bp,
+            self._file_obj,
+            self.settings.memory_cache_size,
+            lock=self._manager.RLock(),
+            memory_backing=self._shared_memory
+        )
+
+        return _frame_holder
+
     def _open(self):
         if(self._restore_path is not None):
             # Ignore everything else,
@@ -479,32 +506,10 @@ class SegmentedFramePassEngine(Predictor):
 
             self._segments = np.array(self._frame_holder.metadata["segments"], dtype=np.int64)
             self._segment_scores = np.array(self._frame_holder.metadata["segment_scores"], dtype=np.float32)
-        elif(self.settings.storage_mode == "memory"):
+        elif(self.settings.storage_mode in ["memory","hybrid"]):
             self._frame_holder = ForwardBackwardData(self.num_frames, self._num_total_bp)
         else:
-            output_path = Path(self.video_metadata["output-file-path"]).resolve()
-            video_path = Path(self.video_metadata["orig-video-path"]).resolve()
-            disk_path = output_path.parent / (output_path.stem + ".dipui")
-
-            self._file_obj = disk_path.open("w+b")
-
-            with video_path.open("rb") as f:
-                shutil.copyfileobj(f, self._file_obj)
-
-            ctx = PoolWithProgress.get_optimal_ctx()
-            self._manager = ctx.Manager()
-            self._shared_memory = allocate_shared_memory(
-                ctx, DiskBackedForwardBackwardData.get_shared_memory_size(self.num_frames, self._num_total_bp)
-            )
-
-            self._frame_holder = DiskBackedForwardBackwardData(
-                self.num_frames,
-                self._num_total_bp,
-                self._file_obj,
-                self.settings.memory_cache_size,
-                lock=self._manager.RLock(),
-                memory_backing=self._shared_memory
-            )
+            self._frame_holder = self.get_frame_holder()
 
         self._frame_holder.metadata.settings = dict(self.settings)
         self._frame_holder.metadata.video_metadata = dict(self.video_metadata)
@@ -1466,8 +1471,8 @@ class SegmentedFramePassEngine(Predictor):
                 "Greedy is faster/simpler, hungarian provides better results."
             ),
             "storage_mode": (
-                "disk",
-                type_casters.Literal("disk", "memory"),
+                "hybrid",
+                type_casters.Literal("disk", "hybrid", "memory"),
                 "Location to store frames while the algorithm is running."
             ),
             "memory_cache_size": (

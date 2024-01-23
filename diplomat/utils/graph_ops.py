@@ -188,7 +188,7 @@ def min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     row_solution = np.full(graph_copy.shape[0], -1, np.int64)
     col_solution = np.full(graph_copy.shape[1], -1, np.int64)
 
-    for i in range(len(row_solution)):
+    for _ in range(len(row_solution)):
         min_row = 0
 
         for i2 in range(len(row_solution)):
@@ -200,7 +200,9 @@ def min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
                 row_solution[min_row] = j
                 col_solution[j] = min_row
                 row_zeros[min_row] = np.iinfo(row_zeros.dtype).max
-                col_zeros[j] = np.iinfo(col_zeros.dtype).max
+                for k in range(len(row_zeros)):
+                    if(graph_copy[k, j] == 0 and row_zeros[k] != np.iinfo(row_zeros.dtype).max):
+                        row_zeros[k] -= 1
                 break
 
     return (np.arange(cost_matrix.shape[0], dtype=np.int64), col_solution)
@@ -221,23 +223,27 @@ def to_valid_graph(g: np.ndarray) -> np.ndarray:
 if(__name__ == "__main__"):
     inf = np.inf
 
-    print(_min_spanning_tree(np.array([
-        [inf, 1, 2, 6],
-        [1, inf, 5, 3],
-        [2, 5, inf, 7],
-        [6, 3, 7, inf]
-    ])))
+    # print(_min_spanning_tree(np.array([
+    #     [inf, 1, 2, 6],
+    #     [1, inf, 5, 3],
+    #     [2, 5, inf, 7],
+    #     [6, 3, 7, inf]
+    # ])))
 
-    print(connected_components(np.array([
-        [inf, inf, inf, inf],
-        [inf, inf, inf, 6],
-        [inf, inf, inf, 7],
-        [inf, 6, 7, inf]
-    ])))
+    # print(connected_components(np.array([
+    #     [inf, inf, inf, inf],
+    #     [inf, inf, inf, 6],
+    #     [inf, inf, inf, 7],
+    #     [inf, 6, 7, inf]
+    # ])))
 
-    print(min_cost_matching(np.array([
-        [1, 3, 5, 7],
-        [3, 5, 7, 1],
-        [21, 2, 6, 4],
-        [99, 91, 8, 1]
-    ])))
+    # print(min_cost_matching(np.array([
+    #     [1, 3, 5, 7],
+    #     [3, 5, 7, 1],
+    #     [21, 2, 6, 4],
+    #     [99, 91, 8, 1]
+    # ])))
+
+    print(min_cost_matching(np.array([[9.92690898e+04, 1.07946068e+01, 2.50553569e-01],
+        [3.14225839e+01, 1.54683226e+00, 1.06039718e+05],
+        [3.12269539e+01, 9.64991177e+04, 1.47355721e-03]])))

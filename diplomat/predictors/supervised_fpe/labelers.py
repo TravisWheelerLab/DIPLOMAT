@@ -383,8 +383,8 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         self._frame_engine = frame_engine
         self._settings = labeler_lib.SettingCollection(
             minimum_peak_value=labeler_lib.FloatSpin(0, 1, 0.05, 0.001, 4),
-            selected_peak_value=labeler_lib.FloatSpin(0, 1, 0.95, 0.001, 4),
-            unselected_peak_value=labeler_lib.FloatSpin(0, 1, 0.05, 0.001, 4)
+            selected_peak_value=labeler_lib.FloatSpin(0.5, 1, 0.95, 0.001, 4),
+            unselected_peak_value=labeler_lib.FloatSpin(0, 0.5, 0.05, 0.001, 4)
         )
 
     def predict_location(
@@ -415,6 +415,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
 
         peak_locs = find_peaks(xs, ys, probs, meta.width)
         peak_locs = peak_locs[probs[peak_locs] >= config.minimum_peak_value]
+        print(peak_locs)
         if(len(peak_locs) <= 1):
             # No peaks, or only one peak, perform basically a no-op, return prior frame state...
             x, y, prob = self._frame_engine.scmap_to_video_coord(

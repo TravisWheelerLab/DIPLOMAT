@@ -2,7 +2,7 @@
 Provides utility functions for quickly extracting frames from diplomat frame store files, and also printing frame data to the terminal
 for debugging and display purposes.
 """
-from typing import BinaryIO, Sequence, Callable, Optional, Generator, Union, Tuple, NamedTuple
+from typing import BinaryIO, Sequence, Callable, Optional, Generator, Union, Tuple, NamedTuple, List
 from diplomat.processing import TrackingData
 from diplomat.utils import frame_store_fmt
 from io import BytesIO
@@ -243,7 +243,10 @@ def extract_n_pack(
     return base64.encodebytes(out.getvalue())
 
 
-def unpack_frame_string(frame_string: bytes, frames_per_iter: int = 0) -> Union[TrackingData, Generator[TrackingData, None, None]]:
+def unpack_frame_string(
+    frame_string: bytes,
+    frames_per_iter: int = 0
+) -> Tuple[List[str], Union[TrackingData, Generator[TrackingData, None, None]]]:
     """
     Unpack a frame store string into a tracking data object for access to the original probability frame data.
 
@@ -252,17 +255,22 @@ def unpack_frame_string(frame_string: bytes, frames_per_iter: int = 0) -> Union[
                             0 or less, this function returns a single TrackingData object storing all frames instead of
                             returning a generator.
 
-    :returns: A single TrackingData object if frames_per_iter <= 0, a Generator of TrackingData objects if
-              frames_per_iter > 0.
+    :returns: A tuple containing:
+               - A list of strings (body parts) and,
+               - A single TrackingData object if frames_per_iter <= 0,
+                 or a Generator of TrackingData objects if frames_per_iter > 0.
     """
     f = BytesIO(base64.decodebytes(frame_string))
 
     reader = frame_store_fmt.DLFSReader(f)
 
-    if (frames_per_iter <= 0):
-        yield reader.read_frames(reader.get_header().number_of_frames)
-        return
+    if(frames_per_iter <= 0):
+        return (reader.get_header().bodypart_names, reader.read_frames(reader.get_header().number_of_frames))
+    else:
+        return (reader.get_header().bodypart_names, _unpack_frame_string_gen(reader, frames_per_iter))
 
+
+def _unpack_frame_string_gen(reader: frame_store_fmt.DLFSReader, frames_per_iter: int = 0):
     while(reader.has_next(frames_per_iter)):
         yield reader.read_frames(frames_per_iter)
 
@@ -270,4 +278,4 @@ def unpack_frame_string(frame_string: bytes, frames_per_iter: int = 0) -> Union[
     if(extra > 0):
         yield reader.read_frames(extra)
 
-    return
+    return None

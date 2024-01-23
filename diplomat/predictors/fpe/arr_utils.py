@@ -133,7 +133,7 @@ def find_peaks(x: np.ndarray, y: np.ndarray, prob: np.ndarray, width: int, fill_
     # We perform a 3x3 max-convolution to find peaks.
     for i in range(-1, 2):
         for j in range(-1, 2):
-            if (i == 0 and j == 0):
+            if(i == 0 and j == 0):
                 continue
             neighbor = lookup_table[to_keys(x + j, y + i)]
             below_to_right = (i >= 0) & (j >= 0)

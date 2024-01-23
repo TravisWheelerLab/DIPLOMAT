@@ -14,3 +14,10 @@ docs/source/api
 docs/.venv
 docs/venv/
 docs/ENV/
+
+# Ignore pycache files...
+**/__pycache__/
+
+.DS_Store
+
+*.zip
