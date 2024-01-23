@@ -195,7 +195,6 @@ def min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
             if(row_zeros[i2] < row_zeros[min_row]):
                 min_row = i2
 
-
         for j in range(len(col_solution)):
             if(graph_copy[min_row, j] == 0 and row_solution[min_row] < 0 and col_solution[j] < 0):
                 row_solution[min_row] = j
@@ -244,7 +243,6 @@ if(__name__ == "__main__"):
     #     [21, 2, 6, 4],
     #     [99, 91, 8, 1]
     # ])))
-
 
     print(min_cost_matching(np.array([[9.92690898e+04, 1.07946068e+01, 2.50553569e-01],
         [3.14225839e+01, 1.54683226e+00, 1.06039718e+05],
