@@ -315,7 +315,7 @@ def print_test_set():
 
     for i, s in enumerate(TEST_FRAME_SEQUENCES):
         print(f"Test Frame Sequence {i}: ")
-        for j, frm in enumerate(extract_frames.unpack_frame_string(s, 1)):
+        for j, frm in enumerate(extract_frames.unpack_frame_string(s, 1)[1]):
             for bp_idx in range(frm.get_bodypart_count()):
                 print(f"Frame {j} Body Part {bp_idx}")
                 extract_frames.pretty_print_frame(frm, 0, bp_idx)
