@@ -127,7 +127,7 @@ def _min_row_subtract(g: np.ndarray) -> np.ndarray:
     return g
 
 
-#@numba.njit
+@numba.njit
 def min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Implementation of the hungarian algorithm for solving the minimum assignment problem. Given a cost matrix,
