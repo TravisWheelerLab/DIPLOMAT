@@ -6,7 +6,7 @@ from pathlib import Path
 
 from diplomat.predictors.sfpe.disk_sparse_storage import DiskBackedForwardBackwardData
 from diplomat.wx_gui.progress_dialog import FBProgressDialog
-from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, NearestPeakInSource, ApproximateSourceOnly
+from diplomat.predictors.supervised_fpe.labelers import Approximate, Point#, NearestPeakInSource, ApproximateSourceOnly
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
@@ -531,7 +531,15 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         for (s_i, e_i, f_i), seg_ord in zip(self._segments, self._segment_bp_order):
             poses[s_i:e_i, :] = poses[s_i:e_i, seg_ord]
         old_poses.get_all()[:] = poses.reshape(old_poses.get_frame_count(), old_poses.get_bodypart_count() * 3)
+        
+        # For each changed frame and each body part, take the maximum probability coordinates and set them to one
+        for (frame_idx, bp_idx), frame in changed_frames.items():
+            max_prob_coord = np.unravel_index(frame.frame_probs.argmax(), frame.frame_probs.shape)
+            new_frame_probs = np.zeros_like(frame.frame_probs) #copy because this is read only
+            new_frame_probs[max_prob_coord] = 1
+            frame.frame_probs = new_frame_probs
 
+        
         return (
             self.get_maximums(
                 self._frame_holder,
@@ -672,7 +680,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._get_names(),
             self.video_metadata,
             self._get_crop_box(),
-            [Approximate(self), ApproximateSourceOnly(self), Point(self), NearestPeakInSource(self)],
+            [Approximate(self), Point(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
             None,
             list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs),
