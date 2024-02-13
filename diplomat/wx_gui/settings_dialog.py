@@ -43,7 +43,11 @@ class DropDown(SettingWidget):
         self._hook = hook
 
     def get_new_widget(self, parent=None) -> wx.Control:
-        text_list = wx.Choice(parent, choices=self._option_names, style=wx.LB_SINGLE, **self._kwargs)
+                # Check if the platform is Windows
+        if platform.system() != 'Windows':
+            # If not Windows, add the style flag to kwargs
+            self.kwargs['style'] = wx.LB_SINGLE
+        text_list = wx.Choice(parent, choices=self._option_names, **self._kwargs)
         text_list.SetSelection(self._default)
 
         def val_change(evt):
