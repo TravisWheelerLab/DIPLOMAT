@@ -6,7 +6,7 @@ from pathlib import Path
 
 from diplomat.predictors.sfpe.disk_sparse_storage import DiskBackedForwardBackwardData
 from diplomat.wx_gui.progress_dialog import FBProgressDialog
-from diplomat.predictors.supervised_fpe.labelers import Approximate, Point#, NearestPeakInSource, ApproximateSourceOnly
+from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, NearestPeakInSource, ApproximateSourceOnly
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
@@ -538,7 +538,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             new_frame_probs = np.zeros_like(frame.frame_probs) #copy because this is read only
             new_frame_probs[max_prob_coord] = 1
             frame.frame_probs = new_frame_probs
-
         
         return (
             self.get_maximums(
@@ -680,7 +679,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._get_names(),
             self.video_metadata,
             self._get_crop_box(),
-            [Approximate(self), Point(self)],
+            [Approximate(self), Point(self), NearestPeakInSource(self), ApproximateSourceOnly(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
             None,
             list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs),
