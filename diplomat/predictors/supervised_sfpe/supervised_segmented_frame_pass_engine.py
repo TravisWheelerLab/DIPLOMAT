@@ -517,6 +517,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         progress_bar: ProgressBar
     ) -> Tuple[Pose, Iterable[int]]:
         
+        #TODO : delete below lines, not doing as expected
+        
         # # For each changed frame and each body part, take the maximum probability coordinates and set them to one
         # for (frame_idx, bp_idx), frame in changed_frames.items():
         #     max_prob_coord = np.unravel_index(frame.frame_probs.argmax(), frame.frame_probs.shape)
