@@ -6,6 +6,7 @@ from typing import Any, Callable, List, Optional
 import wx
 from diplomat.processing import Config
 from diplomat.wx_gui.labeler_lib import SettingWidget, SettingCollection, SettingCollectionWidget
+import platform
 
 
 class DropDown(SettingWidget):
@@ -43,7 +44,11 @@ class DropDown(SettingWidget):
         self._hook = hook
 
     def get_new_widget(self, parent=None) -> wx.Control:
-        text_list = wx.Choice(parent, choices=self._option_names, style=wx.LB_SINGLE, **self._kwargs)
+                # Check if the platform is Windows
+        if platform.system() != 'Windows':
+            # If not Windows, add the style flag to kwargs
+            self._kwargs['style'] = wx.LB_SINGLE
+        text_list = wx.Choice(parent, choices=self._option_names, **self._kwargs)
         text_list.SetSelection(self._default)
 
         def val_change(evt):

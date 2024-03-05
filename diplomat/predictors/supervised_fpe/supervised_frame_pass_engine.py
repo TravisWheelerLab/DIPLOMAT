@@ -67,7 +67,7 @@ class SupervisedFramePassEngine(FramePassEngine):
             self._get_names(),
             self.video_metadata,
             self._get_crop_box(),
-            [Approximate(self), ApproximateSourceOnly(self), Point(self), NearestPeakInSource(self)],
+            [Approximate(self), Point(self), NearestPeakInSource(self), ApproximateSourceOnly(self)],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
             None,
             list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs)

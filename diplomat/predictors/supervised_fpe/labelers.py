@@ -57,6 +57,7 @@ class Point(labeler_lib.PoseLabeler):
         frame = self._frame_engine.frame_data.frames[frame_idx][bp_idx]
 
         if(x is None):
+            #should we be returning this prob value or the probability value?
             x, y, prob = self._frame_engine.scmap_to_video_coord(
                 *self._frame_engine.get_maximum_with_defaults(frame),
                 meta.down_scaling
@@ -206,7 +207,7 @@ class Approximate(labeler_lib.PoseLabeler):
         bp_idx: int,
         x: float,
         y: float,
-        probability: float
+        probability: float,
     ) -> Tuple[Any, Tuple[float, float, float]]:
         info = self._settings.get_values()
         user_amp = info.user_input_strength / 1000
@@ -293,7 +294,10 @@ class Approximate(labeler_lib.PoseLabeler):
             )
             new_data.pack(*[np.array([item]) for item in [y, x, prob, off_x, off_y]])
         else:
-            new_data = suggested_frame.src_data
+            y, x, prob, x_offset, y_offset = suggested_frame.src_data.unpack()
+            max_prob_idx = np.argmax(prob)
+            new_data = SparseTrackingData()
+            new_data.pack(*[np.array([item]) for item in [y[max_prob_idx], x[max_prob_idx], 1, x_offset[max_prob_idx], y_offset[max_prob_idx]]])
 
         new_frame = ForwardBackwardFrame()
         new_frame.orig_data = new_data
@@ -481,7 +485,10 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
             )
             new_data.pack(*[np.array([item]) for item in [y, x, prob, off_x, off_y]])
         else:
-            new_data = suggested_frame.src_data
+            y, x, prob, x_offset, y_offset = suggested_frame.src_data.unpack()
+            max_prob_idx = np.argmax(prob)
+            new_data = SparseTrackingData()
+            new_data.pack(*[np.array([item]) for item in [y[max_prob_idx], x[max_prob_idx], 1, x_offset[max_prob_idx], y_offset[max_prob_idx]]])
 
         new_frame = ForwardBackwardFrame()
         new_frame.orig_data = new_data

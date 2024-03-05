@@ -288,6 +288,7 @@ class FPEEditor(wx.Frame):
             bp_names=names,
             labeling_modes=labeling_modes,
             group_list=part_groups,
+         #   skeleton_info = self.skeleton_info
             **ps
         )
         self.video_controls = VideoController(self._sub_panel, video_player=self.video_player.video_viewer)
@@ -335,6 +336,7 @@ class FPEEditor(wx.Frame):
         self._was_save_button_flag = False
 
         self.video_controls.Bind(PointViewNEdit.EVT_FRAME_CHANGE, self._on_frame_chg)
+
 
     def _on_close_caller(self, event: wx.CloseEvent):
         self._on_close(event, self._was_save_button_flag)

@@ -2,7 +2,7 @@
 Provides a point editing widget. This is a video player with a body part and labeler selections available on the side.
 """
 from typing import Tuple, List, Optional, Union, Any, Iterable
-
+from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 import numpy as np
 import wx
 from diplomat.processing import *
@@ -139,6 +139,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         video_hdl: cv2.VideoCapture,
         crop_box: Box,
         poses: Pose,
+        skeleton_info: StorageGraph,
         colormap: Union[str, list, Colormap] = DEF_MAP,
         shape_list: Iterable[str] = None,
         plot_threshold: float = 0.1,
@@ -190,6 +191,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         self._fast_m_speed = ctrl_speed_divider
         self._pose_label_modes = {}
         self._current_pose_labeling_mode = ""
+        self.skeleton_info = skeleton_info
 
         BasicDataFields.__init__(self, colormap, plot_threshold, point_radius, point_alpha, line_thickness, shape_list)
 
@@ -1087,6 +1089,7 @@ class PointEditor(wx.Panel):
         bp_names: List[str],
         labeling_modes: List[PoseLabeler],
         group_list: Optional[List[int]] = None,
+        skeleton_info: StorageGraph = None,
         colormap: str = PointViewNEdit.DEF_MAP,
         shape_list: str = None,
         plot_threshold: float = 0.1,
@@ -1133,7 +1136,7 @@ class PointEditor(wx.Panel):
         self._main_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self._side_bar_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        self.video_viewer = PointViewNEdit(self, video_hdl, crop_box, poses, colormap, shape_list, plot_threshold, point_radius,
+        self.video_viewer = PointViewNEdit(self, video_hdl, crop_box, poses, skeleton_info, colormap, shape_list, plot_threshold, point_radius,
                                            point_alpha, line_thickness)
 
         for p in labeling_modes:
