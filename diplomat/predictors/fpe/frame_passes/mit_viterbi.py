@@ -72,6 +72,9 @@ class ViterbiTransitionTable:
         self._enter_exit_prob = to_log_space(enter_exit_prob)
         self._enter_stay_prob = to_log_space(enter_stay_prob)
 
+    """The ViterbiTransitionTable class is used to manage transition probabilities, 
+    including those modified by the dominance relationship and the "flat-topped" Gaussian distribution."""
+
     @staticmethod
     def _is_enter_state(coords: Coords) -> bool:
         return len(coords[0]) == 1 and np.isneginf(coords[0][0])
@@ -132,6 +135,7 @@ class MITViterbi(FramePass):
         else:
             self._scaled_std = (std if (std != "auto") else 1) / metadata.down_scaling
 
+        #flat topped gaussian 
         self._flatten_std = None if (conf.gaussian_plateau is None) else self._scaled_std * conf.gaussian_plateau
         self._gaussian_table = norm(fpe_math.gaussian_table(
             self.height, self.width, self._scaled_std, conf.amplitude,
@@ -153,6 +157,27 @@ class MITViterbi(FramePass):
         metadata.include_soft_domination = self.config.include_soft_domination
 
     def _init_skeleton(self, data: ForwardBackwardData):
+        """If skeleton data is available, this function initializes the skeleton tables, 
+        which are used to enhance tracking by considering the structural 
+        relationships between different body parts.
+        
+        The _skeleton_tables is a StorageGraph object that stores the relationship between different body parts
+        as defined in the skeleton data from the metadata. Each entry in this table represents a connection
+        between two body parts (nodes) and contains the statistical data (bin_val, freq, avg) related to that connection.
+        This data is used to enhance tracking accuracy by considering the structural relationships between body parts.
+        
+        Specifically, it stores:
+        # - The names of the nodes (body parts) involved in the skeleton structure.
+        # - A matrix for each pair of connected nodes, which is computed based on the skeleton formula. This matrix
+        #   represents the likelihood of transitioning from one body part to another, taking into account the average
+        #   distance and frequency of such transitions as observed in the training data.
+        # - The configuration parameters used for calculating these matrices, which include adjustments for log space
+        #   calculations and other statistical considerations.
+        # This structure is crucial for the Viterbi algorithm to accurately model the movement and relationships
+        # between different parts of the body during tracking.
+
+        """
+
         if("skeleton" in data.metadata):
             meta = data.metadata
             self._skeleton_tables = StorageGraph(meta.skeleton.node_names())
@@ -188,6 +213,10 @@ class MITViterbi(FramePass):
         in_place: bool = True,
         reset_bar: bool = True
     ) -> ForwardBackwardData:
+        """
+        This is the main function that orchestrates the forward and backward passes of the Viterbi algorithm. 
+        It initializes the necessary tables and states, then runs the forward pass to calculate probabilities,
+        followed by a backtrace to determine the most probable paths."""
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             if("fixed_frame_index" not in fb_data.metadata):
@@ -343,6 +372,9 @@ class MITViterbi(FramePass):
     @staticmethod
     def _get_pool():
         # Check globals for a pool...
+        """This function sets up a multiprocessing pool for parallel processing,
+        improving the efficiency of the algorithm by allowing it to process 
+        multiple parts of the frame or multiple frames simultaneously."""
         if(FramePass.GLOBAL_POOL is not None):
             return FramePass.GLOBAL_POOL
 
@@ -431,6 +463,42 @@ class MITViterbi(FramePass):
         soft_dom_weight: float = 0,
         skeleton_weight: float = 0
     ) -> List[np.ndarray]:
+        """This method is responsible for computing the transition probabilities from the prior maximum locations 
+        (highest probability states) of all body parts in the prior frame to the current frame's states. 
+        It's where the algorithm determines the most probable path that leads to each pixel 
+        in the current frame based on the accumulated probabilities from previous frames.
+        
+        Parameters
+        prior: A list of lists containing tuples. 
+        Each tuple represents the probability and coordinates (x, y) of the prior maximum locations 
+        for all body parts in the prior frame. 
+        This data structure allows the method to consider multiple potential origins for each body part's current position.
+
+        current: A list of tuples containing the probability and coordinates (x, y) of the current frame's states
+        This represents the possible current positions and their associated probabilities.
+
+        bp_idx: The index of the body part being processed. This is used to identify which part of the data corresponds to the current body part in multi-body part tracking scenarios.
+
+        metadata: The metadata from the ForwardBackwardData object. 
+        An AttributeDict containing metadata that might be necessary for the computation, such as configuration parameters or additional data needed for probability calculations.
+        
+        transition_function:  A function or callable object that calculates the transition probabilities between states. This is crucial for determining how likely it is to move from one state to another.
+
+        resist_transition_function: A function or callable object that calculates the resistance to transitioning between states. 
+        Similar to transition_function, but used for calculating resistive transitions, which might be part of handling interactions between different tracked objects or body parts.
+
+        skeleton_table: A StorageGraph object that stores the relationship between different body parts as defined in the skeleton data from the metadata.
+        An optional parameter that, if provided, contains skeleton information that can be used to enhance the tracking by considering the structural relationships between different body parts.
+
+        soft_dom_weight: A float representing the weight of the soft domination factor. 
+
+        skeleton_weight: A float representing the weight of the skeleton factor.
+
+        """
+
+        # If skeleton information is available, the method first computes the influence of skeletal connections 
+        # on the transition probabilities. 
+        # This involves considering the structural relationships between body parts and adjusting probabilities accordingly.
         skel_res = cls._compute_from_skeleton(
             prior,
             current,
@@ -438,6 +506,11 @@ class MITViterbi(FramePass):
             metadata,
             skeleton_table
         )
+
+        #The method then calculates the effect of soft domination, 
+        # which is a technique used to handle the dominance relationship between different paths. 
+        # This step adjusts the probabilities to favor more likely paths and suppress less likely ones, 
+        # based on the configured soft domination weight.
 
         from_soft_dom = cls._compute_soft_domination(
             prior,
@@ -447,12 +520,22 @@ class MITViterbi(FramePass):
             resist_transition_function,
         )
 
+        #The core of the method involves calculating the transition probabilities from the prior states to the current states. 
+        # This is done using the transition_function, which takes into account the distances between states and other factors 
+        # to determine how likely it is to transition from one state to another.
         trans_res = cls.log_viterbi_between(
             current,
             prior[bp_idx],
             transition_function
         )
 
+        #The calculated probabilities from the skeleton influence, soft domination, 
+        # and direct transitions are then combined to determine the overall probability of transitioning 
+        # to each current state from the prior states. 
+        # This involves weighting each component according to the configured weights and summing them up to get the final probabilities.
+
+        #Normalization: Finally, the probabilities are normalized to ensure they are within a valid range 
+        # and to facilitate comparison between different paths.
         return norm_together([
             t + s * skeleton_weight + d * soft_dom_weight for t, s, d in zip(trans_res, skel_res, from_soft_dom)
         ])
@@ -527,6 +610,8 @@ class MITViterbi(FramePass):
         merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.max,
         merge_results: bool = True
     ) -> Union[List[Tuple[int, List[NumericArray]]], List[NumericArray]]:
+        
+        #TODO: Add docstring and notes in coda
         if(skeleton_table is None):
             return [0] * len(current_data) if(merge_results) else []
 
@@ -597,6 +682,45 @@ class MITViterbi(FramePass):
         merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.max,
         merge_results: bool = True
     ) -> Union[List[Tuple[int, List[NumericArray]]], List[NumericArray]]:
+        """
+        Computes the soft domination for a given body part across frames, considering prior and current data.
+
+        This method calculates the soft domination values by comparing the probabilities of a body part being in
+        a certain state in the current frame against its probabilities in the prior frames. It uses a transition
+        function to determine the likelihood of transitioning from each state in the prior frames to each state in
+        the current frame. The results are merged using specified merging functions to find the most probable state
+        transitions. This method can optionally merge the results across all body parts to find the overall most
+        probable states.
+
+        Parameters:
+        - prior: Union[List[ForwardBackwardFrame], List[List[Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]]]]
+                 The prior frame data or computed probabilities and coordinates for each body part.
+        - current_data: List[Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]]
+                        The current frame data including probabilities and coordinates for each body part.
+        - bp_idx: int
+                  The index of the body part being processed.
+        - metadata: AttributeDict
+                    Metadata containing configuration and state information for the current processing.
+        - transition_func: Optional[TransitionFunction]
+                           The function used to compute the transition probabilities between states.
+        - merge_arrays: Callable[[Iterable[np.ndarray]], np.ndarray]
+                        A function to merge arrays of probabilities from different transitions.
+        - merge_internal: Callable[[np.ndarray, int], np.ndarray]
+                          A function to merge probabilities within a single transition.
+        - merge_results: bool
+                         A flag indicating whether to merge the results across all body parts.
+
+        Returns:
+        - Union[List[Tuple[int, List[NumericArray]]], List[NumericArray]]:
+          The computed soft domination values for the specified body part, either as a list of numeric arrays
+          (if merge_results is False) or as a list of tuples containing the body part index and the list of
+          numeric arrays (if merge_results is True).
+
+        This method is crucial for optimizing the Viterbi path selection by considering not only the most probable
+        paths but also how these paths compare when considering potential transitions from prior states. It helps
+        in refining the selection of paths that are not only probable in isolation but also in the context of the
+        sequence of frames being analyzed.
+        """
         if(transition_func is None or metadata.num_outputs <= 1):
             return [0] * len(current_data) if(merge_results) else []
 
@@ -669,6 +793,12 @@ class MITViterbi(FramePass):
         soft_dom_weight: float = 0,
         skeleton_weight: float = 0
     ) -> List[ForwardBackwardFrame]:
+        
+        """processes a single frame in the context of tracking multiple body parts or individuals, 
+        calculating the probabilities of each body part being in each position based on prior information, 
+        current observations, and various transition models.
+        It integrates several key concepts, including handling occlusions, leveraging skeleton information, 
+        and applying soft domination to refine the tracking process."""
         group_range = range(
             bp_group * metadata.num_outputs,
             (bp_group + 1) * metadata.num_outputs
@@ -814,6 +944,21 @@ class MITViterbi(FramePass):
         merge_arrays: Callable[[Iterable[np.ndarray]], np.ndarray] = np.maximum.reduce,
         merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.nanmax
     ) -> List[np.ndarray]:
+        """
+        This method calculates the transition probabilities between the prior and current data points for each body part.
+        It utilizes a transition function to compute the probabilities of moving from each prior state to each current state.
+        The method then merges these probabilities across all body parts to determine the most likely transitions.
+
+        Parameters:
+        - current_data: A sequence of tuples containing the current probabilities and coordinates for each body part.
+        - prior_data: A sequence of tuples containing the prior probabilities and coordinates for each body part.
+        - transition_function: A callable that computes the transition probabilities between prior and current states.
+        - merge_arrays: A callable that merges arrays of probabilities across all body parts.
+        - merge_internal: A callable that merges probabilities within each body part.
+
+        Returns:
+        A list of numpy arrays representing the merged transition probabilities for each body part.
+        """
         return [
             merge_arrays([
                 merge_internal(
@@ -851,6 +996,11 @@ class MITViterbi(FramePass):
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         # Class to enforce that probabilities are between 0 and 1....
+        """This function returns a dictionary of configuration options that can be adjusted to 
+        customize the behavior of the algorithm. 
+        These options include parameters for the Gaussian distribution, 
+        probabilities for obscured and edge states, 
+        and weights for the dominance relationship and skeleton data."""
         return {
             "standard_deviation": (
                 "auto", tc.Union(float, tc.Literal("auto")),
