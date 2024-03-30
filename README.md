@@ -2,7 +2,7 @@
 
 Deep learning-based Identity Preserving Labeled-Object Multi-Animal Tracking.
 
-**NOTE:** DIPLOMAT is currently alpha software, there may be minor bugs and issues.
+**NOTE:** DIPLOMAT is currently alpha software, there may be minor bugs and usability issues.
 
 ## About
 
