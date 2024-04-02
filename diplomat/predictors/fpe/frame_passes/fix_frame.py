@@ -48,6 +48,21 @@ class FixFrame(FramePass):
         frame: ForwardBackwardFrame,
         down_scaling: float
     ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+        """
+        Determines the maximum location within a frame after downscaling.
+
+        This method identifies the maximum probability location within a given frame and adjusts its coordinates
+        based on the provided downscaling factor. It returns the adjusted x and y coordinates along with the
+        maximum probability value.
+
+        Parameters:
+        - frame: ForwardBackwardFrame, the frame to analyze.
+        - down_scaling: float, the factor by which the frame's coordinates are downscaled.
+
+        Returns:
+        - Tuple[Optional[float], Optional[float], Optional[float]]: The adjusted x and y coordinates of the maximum
+          location and its probability. Returns None for each value if the probability data is not available.
+        """
         y, x, prob, x_off, y_off = frame.src_data.unpack()
 
         if(prob is None):
@@ -347,6 +362,24 @@ class FixFrame(FramePass):
         max_dist: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> Tuple[float, float]:
+        """
+        Computes a single score for a given set of frames, considering the number of outputs, down scaling factor, 
+        an optional skeleton, and the maximum distance. This function aggregates the scores across all body part groupings, 
+        taking into account the minimum distance between body parts and their confidence levels. It returns a tuple 
+        containing two scores, which represent different aspects of the frame's quality or suitability for further processing.
+
+        Parameters:
+        - frames: List[ForwardBackwardFrame], a list of frames to be scored.
+        - num_outputs: int, the number of outputs or body parts to consider in each frame.
+        - down_scaling: float, the factor by which the frame dimensions have been scaled down.
+        - skeleton: Optional[StorageGraph], an optional graph representing the skeleton to be considered in scoring.
+        - max_dist: float, the maximum distance to consider when scoring body part pairs.
+        - progress_bar: Optional[ProgressBar], an optional progress bar to display processing progress.
+
+        Returns:
+        - Tuple[float, float]: A tuple containing two scores calculated based on the minimum distances and confidence levels 
+          of body part pairs across the given frames.
+        """
         num_bp = len(frames) // num_outputs
 
         score = 0
@@ -360,6 +393,7 @@ class FixFrame(FramePass):
 
             # For body part groupings...
             for i in range(num_outputs - 1):
+                #get the maximum probability location for the body part
                 f1_loc = cls.get_max_location(
                     frames[bp_group_off * num_outputs + i],
                     down_scaling
@@ -377,7 +411,8 @@ class FixFrame(FramePass):
                     if (f2_loc[0] is None):
                         score = -np.inf
                         continue
-
+                    
+                    #mininum distance between the two body parts
                     min_dist = min(cls.dist(f1_loc, f2_loc), min_dist)
                     total_conf += f1_loc[2] * f2_loc[2]
                     count += 1
@@ -386,18 +421,23 @@ class FixFrame(FramePass):
                 min_dist = 0
             if(min_dist == 0 or count == 0):
                 # BAD! We found a frame that failed to cluster properly...
+
+                #looks like this is the difference between score and score2? 
                 score = -np.inf
 
             # Minimum distance, weighted by average skeleton-pair confidence...
             if(count > 0):
                 score += min_dist * (total_conf / count)
                 score2 += min_dist * (total_conf / count)
+        
 
         # If skeleton is implemented...
         if (skeleton is not None):
             skel = skeleton
 
             for bp in range(len(frames)):
+
+                #what is this  ?
                 bp_group_off, bp_off = divmod(bp, num_outputs)
 
                 num_pairs = num_outputs * len(skel[bp_group_off])
@@ -448,6 +488,7 @@ class FixFrame(FramePass):
             progress_bar.reset(len(frames))
 
         for i, frame in enumerate(frames):
+            #this will be a tuple of scores per frame 
             final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton, max_dist)
 
             if(progress_bar is not None):
@@ -463,6 +504,23 @@ class FixFrame(FramePass):
         reset_bar: bool = False,
         thread_count: int = 0
     ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Computes the scores for each frame in the ForwardBackwardData object.
+
+        This method calculates two scores for each frame based on the frame data provided. The scores are computed
+        by evaluating the frame against a set of criteria defined in the compute_single_score method. The scores
+        are intended to be used for determining the quality of the frame data and for further processing steps
+        such as segmentation.
+
+        Parameters:
+        - fb_data: ForwardBackwardData, the data containing frames to be scored.
+        - prog_bar: ProgressBar, a progress bar object for visual feedback during the scoring process.
+        - reset_bar: bool, a flag indicating whether to reset the progress bar before starting the scoring process.
+        - thread_count: int, the number of threads to use for parallel processing of the scoring.
+
+        Returns:
+        - Tuple[np.ndarray, np.ndarray], two arrays containing the computed scores for each frame.
+        """
         if("is_clustered" not in fb_data.metadata):
             raise PassOrderError(
                 "Clustering must be done before frame fixing!"
