@@ -453,6 +453,16 @@ class SegmentedFramePassEngine(Predictor):
         self._current_frame = 0
 
     def get_frame_holder(self):
+        """
+        Retrieves the frame holder object that manages frame data storage and access.
+
+        This method initializes and returns a DiskBackedForwardBackwardData object, which is responsible for holding
+        the frames data. It sets up the necessary file object, shared memory, and manager for inter-process communication
+        and data sharing. It also copies the original video data into a disk file for processing.
+
+        Returns:
+            DiskBackedForwardBackwardData: An object that holds and manages access to the frames data.
+        """
         output_path = Path(self.video_metadata["output-file-path"]).resolve()
         video_path = Path(self.video_metadata["orig-video-path"]).resolve()
         disk_path = output_path.parent / (output_path.stem + ".dipui")
@@ -480,6 +490,14 @@ class SegmentedFramePassEngine(Predictor):
         return _frame_holder
 
     def _open(self):
+        """
+        Opens the necessary resources and prepares the frame holder for processing.
+
+        This method is responsible for setting up the frame holder based on the specified storage mode in the settings.
+        If a restore path is provided, it initializes the frame holder with the data from the specified path. Otherwise,
+        it creates a new frame holder based on the current settings, which could be in-memory, disk-backed, or a hybrid
+        of both. It also initializes segments and segment scores if they are available in the frame holder's metadata.
+        """
         if(self._restore_path is not None):
             # Ignore everything else,
             self._restore_path = Path(self._restore_path).resolve()
@@ -519,6 +537,14 @@ class SegmentedFramePassEngine(Predictor):
         self._frame_holder.metadata.project_skeleton = self.video_metadata.get("skeleton", None)
 
     def _close(self):
+        """
+        Closes all resources associated with the frame holder.
+
+        This method ensures that all resources such as file objects, shared memory, and the manager used for inter-process
+        communication are properly closed and, if applicable, unlinked. It is crucial for preventing resource leaks and ensuring
+        that the system resources are released back to the operating system. This method should be called when the frame holder
+        is no longer needed, typically at the end of processing or when an exception occurs.
+        """
         if(isinstance(self._frame_holder, DiskBackedForwardBackwardData)):
             self._frame_holder.close()
         if(self._file_obj is not None):
@@ -531,6 +557,19 @@ class SegmentedFramePassEngine(Predictor):
             self._manager.shutdown()
 
     def _sparcify_and_store(self, fb_frame: ForwardBackwardFrame, scmap: TrackingData, frame_idx: int, bp_idx: int):
+        """
+        Sparsifies and stores the tracking data for a given frame and body part index.
+
+        This method takes the dense tracking data for a specific frame and body part index, sparsifies it according to the
+        threshold and maximum cells per frame settings, and then stores the sparsified data back into the frame. This process
+        helps in reducing the memory footprint and computational complexity for subsequent processing steps.
+
+        Parameters:
+            fb_frame (ForwardBackwardFrame): The frame object where the sparsified data will be stored.
+            scmap (TrackingData): The dense tracking data for the frame.
+            frame_idx (int): The index of the frame being processed.
+            bp_idx (int): The index of the body part being processed.
+        """
         fb_frame.orig_data = SparseTrackingData.sparsify(
             scmap,
             frame_idx,
@@ -542,6 +581,19 @@ class SegmentedFramePassEngine(Predictor):
         fb_frame.src_data = fb_frame.orig_data
 
     def _on_frames(self, scmap: TrackingData) -> Optional[Pose]:
+        """
+        Processes tracking data for each frame and updates the frame holder with sparsified data.
+
+        This method iterates through each frame provided by the tracking data, processes it by sparsifying
+        the tracking data for each body part, and updates the frame holder with the processed data. It ensures
+        that the metadata for width, height, and downscaling factor are updated based on the tracking data.
+
+        Parameters:
+            scmap (TrackingData): The tracking data containing dense tracking information for each frame.
+
+        Returns:
+            None: This method updates the frame holder in-place and does not return any value.
+        """
         if(self._width is None):
             self._width = scmap.get_frame_width()
             self._height = scmap.get_frame_height()
@@ -710,6 +762,22 @@ class SegmentedFramePassEngine(Predictor):
         return os.cpu_count() if(self.settings.thread_count is None) else self.settings.thread_count
 
     def _build_segments(self, progress_bar: Optional[ProgressBar], reset_bar: bool = True):
+        """
+        Builds segments for frame processing based on the current settings and progress bar status.
+
+        This method computes the scores for each frame using the current frame holder data and then segments
+        the frames based on these scores. The segments are determined using the EndPointSegmentor, which
+        optimizes the segments based on the computed scores and the specified segment size in the settings.
+
+        If the progress bar is enabled and the reset_bar flag is set to True, the progress bar is reset and
+        updated with messages reflecting the current stage of the segmentation process.
+
+        Parameters:
+        - progress_bar: Optional[ProgressBar], a progress bar instance for visual feedback.
+        - reset_bar: bool, a flag indicating whether to reset the progress bar at the beginning of the process.
+
+        The method updates the internal state with the computed segments and their corresponding scores.
+        """
         # Compute the scores...
         if(reset_bar and progress_bar is not None):
             progress_bar.message("Computing frame pose scores...")
@@ -869,6 +937,43 @@ class SegmentedFramePassEngine(Predictor):
         segment_idxs: np.ndarray,
         run_level_data: Optional[Tuple[np.ndarray, np.ndarray, int]]
     ) -> Iterable[Tuple[bool, Sequence[int]]]:
+        """
+        Determines what segments should be run next 
+        For example if you have a segment without any fixed frames (frames with good separation, all segments are at most 200 frames)
+        It tries to always put the fixed frame at the beginning of the segment 
+        
+        Any segment that does have a fixed frame is returned immediately 
+
+        Then you have to do special logic for all of the segments where there is not a fixed frame 
+
+        Whcih is : take the nearest good segment (rightmost) and include the first frame into the given bad segment
+        and continue Viterbi from that good segment 
+
+        but you can only do that for the bad segment that is closest to a good segmentxxw
+        so you kind of have to run viterbi in 'tiers'
+        you run all of the ones that you can run, yield, and then you'll have updated the ones that are 'good' and then you rerun it 
+
+
+
+        Iterates through segments to run levels of processing based on the provided segment indices and run level data.
+
+        This method determines the correct order to run segments in. 
+        If a segment has no good fix frames in it (full separation of parts), instead of picking a poor fix frame 
+        the Viterbi will run for a neighboring good segment first, and then stitch across to the bad segment 
+        by just continuing the Viterbi from the good segment. This can happen recursively, 
+        to allow for long viterbi runs through difficult segments. 
+        
+        This figures out what segments can be run in parallel next, and what segments still have dependencies on other segments.
+
+        Parameters:
+        - segment_idxs: np.ndarray, an array of segment indices that are to be processed.
+        - run_level_data: Optional[Tuple[np.ndarray, np.ndarray, int]], a tuple containing arrays of level values and booleans indicating if a segment
+          is before the fixed frame, along with the maximum level value. If None, default values are used.
+
+        Yields:
+        - Tuple[bool, Sequence[int]], a tuple where the first element is a boolean indicating if the segment is before the fixed frame, and the second
+          element is a sequence of segment indices to be processed at the current level.
+        """
         segment_idxs = np.asarray(segment_idxs)
 
         if(run_level_data is None):

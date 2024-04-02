@@ -1,6 +1,6 @@
 from typing import Optional
 from diplomat.frontends import DIPLOMATFrontend, DIPLOMATCommands
-
+from diplomat.utils import colormaps
 
 class DEEPLABCUTFrontend(DIPLOMATFrontend):
     """

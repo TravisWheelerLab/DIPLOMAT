@@ -275,6 +275,24 @@ class Approximate(labeler_lib.PoseLabeler):
         return ((frame_idx, bp_idx, temp_f, (x, y)), (x, y, prob))
 
     def pose_change(self, new_state: Any) -> Any:
+        """
+        Handles the change in pose by updating the frame data with the new state.
+
+        This method is responsible for updating the frame data when there is a change in the pose. It checks if the
+        frame and body part index combination (frm, bp) has already been modified. If not, it marks the original frame
+        data for this combination as changed. Depending on whether a suggested frame is provided or not, it either
+        creates new tracking data from the suggested frame or from the provided coordinates. This new data is then
+        used to update the frame data for the given frame and body part index. The method returns a tuple containing
+        the frame index, body part index, a flag indicating if the original data was modified, and the old frame data.
+
+        Parameters:
+        - new_state (Any): A tuple containing the frame index, body part index, an optional suggested frame, and
+          coordinates. The suggested frame is None if not provided.
+
+        Returns:
+        - Tuple[Any, Any, bool, Any]: A tuple containing the frame index, body part index, a boolean indicating if the
+          original data was modified (is_orig), and the old frame data before the change.
+        """
         frm, bp, suggested_frame, coord = new_state
         changed_frames = self._frame_engine.changed_frames
         frames = self._frame_engine.frame_data.frames
