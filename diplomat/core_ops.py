@@ -68,7 +68,17 @@ def _find_frontend(
 
     contracts = [contracts] if(isinstance(contracts, DIPLOMATContract)) else contracts
 
+    print(f"Loaded frontends: {_LOADED_FRONTENDS}")
+
+
     for name, funcs in _LOADED_FRONTENDS.items():
+        print(f"Checking frontend '{name}'...")
+
+        for contract in contracts:
+            print(f"Verifying contract '{contract}'...")
+            verified = funcs.verify(contract=contract, config=config, **kwargs)
+            print(f"Verified: {verified}")
+        
         if(all(funcs.verify(
             contract=c,
             config=config,
