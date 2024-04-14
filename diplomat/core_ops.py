@@ -184,6 +184,7 @@ def track_with(
     predictor: Optional[str] = None,
     predictor_settings: Optional[Dict[str, Any]] = None,
     help_extra: Flag = False,
+    dipui_file: Optional[PathLike] = None,
     **extra_args
 ):
     """
@@ -229,7 +230,7 @@ def track_with(
 
     # If some videos are supplied, run the frontends video analysis function.
     if(videos is not None):
-        print("Running on videos...")
+        print("Running on videos... TEST")
         selected_frontend.analyze_videos(
             config=config,
             videos=videos,
@@ -248,6 +249,7 @@ def track_with(
             num_outputs=num_outputs,
             predictor=predictor,
             predictor_settings=predictor_settings,
+            dipui_file=dipui_file,
             **_get_casted_args(selected_frontend.analyze_frames, extra_args)
         )
 

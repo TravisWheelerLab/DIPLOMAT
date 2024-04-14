@@ -62,7 +62,7 @@ def analyze_videos(
     if(num_outputs is None):
         raise ValueError("'num_outputs' is not set! Please set it to the number of bodies you are tracking.")
 
-    print("Loading Model...")
+    print("Loading Model... TEST")
     model = sleap.load_model(_paths_to_str(config), batch_size=batch_size)
     # Get the model extractor...
     mdl_extractor = PredictorExtractor(model, refinement_kernel_size)
