@@ -347,12 +347,16 @@ class Approximate(labeler_lib.PoseLabeler):
                 idx = 0
                 for c_x, c_y in zip(bp_x, bp_y):
                     if c_x == x[max_prob_idx] and c_y == y[max_prob_idx]:
-                        bp_prob[idx] = 0
+                        #bp_prob[idx] = 0
 
                         new_bp_data = SparseTrackingData()
-                        new_bp_data.pack(bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset)
+                        new_bp_data.pack(*[np.array([item]) for item in [bp_y[idx], bp_x[idx], 0, bp_x_offset[idx], bp_y_offset[idx]]])
+
+                        #new_bp_data.pack(bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset)
                         new_body_part_data.append(new_bp_data)
+
                     idx += 1
+            print(f"New body part data: {new_body_part_data}")
                         
 
 
