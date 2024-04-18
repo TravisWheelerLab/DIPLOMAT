@@ -174,6 +174,7 @@ def track_with(
     predictor: Optional[str] = None,
     predictor_settings: Optional[Dict[str, Any]] = None,
     help_extra: Flag = False,
+    dipui_file: Optional[PathLike] = None,
     **extra_args
 ):
     """
@@ -238,6 +239,7 @@ def track_with(
             num_outputs=num_outputs,
             predictor=predictor,
             predictor_settings=predictor_settings,
+            dipui_file=dipui_file,
             **_get_casted_args(selected_frontend.analyze_frames, extra_args)
         )
 
