@@ -2,6 +2,7 @@ import itertools
 import os
 import shutil
 from enum import Enum
+from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable, BinaryIO
 import numpy as np
@@ -463,7 +464,16 @@ class SegmentedFramePassEngine(Predictor):
         Returns:
             DiskBackedForwardBackwardData: An object that holds and manages access to the frames data.
         """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = Path(self.video_metadata["output-file-path"]).resolve()
+        if self.settings.dipui_file is not None:
+            dipui_path = str(self.settings.dipui_file)
+            if os.path.exists(dipui_path):
+                output_path = dipui_path.replace(".dipui","") + f"_{timestamp}.dipui"
+            output_path = Path(output_path).resolve()
+        else:
+            output_path = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
+
         video_path = Path(self.video_metadata["orig-video-path"]).resolve()
         disk_path = output_path.parent / (output_path.stem + ".dipui")
 
@@ -1584,7 +1594,8 @@ class SegmentedFramePassEngine(Predictor):
                 100,
                 type_casters.RangedInteger(1, np.inf),
                 "Size of lifo cache used to temporarily store frames loaded from disk if running in disk storage_mode."
-            )
+            ),
+            "dipui_file": (None, type_casters.Union(type_casters.Literal(None), str), "A path specifying where to save the dipui file"),
         }
 
     @classmethod

@@ -169,7 +169,8 @@ def analyze_videos(
                 save_as_csv,
                 destination_folder,
                 predictor_cls,
-                predictor_settings
+                predictor_settings,
+                dipui_file=None
             )
     else:
         print("No videos found!")
