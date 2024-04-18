@@ -70,6 +70,9 @@ def _find_frontend(
 
     print(f"Loaded frontends: {_LOADED_FRONTENDS}")
 
+    print(f"Config: {config}")
+
+
 
     for name, funcs in _LOADED_FRONTENDS.items():
         print(f"Checking frontend '{name}'...")

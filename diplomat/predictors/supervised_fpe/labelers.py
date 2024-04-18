@@ -1,6 +1,6 @@
 from typing import Tuple, Any, Optional, MutableMapping
 from typing_extensions import Protocol
-
+import copy
 from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.arr_utils import find_peaks
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
@@ -343,16 +343,15 @@ class Approximate(labeler_lib.PoseLabeler):
             new_data.pack(*[np.array([item]) for item in [y[max_prob_idx], x[max_prob_idx], 1, x_offset[max_prob_idx], y_offset[max_prob_idx]]])
 
             for other_bp in other_body_part_indices:
-                bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset = frames[frm][other_bp].orig_data.unpack()
+                bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset = copy.deepcopy(frames[frm][other_bp].orig_data).unpack()
                 idx = 0
                 for c_x, c_y in zip(bp_x, bp_y):
                     if c_x == x[max_prob_idx] and c_y == y[max_prob_idx]:
-                        #bp_prob[idx] = 0
+                        bp_prob[idx] = 0
 
                         new_bp_data = SparseTrackingData()
-                        new_bp_data.pack(*[np.array([item]) for item in [bp_y[idx], bp_x[idx], 0, bp_x_offset[idx], bp_y_offset[idx]]])
 
-                        #new_bp_data.pack(bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset)
+                        new_bp_data.pack(bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset)
                         new_body_part_data.append(new_bp_data)
 
                     idx += 1
@@ -367,8 +366,8 @@ class Approximate(labeler_lib.PoseLabeler):
         new_frame.ignore_clustering = True
 
         frames[frm][bp] = new_frame
-        for other_bp in other_body_part_indices:
-            frames[frm][other_bp] = new_body_part_data[other_bp]
+        for idx, other_bp in enumerate(other_body_part_indices):
+            frames[frm][other_bp] = new_body_part_data[idx]
 
         return (frm, bp, is_orig, old_frame_data, old_body_part_data, body_part_is_orig)
 

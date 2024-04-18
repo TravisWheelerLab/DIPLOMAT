@@ -392,7 +392,22 @@ class SparseTrackingData:
 
         float_offset = 4 + length * 2 * np.dtype(int_dtype).itemsize
 
-        self._coords = np.frombuffer(data, np.dtype(int_dtype), length * 2, 4).reshape((length, 2))
+        # Calculate the expected size of the data based on `length` and `int_dtype`
+        int_dtype_size = np.dtype(int_dtype).itemsize  # Size of int_dtype in bytes
+        expected_data_size = length * 2 * int_dtype_size + 4  # +4 for the offset
+
+        # Check if the actual data buffer is smaller than expected
+        if len(data) < expected_data_size:
+            print(f"Error: The data buffer length {len(data)} is smaller than the expected size {expected_data_size}.")
+
+        # Proceed with the original line, wrapped in a try-except block for safety
+        try:
+            self._coords = np.frombuffer(data, np.dtype(int_dtype), length * 2, 4).reshape((length, 2))
+        except ValueError as e:
+            print(f"Encountered an error when trying to reshape the data: {e}")
+
+
+        #self._coords = np.frombuffer(data, np.dtype(int_dtype), length * 2, 4).reshape((length, 2))
         self._coords_access = self.NumpyAccessor(self._coords)
         self._offsets_probs = np.frombuffer(data, np.dtype(float_dtype), length * 3, float_offset).reshape((length, 3))
         self._off_access = self.NumpyAccessor(self._offsets_probs, (slice(1, 3),))

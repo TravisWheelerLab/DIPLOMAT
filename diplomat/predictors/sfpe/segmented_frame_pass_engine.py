@@ -1,6 +1,6 @@
 import itertools
 import os
-import datetime
+from datetime import datetime
 import shutil
 from enum import Enum
 from pathlib import Path
@@ -464,16 +464,19 @@ class SegmentedFramePassEngine(Predictor):
         Returns:
             DiskBackedForwardBackwardData: An object that holds and manages access to the frames data.
         """
-        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = Path(self.video_metadata["output-file-path"]).resolve()
         if self.settings.dipui_file is not None:
             output_path = Path(self.settings.dipui_file).resolve()
+            if os.path.exists(output_path):
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path += timestamp
         else:
             output_path = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
 
-        if os.path.exists(output_path):
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path += timestamp
+
+
+
         video_path = Path(self.video_metadata["orig-video-path"]).resolve()
         disk_path = output_path.parent / (output_path.stem + ".dipui")
 
