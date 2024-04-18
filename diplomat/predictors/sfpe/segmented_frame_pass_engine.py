@@ -464,16 +464,15 @@ class SegmentedFramePassEngine(Predictor):
         Returns:
             DiskBackedForwardBackwardData: An object that holds and manages access to the frames data.
         """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = Path(self.video_metadata["output-file-path"]).resolve()
         if self.settings.dipui_file is not None:
-            output_path = Path(self.settings.dipui_file).resolve()
+            dipui_path = str(self.settings.dipui_file)
+            if os.path.exists(dipui_path):
+                output_path = dipui_path.replace(".dipui","") + f"_{timestamp}.dipui"
+            output_path = Path(output_path).resolve()
         else:
             output_path = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
-
-        if os.path.exists(output_path):
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path += timestamp
-
 
         video_path = Path(self.video_metadata["orig-video-path"]).resolve()
         disk_path = output_path.parent / (output_path.stem + ".dipui")
