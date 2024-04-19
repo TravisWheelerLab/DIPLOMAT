@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 import shutil
 from enum import Enum
+from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple, Optional, Any, Callable, Sequence, Iterable, BinaryIO
 import numpy as np
@@ -136,7 +137,9 @@ class InternalProgressIndicator(ProgressBar):
 
     def rate_limit_update(self):
         new_time = time.monotonic()
-        if(new_time - self._last_update > self._refresh_rate):
+        if(new_time - self._last_update 
+           
+           self._refresh_rate):
             self._last_update = new_time
             self.update_shared_mem(self._internal_prog_data)
 
@@ -473,9 +476,6 @@ class SegmentedFramePassEngine(Predictor):
                 output_path += timestamp
         else:
             output_path = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
-
-
-
 
         video_path = Path(self.video_metadata["orig-video-path"]).resolve()
         disk_path = output_path.parent / (output_path.stem + ".dipui")

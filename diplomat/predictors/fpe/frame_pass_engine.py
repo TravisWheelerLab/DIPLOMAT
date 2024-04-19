@@ -478,8 +478,10 @@ class FramePassEngine(Predictor):
                 type_casters.Literal(*[mode.name for mode in SparseTrackingData.SparseModes]),
                 "The mode to utilize during sparsification."
             ),
-            "dipui_file": (None, type_casters.Union(type_casters.Literal(None), str), "A path specifying where to save the dipui file"
-            )
+            "dipui_file": (
+                None, type_casters.Union(type_casters.Literal(None), str), 
+                "A path specifying where to save the dipui file"
+            ),
         }
 
 

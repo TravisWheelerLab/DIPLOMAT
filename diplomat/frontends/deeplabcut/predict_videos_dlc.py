@@ -171,6 +171,7 @@ def analyze_videos(
                 destination_folder,
                 predictor_cls,
                 predictor_settings,
+                dipui_file=None
             )
     else:
         print("No videos found!")
