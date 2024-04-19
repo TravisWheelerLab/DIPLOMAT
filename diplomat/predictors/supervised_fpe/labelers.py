@@ -569,13 +569,13 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         is_orig = False
 
         idx = (frm, bp)
-
-        #which body parts are in the same group as bp? 
         num_outputs = self._frame_engine.frame_data.metadata.num_outputs #the number of individuals
 
         group = bp // num_outputs
+        print(f"Group : {group}")
 
         other_body_part_indices = [group * num_outputs + i for i in range(num_outputs) if i != bp % num_outputs]
+        print(f"Other body part indices: {other_body_part_indices}")
 
         body_part_is_orig = {bp: False for bp in other_body_part_indices}
         old_body_part_data = {} #keep track of these for the undo function 
@@ -590,7 +590,8 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
 
             old_body_part_data[other_bp] = old_bp_frame_data
         
-        new_body_part_data = []
+        new_body_part_data = {}
+
 
 
         if(idx not in changed_frames):
@@ -610,7 +611,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
             new_data.pack(*[np.array([item]) for item in [y[max_prob_idx], x[max_prob_idx], 1, x_offset[max_prob_idx], y_offset[max_prob_idx]]])
 
             for other_bp in other_body_part_indices:
-                bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset = frames[frm][other_bp].orig_data.unpack()
+                bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset = copy.deepcopy(frames[frm][other_bp].orig_data).unpack()
                 idx = 0
                 for c_x, c_y in zip(bp_x, bp_y):
                     if c_x == x[max_prob_idx] and c_y == y[max_prob_idx]:
@@ -618,7 +619,12 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
 
                         new_bp_data = SparseTrackingData()
                         new_bp_data.pack(bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset)
-                        new_body_part_data.append(new_bp_data)
+                        new_bp_frame = ForwardBackwardFrame()
+                        new_bp_frame.orig_data = new_bp_data
+                        new_bp_frame.src_data = new_bp_data
+                        new_bp_frame.disable_occluded = True
+                        new_bp_frame.ignore_clustering = True
+                        new_body_part_data[other_bp] = new_bp_frame
                     idx += 1
 
         new_frame = ForwardBackwardFrame()
@@ -628,8 +634,9 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         new_frame.ignore_clustering = True
 
         frames[frm][bp] = new_frame
-        for other_bp in other_body_part_indices:
-            frames[frm][other_bp] = new_body_part_data[other_bp]
+        for idx, other_bp in enumerate(other_body_part_indices):
+            if other_bp in new_body_part_data:
+                frames[frm][other_bp] = new_body_part_data[other_bp]
 
         return (frm, bp, is_orig, old_frame_data, old_body_part_data, body_part_is_orig)
 
