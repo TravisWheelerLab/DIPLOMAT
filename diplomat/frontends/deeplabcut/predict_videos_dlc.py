@@ -42,12 +42,13 @@ def analyze_videos(
     num_outputs: tc.Optional[int] = None,
     multi_output_format: tc.Literal["default", "separate"] = "default",
     predictor: tc.Optional[str] = None,
-    predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None
+    predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None,
 ):
     """
     Run DIPLOMAT tracking on videos using a DEEPLABCUT project and trained network.
 
     :param config: The path to the DLC config for the DEEPLABCUT project.
+
     :param videos: A single path or list of paths, to the location of video files to run analysis on. Can also be a directory.
     :param video_type: Optional string, the video extension to search for if the 'videos' argument is a directory
                        to search inside ('.avi', '.mp4', ...).
@@ -196,6 +197,7 @@ def _analyze_video(
     dest_folder=None,
     predictor_cls=None,
     predictor_settings=None,
+    dipui_file=None
 ) -> str:
     print(f"Analyzing video: {video}")
 

@@ -68,7 +68,20 @@ def _find_frontend(
 
     contracts = [contracts] if(isinstance(contracts, DIPLOMATContract)) else contracts
 
+    print(f"Loaded frontends: {_LOADED_FRONTENDS}")
+
+    print(f"Config: {config}")
+
+
+
     for name, funcs in _LOADED_FRONTENDS.items():
+        print(f"Checking frontend '{name}'...")
+
+        for contract in contracts:
+            print(f"Verifying contract '{contract}'...")
+            verified = funcs.verify(contract=contract, config=config, **kwargs)
+            print(f"Verified: {verified}")
+        
         if(all(funcs.verify(
             contract=c,
             config=config,
@@ -220,7 +233,7 @@ def track_with(
 
     # If some videos are supplied, run the frontends video analysis function.
     if(videos is not None):
-        print("Running on videos...")
+        print("Running on videos... TEST")
         selected_frontend.analyze_videos(
             config=config,
             videos=videos,

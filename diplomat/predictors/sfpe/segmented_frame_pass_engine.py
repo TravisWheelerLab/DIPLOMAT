@@ -1,5 +1,6 @@
 import itertools
 import os
+from datetime import datetime
 import shutil
 from enum import Enum
 from datetime import datetime
@@ -136,7 +137,9 @@ class InternalProgressIndicator(ProgressBar):
 
     def rate_limit_update(self):
         new_time = time.monotonic()
-        if(new_time - self._last_update > self._refresh_rate):
+        if(new_time - self._last_update 
+           
+           self._refresh_rate):
             self._last_update = new_time
             self.update_shared_mem(self._internal_prog_data)
 
@@ -467,10 +470,10 @@ class SegmentedFramePassEngine(Predictor):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = Path(self.video_metadata["output-file-path"]).resolve()
         if self.settings.dipui_file is not None:
-            dipui_path = str(self.settings.dipui_file)
-            if os.path.exists(dipui_path):
-                output_path = dipui_path.replace(".dipui","") + f"_{timestamp}.dipui"
-            output_path = Path(output_path).resolve()
+            output_path = Path(self.settings.dipui_file).resolve()
+            if os.path.exists(output_path):
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path += timestamp
         else:
             output_path = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
 
@@ -1595,7 +1598,9 @@ class SegmentedFramePassEngine(Predictor):
                 type_casters.RangedInteger(1, np.inf),
                 "Size of lifo cache used to temporarily store frames loaded from disk if running in disk storage_mode."
             ),
-            "dipui_file": (None, type_casters.Union(type_casters.Literal(None), str), "A path specifying where to save the dipui file"),
+            "dipui_file": (None, type_casters.Union(type_casters.Literal(None), str), "A path specifying where to save the dipui file"
+            )
+
         }
 
     @classmethod
