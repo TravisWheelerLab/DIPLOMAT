@@ -137,9 +137,7 @@ class InternalProgressIndicator(ProgressBar):
 
     def rate_limit_update(self):
         new_time = time.monotonic()
-        if(new_time - self._last_update 
-           
-           self._refresh_rate):
+        if(new_time - self._last_update > self._refresh_rate):
             self._last_update = new_time
             self.update_shared_mem(self._internal_prog_data)
 
