@@ -238,7 +238,7 @@ class FixFrame(FramePass):
         skeleton: Optional[StorageGraph],
         algorithm: str = "greedy"
     ) -> List[ForwardBackwardFrame]:
-        print(f"FixFrame.create_fix_frame.algorithm:={algorithm}")
+        #print(f"FixFrame.create_fix_frame.algorithm:={algorithm}")
         if(algorithm not in ("greedy", "hungarian")):
             raise ValueError("Algorithm passed not a support algorithm, use greedy or hungarian.")
 
