@@ -91,6 +91,9 @@ def get_func_table(
 
     :returns: A 2D numpy array of floats, with the function evaluated at each index. (Indexing is x then y).
     """
+    #! for testing purposes
+    flatten_radius = None
+
     table = np.zeros((width, height), dtype=np.float32)
     tot_sum = 0
     count = 0
