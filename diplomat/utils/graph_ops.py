@@ -2,6 +2,7 @@ import numba
 import numpy as np
 from typing import Tuple
 
+from .scipy_hungarian import linear_sum_assignment
 
 @numba.experimental.jitclass([
     ["_stack_ptr", numba.int64],
@@ -126,9 +127,14 @@ def _min_row_subtract(g: np.ndarray) -> np.ndarray:
 
     return g
 
+def min_cost_matching(cost_matrix: np.ndarray, mode="scipy") -> Tuple[np.ndarray, np.ndarray]:
+    if mode == "scipy":
+        return linear_sum_assignment(cost_matrix)
+    else:
+        return _min_cost_matching(cost_matrix)
 
 @numba.njit
-def min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Implementation of the hungarian algorithm for solving the minimum assignment problem. Given a cost matrix,
     find the optimal assignment of workers (rows) to jobs (columns). Algorithm is O(N^3).
@@ -138,6 +144,7 @@ def min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     :returns: A tuple of 2 numpy arrays, first representing row assignments (row -> column) and second column
               assignments (column -> row). Note, these are inversions of each other.
     """
+
     graph_copy = cost_matrix.copy()
 
     while(True):

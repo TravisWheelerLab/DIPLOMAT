@@ -659,6 +659,9 @@ class FPEEditor(wx.Frame):
         """
         self._frame_exporter = func
 
+    def set_radiobox_colors(self, colormap):
+        self.video_player.select_box.set_colormap(colormap)
+
     def set_plot_settings_changer(self, func: Optional[Callable[[Mapping[str, Any]], None]]):
         """
         Set the plot settings changing function, which allows for adjusting certain video metadata values when they
@@ -667,7 +670,13 @@ class FPEEditor(wx.Frame):
         :param func: Optional function that accepts a string to any mapping (dict), and returns nothing. Can be used
                      for adjusting video metadata when a user adjusts visual settings in the UI.
         """
-        self._on_plot_settings_change = func
+
+        def func2(data):
+            if "colormap" in data:
+                self.set_radiobox_colors(data["colormap"])
+            func(data)
+        
+        self._on_plot_settings_change = func2
 
     @property
     def history(self) -> History:
