@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIPLOMAT - Supplementary Information</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background: #333;
+            color: #fff;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+        }
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0;
+            flex: 1;
+        }
+        header p {
+            margin: 0;
+        }
+        nav {
+            display: flex;
+            justify-content: center;
+            background: #eaeaea;
+            padding: 1rem;
+        }
+        nav a {
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            text-decoration: none;
+            color: #333;
+            border: 1px solid #333;
+            border-radius: 5px;
+        }
+        nav a:hover {
+            background: #ccc;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 2rem;
+        }
+        h2 {
+            color: #333;
+        }
+        p {
+            color: #666;
+        }
+        .commands {
+            background: #fff;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .commands pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            border-radius: 5px;
+        }
+        .author-contact {
+            margin: 2rem 0;
+            text-align: center;
+        }
+        footer {
+            background: #333;
+            color: #fff;
+            text-align: center;
+            padding: 1rem 0;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>DIPLOMAT</h1>
+        <p>Deep Learning-Based Identity Preserving Labeled-Object Multi-Animal Tracking</p>
+    </header>
+    
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="installation.html">Installation</a>
+        <a href="supplementary.html">Supplementary Information</a>
+    </nav>
+
+    <div class="container">
+        <section>
+            <h2>Usage</h2>
+            <h3>Running DIPLOMAT</h3>
+            <p>To run DIPLOMAT on a video once it is installed, simply use DIPLOMAT's <code>track</code> and <code>track_and_interact</code> commands to track a video:</p>
+            <div class="commands">
+                <pre># Run DIPLOMAT with no UI...
+diplomat track -c path/to/config -v path/to/video
+# Run DIPLOMAT with UI...
+diplomat track_and_interact -c path/to/config -v path/to/video</pre>
+            </div>
+            <p>Multiple videos can be tracked by passing them as a list:</p>
+            <div class="commands">
+                <pre>diplomat track -c path/to/config -v [path/to/video1, path/to/video2, "path/to/video3"]</pre>
+            </div>
+            <p>Once tracking is done, DIPLOMAT can create labeled videos via its <code>annotate</code> subcommand:</p>
+            <div class="commands">
+                <pre>diplomat annotate -c path/to/config -v path/to/video</pre>
+            </div>
+            <p>If you need to reopen the UI to make further major modifications, you can do so using the <code>interact</code> subcommand:</p>
+            <div class="commands">
+                <pre>diplomat interact -s path/to/ui_state.dipui</pre>
+            </div>
+            <p>This displays the full UI again for making further edits. Results are saved back to the same files.</p>
+            <p>If you need to make minor modifications after tracking a video, you can do so using the <code>tweak</code> subcommand:</p>
+            <div class="commands">
+                <pre>diplomat tweak -c path/to/config -v path/to/video</pre>
+            </div>
+            <p>This will display a stripped down version of the interactive editing UI, allowing for minor tweaks to be made to the tracks, and then saved back to the same file.</p>
+            <p>For a list of additional ways DIPLOMAT can be used, see the <a href="https://diplomat.readthedocs.io/en/latest/basic_usage.html" target="_blank">documentation</a>.</p>
+
+            <h3>Additional Help</h3>
+            <p>All DIPLOMAT commands are documented via help strings. To get more information about a DIPLOMAT subcommand or command, simply run it with the <code>-h</code> or <code>--help</code> flag.</p>
+            <div class="commands">
+                <pre># Help for all of DIPLOMAT (lists subcommands of DIPLOMAT):
+diplomat --help 
+# Help for the track subcommand:
+diplomat track --help
+# Help for the predictors subcommand space:
+diplomat predictors --help</pre>
+            </div>
+        </section>
+
+        <section>
+            <h2>Documentation</h2>
+            <p>DIPLOMAT has documentation on ReadTheDocs at <a href="https://diplomat.readthedocs.io/en/latest" target="_blank">https://diplomat.readthedocs.io/en/latest</a>.</p>
+        </section>
+
+        <section>
+            <h2>Development</h2>
+            <p>DIPLOMAT is written entirely in Python. To set up an environment for developing DIPLOMAT, you can simply pull down this repository and install its requirements using pip. For a further description of how to set up DIPLOMAT for development, see the <a href="https://diplomat.readthedocs.io/en/latest/advanced_usage.html#development-usage" target="_blank">Development Usage</a> section in the documentation.</p>
+        </section>
+
+        <section>
+            <h2>Contributing</h2>
+            <p>We welcome external contributions, although it is a good idea to contact the maintainers before embarking on any significant development work to make sure the proposed changes are a good fit.</p>
+            <p>Contributors agree to license their code under the license in use by this project (see <code>LICENSE</code>).</p>
+            <p>To contribute:</p>
+            <ol>
+                <li>Fork the repo</li>
+                <li>Make changes on a branch</li>
+                <li>Create a pull request</li>
+            </ol>
+        </section>
+
+        <section class="author-contact">
+            <h2>Authors</h2>
+            <p>If you have any questions, feel free to reach out to George Glidden, at <a href="mailto:georgeglidden@arizona.edu">isaac.k.robinson2000@gmail.com</a></p>
+            <p>See <code>AUTHORS</code> for the full list of authors.</p>
+        </section>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 DIPLOMAT Project</p>
+        <p>See <code>LICENSE</code> for details.</p>
+    </footer>
+</body>
+</html>
