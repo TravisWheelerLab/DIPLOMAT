@@ -129,7 +129,7 @@ See `LICENSE` for details.
 
 ## Authors
 
-If you have any questions, feel free to reach out to Isaac Robinson, at [isaac.k.robinson2000@gmail.com](mailto:isaac.k.robinson2000@gmail.com)
+If you have any questions, feel free to reach out to George Glidden, at [georgeglidden@arizona.edu](mailto:georgeglidden@arizona.edu)
 
 See `AUTHORS` the full list of authors.
 
