@@ -21,8 +21,8 @@ def _get_version() -> str:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'DIPLOMAT'
-copyright = '2022, Isaac Robinson, Nathan Insel, Travis Wheeler'
-author = 'Isaac Robinson, Nathan Insel, Travis Wheeler'
+copyright = '2024, Isaac Robinson, George Glidden, Nathan Insel, Travis Wheeler'
+author = 'Isaac Robinson, George Glidden, Nathan Insel, Travis Wheeler'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
