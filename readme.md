@@ -2,7 +2,11 @@
 
 Deep learning-based Identity Preserving Labeled-Object Multi-Animal Tracking.
 
-**NOTE:** DIPLOMAT is currently alpha software, there may be minor bugs and usability issues.
+**NOTE:** DIPLOMAT is currently early beta software, there may be minor bugs and usability issues.
+
+If you are a user (not a developer contributing code), you may want to visit:
+- the software website: [https://wheelerlab.org/DIPLOMAT](https://wheelerlab.org/DIPLOMAT/)
+- in-depth documentation: [https://diplomat.readthedocs.io](https://diplomat.readthedocs.io/en/latest)
 
 ## About
 
