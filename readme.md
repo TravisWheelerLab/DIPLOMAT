@@ -2,11 +2,7 @@
 
 Deep learning-based Identity Preserving Labeled-Object Multi-Animal Tracking.
 
-**NOTE:** DIPLOMAT is currently early beta software, there may be minor bugs and usability issues.
-
-If you are a user (not a developer contributing code), you may want to visit:
-- the software website: [https://wheelerlab.org/DIPLOMAT](https://wheelerlab.org/DIPLOMAT/)
-- in-depth documentation: [https://diplomat.readthedocs.io](https://diplomat.readthedocs.io/en/latest)
+**NOTE:** DIPLOMAT is currently alpha software, there may be minor bugs and usability issues.
 
 ## About
 
@@ -21,7 +17,7 @@ Unlike other multi-animal tracking packages, DIPLOMAT's algorithms work directly
 
 DIPLOMAT also includes a UI for performing tracking and several other tools for storing and visualizing confidence maps. 
 
-![UI Demo Showing user correcting tracking in a video](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcnU4czd0eXh6eXg4Y2xiN3FhZGs0N21mbHZucGw2ZHlyMzUwdmx3MiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/eyRJXqxwkQF7Pa71qV/giphy.gif)
+![UI Demo Showing user correcting tracking in a video](interact_retrack_gif.gif)
 
 ## Installation
 
@@ -133,7 +129,7 @@ See `LICENSE` for details.
 
 ## Authors
 
-If you have any questions, feel free to reach out to George Glidden, at [georgeglidden@arizona.edu](mailto:georgeglidden@arizona.edu)
+If you have any questions, feel free to reach out to Isaac Robinson, at [isaac.k.robinson2000@gmail.com](mailto:isaac.k.robinson2000@gmail.com)
 
 See `AUTHORS` the full list of authors.
 

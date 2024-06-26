@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIPLOMAT - Supplementary Information</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        header {
+            background: #351431;
+            color: #fff;
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        header h1 {
+            font-size: 4rem;
+            font-weight: bold;
+            margin: 0;
+            letter-spacing: 0.1em;
+            transform: scaleY(1.2);
+            transition: transform 0.1s ease-out;
+        }
+        header p {
+            color: #fff;
+            margin: 0;
+            font-size: 1.2rem;
+            margin-top: 0.5rem;
+        }
+        nav {
+            display: flex;
+            justify-content: center;
+            background: #351431;
+            padding: 1rem;
+        }
+        nav a {
+            position: relative;
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            text-decoration: none;
+            color: #fff;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        nav a:before, nav a:after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: #96bdc6;
+            top: 0;
+            left: -100%;
+            transition: all 0.3s ease;
+        }
+        nav a:after {
+            top: auto;
+            bottom: 0;
+            left: 100%;
+        }
+        nav a:hover:before {
+            left: 100%;
+        }
+        nav a:hover:after {
+            left: -100%;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 2rem;
+        }
+        h2, h3 {
+            color: #351431;
+        }
+        p {
+            color: #666;
+        }
+        .commands {
+            background: #fff;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .commands pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            border-radius: 5px;
+        }
+        .divider {
+            height: 2px;
+            background-color: #351431;
+            margin: 2rem 0;
+        }
+        .author-contact {
+            margin: 2rem 0;
+            text-align: center;
+        }
+        footer {
+            background: #351431;
+            color: #fff;
+            text-align: center;
+            padding: 1rem 0;
+            margin-top: 2rem;
+        }
+        footer p {
+            color: #fff;        
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 id="logo">DIPLOMAT</h1>
+        <p>Deep Learning-Based Identity Preserving Labeled-Object Multi-Animal Tracking</p>
+    </header>
+    
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="installation.html">Installation</a>
+        <a href="supplementary.html">Supplementary Information</a>
+    </nav>
+
+    <div class="container">
+        <section>
+            <h2>Usage</h2>
+            <h3>Overview</h3>
+            <p>DIPLOMAT offers a range of commands and interfaces designed to facilitate multi-animal identity-preserving tracking. Each command and interface serves a specific purpose, from initial tracking to detailed adjustments and annotations. The following sections provide detailed descriptions and use cases for each component of the DIPLOMAT framework.</p>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>1. Tracking with DIPLOMAT</h3>
+            <p>The <code>track</code> command is the primary tool for processing videos through the DIPLOMAT framework. It utilizes pre-trained models to detect and track animals within video footage, ensuring that the identity of each tracked animal is preserved throughout the sequence. This command can be run with or without a user interface (UI).</p>
+            <div class="commands">
+                <pre># Run DIPLOMAT with no UI...
+diplomat track -c path/to/config -v path/to/video
+
+# Run DIPLOMAT with UI...
+diplomat track_and_interact -c path/to/config -v path/to/video</pre>
+            </div>
+            <p>Use the <code>track_and_interact</code> command if you prefer a more interactive approach, allowing you to visualize and adjust the tracking in real-time as the video is processed.</p>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>2. Multiple Video Tracking</h3>
+            <p>DIPLOMAT supports batch processing of multiple videos in a single command. This feature is especially useful for researchers who need to analyze large datasets efficiently.</p>
+            <div class="commands">
+                <pre># Track multiple videos by passing them as a list:
+diplomat track -c path/to/config -v [path/to/video1, path/to/video2, "path/to/video3"]</pre>
+            </div>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>3. Annotating Videos</h3>
+            <p>After tracking, the <code>annotate</code> command can be used to generate labeled videos. This command overlays tracking data onto the original footage, providing a visual representation of the tracking results.</p>
+            <div class="commands">
+                <pre># Create annotated videos with tracking labels:
+diplomat annotate -c path/to/config -v path/to/video</pre>
+            </div>
+            <p>Annotated videos are valuable for presentations, publications, and further analysis.</p>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>4. Interacting with the UI</h3>
+            <p>The <code>interact</code> subcommand opens the full interactive UI for major adjustments and detailed editing. This interface provides tools for adjusting tracked points, correcting errors, and refining the tracking results.</p>
+            <div class="commands">
+                <pre># Open the interactive UI for detailed adjustments:
+diplomat interact -s path/to/ui_state.dipui</pre>
+            </div>
+            <p>This UI is essential for ensuring high-quality tracking data, allowing users to manually correct any inaccuracies in the automated tracking.</p>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>5. Tweaking Minor Adjustments</h3>
+            <p>For minor adjustments, the <code>tweak</code> subcommand offers a streamlined version of the interactive UI. This tool is perfect for quick fixes and minor corrections without the need to open the full interface.</p>
+            <div class="commands">
+                <pre># Make minor adjustments to tracking data:
+diplomat tweak -c path/to/config -v path/to/video</pre>
+            </div>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>6. Additional Help</h3>
+            <p>All DIPLOMAT commands include built-in help documentation. Use the <code>-h</code> or <code>--help</code> flags to access detailed information about each command and its options.</p>
+            <div class="commands">
+                <pre># Help for all of DIPLOMAT (lists subcommands of DIPLOMAT):
+diplomat --help 
+
+# Help for the track subcommand:
+diplomat track --help
+
+# Help for the predictors subcommand space:
+diplomat predictors --help</pre>
+            </div>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h2>Documentation</h2>
+            <p>DIPLOMAT has comprehensive documentation available on ReadTheDocs. The documentation covers installation, basic usage, advanced features, and troubleshooting tips. Access the documentation at <a href="https://diplomat.readthedocs.io/en/latest" target="_blank">https://diplomat.readthedocs.io/en/latest</a>.</p>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h2>Development</h2>
+            <p>DIPLOMAT is written entirely in Python. To set up a development environment for DIPLOMAT, you can clone the repository and install its dependencies using pip. Detailed instructions are available in the <a href="https://diplomat.readthedocs.io/en/latest/advanced_usage.html#development-usage" target="_blank">Development Usage</a> section of the documentation.</p>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h2>Contributing</h2>
+            <p>We welcome external contributions. Before starting any significant development work, it is advisable to contact the maintainers to ensure the proposed changes are a good fit for the project. Contributors agree to license their code under the project's license (see <code>LICENSE</code>).</p>
+            <p>To contribute:</p>
+            <ol>
+                <li>Fork the repository</li>
+                <li>Make changes on a branch</li>
+                <li>Create a pull request</li>
+            </ol>
+        </section>
+
+        <div class="divider"></div>
+
+        <section class="author-contact">
+            <h2>Authors</h2>
+            <p>If you have any questions, feel free to reach out to George Glidden at <a href="mailto:georgeglidden@arizona.edu">georgeglidden@arizona.edu</a></p>
+            <p>See <code>AUTHORS</code> for the full list of authors.</p>
+        </section>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 DIPLOMAT Project</p>
+        <p>See <code>LICENSE</code> for details.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('mousemove', (e) => {
+            const logo = document.getElementById('logo');
+            const movementX = (e.clientX - window.innerWidth / 2) / 50;
+            const movementY = (e.clientY - window.innerHeight / 2) / 50;
+            logo.style.transform = `scaleY(1.2) translate(${movementX
+        });
+    </script>
+</body>
+</html>
