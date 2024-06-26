@@ -6,52 +6,78 @@
     <title>DIPLOMAT - Installation</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Roboto', sans-serif;
             line-height: 1.6;
             margin: 0;
             padding: 0;
             background-color: #f4f4f4;
+            color: #333;
         }
         header {
-            background: #333;
+            background: #351431;
             color: #fff;
-            padding: 1rem;
-            display: flex;
-            align-items: center;
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
         }
         header h1 {
-            font-size: 2.5rem;
+            font-size: 4rem;
             font-weight: bold;
             margin: 0;
-            flex: 1;
+            letter-spacing: 0.1em;
+            transform: scaleY(1.2);
+            transition: transform 0.1s ease-out;
         }
         header p {
+            color: #fff;
             margin: 0;
+            font-size: 1.2rem;
+            margin-top: 0.5rem;
         }
         nav {
             display: flex;
             justify-content: center;
-            background: #eaeaea;
+            background: #351431;
             padding: 1rem;
         }
         nav a {
+            position: relative;
             margin: 0 1rem;
             padding: 0.5rem 1rem;
             text-decoration: none;
-            color: #333;
-            border: 1px solid #333;
+            color: #fff;
             border-radius: 5px;
+            overflow: hidden;
         }
-        nav a:hover {
-            background: #ccc;
+        nav a:before, nav a:after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: #96bdc6;
+            top: 0;
+            left: -100%;
+            transition: all 0.3s ease;
+        }
+        nav a:after {
+            top: auto;
+            bottom: 0;
+            left: 100%;
+        }
+        nav a:hover:before {
+            left: 100%;
+        }
+        nav a:hover:after {
+            left: -100%;
         }
         .container {
             max-width: 1200px;
             margin: auto;
             padding: 2rem;
         }
-        h2 {
-            color: #333;
+        h2, h3 {
+            color: #351431;
         }
         p {
             color: #666;
@@ -67,19 +93,28 @@
             background: #f4f4f4;
             padding: 1rem;
             border-radius: 5px;
+            overflow-x: auto;
+        }
+        .divider {
+            height: 2px;
+            background-color: #351431;
+            margin: 2rem 0;
         }
         footer {
-            background: #333;
+            background: #351431;
             color: #fff;
             text-align: center;
             padding: 1rem 0;
             margin-top: 2rem;
         }
+        footer p {
+            color: #fff;        
+        }
     </style>
 </head>
 <body>
     <header>
-        <h1>DIPLOMAT</h1>
+        <h1 id="logo">DIPLOMAT</h1>
         <p>Deep Learning-Based Identity Preserving Labeled-Object Multi-Animal Tracking</p>
     </header>
     
@@ -91,29 +126,83 @@
 
     <div class="container">
         <section>
-            <h2>Installation</h2>
-            <p>DIPLOMAT includes four environment configuration files for setting up DIPLOMAT with <a href="https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html" target="_blank">mamba</a>, which can be installed on Windows, Linux, or MacOS using the <a href="https://github.com/conda-forge/miniforge" target="_blank">Miniforge</a> installer.</p>
-            <p>To create an environment using mamba, run one of these four commands:</p>
+            <h2>Installation Guide</h2>
+            <p>This guide will walk you through the steps to set up DIPLOMAT on your system using <a href="https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html" target="_blank">mamba</a>, which can be installed on Windows, Linux, or MacOS using the <a href="https://github.com/conda-forge/miniforge" target="_blank">Miniforge</a> installer.</p>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>1. Environment Setup</h3>
+            <p>To create an environment using mamba, run one of these commands based on your requirements:</p>
             <div class="commands">
                 <pre># Create the environment for using DIPLOMAT with DeepLabCut
 # GPU:
 mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
 # CPU only:
 mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT-CPU.yaml
+
 # OR Create an environment for using DIPLOMAT with SLEAP instead...
 # GPU:
 mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
 # CPU only:
 mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP-CPU.yaml</pre>
             </div>
-            <p>And then activate the environment with one of these two commands:</p>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>2. Activating the Environment</h3>
+            <p>After creating the environment, activate it using one of the following commands:</p>
             <div class="commands">
                 <pre># Activate the DeepLabCut/DIPLOMAT environment...
 mamba activate DIPLOMAT-DEEPLABCUT
+
 # Activate the SLEAP/DIPLOMAT environment...
 mamba activate DIPLOMAT-SLEAP</pre>
             </div>
-            <p>For a more thorough explanation of the installation process and alternative installation methods, see the <a href="https://diplomat.readthedocs.io/en/latest/installation.html" target="_blank">documentation</a>.</p>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>3. Documentation and Additional Help</h3>
+            <p>For a more thorough explanation of the installation process and alternative installation methods, see the <a href="https://diplomat.readthedocs.io/en/latest/installation.html" target="_blank">official documentation</a>.</p>
+            <p>All DIPLOMAT commands are documented via help strings. To get more information about a DIPLOMAT subcommand or command, simply run it with the <code>-h</code> or <code>--help</code> flag. For example:</p>
+            <div class="commands">
+                <pre># Help for all of DIPLOMAT (lists subcommands of DIPLOMAT):
+diplomat --help 
+
+# Help for the track subcommand:
+diplomat track --help
+
+# Help for the predictors subcommand space:
+diplomat predictors --help</pre>
+            </div>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+            <h3>4. Common Commands</h3>
+            <p>Below are some common commands you might find useful once DIPLOMAT is installed:</p>
+            <div class="commands">
+                <pre># Run DIPLOMAT with no UI...
+diplomat track -c path/to/config -v path/to/video
+
+# Run DIPLOMAT with UI...
+diplomat track_and_interact -c path/to/config -v path/to/video
+
+# Annotate video with labels...
+diplomat annotate -c path/to/config -v path/to/video
+
+# Reopen the UI for further modifications...
+diplomat interact -s path/to/ui_state.dipui
+
+# Make minor modifications after tracking...
+diplomat tweak -c path/to/config -v path/to/video</pre>
+            </div>
         </section>
     </div>
 
@@ -121,5 +210,14 @@ mamba activate DIPLOMAT-SLEAP</pre>
         <p>&copy; 2024 DIPLOMAT Project</p>
         <p>See <code>LICENSE</code> for details.</p>
     </footer>
+
+    <script>
+        document.addEventListener('mousemove', (e) => {
+            const logo = document.getElementById('logo');
+            const movementX = (e.clientX - window.innerWidth / 2) / 50;
+            const movementY = (e.clientY - window.innerHeight / 2) / 50;
+            logo.style.transform = `scaleY(1.2) translate(${movementX}px, ${movementY}px)`;
+        });
+    </script>
 </body>
 </html>
