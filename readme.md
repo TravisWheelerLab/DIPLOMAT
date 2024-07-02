@@ -16,6 +16,7 @@ Unlike other multi-animal tracking packages, DIPLOMAT's algorithms work directly
 DIPLOMAT also includes a UI for performing tracking and several other tools for storing and visualizing confidence maps. 
 
 ![UI Demo Showing user correcting tracking in a video](interact_retrack_gif.gif)
+
 **Correcting and rerunning the Viterbi algorithm on the Interact Interface**
 
 ## Installation
