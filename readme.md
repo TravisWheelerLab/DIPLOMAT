@@ -18,7 +18,7 @@ DIPLOMAT provides a multi-animal pose estimation and editing interface. It relie
 
 | Example of tracking 2 Degus in a Box | Example of tracking 3 Rats |
 |:------------------------------------:|:--------------------------:|
-| ![Example of tracking 2 Degus in a Box](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png) | ![Example of tracking 3 Rats](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png) |
+| ![Example of tracking 2 Degus](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png) | ![Example of tracking 3 Rats](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png) |
 ## Installation
 
 DIPLOMAT also includes four environment configuration files for setting up DIPLOMAT with 
