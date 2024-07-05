@@ -10,14 +10,15 @@ If you are a user (not a developer contributing code), you may want to visit:
 
 ## About
 
-DIPLOMAT provides a multi-animal pose estimation and editing interface. It relies on a trained CNN model (currently supporting SLEAP and DeepLabCut packages) and uses algorithms to first **Track** the animal body part in a way that reduces body part losses and identity swaps, and then provides an intuitive and memory/time efficient **Interact** interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more nuanced tracking results.
+DIPLOMAT provides a multi-animal pose estimation and editing interface. It relies on a trained CNN model (currently supporting SLEAP and DeepLabCut packages) and uses algorithms to first _**Track**_ the animal body part in a way that reduces body part losses and identity swaps, and then provides an intuitive and memory/time efficient _**Interact**_ interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more nuanced tracking results.
 
 ![UI Demo Showing user correcting tracking in a video](interact_retrack_gif.gif)
 
 **Correcting and rerunning the Viterbi algorithm on the Interact Interface**
 
-![Example of tracking 2 Degus in a Box](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png) 
-![Example of tracking 3 Rats](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png) 
+| Example of tracking 2 Degus in a Box | Example of tracking 3 Rats |
+|:------------------------------------:|:--------------------------:|
+| ![Example of tracking 2 Degus in a Box](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png) | ![Example of tracking 3 Rats](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png) |
 ## Installation
 
 DIPLOMAT also includes four environment configuration files for setting up DIPLOMAT with 
