@@ -13,7 +13,8 @@ If you are a user (not a developer contributing code), you may want to visit:
 DIPLOMAT provides a multi-animal pose estimation and editing interface. It relies on a trained CNN model (currently supporting SLEAP and DeepLabCut packages) and uses algorithms to first **Track** the animal body part in a way that reduces body part losses and identity swaps, and then provides an intuitive and memory/time efficient **Interact** interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more nuanced tracking results.
 
 ![UI Demo Showing user correcting tracking in a video](interact_retrack_gif.gif)
-
+![Example of tracking 2 Degus in a Box](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png) 
+![Example of tracking 3 Rats](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png) 
 **Correcting and rerunning the Viterbi algorithm on the Interact Interface**
 
 ## Installation
@@ -94,12 +95,6 @@ diplomat track --help
 # Help for the predictors subcommand space:
 diplomat predictors --help
 ```
-## Visuals
-
-[https://github.com/TravisWheelerLab/DIPLOMAT/assets/47544550/d805b673-4678-4297-b288-3fd08ad3cf62](https://private-user-images.githubusercontent.com/47544550/237458675-d805b673-4678-4297-b288-3fd08ad3cf62.mp4?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MTIwNzUxNDMsIm5iZiI6MTcxMjA3NDg0MywicGF0aCI6Ii80NzU0NDU1MC8yMzc0NTg2NzUtZDgwNWI2NzMtNDY3OC00Mjk3LWIyODgtM2ZkMDhhZDNjZjYyLm1wND9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA0MDIlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwNDAyVDE2MjA0M1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWZjNDMzZWZiMWIwMjUxODY1Y2RhMjMxYjUzZjk5YTlkYjI4Y2Y1NWMzZGVjYWM5ZDk1N2ZkYWI3OGI2ODc3NGYmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.C-HOqmEW44gEcMJF9So0LKcj1nQaQZORye3CHVnsMTE)
-
-![Example of tracking 2 Degus in a Box](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png) 
-![Example of tracking 3 Rats](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png) 
 
 ## Documentation
 
