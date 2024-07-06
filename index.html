@@ -208,11 +208,12 @@
             flex: 1;
             max-width: 100%;
             margin-left: 2rem;
+            text-align: left;
         }
         .tweak-section {
             position: relative;
             overflow: hidden;
-            background-color: #e3e3e3;
+            background-color: #d5e5e8;
             padding: 2rem;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -222,6 +223,7 @@
         }
         .tweak-section.visible {
             opacity: 1;
+            transform: translateY(0);
         }
         .tweak-section h2 {
             text-align: center;
@@ -286,7 +288,7 @@
     <div class="container">
         <section>
             <h2>About</h2>
-            <p>DIPLOMAT provides a multi-animal pose estimation and editing interface. It relies on a trained CNN model (currently supporting SLEAP and DeepLabCut packages) and uses algorithms to first _**Track**_ the animal body part in a way that reduces body part losses and identity swaps, and then provides an intuitive and memory/time efficient _**Interact**_ interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more nuanced tracking results.</p>
+            <p>DIPLOMAT provides a multi-animal pose estimation and editing interface. It relies on a trained CNN model (currently supporting SLEAP and DeepLabCut packages) and uses algorithms to first Track the animal body part in a way that reduces body part losses and identity swaps, and then provides an intuitive and memory/time efficient Interact interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more nuanced tracking results.</p>
         </section>
 
         <div class="images">
@@ -373,12 +375,12 @@
         }
 
         function showTweakVideo() {
+            const videoRows = document.querySelectorAll('.video-row');
+            videoRows.forEach(row => {
+                row.classList.remove('visible');
+            });
             const tweakSection = document.getElementById('tweak');
             tweakSection.classList.add('visible');
-            window.scrollTo({
-                top: tweakSection.offsetTop,
-                behavior: 'smooth'
-            });
         }
 
         window.addEventListener('scroll', () => {
