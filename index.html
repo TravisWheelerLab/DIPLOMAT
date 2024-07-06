@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8">    
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DIPLOMAT - Home</title>
     <style>
@@ -209,6 +209,22 @@
             max-width: 100%;
             margin-left: 2rem;
         }
+        .tweak-section {
+            position: relative;
+            overflow: hidden;
+            background-color: #e3e3e3;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            margin-top: 2rem;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 1s ease-out, transform 1s ease-out;
+        }
+        .tweak-section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
         footer {
             background: #351431;
             color: #fff;
@@ -241,7 +257,7 @@
     <div class="container">
         <section>
             <h2>About</h2>
-            <p>DIPLOMAT provides algorithms and tools for performing multi-animal identity preserving tracking on top of single animal and multi animal CNN based tracking packages. Currently, it supports running on both DeepLabCut and SLEAP projects. Unlike other multi-animal tracking packages, DIPLOMAT's algorithms work directly off confidence maps instead of running peak detection, allowing for more nuanced tracking results compared to other methods.</p>
+            <p>DIPLOMAT provides a multi-animal pose estimation and editing interface. It relies on a trained CNN model (currently supporting SLEAP and DeepLabCut packages) and uses algorithms to first _**Track**_ the animal body part in a way that reduces body part losses and identity swaps, and then provides an intuitive and memory/time efficient _**Interact**_ interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more nuanced tracking results.</p>
         </section>
 
         <div class="images">
@@ -251,7 +267,7 @@
 
         <div class="divider"></div>
 
-         <section class="interact-section" id="interact-section">
+        <section class="interact-section" id="interact-section">
             <div class="interact-content">
                 <img src="interact_retrack_gif.gif" alt="Interact Interface">
                 <div class="interact-text">
@@ -269,7 +285,6 @@
             <div class="button-row">
                 <button onclick="showVideo('track-interact')">Track and Interact</button>
                 <button onclick="showVideo('interact')">Interact</button>
-                <button onclick="showVideo('tweak')">Tweak</button>
             </div>
 
             <div id="track-interact" class="video-row">
@@ -291,8 +306,13 @@
                     <p>Overview of the visual settings, continuous labeling, single/multi body part labeling modes, and re-running the Viterbi algorithm</p>
                 </div>
             </div>
+        </section>
 
-            <div id="tweak" class="video-row">
+        <div class="divider"></div>
+
+        <section class="tweak-section" id="tweak-section">
+            <h2 class="text-3xl text-dark-purple mb-4">Additional Features: Tweak Interface</h2>
+            <div id="tweak" class="video-row visible">
                 <div class="video">
                     <iframe src="https://www.youtube.com/embed/OC1soECO2r4" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                 </div>
@@ -332,6 +352,14 @@
             const rect = interactSection.getBoundingClientRect();
             if (rect.top < window.innerHeight && rect.bottom >= 0) {
                 interactSection.classList.add('visible');
+            }
+        });
+
+        window.addEventListener('scroll', () => {
+            const tweakSection = document.getElementById('tweak-section');
+            const rect = tweakSection.getBoundingClientRect();
+            if (rect.top < window.innerHeight && rect.bottom >= 0) {
+                tweakSection.classList.add('visible');
             }
         });
 
