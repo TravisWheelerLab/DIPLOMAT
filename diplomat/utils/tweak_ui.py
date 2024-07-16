@@ -249,11 +249,14 @@ class TweakUI:
                 " or diplomat was installed with optional dependencies enabled."
             )
 
+    # this is a dummy function; `tweak` is a simplified version of `interact`, 
+    # so it has nothing to do, but it's necessary to pass something into 
+    # set_plot_settings_changer in order for the side effect radiobox color 
+    # update to occur. i defined this in the same style as its relative in 
+    # supervised_segmented_frame_pass_engine for consistency's sake, but really
+    # you could just pass in a blank lambda fn instead.
     def _on_visual_settings_change(self, data):
         pass
-        #old_data = self._frame_holder.metadata["video_metadata"]
-        #old_data.update(data)
-        #self._frame_holder.metadata["video_metadata"] = old_data
 
     def tweak(
         self,
