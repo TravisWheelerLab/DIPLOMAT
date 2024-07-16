@@ -154,10 +154,13 @@ def _resolve_videos(
 
     # Finally, check if the frame store itself can be opened as a video (new dual encoding). Overrides prior searches...
     for idx, path in enumerate(frame_store_paths):
-        test_cap = cv2.VideoCapture(path)
-        if(test_cap.grab()):
-            video_paths[idx] = path
-
+        try:
+            test_cap = cv2.VideoCapture(path)
+            if(test_cap.grab()):
+                video_paths[idx] = path
+        except:
+            print(f"The frame store at {path} could not be opened as a video.")
+    
     return video_paths
 
 
