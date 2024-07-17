@@ -10,6 +10,7 @@ from diplomat.predictors.fpe.frame_pass import type_casters as tc
 from diplomat.predictors.fpe import arr_utils
 import warnings
 
+np.random.seed(0)
 
 # Used when the body part count is <= 2, or multi-threading is disabled...
 class NotAPool:
@@ -275,7 +276,7 @@ class MITViterbi(FramePass):
 
             fb_data = fb_data if(in_place) else fb_data.copy()
 
-            # Viterbiwhi
+            # Viterbi
             super()._set_step_controls(fix_frame_index + 1, None, 1, -1) #starting from the frame after the fix_frame, going future
             self._run_forward(fb_data, prog_bar, True, False)
             super()._set_step_controls(None, fix_frame_index, -1, 1)
@@ -333,8 +334,9 @@ class MITViterbi(FramePass):
                 if(not (0 <= (frame_idx + self._prior_off) < len(fb_data.frames))):
                     continue
 
-                # Compute the prior maximum locations for all body parts in
-                # the prior frame...
+                # As outer loop iterates, the current frame data is updated to contain transition and skeleton probabilities,
+                # so in the next step, picking the maximum in the prior frame (the "current" frame we updated in the last 
+                # step) will recover the source cell.
                 for bp_idx in range(fb_data.num_bodyparts):
                     prior = fb_data.frames[frame_idx + self._prior_off][bp_idx]
                     current = fb_data.frames[frame_idx][bp_idx]
@@ -612,7 +614,8 @@ class MITViterbi(FramePass):
         cls,
         occluded_coords: np.ndarray,
         occluded_probs: np.ndarray,
-        max_count: int
+        max_count: int,
+        verbose = False
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Filter occluded coordinates and probabilities such that there is only max_count of them left, those with the
@@ -879,6 +882,7 @@ class MITViterbi(FramePass):
             group_range, frm_probs, occ_probs, frm_idxs, occ_idxs, enter_probs
         ):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
+            best_frm = np.argmax(frm_prob)
             frm_prob[frm_prob < frame_dominators] = -np.inf
 
             if(not np.all(occ_prob < occ_dominators)):
@@ -887,8 +891,11 @@ class MITViterbi(FramePass):
                 # Bad domination step, lost all occluded and in-frame probabilities, so keep the best location...
                 best_occ = np.argmax(occ_prob)
                 occ_prob[occ_prob < occ_dominators] = -np.inf
-                occ_prob[best_occ] = 0  # 1 in log space...
+                frm_prob[best_frm] = 0
+                occ_prob[best_frm] = 0
+                #occ_prob[best_occ] = 0  # 1 in log space...
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
+                #print(f"bad domination step: bp{bp_i} frm_idx\n{frm_idx}")
 
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
