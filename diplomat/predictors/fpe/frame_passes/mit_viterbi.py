@@ -277,6 +277,7 @@ class MITViterbi(FramePass):
             fb_data = fb_data if(in_place) else fb_data.copy()
 
             # Viterbi
+            #print("towards future")
             super()._set_step_controls(fix_frame_index + 1, None, 1, -1) #starting from the frame after the fix_frame, going future
             self._run_forward(fb_data, prog_bar, True, False)
             super()._set_step_controls(None, fix_frame_index, -1, 1)
@@ -284,6 +285,7 @@ class MITViterbi(FramePass):
 
 
             #TODO check if this is being run for any segment other than the first one
+            #print("towards past")
             super()._set_step_controls(fix_frame_index - 1, None, -1, 1) #starting from the frame before the fix_frame, going past
             self._run_forward(fb_data, prog_bar, True, False)
             super()._set_step_controls(None, fix_frame_index, 1, -1)
@@ -321,6 +323,7 @@ class MITViterbi(FramePass):
         Returns:
         - ForwardBackwardData: The input data object updated with the backtraced path information.
         """
+        #print(f"_run_backtrace {self._start},{self._stop},{self._step}")
         pool_cls = self._get_pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // fb_data.metadata.num_outputs) > 2) else NotAPool
 
         backtrace_priors = [None for __ in range(fb_data.num_bodyparts)]
@@ -331,6 +334,7 @@ class MITViterbi(FramePass):
             transition_function = ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob)
 
             for frame_idx in RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]:
+                #print("frame",frame_idx)
                 if(not (0 <= (frame_idx + self._prior_off) < len(fb_data.frames))):
                     continue
 
@@ -405,6 +409,10 @@ class MITViterbi(FramePass):
                     fb_data.frames[frame_idx][bp_i].frame_probs = frm_prob
                     fb_data.frames[frame_idx][bp_i].occluded_probs = occ_prob
                     fb_data.frames[frame_idx][bp_i].enter_state = enter_state[0]
+                    if bp_i == 29:
+                        pass
+                        #print(f"backtrace frm_prob\n{frm_prob}")
+                        #print(fb_data.frames[frame_idx][bp_i].to_fancy_string(80,80))
 
                 if(prog_bar is not None):
                     prog_bar.update()
@@ -454,6 +462,7 @@ class MITViterbi(FramePass):
         Returns:
         - ForwardBackwardData: The updated data structure with computed probabilities and states for each frame.
         """
+        #print(f"_run_forward {self._start},{self._stop},{self._step}")
         frame_iter = RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]
         meta = fb_data.metadata
 
@@ -470,6 +479,7 @@ class MITViterbi(FramePass):
             transition_func = ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob)
 
             for i in frame_iter:
+                #print("frame", i)
                 prior_idx = i + self._prior_off
 
                 if (not (0 <= prior_idx < fb_data.num_frames)):
@@ -882,9 +892,25 @@ class MITViterbi(FramePass):
             group_range, frm_probs, occ_probs, frm_idxs, occ_idxs, enter_probs
         ):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
+            
             best_frm = np.argmax(frm_prob)
-            frm_prob[frm_prob < frame_dominators] = -np.inf
+            best_frm_prob = frm_prob[best_frm]
 
+            best_occ = np.argmax(occ_prob)
+            best_occ_prob = occ_prob[best_occ]
+
+            frm_prob[frm_prob < frame_dominators] = -np.inf
+            occ_prob[occ_prob < occ_dominators] = -np.inf
+
+            if np.all(occ_prob < occ_dominators):
+                print(f"bp{bp_i} lost all occ probs - set to max frame probability")
+                occ_prob[best_frm] = best_frm_prob
+                
+            if np.all(frm_prob < frame_dominators):
+                print(f"bp{bp_i} lost all frm probs - set to max frame probability")
+                frm_prob[best_frm] = best_frm_prob
+
+            """
             if(not np.all(occ_prob < occ_dominators)):
                 occ_prob[occ_prob < occ_dominators] = -np.inf
             else:
@@ -896,6 +922,7 @@ class MITViterbi(FramePass):
                 #occ_prob[best_occ] = 0  # 1 in log space...
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
                 #print(f"bad domination step: bp{bp_i} frm_idx\n{frm_idx}")
+            """
 
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
