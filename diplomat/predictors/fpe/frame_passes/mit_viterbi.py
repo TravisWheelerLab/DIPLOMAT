@@ -334,7 +334,7 @@ class MITViterbi(FramePass):
             transition_function = ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob)
 
             for frame_idx in RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]:
-                print("frame",frame_idx)
+                #print("frame",frame_idx)
                 if(not (0 <= (frame_idx + self._prior_off) < len(fb_data.frames))):
                     continue
 
@@ -475,7 +475,7 @@ class MITViterbi(FramePass):
             transition_func = ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob)
 
             for i in frame_iter:
-                print("frame", i)
+                #print("frame", i)
                 prior_idx = i + self._prior_off
 
                 if (not (0 <= prior_idx < fb_data.num_frames)):
@@ -898,18 +898,20 @@ class MITViterbi(FramePass):
             frm_prob[frm_prob < frame_dominators] = -np.inf
             occ_prob[occ_prob < occ_dominators] = -np.inf
 
-            cy, cx, cprob, c_occx, c_occy = current[bp_i].src_data.unpack()
+            #cy, cx, cprob, c_occx, c_occy = current[bp_i].src_data.unpack()
 
-            best_y = cy[best_frm]
-            best_x = cx[best_frm]
+            #best_y = cy[best_frm]
+            #best_x = cx[best_frm]
 
             if np.all(occ_prob < occ_dominators):
-                print(f"bp{bp_i} lost all occ probs - set to max frame probability {best_frm_prob} at {best_x,best_y}")
+                print(f"bp{bp_i} lost all occ probs - set to max frame probability")# {best_frm_prob} at {best_x,best_y}")
                 occ_prob[best_frm] = 0#best_frm_prob
+                occ_dominators[best_frm] = 0
                 
             if np.all(frm_prob < frame_dominators):
-                print(f"bp{bp_i} lost all frm probs - set to max frame probability {best_frm_prob} at {best_x,best_y}")
+                print(f"bp{bp_i} lost all frm probs - set to max frame probability")# {best_frm_prob} at {best_x,best_y}")
                 frm_prob[best_frm] = 0#best_frm_prob
+                frame_dominators[best_frm] = 0
 
             """
             if(not np.all(occ_prob < occ_dominators)):
@@ -998,18 +1000,18 @@ class MITViterbi(FramePass):
             np.concatenate((current_frame_coords, prior_occluded_coords)),
             axis=0
         )
-        import warnings
-        warnings.filterwarnings("error")
+        #import warnings
+        #warnings.filterwarnings("error")
 
-        if disable_occluded:
-            print("occlusion disabled!")
+        #if disable_occluded:
+        #    print("occlusion disabled!")
 
-        try:
-            log_occluded_prob = to_log_space(0 if(disable_occluded) else occluded_prob)
-        except RuntimeWarning:
-            print(f"err:\n\tprobability {occluded_prob}\n\tdisable_occluded={disable_occluded}")
-            if disable_occluded:
-                print("\tpassed 0 to np.log2; throwing runtime err")
+        #try:
+        #    log_occluded_prob = to_log_space(0 if(disable_occluded) else occluded_prob)
+        #except RuntimeWarning:
+        #    print(f"err:\n\tprobability {occluded_prob}\n\tdisable_occluded={disable_occluded}")
+        #    if disable_occluded:
+        #        print("\tpassed 0 to np.log2; throwing runtime err")
 
         return (
             new_coords,
