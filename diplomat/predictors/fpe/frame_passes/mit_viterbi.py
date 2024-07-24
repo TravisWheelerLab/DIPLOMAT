@@ -49,17 +49,9 @@ def log_prob_complement(arr):
 NumericArray = Union[int, float, np.ndarray]
 
 
-def norm_together(arrs,verbose=False):
+def norm_together(arrs):
     max_val = max(np.max(arr) for arr in arrs)
-    new_arrs = [arr - max_val for arr in arrs]
-    if verbose:
-        print("before norm:")
-        for a in arrs:
-            print(a)
-        print("after norm:")
-        for na in new_arrs:
-            print(na)
-    return new_arrs #[arr - max_val for arr in arrs]
+    return [arr - max_val for arr in arrs]
 
 
 def select(*info):
@@ -285,7 +277,6 @@ class MITViterbi(FramePass):
             fb_data = fb_data if(in_place) else fb_data.copy()
 
             # Viterbi
-            print("\n\ntowards future")
             super()._set_step_controls(fix_frame_index + 1, None, 1, -1) #starting from the frame after the fix_frame, going future
             self._run_forward(fb_data, prog_bar, True, False)
             super()._set_step_controls(None, fix_frame_index, -1, 1)
@@ -293,7 +284,6 @@ class MITViterbi(FramePass):
 
 
             #TODO check if this is being run for any segment other than the first one
-            print("\n\ntowards past")
             super()._set_step_controls(fix_frame_index - 1, None, -1, 1) #starting from the frame before the fix_frame, going past
             self._run_forward(fb_data, prog_bar, True, False)
             super()._set_step_controls(None, fix_frame_index, 1, -1)
@@ -331,7 +321,6 @@ class MITViterbi(FramePass):
         Returns:
         - ForwardBackwardData: The input data object updated with the backtraced path information.
         """
-        print(f"\n_run_backtrace {self._start},{self._stop},{self._step}")
         pool_cls = self._get_pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // fb_data.metadata.num_outputs) > 2) else NotAPool
 
         backtrace_priors = [None for __ in range(fb_data.num_bodyparts)]
@@ -342,7 +331,6 @@ class MITViterbi(FramePass):
             transition_function = ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob)
 
             for frame_idx in RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]:
-                #print("frame",frame_idx)
                 if(not (0 <= (frame_idx + self._prior_off) < len(fb_data.frames))):
                     continue
 
@@ -466,7 +454,6 @@ class MITViterbi(FramePass):
         Returns:
         - ForwardBackwardData: The updated data structure with computed probabilities and states for each frame.
         """
-        print(f"\n_run_forward {self._start},{self._stop},{self._step}")
         frame_iter = RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]
         meta = fb_data.metadata
 
@@ -483,7 +470,6 @@ class MITViterbi(FramePass):
             transition_func = ViterbiTransitionTable(self._gaussian_table, exit_prob, 1 - exit_prob)
 
             for i in frame_iter:
-                #print("frame", i)
                 prior_idx = i + self._prior_off
 
                 if (not (0 <= prior_idx < fb_data.num_frames)):
@@ -556,9 +542,6 @@ class MITViterbi(FramePass):
         skeleton_weight: A float representing the weight of the skeleton factor.
 
         """
-        verbosity = False#((bp_idx % 10) == 0)
-        if verbosity:
-            print("_compute_backtrace_step")
 
         # If skeleton information is available, the method first computes the influence of skeletal connections 
         # on the transition probabilities. 
@@ -587,11 +570,9 @@ class MITViterbi(FramePass):
 
         #Normalization: Finally, the probabilities are normalized to ensure they are within a valid range 
         # and to facilitate comparison between different paths.
-        if verbosity:
-            print(len(list(zip(trans_res,skel_res))))
         return norm_together([
             t + s * skeleton_weight for t, s in zip(trans_res, skel_res)
-        ], verbose=verbosity)
+        ])
 
     @classmethod
     def _compute_init_frame(
@@ -622,8 +603,7 @@ class MITViterbi(FramePass):
         # Store results in current frame (normalized and in log-space)
         frame.occluded_coords = occ_coord
         frame.frame_probs, frame.occluded_probs = norm_together(
-            [to_log_space(probs), occ_probs],
-            verbose=False
+            [to_log_space(probs), occ_probs]
         )
         frame.enter_state = -np.inf  # Make enter state 0 in log space...
 
@@ -745,7 +725,8 @@ class MITViterbi(FramePass):
                     continue
                 merged_result = current_total + bp_sub_res
                 final_result[i] = merged_result
-            final_result = norm_together(final_result,verbose=False)
+
+            final_result = norm_together(final_result)
 
         return final_result
 
@@ -985,18 +966,6 @@ class MITViterbi(FramePass):
             np.concatenate((current_frame_coords, prior_occluded_coords)),
             axis=0
         )
-        #import warnings
-        #warnings.filterwarnings("error")
-
-        #if disable_occluded:
-        #    print("occlusion disabled!")
-
-        #try:
-        #    log_occluded_prob = to_log_space(0 if(disable_occluded) else occluded_prob)
-        #except RuntimeWarning:
-        #    print(f"err:\n\tprobability {occluded_prob}\n\tdisable_occluded={disable_occluded}")
-        #    if disable_occluded:
-        #        print("\tpassed 0 to np.log2; throwing runtime err")
 
         return (
             new_coords,
