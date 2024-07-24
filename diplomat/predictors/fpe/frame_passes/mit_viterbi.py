@@ -901,44 +901,16 @@ class MITViterbi(FramePass):
             group_range, frm_probs, occ_probs, frm_idxs, occ_idxs, enter_probs
         ):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
-            
-            best_frm = np.argmax(frm_prob)
-            best_frm_prob = frm_prob[best_frm]
-
-            best_occ = np.argmax(occ_prob)
-            best_occ_prob = occ_prob[best_occ]
-
             frm_prob[frm_prob < frame_dominators] = -np.inf
-            occ_prob[occ_prob < occ_dominators] = -np.inf
 
-            #cy, cx, cprob, c_occx, c_occy = current[bp_i].src_data.unpack()
-
-            #best_y = cy[best_frm]
-            #best_x = cx[best_frm]
-
-            if np.all(occ_prob < occ_dominators):
-                print(f"bp{bp_i} lost all occ probs - set to max frame probability")# {best_frm_prob} at {best_x,best_y}")
-                occ_prob[best_frm] = 0#best_frm_prob
-                occ_dominators[best_frm] = 0
-                
-            if np.all(frm_prob < frame_dominators):
-                print(f"bp{bp_i} lost all frm probs - set to max frame probability")# {best_frm_prob} at {best_x,best_y}")
-                frm_prob[best_frm] = 0#best_frm_prob
-                frame_dominators[best_frm] = 0
-
-            """
             if(not np.all(occ_prob < occ_dominators)):
                 occ_prob[occ_prob < occ_dominators] = -np.inf
             else:
                 # Bad domination step, lost all occluded and in-frame probabilities, so keep the best location...
                 best_occ = np.argmax(occ_prob)
                 occ_prob[occ_prob < occ_dominators] = -np.inf
-                frm_prob[best_frm] = 0
-                occ_prob[best_frm] = 0
-                #occ_prob[best_occ] = 0  # 1 in log space...
+                occ_prob[best_occ] = 0  # 1 in log space...
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
-                #print(f"bad domination step: bp{bp_i} frm_idx\n{frm_idx}")
-            """
 
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
