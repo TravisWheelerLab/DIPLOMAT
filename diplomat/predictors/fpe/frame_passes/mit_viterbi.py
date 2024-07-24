@@ -882,7 +882,6 @@ class MITViterbi(FramePass):
             group_range, frm_probs, occ_probs, frm_idxs, occ_idxs, enter_probs
         ):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
-            best_frm = np.argmax(frm_prob)
             frm_prob[frm_prob < frame_dominators] = -np.inf
 
             if(not np.all(occ_prob < occ_dominators)):
@@ -891,11 +890,8 @@ class MITViterbi(FramePass):
                 # Bad domination step, lost all occluded and in-frame probabilities, so keep the best location...
                 best_occ = np.argmax(occ_prob)
                 occ_prob[occ_prob < occ_dominators] = -np.inf
-                frm_prob[best_frm] = 0
-                occ_prob[best_frm] = 0
-                #occ_prob[best_occ] = 0  # 1 in log space...
+                occ_prob[best_occ] = 0  # 1 in log space...
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
-                #print(f"bad domination step: bp{bp_i} frm_idx\n{frm_idx}")
 
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
