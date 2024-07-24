@@ -49,9 +49,17 @@ def log_prob_complement(arr):
 NumericArray = Union[int, float, np.ndarray]
 
 
-def norm_together(arrs):
+def norm_together(arrs,verbose=False):
     max_val = max(np.max(arr) for arr in arrs)
-    return [arr - max_val for arr in arrs]
+    new_arrs = [arr - max_val for arr in arrs]
+    if verbose:
+        print("before norm:")
+        for a in arrs:
+            print(a)
+        print("after norm:")
+        for na in new_arrs:
+            print(na)
+    return new_arrs #[arr - max_val for arr in arrs]
 
 
 def select(*info):
@@ -548,6 +556,9 @@ class MITViterbi(FramePass):
         skeleton_weight: A float representing the weight of the skeleton factor.
 
         """
+        verbosity = False#((bp_idx % 10) == 0)
+        if verbosity:
+            print("_compute_backtrace_step")
 
         # If skeleton information is available, the method first computes the influence of skeletal connections 
         # on the transition probabilities. 
@@ -576,9 +587,11 @@ class MITViterbi(FramePass):
 
         #Normalization: Finally, the probabilities are normalized to ensure they are within a valid range 
         # and to facilitate comparison between different paths.
+        if verbosity:
+            print(len(list(zip(trans_res,skel_res))))
         return norm_together([
             t + s * skeleton_weight for t, s in zip(trans_res, skel_res)
-        ])
+        ], verbose=verbosity)
 
     @classmethod
     def _compute_init_frame(
@@ -609,7 +622,8 @@ class MITViterbi(FramePass):
         # Store results in current frame (normalized and in log-space)
         frame.occluded_coords = occ_coord
         frame.frame_probs, frame.occluded_probs = norm_together(
-            [to_log_space(probs), occ_probs]
+            [to_log_space(probs), occ_probs],
+            verbose=False
         )
         frame.enter_state = -np.inf  # Make enter state 0 in log space...
 
@@ -731,8 +745,7 @@ class MITViterbi(FramePass):
                     continue
                 merged_result = current_total + bp_sub_res
                 final_result[i] = merged_result
-
-            final_result = norm_together(final_result)
+            final_result = norm_together(final_result,verbose=False)
 
         return final_result
 
