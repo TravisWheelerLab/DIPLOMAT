@@ -104,15 +104,18 @@ class FramePassEngine(Predictor):
     def get_maximum(
         cls,
         frame: ForwardBackwardFrame,
-        relaxed_radius: float = 0
+        relaxed_radius: float = 0,
+        verbose = False,
     ) -> Tuple[int, int, float, float, float]:
         """
         PRIVATE: Get the maximum location of a single forward backward frame.
         Returns a tuple containing the values x, y, probability, x offset,
         and y offset in order.
         """
+        if verbose: print("get_maximum")
         if (frame.frame_probs is None or frame.src_data.unpack()[0] is None):
             # No frame data, return 3 for no probability and 0 probability...
+            if verbose: print("\tno frame data")
             return (-1, -1, 0, 0, 0)
         else:
             # Get the max location in the frame....
@@ -137,10 +140,12 @@ class FramePassEngine(Predictor):
             if (max_of_max > 0):
                 # Return correct location for occluded, but return a
                 # probability of 0.
+                if verbose: print("\toccluded loc")
                 return (m_occ_x, m_occ_y, 0, 0, 0)
             else:
                 if (relaxed_radius <= 0):
                     # If no relaxed radius, just set pose...
+                    if verbose: print("\t wout radius")
                     return (m_x, m_y, m_p, m_offx, m_offy)
                 else:
                     # Now find locations within the radius...
@@ -150,9 +155,11 @@ class FramePassEngine(Predictor):
 
                     # No other neighbors, return initially suggested value...
                     if (len(res) <= 0):
+                        if verbose: print("\t no neighbors")
                         return (m_x, m_y, m_p, m_offx, m_offy)
                     else:
                         best_idx = res[np.argmax(orig_probs[res])]
+                        if verbose: print("\t w neighbors")
                         return (
                             x_coords[best_idx], y_coords[best_idx], m_p,
                             x_offsets[best_idx], y_offsets[best_idx]
