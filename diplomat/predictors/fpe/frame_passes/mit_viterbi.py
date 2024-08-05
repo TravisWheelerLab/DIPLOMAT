@@ -636,7 +636,7 @@ class MITViterbi(FramePass):
 
         indexes = np.argpartition(occluded_probs, -max_count)[-max_count:]
 
-        indexes = indexes[occluded_probs[indexes] > min_prob]
+        #indexes = indexes[occluded_probs[indexes] > min_prob]
 
         return (occluded_coords[indexes], occluded_probs[indexes])
 
@@ -919,7 +919,8 @@ class MITViterbi(FramePass):
             c, p = cls.filter_occluded_probabilities(
                 current[bp_i].occluded_coords,
                 occ_prob[occ_idx],
-                metadata.obscured_survival_max
+                metadata.obscured_survival_max,
+                metadata.minimum_obscured_probability
             )
             current[bp_i].occluded_coords = c
             current[bp_i].occluded_probs = p - norm_val
@@ -951,6 +952,8 @@ class MITViterbi(FramePass):
         Returns:
         A list of numpy arrays representing the merged transition probabilities for each body part.
         """
+        print("log_viterbi_between\n\t",[np.expand_dims(pprob, 0).shape for pprob, pcoord in prior_data])
+        print([np.expand_dims(cprob, 1).shape for (cprob, ccoord) in current_data])
         return [
             merge_arrays([
                 merge_internal(
@@ -984,6 +987,7 @@ class MITViterbi(FramePass):
         new_coords = merged_coords[0]
         new_probs = np.maximum(*merged_probs) * decay_rate
 
+        #print(f"generate_occluded\n\t{new_coords.shape}\n\t{new_probs.shape}")
         return (
             new_coords,
             new_probs
@@ -1037,14 +1041,14 @@ class MITViterbi(FramePass):
                 "probabilities can reach."
             ),
             "obscured_probability": (
-                0.0000001, tc.RangedFloat(0, 1),
+                1e-6, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
                 "prior probability of being in any hidden state cell."
             ),
             "minimum_obscured_probability": (
-                1e-9, tc.RangedFloat(0, 1),
+                1e-12, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that sets a cutoff for obscured state probabilities."
-            )
+            ),
             "enter_state_probability": (
                 1e-12, tc.RangedFloat(0, 1),
                 "A constant, the probability of being in the enter state."
@@ -1060,7 +1064,7 @@ class MITViterbi(FramePass):
                 "if there is more than this value, the top ones are kept."
             ),
             "obscured_decay_rate": (
-                1e-2, tc.RangedFloat(0, 1),
+                0.99, tc.RangedFloat(0, 1),
                 "A constant float defining the decay rate of probabilities in the occluded state."
             ),
             "gaussian_plateau": (
