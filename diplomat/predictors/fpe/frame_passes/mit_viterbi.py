@@ -975,18 +975,18 @@ class MITViterbi(FramePass):
         decay_rate: float,
         disable_occluded: bool
     ) -> Tuple[np.ndarray, np.ndarray]:
-        new_coords = np.unique(
-            np.concatenate((current_frame_coords, prior_occluded_coords)),
-            axis=0
+        merged_probs, merged_coords, _ = arr_utils.pad_coordinates_and_probs(
+            [current_frame_probs, prior_occluded_probs],
+            [current_frame_coords, prior_occluded_coords],
+            -np.inf
         )
-        
+
+        new_coords = merged_coords[0]
+        new_probs = np.maximum(*merged_probs)
 
         return (
             new_coords,
-            np.full(
-                new_coords.shape[0],
-                to_log_space(0 if(disable_occluded) else occluded_prob)
-            )
+            new_probs
         )
 
     @classmethod
