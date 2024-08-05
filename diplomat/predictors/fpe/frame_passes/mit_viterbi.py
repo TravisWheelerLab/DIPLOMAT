@@ -203,6 +203,8 @@ class MITViterbi(FramePass):
         """Initialize probabilities relating to an obscured state"""
         metadata.obscured_prob = self.config.obscured_probability
         metadata.obscured_survival_max = self.config.obscured_survival_max
+        metadata.minimum_obscured_probability = self.config.minimum_obscured_probability
+        metadata.obscured_decay_rate = self.config.obscured_decay_rate
 
     def _init_edge_state(self, metadata: AttributeDict):
         """Initialize probabilities relating to an edge / boundary state"""
@@ -596,7 +598,7 @@ class MITViterbi(FramePass):
 
         # Filter probabilities to limit occluded state.
         occ_coord, occ_probs = cls.filter_occluded_probabilities(
-            occ_coord, occ_probs, metadata.obscured_survival_max
+            occ_coord, occ_probs, metadata.obscured_survival_max, metadata.minimum_obscured_probability,
         )
 
         # Store results in current frame.
@@ -821,6 +823,7 @@ class MITViterbi(FramePass):
                 prior[bp_i].occluded_coords,
                 prior[bp_i].occluded_probs,
                 metadata.obscured_prob, #obscured = occluded
+                metadata.obscured_decay_rate,
                 current[bp_i].disable_occluded and (cy is not None)
             )
 
@@ -1038,6 +1041,10 @@ class MITViterbi(FramePass):
                 "A constant float between 0 and 1 that determines the "
                 "prior probability of being in any hidden state cell."
             ),
+            "minimum_obscured_probability": (
+                1e-9, tc.RangedFloat(0, 1),
+                "A constant float between 0 and 1 that sets a cutoff for obscured state probabilities."
+            )
             "enter_state_probability": (
                 1e-12, tc.RangedFloat(0, 1),
                 "A constant, the probability of being in the enter state."
@@ -1051,6 +1058,10 @@ class MITViterbi(FramePass):
                 50, int,
                 "An integer, the max number of points to allow to survive for each frame, "
                 "if there is more than this value, the top ones are kept."
+            ),
+            "obscured_decay_rate": (
+                1e-2, tc.RangedFloat(0, 1),
+                "A constant float defining the decay rate of probabilities in the occluded state."
             ),
             "gaussian_plateau": (
                 None, tc.Union(float, tc.Literal(None)),
