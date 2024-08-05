@@ -809,14 +809,17 @@ class MITViterbi(FramePass):
 
             #only have source data for the current frame
             c_frame_data = (
-                (norm(to_log_space(cprob)), (cx, cy))
-                if(cy is not None) else (to_log_space(z_arr()), (z_arr(), z_arr()))
+                (norm(to_log_space(cprob)), 
+                (cx, cy)) if(cy is not None) else (to_log_space(z_arr()), 
+                (z_arr(), z_arr()))
             )
 
             #occluded coordinates are constrained by the coordinate probabilities in the previous frame 
             c_occ_coords, c_occ_probs = cls.generate_occluded(
                 np.asarray(c_frame_data[1]).T,
+                np.asarray(c_frame_data[0])
                 prior[bp_i].occluded_coords,
+                prior[bp_i].occluded_probs,
                 metadata.obscured_prob, #obscured = occluded
                 current[bp_i].disable_occluded and (cy is not None)
             )
@@ -962,14 +965,18 @@ class MITViterbi(FramePass):
     def generate_occluded(
         cls,
         current_frame_coords: np.ndarray,
+        current_frame_probs: np.ndarray,
         prior_occluded_coords: np.ndarray,
+        prior_occluded_probs: np.ndarray,
         occluded_prob: float,
+        decay_rate: float,
         disable_occluded: bool
     ) -> Tuple[np.ndarray, np.ndarray]:
         new_coords = np.unique(
             np.concatenate((current_frame_coords, prior_occluded_coords)),
             axis=0
         )
+        
 
         return (
             new_coords,
