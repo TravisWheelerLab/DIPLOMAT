@@ -616,6 +616,7 @@ class MITViterbi(FramePass):
         occluded_coords: np.ndarray,
         occluded_probs: np.ndarray,
         max_count: int,
+        min_prob: float,
         verbose = False
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -632,6 +633,8 @@ class MITViterbi(FramePass):
             return (occluded_coords, occluded_probs)
 
         indexes = np.argpartition(occluded_probs, -max_count)[-max_count:]
+
+        indexes = indexes[occluded_probs[indexes] > min_prob]
 
         return (occluded_coords[indexes], occluded_probs[indexes])
 
