@@ -819,7 +819,7 @@ class MITViterbi(FramePass):
             #occluded coordinates are constrained by the coordinate probabilities in the previous frame 
             c_occ_coords, c_occ_probs = cls.generate_occluded(
                 np.asarray(c_frame_data[1]).T,
-                np.asarray(c_frame_data[0])
+                np.asarray(c_frame_data[0]),
                 prior[bp_i].occluded_coords,
                 prior[bp_i].occluded_probs,
                 metadata.obscured_prob, #obscured = occluded
@@ -900,7 +900,7 @@ class MITViterbi(FramePass):
                 # Bad domination step, lost all occluded and in-frame probabilities, so keep the best location...
                 best_occ = np.argmax(occ_prob)
                 occ_prob[occ_prob < occ_dominators] = -np.inf
-                occ_prob[best_occ] = 0  # 1 in log space...
+                occ_prob[best_occ] = metadata.obscured_prob  # 1 in log space...
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
 
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
@@ -982,7 +982,7 @@ class MITViterbi(FramePass):
         )
 
         new_coords = merged_coords[0]
-        new_probs = np.maximum(*merged_probs)
+        new_probs = np.maximum(*merged_probs) * decay_rate
 
         return (
             new_coords,
