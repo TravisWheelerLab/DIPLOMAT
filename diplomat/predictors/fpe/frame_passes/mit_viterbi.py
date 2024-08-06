@@ -584,7 +584,7 @@ class MITViterbi(FramePass):
     ) -> ForwardBackwardFrame:
         y, x, probs, x_off, y_off = frame.src_data.unpack()
 
-        if(y is None):
+        if(y == x == probs == x_off == y_off == [0]):
             print("Invalid frame to start on! Using enter state...")
             frame.enter_state = to_log_space(1)
             #The enter_state is used when no good fix frame is found over the entire video (one where all parts are separable) the best scoring frame for the video (typically one with most parts separated) is picked and parts that weren't separated via clustering start in the enter state, which allows transitioning to the frame, but not back to the enter state
