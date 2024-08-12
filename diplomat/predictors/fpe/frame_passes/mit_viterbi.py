@@ -592,7 +592,7 @@ class MITViterbi(FramePass):
             # this needs to change; setting the occluded coordinate to (0,0) introduces bias to the transition probabilities.
             # (that is, jumping to the nearest point will be favored arbitrarily.)
             frame.occluded_probs = to_log_space(np.array([0]))
-            frame.occluded_coords = np.array([[0, 0]])
+            frame.occluded_coords = np.array([[-np.inf, -np.inf]])
             # can't use these
             frame.frame_probs = [-np.inf]
             # set the enter state
