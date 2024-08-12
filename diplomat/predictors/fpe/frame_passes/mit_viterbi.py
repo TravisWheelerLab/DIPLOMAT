@@ -581,42 +581,47 @@ class MITViterbi(FramePass):
     ) -> ForwardBackwardFrame:
         y, x, probs, x_off, y_off = frame.src_data.unpack()
 
-        if(y == x == probs == x_off == y_off == [0]):
-            print("Invalid frame to start on! Using enter state...")
-            # The enter_state is used when no good fix frame is found over the entire video 
-            # (one where all parts are separable) the best scoring frame for the video 
-            # (typically one with most parts separated) is picked and parts that weren't 
-            # separated via clustering start in the enter state, which allows transitioning to 
-            # the frame, but not back to the enter state.
-            
-            # this needs to change; setting the occluded coordinate to (0,0) introduces bias to the transition probabilities.
-            # (that is, jumping to the nearest point will be favored arbitrarily.)
-            frame.occluded_probs = to_log_space(np.array([0]))
-            frame.occluded_coords = np.array([[0, 0]])
-            # can't use these
-            frame.frame_probs = [-np.inf]
-            # set the enter state
-            frame.enter_state = to_log_space(1)
-        else:
-            # The first occluded state is constructed from the source pixels, 
-            # whose probabilities are augmented by the obscured probability.
-            occ_coord = np.array([x, y]).T
-            occ_probs = np.array(probs) + to_log_space(metadata.obscured_prob)
+    
+        if len(y) == 0:
+            if(y == x == probs == x_off == y_off == [0]):
+                print("Invalid frame to start on! Using enter state...")
+                # The enter_state is used when no good fix frame is found over the entire video 
+                # (one where all parts are separable) the best scoring frame for the video 
+                # (typically one with most parts separated) is picked and parts that weren't 
+                # separated via clustering start in the enter state, which allows transitioning to 
+                # the frame, but not back to the enter state.
+                
+                # this needs to change; setting the occluded coordinate to (0,0) introduces bias to the transition probabilities.
+                # (that is, jumping to the nearest point will be favored arbitrarily.)
+                # but it can't be a +/- inf, and it can't be empty. might need to make inf a condition in/above the transition table logic?
+                frame.occluded_probs = to_log_space(np.array([0]))
+                frame.occluded_coords = np.array([[0, 0]])
+                # can't use these
+                frame.frame_probs = [-np.inf]
+                # set the enter state
+                frame.enter_state = to_log_space(1)
 
-            # Filter probabilities to limit occluded state.
-            occ_coord, occ_probs = cls.filter_occluded_probabilities(
-                occ_coord, occ_probs, metadata.obscured_survival_max, metadata.minimum_obscured_probability,
-            )
+                return frame
+        
+        # The first occluded state is constructed from the source pixels, 
+        # whose probabilities are augmented by the obscured probability.
+        occ_coord = np.array([x, y]).T
+        occ_probs = np.array(probs) + to_log_space(metadata.obscured_prob)
 
-            # Store results in current frame.
-            # Frame (visible) probabilities and occluded probabilities are normalized separately.
-            frame.occluded_coords = occ_coord
-            frame.occluded_probs = norm(occ_probs)
+        # Filter probabilities to limit occluded state.
+        occ_coord, occ_probs = cls.filter_occluded_probabilities(
+            occ_coord, occ_probs, metadata.obscured_survival_max, metadata.minimum_obscured_probability,
+        )
 
-            frame.frame_probs = norm(to_log_space(probs))
-            
-            frame.enter_state = -np.inf  # Make enter state 0 in log space...
+        # Store results in current frame.
+        # Frame (visible) probabilities and occluded probabilities are normalized separately.
+        frame.occluded_coords = occ_coord
+        frame.occluded_probs = norm(occ_probs)
 
+        frame.frame_probs = norm(to_log_space(probs))
+        
+        frame.enter_state = -np.inf  # Make enter state 0 in log space...
+        
         return frame
 
     @classmethod
@@ -753,7 +758,8 @@ class MITViterbi(FramePass):
         metadata: AttributeDict,
         transition_function: TransitionFunction,
         skeleton_table: Optional[StorageGraph] = None,
-        skeleton_weight: float = 0
+        skeleton_weight: float = 0,
+        verbose = False,
     ) -> List[ForwardBackwardFrame]:
         
         """processes a single frame in the context of tracking multiple body parts or individuals, 
@@ -788,7 +794,7 @@ class MITViterbi(FramePass):
         # Looks like normal viterbi until domination step...
         # iterates through each body part within the specified group, unpacking prior and current state information.
 
-        print("!! frame break !!")
+        if verbose: print("!! frame break !!")
         for bp_i in group_range:
             #the source data from deep lab cut or sleap
             py, px, pprob, p_occx, p_occy = prior[bp_i].src_data.unpack()
@@ -854,12 +860,12 @@ class MITViterbi(FramePass):
                 skeleton_table
             )
 
-            print(f"bp{bp_i}")
+            if verbose: print(f"bp{bp_i}")
             from_transition = cls.log_viterbi_between(
                 current_data,
                 prior_data,
                 transition_function,
-                verbose=(bp_i == 2)
+                verbose=verbose and (bp_i == 2)
             )
 
             results.append([

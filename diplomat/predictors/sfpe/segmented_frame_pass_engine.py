@@ -637,7 +637,7 @@ class SegmentedFramePassEngine(Predictor):
         cls,
         frame: ForwardBackwardFrame,
         relaxed_radius: float = 0,
-        verbose = True,
+        verbose = False,
     ) -> Tuple[int, int, float, float, float]:
         """
         PRIVATE: Get the maximum location of a single forward backward frame.
