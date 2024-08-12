@@ -480,9 +480,7 @@ class MITViterbi(FramePass):
                 current = fb_data.frames[i]
                 current = current if (in_place) else [c.copy() for c in current]
 
-                results = pool.starmap(
-                    MITViterbi._compute_normal_frame,
-                    [(
+                results = [MITViterbi._compute_normal_frame(
                         prior,
                         current,
                         bp_grp_i,
@@ -491,7 +489,6 @@ class MITViterbi(FramePass):
                         self._skeleton_tables if (self.config.include_skeleton) else None,
                         self.config.skeleton_weight
                     ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)]
-                )
 
                 for (bp_grp_i, res) in enumerate(results):
                     section = slice(bp_grp_i * meta.num_outputs, (bp_grp_i + 1) * meta.num_outputs)
@@ -586,29 +583,39 @@ class MITViterbi(FramePass):
 
         if(y == x == probs == x_off == y_off == [0]):
             print("Invalid frame to start on! Using enter state...")
-            frame.enter_state = to_log_space(1)
-            #The enter_state is used when no good fix frame is found over the entire video (one where all parts are separable) the best scoring frame for the video (typically one with most parts separated) is picked and parts that weren't separated via clustering start in the enter state, which allows transitioning to the frame, but not back to the enter state
+            # The enter_state is used when no good fix frame is found over the entire video 
+            # (one where all parts are separable) the best scoring frame for the video 
+            # (typically one with most parts separated) is picked and parts that weren't 
+            # separated via clustering start in the enter state, which allows transitioning to 
+            # the frame, but not back to the enter state.
+            
+            # this needs to change; setting the occluded coordinate to (0,0) introduces bias to the transition probabilities.
+            # (that is, jumping to the nearest point will be favored arbitrarily.)
             frame.occluded_probs = to_log_space(np.array([0]))
             frame.occluded_coords = np.array([[0, 0]])
+            # can't use these
+            frame.frame_probs = [-np.inf]
+            # set the enter state
+            frame.enter_state = to_log_space(1)
+        else:
+            # The first occluded state is constructed from the source pixels, 
+            # whose probabilities are augmented by the obscured probability.
+            occ_coord = np.array([x, y]).T
+            occ_probs = np.array(probs) + to_log_space(metadata.obscured_prob)
 
-        # The first occluded state is constructed from the source pixels, 
-        # whose probabilities are augmented by the obscured probability.
-        occ_coord = np.array([x, y]).T
-        occ_probs = np.array(probs) + to_log_space(metadata.obscured_prob)
+            # Filter probabilities to limit occluded state.
+            occ_coord, occ_probs = cls.filter_occluded_probabilities(
+                occ_coord, occ_probs, metadata.obscured_survival_max, metadata.minimum_obscured_probability,
+            )
 
-        # Filter probabilities to limit occluded state.
-        occ_coord, occ_probs = cls.filter_occluded_probabilities(
-            occ_coord, occ_probs, metadata.obscured_survival_max, metadata.minimum_obscured_probability,
-        )
+            # Store results in current frame.
+            # Frame (visible) probabilities and occluded probabilities are normalized separately.
+            frame.occluded_coords = occ_coord
+            frame.occluded_probs = norm(occ_probs)
 
-        # Store results in current frame.
-        # Frame (visible) probabilities and occluded probabilities are normalized separately.
-        frame.occluded_coords = occ_coord
-        frame.occluded_probs = norm(occ_probs)
-
-        frame.frame_probs = norm(to_log_space(probs))
-        
-        frame.enter_state = -np.inf  # Make enter state 0 in log space...
+            frame.frame_probs = norm(to_log_space(probs))
+            
+            frame.enter_state = -np.inf  # Make enter state 0 in log space...
 
         return frame
 
@@ -781,6 +788,7 @@ class MITViterbi(FramePass):
         # Looks like normal viterbi until domination step...
         # iterates through each body part within the specified group, unpacking prior and current state information.
 
+        print("!! frame break !!")
         for bp_i in group_range:
             #the source data from deep lab cut or sleap
             py, px, pprob, p_occx, p_occy = prior[bp_i].src_data.unpack()
@@ -850,7 +858,8 @@ class MITViterbi(FramePass):
             from_transition = cls.log_viterbi_between(
                 current_data,
                 prior_data,
-                transition_function
+                transition_function,
+                verbose=(bp_i == 2)
             )
 
             results.append([
@@ -936,7 +945,8 @@ class MITViterbi(FramePass):
         prior_data: Sequence[Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]],
         transition_function: TransitionFunction,
         merge_arrays: Callable[[Iterable[np.ndarray]], np.ndarray] = np.maximum.reduce,
-        merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.nanmax
+        merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.nanmax,
+        verbose = False,
     ) -> List[np.ndarray]:
         """
         This method calculates the transition probabilities between the prior and current data points for each body part.
@@ -953,18 +963,22 @@ class MITViterbi(FramePass):
         Returns:
         A list of numpy arrays representing the merged transition probabilities for each body part.
         """
-        
-        print("\tcurrent_data:")
-        for prob,coord in current_data:
-            print()
-            for p,c in list(zip(prob,list(zip(*coord)))):
-                print(f"\t\tp{p} x{c[0]} y{c[1]}")
-        
-        print("\tprior_data:")
-        for prob,coord in prior_data:
-            print()
-            for p,c in list(zip(prob,list(zip(*coord)))):
-                print(f"\t\tp{p} x{c[0]} y{c[1]}")
+        types = ["vis","occ","ent"]
+        if verbose:
+            print("\tprior_data:")
+            n = 0
+            for prob,coord in prior_data:
+                print(f"\t{types[n]}")
+                n += 1
+                for p,c in list(zip(prob,list(zip(*coord)))):
+                    print(f"\t\tp{p} x{c[0]} y{c[1]}")
+            n = 0   
+            print("\tcurrent_data:")
+            for prob,coord in current_data:
+                print(f"\t{types[n]}")
+                n += 1
+                for p,c in list(zip(prob,list(zip(*coord)))):
+                    print(f"\t\tp{p} x{c[0]} y{c[1]}")
         
         return [
             merge_arrays([
