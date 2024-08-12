@@ -580,10 +580,8 @@ class MITViterbi(FramePass):
         metadata: AttributeDict
     ) -> ForwardBackwardFrame:
         y, x, probs, x_off, y_off = frame.src_data.unpack()
-        
-        INVALID_CONDITION = ([-np.inf], [-np.inf], [0], [0], [0])
 
-        if((y,x,probs,x_off,y_off) == INVALID_CONDITION):
+        if(y == x == probs == x_off == y_off == [0]):
             print("Invalid frame to start on! Using enter state...")
             # The enter_state is used when no good fix frame is found over the entire video 
             # (one where all parts are separable) the best scoring frame for the video 
@@ -594,7 +592,7 @@ class MITViterbi(FramePass):
             # this needs to change; setting the occluded coordinate to (0,0) introduces bias to the transition probabilities.
             # (that is, jumping to the nearest point will be favored arbitrarily.)
             frame.occluded_probs = to_log_space(np.array([0]))
-            frame.occluded_coords = np.array([[-np.inf, -np.inf]])
+            frame.occluded_coords = np.array([[0, 0]])
             # can't use these
             frame.frame_probs = [-np.inf]
             # set the enter state
