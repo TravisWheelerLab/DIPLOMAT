@@ -580,8 +580,10 @@ class MITViterbi(FramePass):
         metadata: AttributeDict
     ) -> ForwardBackwardFrame:
         y, x, probs, x_off, y_off = frame.src_data.unpack()
+        
+        INVALID_CONDITION = ([-np.inf], [-np.inf], [0], [0], [0])
 
-        if(y == x == probs == x_off == y_off == [0]):
+        if((y,x,probs,x_off,y_off) == INVALID_CONDITION):
             print("Invalid frame to start on! Using enter state...")
             # The enter_state is used when no good fix frame is found over the entire video 
             # (one where all parts are separable) the best scoring frame for the video 
