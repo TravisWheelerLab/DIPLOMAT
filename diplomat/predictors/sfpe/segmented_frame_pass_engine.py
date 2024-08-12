@@ -637,7 +637,7 @@ class SegmentedFramePassEngine(Predictor):
         cls,
         frame: ForwardBackwardFrame,
         relaxed_radius: float = 0,
-        verbose = False,
+        verbose = True,
     ) -> Tuple[int, int, float, float, float]:
         """
         PRIVATE: Get the maximum location of a single forward backward frame.
@@ -697,7 +697,7 @@ class SegmentedFramePassEngine(Predictor):
                         return (m_x, m_y, m_p, m_offx, m_offy)
                     else:
                         best_idx = res[np.argmax(orig_probs[res])]
-                        if verbose: print("\t w neighbors")
+                        if verbose: print("\t w neighbors", m_p)
                         return (
                             x_coords[best_idx], y_coords[best_idx], m_p,
                             x_offsets[best_idx], y_offsets[best_idx]

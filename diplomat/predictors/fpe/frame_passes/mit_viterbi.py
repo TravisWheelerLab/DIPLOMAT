@@ -846,6 +846,7 @@ class MITViterbi(FramePass):
                 skeleton_table
             )
 
+            print(f"bp{bp_i}")
             from_transition = cls.log_viterbi_between(
                 current_data,
                 prior_data,
@@ -900,7 +901,7 @@ class MITViterbi(FramePass):
                 # Bad domination step, lost all occluded and in-frame probabilities, so keep the best location...
                 best_occ = np.argmax(occ_prob)
                 occ_prob[occ_prob < occ_dominators] = -np.inf
-                occ_prob[best_occ] = metadata.obscured_prob  # 1 in log space...
+                occ_prob[best_occ] = to_log_space(metadata.obscured_prob)
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
 
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
@@ -952,8 +953,19 @@ class MITViterbi(FramePass):
         Returns:
         A list of numpy arrays representing the merged transition probabilities for each body part.
         """
-        print("log_viterbi_between\n\t",[np.expand_dims(pprob, 0).shape for pprob, pcoord in prior_data])
-        print([np.expand_dims(cprob, 1).shape for (cprob, ccoord) in current_data])
+        
+        print("\tcurrent_data:")
+        for prob,coord in current_data:
+            print()
+            for p,c in list(zip(prob,list(zip(*coord)))):
+                print(f"\t\tp{p} x{c[0]} y{c[1]}")
+        
+        print("\tprior_data:")
+        for prob,coord in prior_data:
+            print()
+            for p,c in list(zip(prob,list(zip(*coord)))):
+                print(f"\t\tp{p} x{c[0]} y{c[1]}")
+        
         return [
             merge_arrays([
                 merge_internal(
@@ -1041,7 +1053,7 @@ class MITViterbi(FramePass):
                 "probabilities can reach."
             ),
             "obscured_probability": (
-                1e-6, tc.RangedFloat(0, 1),
+                1e-12, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
                 "prior probability of being in any hidden state cell."
             ),
