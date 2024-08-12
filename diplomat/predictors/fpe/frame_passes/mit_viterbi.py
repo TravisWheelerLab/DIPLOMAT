@@ -602,11 +602,13 @@ class MITViterbi(FramePass):
                 frame.enter_state = to_log_space(1)
 
                 return frame
+
+        frame_probs = to_log_space(probs)
         
         # The first occluded state is constructed from the source pixels, 
         # whose probabilities are augmented by the obscured probability.
         occ_coord = np.array([x, y]).T
-        occ_probs = np.array(probs) + to_log_space(metadata.obscured_prob)
+        occ_probs = np.array(frame_probs) - to_log_space(metadata.obscured_prob)
 
         # Filter probabilities to limit occluded state.
         occ_coord, occ_probs = cls.filter_occluded_probabilities(
@@ -614,11 +616,10 @@ class MITViterbi(FramePass):
         )
 
         # Store results in current frame.
-        # Frame (visible) probabilities and occluded probabilities are normalized separately.
         frame.occluded_coords = occ_coord
-        frame.occluded_probs = norm(occ_probs)
-
-        frame.frame_probs = norm(to_log_space(probs))
+        frame.frame_probs, frame.occluded_probs = norm_together(
+            [frame_probs, occ_probs]
+        )
         
         frame.enter_state = -np.inf  # Make enter state 0 in log space...
         
