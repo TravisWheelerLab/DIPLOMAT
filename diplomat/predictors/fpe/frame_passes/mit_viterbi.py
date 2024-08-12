@@ -581,8 +581,7 @@ class MITViterbi(FramePass):
     ) -> ForwardBackwardFrame:
         y, x, probs, x_off, y_off = frame.src_data.unpack()
 
-    
-        if len(y) == 0:
+        if len(y) == 1:
             if(y == x == probs == x_off == y_off == [0]):
                 print("Invalid frame to start on! Using enter state...")
                 # The enter_state is used when no good fix frame is found over the entire video 
@@ -608,7 +607,7 @@ class MITViterbi(FramePass):
         # The first occluded state is constructed from the source pixels, 
         # whose probabilities are augmented by the obscured probability.
         occ_coord = np.array([x, y]).T
-        occ_probs = np.array(frame_probs) - to_log_space(metadata.obscured_prob)
+        occ_probs = np.array(frame_probs) + to_log_space(metadata.obscured_prob)
 
         # Filter probabilities to limit occluded state.
         occ_coord, occ_probs = cls.filter_occluded_probabilities(
