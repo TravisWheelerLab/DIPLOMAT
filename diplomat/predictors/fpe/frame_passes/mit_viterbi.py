@@ -1017,7 +1017,7 @@ class MITViterbi(FramePass):
         )
 
         new_coords = merged_coords[0]
-        new_probs = np.maximum(*merged_probs) * decay_rate
+        new_probs = np.maximum(*merged_probs) + to_log_space(decay_rate)
 
         #print(f"generate_occluded\n\t{new_coords.shape}\n\t{new_probs.shape}")
         return (
