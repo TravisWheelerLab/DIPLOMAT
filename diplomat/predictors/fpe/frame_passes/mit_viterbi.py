@@ -480,7 +480,9 @@ class MITViterbi(FramePass):
                 current = fb_data.frames[i]
                 current = current if (in_place) else [c.copy() for c in current]
 
-                results = [MITViterbi._compute_normal_frame(
+                results = pool.starmap(
+                    MITViterbi._compute_normal_frame,
+                    [(
                         prior,
                         current,
                         bp_grp_i,
@@ -488,7 +490,7 @@ class MITViterbi(FramePass):
                         transition_func,
                         self._skeleton_tables if (self.config.include_skeleton) else None,
                         self.config.skeleton_weight
-                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)]
+                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)])
 
                 for (bp_grp_i, res) in enumerate(results):
                     section = slice(bp_grp_i * meta.num_outputs, (bp_grp_i + 1) * meta.num_outputs)
@@ -1010,6 +1012,9 @@ class MITViterbi(FramePass):
         decay_rate: float,
         disable_occluded: bool
     ) -> Tuple[np.ndarray, np.ndarray]:
+        # otherwise the visible probs will override the occluded probs and the occluded state becomes "sticky."
+        current_frame_probs = current_frame_probs + to_log_space(occluded_prob)
+
         merged_probs, merged_coords, _ = arr_utils.pad_coordinates_and_probs(
             [current_frame_probs, prior_occluded_probs],
             [current_frame_coords, prior_occluded_coords],
@@ -1042,7 +1047,7 @@ class MITViterbi(FramePass):
                 "prior pass, and otherwise uses the default value of 1..."
             ),
             "skeleton_weight": (
-                1, float,
+                1e-4, float,
                 "A positive float, determines how much impact probabilities "
                 "from skeletal transitions should have in each "
                 "forward/backward step if a skeleton was created and enabled "
@@ -1073,7 +1078,7 @@ class MITViterbi(FramePass):
                 "probabilities can reach."
             ),
             "obscured_probability": (
-                1e-12, tc.RangedFloat(0, 1),
+                1e-6, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
                 "prior probability of being in any hidden state cell."
             ),
