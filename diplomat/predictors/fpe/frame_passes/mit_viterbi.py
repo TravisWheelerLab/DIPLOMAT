@@ -1047,7 +1047,7 @@ class MITViterbi(FramePass):
                 "prior pass, and otherwise uses the default value of 1..."
             ),
             "skeleton_weight": (
-                1e-4, float,
+                1, float,
                 "A positive float, determines how much impact probabilities "
                 "from skeletal transitions should have in each "
                 "forward/backward step if a skeleton was created and enabled "
