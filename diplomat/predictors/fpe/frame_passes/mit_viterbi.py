@@ -480,17 +480,18 @@ class MITViterbi(FramePass):
                 current = fb_data.frames[i]
                 current = current if (in_place) else [c.copy() for c in current]
 
-                results = pool.starmap(
-                    MITViterbi._compute_normal_frame,
-                    [(
+                #results = pool.starmap(
+                results = [MITViterbi._compute_normal_frame(
                         prior,
                         current,
                         bp_grp_i,
                         meta,
                         transition_func,
                         self._skeleton_tables if (self.config.include_skeleton) else None,
-                        self.config.skeleton_weight
-                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)])
+                        self.config.skeleton_weight,
+                        verbose=True
+                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)]
+                #)
 
                 for (bp_grp_i, res) in enumerate(results):
                     section = slice(bp_grp_i * meta.num_outputs, (bp_grp_i + 1) * meta.num_outputs)
@@ -722,7 +723,7 @@ class MITViterbi(FramePass):
             else:
                 prior_data = prior_frame
 
-            # No skeleton penalty for transitioning from
+            # No skeleton penalty for transitioning from enter state
             transition_func = ViterbiTransitionTable(trans_table, 0.5, 0.5)
 
             results.append((
@@ -869,6 +870,21 @@ class MITViterbi(FramePass):
                 transition_function,
                 verbose=verbose and (bp_i == 2)
             )
+
+            if verbose:
+                tr_vis,tr_occ,tr_ent = from_transition
+                sk_vis,sk_occ,sk_ent = from_skel
+                weighted_sum_vis = [t + s * skeleton_weight for (t,s) in zip(tr_vis,sk_vis)]
+                weighted_sum_occ = [t + s * skeleton_weight for (t,s) in zip(tr_occ,sk_occ)]
+                _, coords_vis = current_data[0]
+                coords_vis = list(zip(*coords_vis))
+                _, coords_occ = current_data[1]
+                coords_occ = list(zip(*coords_occ))
+                print("bp", bp_i)
+                print(f"visible state:\n\tcoords:\n{coords_vis}\n\ttransition:\n{tr_vis}\n\tskeleton:\n{sk_vis}\n\tweighted sum:\n{weighted_sum_vis}")
+                print(f"occluded state:\n\tcoords:\n{coords_occ}\n\ttransition:\n{tr_occ}\n\tskeleton:\n{sk_occ}\n\tweighted sum:\n{weighted_sum_occ}")
+                #print(f"bp{bp_i}\ntransition probabilities{from_transition}\nskeleton probabilities{from_skel}\ncurrent coordinates{current_data[0]}")
+                input()
 
             results.append([
                 t + s * skeleton_weight 
