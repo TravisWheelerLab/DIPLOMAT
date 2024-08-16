@@ -480,8 +480,9 @@ class MITViterbi(FramePass):
                 current = fb_data.frames[i]
                 current = current if (in_place) else [c.copy() for c in current]
 
-                #results = pool.starmap(
-                results = [MITViterbi._compute_normal_frame(
+                results = pool.starmap(
+                    MITViterbi._compute_normal_frame,
+                    [(
                         prior,
                         current,
                         bp_grp_i,
@@ -489,9 +490,7 @@ class MITViterbi(FramePass):
                         transition_func,
                         self._skeleton_tables if (self.config.include_skeleton) else None,
                         self.config.skeleton_weight,
-                        verbose=True
-                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)]
-                #)
+                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)])
 
                 for (bp_grp_i, res) in enumerate(results):
                     section = slice(bp_grp_i * meta.num_outputs, (bp_grp_i + 1) * meta.num_outputs)
@@ -634,7 +633,6 @@ class MITViterbi(FramePass):
         occluded_probs: np.ndarray,
         max_count: int,
         min_prob: float,
-        verbose = False
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Filter occluded coordinates and probabilities such that there is only max_count of them left, those with the
@@ -762,7 +760,6 @@ class MITViterbi(FramePass):
         transition_function: TransitionFunction,
         skeleton_table: Optional[StorageGraph] = None,
         skeleton_weight: float = 0,
-        verbose = False,
     ) -> List[ForwardBackwardFrame]:
         
         """processes a single frame in the context of tracking multiple body parts or individuals, 
@@ -797,7 +794,6 @@ class MITViterbi(FramePass):
         # Looks like normal viterbi until domination step...
         # iterates through each body part within the specified group, unpacking prior and current state information.
 
-        if verbose: print("!! frame break !!")
         for bp_i in group_range:
             #the source data from deep lab cut or sleap
             py, px, pprob, p_occx, p_occy = prior[bp_i].src_data.unpack()
@@ -863,28 +859,11 @@ class MITViterbi(FramePass):
                 skeleton_table
             )
 
-            if verbose: print(f"bp{bp_i}")
             from_transition = cls.log_viterbi_between(
                 current_data,
                 prior_data,
-                transition_function,
-                verbose=verbose and (bp_i == 2)
+                transition_function
             )
-
-            if verbose:
-                tr_vis,tr_occ,tr_ent = from_transition
-                sk_vis,sk_occ,sk_ent = from_skel
-                weighted_sum_vis = [t + s * skeleton_weight for (t,s) in zip(tr_vis,sk_vis)]
-                weighted_sum_occ = [t + s * skeleton_weight for (t,s) in zip(tr_occ,sk_occ)]
-                _, coords_vis = current_data[0]
-                coords_vis = list(zip(*coords_vis))
-                _, coords_occ = current_data[1]
-                coords_occ = list(zip(*coords_occ))
-                print("bp", bp_i)
-                print(f"visible state:\n\tcoords:\n{coords_vis}\n\ttransition:\n{tr_vis}\n\tskeleton:\n{sk_vis}\n\tweighted sum:\n{weighted_sum_vis}")
-                print(f"occluded state:\n\tcoords:\n{coords_occ}\n\ttransition:\n{tr_occ}\n\tskeleton:\n{sk_occ}\n\tweighted sum:\n{weighted_sum_occ}")
-                #print(f"bp{bp_i}\ntransition probabilities{from_transition}\nskeleton probabilities{from_skel}\ncurrent coordinates{current_data[0]}")
-                input()
 
             results.append([
                 t + s * skeleton_weight 
@@ -970,7 +949,6 @@ class MITViterbi(FramePass):
         transition_function: TransitionFunction,
         merge_arrays: Callable[[Iterable[np.ndarray]], np.ndarray] = np.maximum.reduce,
         merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.nanmax,
-        verbose = False,
     ) -> List[np.ndarray]:
         """
         This method calculates the transition probabilities between the prior and current data points for each body part.
@@ -987,22 +965,6 @@ class MITViterbi(FramePass):
         Returns:
         A list of numpy arrays representing the merged transition probabilities for each body part.
         """
-        types = ["vis","occ","ent"]
-        if verbose:
-            print("\tprior_data:")
-            n = 0
-            for prob,coord in prior_data:
-                print(f"\t{types[n]}")
-                n += 1
-                for p,c in list(zip(prob,list(zip(*coord)))):
-                    print(f"\t\tp{p} x{c[0]} y{c[1]}")
-            n = 0   
-            print("\tcurrent_data:")
-            for prob,coord in current_data:
-                print(f"\t{types[n]}")
-                n += 1
-                for p,c in list(zip(prob,list(zip(*coord)))):
-                    print(f"\t\tp{p} x{c[0]} y{c[1]}")
         
         return [
             merge_arrays([
