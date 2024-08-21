@@ -906,28 +906,20 @@ class MITViterbi(FramePass):
         ):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
             frm_prob[frm_prob < frame_dominators] = -np.inf
-
-            if(not np.all(occ_prob < occ_dominators)):
+            
+            # New occluded-domination logic
+            best_occ = np.argmax(occ_prob)
+            occ_prob[occ_prob < occ_dominators] = -np.inf
+            if np.all(occ_prob == -np.inf):
                 occ_prob[occ_prob < occ_dominators] = -np.inf
-            else:
-                # Bad domination step, lost all occluded and in-frame probabilities, so keep the best location...
-                best_occ = np.argmax(occ_prob)
-                occ_prob[occ_prob < occ_dominators] = -np.inf
-                occ_prob[best_occ] = to_log_space(metadata.obscured_prob)
+                occ_prob[best_occ] = 0 #to_log_space(metadata.obscured_prob)
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
-
+            
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
             # Store the results...
-            # Store the results...
             current[bp_i].frame_probs = frm_prob[frm_idx] - norm_val
-
-            #TODO 
-            #also store a mirror matrix for each coordinate, the source of that pixel in the preceding frame 
-            #which would be the coordinate that has the highest transition probability 
-
-
-
+            
             # Filter occluded probabilities...
             c, p = cls.filter_occluded_probabilities(
                 current[bp_i].occluded_coords,
