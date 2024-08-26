@@ -21,6 +21,20 @@
             position: relative;
             overflow: hidden;
         }
+        header a {
+            text-decoration: none;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        header a img {
+            width: 20px;
+            vertical-align: middle;
+        }
+        header a span {
+            margin-left: 0.5rem;
+        }
         header h1 {
             font-size: 4rem;
             font-weight: bold;
@@ -275,143 +289,80 @@
 </head>
 <body>
     <header>
+        <a href="https://github.com/TravisWheelerLab/DIPLOMAT" target="_blank" style="text-decoration: none; color: white;">
+            <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo">
+            <span>DIPLOMAT GitHub</span>
+        </a>
         <h1 id="logo">DIPLOMAT</h1>
         <p>Deep Learning-Based Identity Preserving Labeled-Object Multi-Animal Tracking</p>
     </header>
-    
+
     <nav>
-        <a href="index.html">Home</a>
-        <a href="installation.html">Installation</a>
-        <a href="supplementary.html">Supplementary Information</a>
+        <a href="#home">Home</a>
+        <a href="#features">Features</a>
+        <a href="#videos">Videos</a>
+        <a href="#contact">Contact</a>
     </nav>
 
     <div class="container">
-        <section>
-            <h2>About</h2>
-            <p>DIPLOMAT provides a multi-animal pose estimation and editing interface. It relies on a trained CNN model (currently supporting SLEAP and DeepLabCut packages) and uses algorithms to first Track the animal body part in a way that reduces body part losses and identity swaps, and then provides an intuitive and memory/time efficient Interact interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more nuanced tracking results.</p>
-        </section>
-
         <div class="images">
-            <img src="https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png" alt="Example of tracking 2 Degus in a Box">
-            <img src="https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png" alt="Example of tracking 3 Rats">
+            <img src="https://via.placeholder.com/300x200" alt="Placeholder Image 1">
+            <img src="https://via.placeholder.com/300x200" alt="Placeholder Image 2">
+            <img src="https://via.placeholder.com/300x200" alt="Placeholder Image 3">
         </div>
 
-        <div class="divider"></div>
-
-        <section class="interact-section" id="interact-section">
+        <div class="interact-section">
             <div class="interact-content">
-                <img src="interact_retrack_gif.gif" alt="Interact Interface">
+                <img src="https://via.placeholder.com/600x400" alt="Interact Image">
                 <div class="interact-text">
-                    <h2>Using the Interact Interface</h2>
-                    <p>Here we can make precise adjustments to our model's predicted points and re-run the Viterbi algorithm</p>
+                    <h2>Interactive Section</h2>
+                    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque scelerisque lorem sed urna aliquet, at vehicula elit luctus.</p>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <div class="divider"></div>
-
-        <section class="video-section" id="video-section">
-            <h2 class="text-3xl text-dark-purple mb-4">Explore Our Features</h2>
-            <p class="text-lg text-gray-700">Learn more about DIPLOMAT's functionalities through our video guides.</p>
-            <div class="button-row">
-                <button onclick="showVideo('track-interact')">Track and Interact</button>
-                <button onclick="showVideo('interact')">Interact</button>
-            </div>
-
-            <div id="track-interact" class="video-row">
+        <div class="video-section">
+            <h2>Featured Videos</h2>
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed vitae suscipit urna. Donec varius, nisi nec viverra pharetra, erat turpis dapibus odio.</p>
+            <div class="video-row visible">
                 <div class="video">
-                    <iframe src="https://www.youtube.com/embed/T-8y4f_4XTA" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    <iframe src="https://www.youtube.com/embed/tgbNymZ7vqY" frameborder="0" allowfullscreen></iframe>
                 </div>
                 <div class="video-text">
-                    <h3 class="text-2xl text-dark-purple mb-2">Track and Interact Interface</h3>
-                    <p>Introduction on how you can track and interact with pose data in DIPLOMAT, leveraging models created through SLEAP or DeepLabCut (DLC).</p>
+                    <h2>Video Title</h2>
+                    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed vitae suscipit urna. Donec varius, nisi nec viverra pharetra, erat turpis dapibus odio.</p>
                 </div>
             </div>
+        </div>
 
-            <div id="interact" class="video-row">
-                <div class="video">
-                    <iframe src="https://www.youtube.com/embed/-Y9z8KOVSEo" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                </div>
-                <div class="video-text">
-                    <h3 class="text-2xl text-dark-purple mb-2">Interact Interface</h3>
-                    <p>Overview of the visual settings, continuous labeling, single/multi body part labeling modes, and re-running the Viterbi algorithm</p>
-                </div>
-            </div>
-        </section>
-
-        <div class="divider"></div>
-
-        <section class="tweak-section" id="tweak-section">
-            <h2 class="text-3xl text-dark-purple mb-4">Additional Features: Tweak Interface</h2>
-            <p class="text-lg text-gray-700">The Tweak Interface allows for fine-tuning to minimize identity swaps and other issues. Explore the tutorial video to learn more.</p>
+        <div class="tweak-section">
+            <h2>Interactive Tweaks</h2>
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus in volutpat nunc. Proin vel risus et arcu tincidunt malesuada.</p>
             <div class="tweak-button">
-                <button onclick="showTweakVideo()">Explore Tweak Interface</button>
+                <button>Tweak 1</button>
+                <button>Tweak 2</button>
+                <button>Tweak 3</button>
             </div>
-            <div id="tweak" class="video-row">
-                <div class="video">
-                    <iframe src="https://www.youtube.com/embed/OC1soECO2r4" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                </div>
-                <div class="video-text">
-                    <h3 class="text-2xl text-dark-purple mb-2">Tweak Interface</h3>
-                    <p>Tutorial on navigating the Tweak Interface</p>
-                </div>
-            </div>
-        </section>
+        </div>
     </div>
 
     <footer>
-        <p>&copy; 2024 DIPLOMAT Project</p>
-        <p>See <code>LICENSE</code> for details.</p>
+        <p>&copy; 2024 DIPLOMAT. All Rights Reserved.</p>
     </footer>
 
     <script>
-        function showVideo(videoId) {
-            const videoRows = document.querySelectorAll('.video-row');
-            videoRows.forEach(row => {
-                row.classList.remove('visible');
+        document.addEventListener("DOMContentLoaded", function() {
+            const sections = document.querySelectorAll('.interact-section, .video-section, .tweak-section');
+            sections.forEach(section => {
+                const observer = new IntersectionObserver(entries => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('visible');
+                        }
+                    });
+                });
+                observer.observe(section);
             });
-            const selectedVideo = document.getElementById(videoId);
-            selectedVideo.classList.add('visible');
-        }
-
-        function showTweakVideo() {
-            const videoRows = document.querySelectorAll('.video-row');
-            videoRows.forEach(row => {
-                row.classList.remove('visible');
-            });
-            const tweakSection = document.getElementById('tweak');
-            tweakSection.classList.add('visible');
-        }
-
-        window.addEventListener('scroll', () => {
-            const videoSection = document.getElementById('video-section');
-            const rect = videoSection.getBoundingClientRect();
-            if (rect.top < window.innerHeight && rect.bottom >= 0) {
-                videoSection.classList.add('visible');
-            }
-        });
-
-        window.addEventListener('scroll', () => {
-            const interactSection = document.getElementById('interact-section');
-            const rect = interactSection.getBoundingClientRect();
-            if (rect.top < window.innerHeight && rect.bottom >= 0) {
-                interactSection.classList.add('visible');
-            }
-        });
-
-        window.addEventListener('scroll', () => {
-            const tweakSection = document.getElementById('tweak-section');
-            const rect = tweakSection.getBoundingClientRect();
-            if (rect.top < window.innerHeight && rect.bottom >= 0) {
-                tweakSection.classList.add('visible');
-            }
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            const logo = document.getElementById('logo');
-            const movementX = (e.clientX - window.innerWidth / 2) / 50;
-            const movementY = (e.clientY - window.innerHeight / 2) / 50;
-            logo.style.transform = `scaleY(1.2) translate(${movementX}px, ${movementY}px)`;
         });
     </script>
 </body>
