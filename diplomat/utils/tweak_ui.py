@@ -4,7 +4,7 @@ to user saved tracking data.
 """
 
 import os
-from typing import List, Any, Dict, Optional, Tuple, MutableMapping, Sequence, Union, Callable
+from typing import List, Any, Dict, Optional, Tuple, MutableMapping, Sequence, Union, Callable, Mapping, Iterable, NamedTuple, Literal
 import cv2
 import numpy as np
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine
@@ -196,6 +196,25 @@ def _simplify_editor_class(wx, editor_class):
 
             evt.Skip(True)
 
+        def set_radiobox_colors(self, colormap):
+            self.video_player.select_box.set_colormap(colormap)
+
+        def set_plot_settings_changer(self, func: Optional[Callable[[Mapping[str, Any]], None]]):
+            """
+            Set the plot settings changing function, which allows for adjusting certain video metadata values when they
+            become adjusted.
+
+            :param func: Optional function that accepts a string to any mapping (dict), and returns nothing. Can be used
+                        for adjusting video metadata when a user adjusts visual settings in the UI.
+            """
+
+            def func2(data):
+                if "colormap" in data:
+                    self.set_radiobox_colors(data["colormap"])
+                func(data)
+            
+            self._on_plot_settings_change = func2
+
     return SimplifiedEditor
 
 
@@ -229,6 +248,15 @@ class TweakUI:
                 "Unable to load wx UI, make sure wxPython is installed,"
                 " or diplomat was installed with optional dependencies enabled."
             )
+
+    # this is a dummy function; `tweak` is a simplified version of `interact`, 
+    # so it has nothing to do, but it's necessary to pass something into 
+    # set_plot_settings_changer in order for the side effect radiobox color 
+    # update to occur. i defined this in the same style as its relative in 
+    # supervised_segmented_frame_pass_engine for consistency's sake, but really
+    # you could just pass in a blank lambda fn instead.
+    def _on_visual_settings_change(self, data):
+        pass
 
     def tweak(
         self,
@@ -286,6 +314,8 @@ class TweakUI:
             list(range(1, num_outputs + 1)) * (len(bodypart_names) // num_outputs),
             title="Tweak Tracks"
         )
+
+        editor.set_plot_settings_changer(self._on_visual_settings_change)
 
         editor.Show()
 
