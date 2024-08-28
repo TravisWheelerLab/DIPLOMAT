@@ -159,7 +159,10 @@ class MITViterbi(FramePass):
 
     def _augment_skeleton_weight(self, skeleton_weight, fixed_frame_score):
         print(f"fix frame score: {fixed_frame_score}")
-        return skeleton_weight
+        if fixed_frame_score == -np.inf:
+            return self.config.minimum_skeleton_weight
+        else:
+            return skeleton_weight
 
     def _init_skeleton(self, metadata: ForwardBackwardData):
         """If skeleton data is available, this function initializes the skeleton tables, 
@@ -1030,6 +1033,13 @@ class MITViterbi(FramePass):
                 "forward/backward step if a skeleton was created and enabled "
                 "by prior passes... This is not a probability, but rather a "
                 "ratio."
+            ),
+            "minimum_skeleton_weight": (
+                1e-4, float,
+                "A positive float, bounds skeleton_weight from below in the "
+                "adjustment of skeleton weight for poor fix frame quality. "
+                "Avoiding a zero skeleton weight is necessary to stop "
+                "information loss across segment boundaries in SFPE."
             ),
             "soft_domination_weight": (
                 1, float,
