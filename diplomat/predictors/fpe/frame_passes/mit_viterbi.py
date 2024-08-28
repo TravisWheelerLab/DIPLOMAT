@@ -912,14 +912,14 @@ class MITViterbi(FramePass):
             occ_prob[occ_prob < occ_dominators] = -np.inf
             if np.all(occ_prob == -np.inf):
                 occ_prob[occ_prob < occ_dominators] = -np.inf
-                occ_prob[best_occ] = 0 #to_log_space(metadata.obscured_prob)
+                occ_prob[best_occ] = 0
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
             
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
             # Store the results...
             current[bp_i].frame_probs = frm_prob[frm_idx] - norm_val
-            
+
             # Filter occluded probabilities...
             c, p = cls.filter_occluded_probabilities(
                 current[bp_i].occluded_coords,
