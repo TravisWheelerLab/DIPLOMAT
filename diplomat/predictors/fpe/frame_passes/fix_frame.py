@@ -564,6 +564,7 @@ class FixFrame(FramePass):
         cls,
         fb_data: ForwardBackwardData,
         frame_idx: int,
+        frame_score: float,
         fix_frame_data: List[ForwardBackwardFrame],
         prog_bar: ProgressBar,
         reset_bar: bool = False,
@@ -571,6 +572,7 @@ class FixFrame(FramePass):
     ) -> ForwardBackwardData:
         # For passes to use....
         fb_data.metadata.fixed_frame_index = int(frame_idx)
+        fb_data.metadata.fixed_frame_score = frame_score
         fb_data.metadata.is_pre_initialized = is_pre_initialized
 
         if(reset_bar and prog_bar is not None):
@@ -604,6 +606,7 @@ class FixFrame(FramePass):
         self._scores, fallback_scores = self.compute_scores(fb_data, prog_bar, False)
 
         self._max_frame_idx = int(np.argmax(self._scores))
+        self._max_frame_score = self._scores[self._max_frame_idx]
 
         if(np.isneginf(self._scores[self._max_frame_idx])):
             self._max_frame_idx = int(np.argmax(fallback_scores))
@@ -629,6 +632,7 @@ class FixFrame(FramePass):
             return self.restore_all_except_fix_frame(
                 fb_data,
                 self._max_frame_idx,
+                self._max_frame_score,
                 self._fixed_frame,
                 prog_bar,
                 False
