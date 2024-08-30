@@ -7,6 +7,7 @@ from diplomat.utils.graph_ops import min_cost_matching
 import numpy as np
 from diplomat.processing import ProgressBar, ConfigSpec
 import diplomat.processing.type_casters as tc
+from diplomat.utils.point_spread_patterns import approximate_maxmin_distance
 
 
 class FixFrame(FramePass):
@@ -560,6 +561,23 @@ class FixFrame(FramePass):
         return (scores[:, 0], scores[:, 1])
 
     @classmethod
+    def normalize_score(
+        cls,
+        fb_data: ForwardBackwardData,
+        frame_score: float
+    ) -> float:
+        num_outputs = fb_data.metadata.num_outputs
+        # approximate the maximal minimum distance between num_outputs points spread in the unit square
+        maxmin_dist = approximate_maxmin_distance(num_outputs)
+        # scale the distance wrt the video resolution. 
+        # this is definitely not perfect for rectangular resolutions but it gets close enough.
+        width = fb_data.metadata.down_scaling * fb_data.metadata.width
+        height = fb_data.metadata.down_scaling * fb_data.metadata.height
+        scaled_maxmin_dist = maxmin_dist * np.sqrt(width * height)
+        # normalize the frame score
+        return frame_score / scaled_maxmin_dist
+
+    @classmethod
     def restore_all_except_fix_frame(
         cls,
         fb_data: ForwardBackwardData,
@@ -573,6 +591,7 @@ class FixFrame(FramePass):
         # For passes to use....
         fb_data.metadata.fixed_frame_index = int(frame_idx)
         fb_data.metadata.fixed_frame_score = frame_score
+        fb_data.metadata.normalized_fixed_frame_score = cls.normalize_score(fb_data,frame_score)
         fb_data.metadata.is_pre_initialized = is_pre_initialized
 
         if(reset_bar and prog_bar is not None):
@@ -619,7 +638,15 @@ class FixFrame(FramePass):
 
         if(self.config.DEBUG):
             print(f"Max Scoring Frame: {self._max_frame_idx}")
-
+            print(f"Max Score: {self._max_frame_score}")
+            down_scaling = fb_data.metadata.down_scaling
+            width = down_scaling * fb_data.metadata.width
+            height = down_scaling * fb_data.metadata.height
+            h = min(width, height)
+            w = max(width, height)
+            bound3 = np.sqrt(h**2 + (w**2 / 4))
+            print(f"Normalized max score: {self._max_frame_score / bound3}")
+            
         self._fixed_frame = self.create_fix_frame(
             fb_data,
             self._max_frame_idx,
@@ -643,7 +670,7 @@ class FixFrame(FramePass):
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
-            "DEBUG": (False, bool, "Set to True to dump additional information while the pass is running."),
+            "DEBUG": (True, bool, "Set to True to dump additional information while the pass is running."),
             "fix_frame_override": (
                 None,
                 tc.Union(tc.Literal(None), tc.RangedInteger(0, np.inf)),

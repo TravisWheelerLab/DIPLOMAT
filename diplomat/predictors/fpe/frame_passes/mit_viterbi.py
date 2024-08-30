@@ -157,12 +157,12 @@ class MITViterbi(FramePass):
 
         metadata.include_soft_domination = self.config.include_soft_domination
 
-    def _augment_skeleton_weight(self, skeleton_weight, fixed_frame_score):
-        print(f"fix frame score: {fixed_frame_score}")
-        if fixed_frame_score == -np.inf:
+    def _augment_skeleton_weight(self, skeleton_weight, normalized_score):
+        print(f"normalized score: {normalized_score}")
+        if normalized_score == -np.inf:
             return self.config.minimum_skeleton_weight
         else:
-            return skeleton_weight
+            return max(self.config.minimum_skeleton_weight, skeleton_weight * np.sqrt(normalized_score))
 
     def _init_skeleton(self, metadata: ForwardBackwardData):
         """If skeleton data is available, this function initializes the skeleton tables, 
@@ -203,7 +203,7 @@ class MITViterbi(FramePass):
                     self.config.lowest_skeleton_score
                 )
             
-            self.config.skeleton_weight = self._augment_skeleton_weight(self.config.skeleton_weight, metadata.fixed_frame_score)
+            self.config.skeleton_weight = self._augment_skeleton_weight(self.config.skeleton_weight, metadata.normalized_fixed_frame_score)
         else:
             self.config.skeleton_weight = 0
 

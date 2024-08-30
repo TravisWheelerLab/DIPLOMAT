@@ -36,7 +36,8 @@ def L5(n):
                     return sqrt((1/p**2) + (1/q**2))
     return 0
 
-def d(n):
+def approximate_maxmin_distance(n):
     if n == 3:
         return sqrt(6) - sqrt(2)
-    return max(L1(n),L2(n),L3a(n),L3b(n),L4(n),L5(n))
+    else:
+        return max(L1(n),L2(n),L3a(n),L3b(n),L4(n),L5(n))
