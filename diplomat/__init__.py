@@ -2,7 +2,7 @@
 A tool providing multi-animal tracking capabilities on top of other Deep learning based tracking software.
 """
 
-__version__ = "0.1.8"
+__version__ = "0.1.8_strict-dynamic-skeleton-weight"
 # Can be used by functions to determine if diplomat was invoked through it's CLI interface.
 CLI_RUN = False
 
