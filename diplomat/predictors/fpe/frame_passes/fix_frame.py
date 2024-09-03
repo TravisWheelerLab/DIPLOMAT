@@ -431,7 +431,7 @@ class FixFrame(FramePass):
             if(count > 0):
                 score += min_dist * (total_conf / count)
                 score2 += min_dist * (total_conf / count)
-        
+
 
         # If skeleton is implemented...
         if (skeleton is not None):
@@ -571,11 +571,10 @@ class FixFrame(FramePass):
         maxmin_dist = approximate_maxmin_distance(num_outputs)
         # scale the distance wrt the video resolution. 
         # this is definitely not perfect for rectangular resolutions but it gets close enough.
-        width = fb_data.metadata.down_scaling * fb_data.metadata.width
-        height = fb_data.metadata.down_scaling * fb_data.metadata.height
-        scaled_maxmin_dist = maxmin_dist * np.sqrt(width * height)
+        scaled_maxmin_dist = maxmin_dist * np.sqrt(fb_data.metadata.width * fb_data.metadata.height)
         # normalize the frame score
-        return frame_score / scaled_maxmin_dist
+        num_bp = len(fb_data.metadata.bodyparts)
+        return frame_score / (scaled_maxmin_dist * num_bp)
 
     @classmethod
     def restore_all_except_fix_frame(

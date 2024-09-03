@@ -158,7 +158,6 @@ class MITViterbi(FramePass):
         metadata.include_soft_domination = self.config.include_soft_domination
 
     def _augment_skeleton_weight(self, skeleton_weight, normalized_score):
-        print(f"normalized score: {normalized_score}")
         if normalized_score == -np.inf:
             return self.config.minimum_skeleton_weight
         else:
