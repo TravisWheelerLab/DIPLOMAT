@@ -162,7 +162,7 @@ class MITViterbi(FramePass):
         if normalized_score == -np.inf:
             return self.config.minimum_skeleton_weight
         else:
-            return max(self.config.minimum_skeleton_weight, skeleton_weight * np.sqrt(normalized_score))
+            return skeleton_weight
 
     def _init_skeleton(self, metadata: ForwardBackwardData):
         """If skeleton data is available, this function initializes the skeleton tables, 
