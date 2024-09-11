@@ -389,10 +389,11 @@ class FixFrame(FramePass):
                     else:
                         result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
                         num_pairs += 1
+                        min_score = min(result, min_score)
 
-                    min_score = min(result, min_score)
-
-                variance += (min_score / num_pairs)
+                variance += (min_score / avg)
+            
+            variance /= num_pairs
         return variance
 
     @classmethod
@@ -637,7 +638,7 @@ class FixFrame(FramePass):
         variance = cls.compute_skeleton_variance(
             fb_data.frames[frame_idx], fb_data.metadata.num_outputs, fb_data.metadata.down_scaling, fb_data.metadata.skeleton
         )
-        print(f"skeletal variance for fix frame is {variance}")
+        print(f"skeletal variance for fix frame is {variance}\ncapped inverse variance is {min(1,variance ** -1 )}")
 
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
@@ -684,13 +685,6 @@ class FixFrame(FramePass):
         if(self.config.DEBUG):
             print(f"Max Scoring Frame: {self._max_frame_idx}")
             print(f"Max Score: {self._max_frame_score}")
-            down_scaling = fb_data.metadata.down_scaling
-            width = down_scaling * fb_data.metadata.width
-            height = down_scaling * fb_data.metadata.height
-            h = min(width, height)
-            w = max(width, height)
-            bound3 = np.sqrt(h**2 + (w**2 / 4))
-            print(f"Normalized max score: {self._max_frame_score / bound3}")
             
         self._fixed_frame = self.create_fix_frame(
             fb_data,
