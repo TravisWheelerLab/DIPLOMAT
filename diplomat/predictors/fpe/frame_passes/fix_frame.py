@@ -362,7 +362,8 @@ class FixFrame(FramePass):
         down_scaling: float,
         skeleton: Optional[StorageGraph],
     ) -> float:
-        variance = 0.0
+        # slow! don't deploy like this
+        differences = []
 
         for bp in range(len(frames)):
             bp_group_off, bp_off = divmod(bp, num_outputs)
@@ -391,10 +392,9 @@ class FixFrame(FramePass):
                         num_pairs += 1
                         min_score = min(result, min_score)
 
-                variance += (min_score / avg)
-            
-            variance /= num_pairs
-        return variance
+                differences.append(min_score ** 2)
+
+        return np.sqrt(np.mean(differences))
 
     @classmethod
     def compute_single_score(
