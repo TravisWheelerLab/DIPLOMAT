@@ -368,7 +368,6 @@ class FixFrame(FramePass):
         for bp in range(len(frames)):
             bp_group_off, bp_off = divmod(bp, num_outputs)
 
-            num_pairs = 0
             f1_loc = cls.get_max_location(
                 frames[bp_group_off * num_outputs + bp_off], down_scaling
             )
@@ -387,14 +386,12 @@ class FixFrame(FramePass):
 
                     if(f2_loc[0] is None):
                         continue
-                    else:
-                        result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
-                        num_pairs += 1
-                        min_score = min(result, min_score)
-
-                differences.append(min_score ** 2)
-
-        return np.sqrt(np.mean(differences))
+                    
+                    result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
+                    min_score = min(result, min_score)
+                
+                differences.append(min_score)
+        return np.mean(differences)
 
     @classmethod
     def compute_single_score(
@@ -429,6 +426,9 @@ class FixFrame(FramePass):
         score = 0
         score2 = 0
 
+        geometric_component = 0.0
+        geometric_component2 = 0.0
+
         for bp_group_off in range(num_bp):
 
             min_dist = np.inf
@@ -444,7 +444,7 @@ class FixFrame(FramePass):
                 )
 
                 if (f1_loc[0] is None):
-                    score = -np.inf
+                    geometric_component = -np.inf
                     continue
 
                 for j in range(i + 1, num_outputs):
@@ -453,7 +453,7 @@ class FixFrame(FramePass):
                     )
 
                     if (f2_loc[0] is None):
-                        score = -np.inf
+                        geometric_component = -np.inf
                         continue
                     
                     #mininum distance between the two body parts
@@ -467,13 +467,15 @@ class FixFrame(FramePass):
                 # BAD! We found a frame that failed to cluster properly...
 
                 #looks like this is the difference between score and score2? 
-                score = -np.inf
+                geometric_component = -np.inf
 
             # Minimum distance, weighted by average skeleton-pair confidence...
             if(count > 0):
-                score += min_dist * (total_conf / count)
-                score2 += min_dist * (total_conf / count)
+                geometric_component += min_dist * (total_conf / count)
+                geometric_component2 += min_dist * (total_conf / count)
 
+        skeletal_component = 0.0
+        skeletal_component2 = 0.0
 
         # If skeleton is implemented...
         if (skeleton is not None):
@@ -490,8 +492,8 @@ class FixFrame(FramePass):
                 )
 
                 if (f1_loc[0] is None):
-                    score = -np.inf
-                    score2 -= (max_dist / num_pairs)
+                    skeletal_component = -np.inf
+                    skeletal_component2 -= (max_dist / num_pairs)
                     continue
 
                 for (bp2_group_off, (__, __, avg)) in skel[bp_group_off]:
@@ -504,16 +506,21 @@ class FixFrame(FramePass):
                         )
 
                         if(f2_loc[0] is None):
-                            score = -np.inf
+                            skeletal_component = -np.inf
                             result = max_dist
                         else:
                             result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
 
                         min_score = min(result, min_score)
 
-                    score -= (min_score / num_pairs)
-                    score2 -= (min_score / num_pairs)
+                    skeletal_component -= (min_score / num_pairs)
+                    skeletal_component2 -= (min_score / num_pairs)
 
+        #print(f"geometric component {geometric_component}\nskeletal component {skeletal_component}\n")
+
+        score = geometric_component + skeletal_component
+        score2 = geometric_component2 + skeletal_component2
+        
         return score, score2
 
     @classmethod
@@ -635,10 +642,10 @@ class FixFrame(FramePass):
         fb_data.metadata.normalized_fixed_frame_score = cls.normalize_score(fb_data,frame_score)
         fb_data.metadata.is_pre_initialized = is_pre_initialized
         
-        variance = cls.compute_skeleton_variance(
-            fb_data.frames[frame_idx], fb_data.metadata.num_outputs, fb_data.metadata.down_scaling, fb_data.metadata.skeleton
-        )
-        print(f"skeletal variance for fix frame is {variance}\ncapped inverse variance is {min(1,variance ** -1 )}")
+        #variance = cls.compute_skeleton_variance(
+        #    fb_data.frames[frame_idx], fb_data.metadata.num_outputs, fb_data.metadata.down_scaling, fb_data.metadata.skeleton
+        #)
+        #print(f"skeletal variance for fix frame is {variance}\ncapped inverse square variance is {min(1,variance ** -2 )}")
 
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
