@@ -354,6 +354,47 @@ class FixFrame(FramePass):
 
         return fixed_frame
 
+    @classmethod 
+    def compute_skeleton_variance(
+        cls,
+        frames: List[ForwardBackwardFrame],
+        num_outputs: int,
+        down_scaling: float,
+        skeleton: Optional[StorageGraph],
+    ) -> float:
+        variance = 0.0
+
+        for bp in range(len(frames)):
+            bp_group_off, bp_off = divmod(bp, num_outputs)
+
+            num_pairs = 0
+            f1_loc = cls.get_max_location(
+                frames[bp_group_off * num_outputs + bp_off], down_scaling
+            )
+
+            if (f1_loc[0] is None):
+                continue
+
+            for (bp2_group_off, (__, __, avg)) in skeleton[bp_group_off]:
+                min_score = np.inf
+
+                for bp2_off in range(num_outputs):
+                    f2_loc = cls.get_max_location(
+                        frames[bp2_group_off * num_outputs + bp2_off],
+                        down_scaling
+                    )
+
+                    if(f2_loc[0] is None):
+                        continue
+                    else:
+                        result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
+                        num_pairs += 1
+
+                    min_score = min(result, min_score)
+
+                variance += (min_score / num_pairs)
+        return variance
+
     @classmethod
     def compute_single_score(
         cls,
@@ -592,6 +633,11 @@ class FixFrame(FramePass):
         fb_data.metadata.fixed_frame_score = frame_score
         fb_data.metadata.normalized_fixed_frame_score = cls.normalize_score(fb_data,frame_score)
         fb_data.metadata.is_pre_initialized = is_pre_initialized
+        
+        variance = cls.compute_skeleton_variance(
+            fb_data.frames[frame_idx], fb_data.metadata.num_outputs, fb_data.metadata.down_scaling, fb_data.metadata.skeleton
+        )
+        print(f"skeletal variance for fix frame is {variance}")
 
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
