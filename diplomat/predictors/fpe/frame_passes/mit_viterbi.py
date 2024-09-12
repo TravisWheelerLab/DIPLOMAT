@@ -157,7 +157,13 @@ class MITViterbi(FramePass):
 
         metadata.include_soft_domination = self.config.include_soft_domination
 
-    def _init_skeleton(self, data: ForwardBackwardData):
+    def _augment_skeleton_weight(self, skeleton_weight, normalized_score):
+        if normalized_score == -np.inf:
+            return self.config.minimum_skeleton_weight
+        else:
+            return max(self.config.minimum_skeleton_weight, skeleton_weight * np.sqrt(normalized_score))
+
+    def _init_skeleton(self, metadata: ForwardBackwardData):
         """If skeleton data is available, this function initializes the skeleton tables, 
         which are used to enhance tracking by considering the structural 
         relationships between different body parts.
@@ -179,13 +185,12 @@ class MITViterbi(FramePass):
 
         """
 
-        if("skeleton" in data.metadata):
-            meta = data.metadata
-            self._skeleton_tables = StorageGraph(meta.skeleton.node_names())
+        if("skeleton" in metadata):
+            self._skeleton_tables = StorageGraph(metadata.skeleton.node_names())
 
-            for ((n1, n2), (bin_val, freq, avg)) in meta.skeleton.items():
+            for ((n1, n2), (bin_val, freq, avg)) in metadata.skeleton.items():
                 fill_func = lambda x, y: fpe_math.skeleton_formula(
-                    x, y, avg, **meta.skeleton_config, in_log_space=True
+                    x, y, avg, **metadata.skeleton_config, in_log_space=True
                 )
 
                 self._skeleton_tables[n1, n2] = np.maximum(
@@ -196,6 +201,8 @@ class MITViterbi(FramePass):
                     ),
                     self.config.lowest_skeleton_score
                 )
+            
+            self.config.skeleton_weight = self._augment_skeleton_weight(self.config.skeleton_weight, metadata.normalized_fixed_frame_score)
         else:
             self.config.skeleton_weight = 0
 
@@ -250,13 +257,15 @@ class MITViterbi(FramePass):
             if("fixed_frame_index" not in fb_data.metadata):
                 raise PassOrderError(f"Must run FixFrame before this pass!")
 
+            #the index of the frame that marks the segment, in which animals are most separable
+            fix_frame_index = fb_data.metadata.fixed_frame_index
+            fix_frame_score = fb_data.metadata.fixed_frame_score
+
             self._init_gaussian_table(fb_data.metadata)
-            self._init_skeleton(fb_data)
+            self._init_skeleton(fb_data.metadata)
             self._init_obscured_state(fb_data.metadata)
             self._init_edge_state(fb_data.metadata)
 
-            #the index of the frame that marks the segment, in which animals are separable
-            fix_frame_index = fb_data.metadata.fixed_frame_index
 
             if(reset_bar and prog_bar is not None):
                 prog_bar.reset(fb_data.num_frames * 3)
@@ -1023,6 +1032,13 @@ class MITViterbi(FramePass):
                 "forward/backward step if a skeleton was created and enabled "
                 "by prior passes... This is not a probability, but rather a "
                 "ratio."
+            ),
+            "minimum_skeleton_weight": (
+                1e-4, float,
+                "A positive float, bounds skeleton_weight from below in the "
+                "adjustment of skeleton weight for poor fix frame quality. "
+                "Avoiding a zero skeleton weight is necessary to stop "
+                "information loss across segment boundaries in SFPE."
             ),
             "soft_domination_weight": (
                 1, float,

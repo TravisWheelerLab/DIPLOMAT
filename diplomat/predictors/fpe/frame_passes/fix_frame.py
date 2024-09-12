@@ -7,6 +7,7 @@ from diplomat.utils.graph_ops import min_cost_matching
 import numpy as np
 from diplomat.processing import ProgressBar, ConfigSpec
 import diplomat.processing.type_casters as tc
+from diplomat.utils.point_spread_patterns import approximate_maxmin_distance
 
 
 class FixFrame(FramePass):
@@ -386,6 +387,9 @@ class FixFrame(FramePass):
         score = 0
         score2 = 0
 
+        geometric_component = 0.0
+        geometric_component2 = 0.0
+
         for bp_group_off in range(num_bp):
 
             min_dist = np.inf
@@ -401,7 +405,7 @@ class FixFrame(FramePass):
                 )
 
                 if (f1_loc[0] is None):
-                    score = -np.inf
+                    geometric_component = -np.inf
                     continue
 
                 for j in range(i + 1, num_outputs):
@@ -410,7 +414,7 @@ class FixFrame(FramePass):
                     )
 
                     if (f2_loc[0] is None):
-                        score = -np.inf
+                        geometric_component = -np.inf
                         continue
                     
                     #mininum distance between the two body parts
@@ -424,13 +428,15 @@ class FixFrame(FramePass):
                 # BAD! We found a frame that failed to cluster properly...
 
                 #looks like this is the difference between score and score2? 
-                score = -np.inf
+                geometric_component = -np.inf
 
             # Minimum distance, weighted by average skeleton-pair confidence...
             if(count > 0):
-                score += min_dist * (total_conf / count)
-                score2 += min_dist * (total_conf / count)
-        
+                geometric_component += min_dist * (total_conf / count)
+                geometric_component2 += min_dist * (total_conf / count)
+
+        skeletal_component = 0.0
+        skeletal_component2 = 0.0
 
         # If skeleton is implemented...
         if (skeleton is not None):
@@ -447,8 +453,8 @@ class FixFrame(FramePass):
                 )
 
                 if (f1_loc[0] is None):
-                    score = -np.inf
-                    score2 -= (max_dist / num_pairs)
+                    skeletal_component = -np.inf
+                    skeletal_component2 -= (max_dist / num_pairs)
                     continue
 
                 for (bp2_group_off, (__, __, avg)) in skel[bp_group_off]:
@@ -461,16 +467,21 @@ class FixFrame(FramePass):
                         )
 
                         if(f2_loc[0] is None):
-                            score = -np.inf
+                            skeletal_component = -np.inf
                             result = max_dist
                         else:
                             result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
 
                         min_score = min(result, min_score)
 
-                    score -= (min_score / num_pairs)
-                    score2 -= (min_score / num_pairs)
+                    skeletal_component -= (min_score / num_pairs)
+                    skeletal_component2 -= (min_score / num_pairs)
 
+        #print(f"geometric component {geometric_component}\nskeletal component {skeletal_component}\n")
+
+        score = geometric_component + skeletal_component
+        score2 = geometric_component2 + skeletal_component2
+        
         return score, score2
 
     @classmethod
@@ -560,10 +571,27 @@ class FixFrame(FramePass):
         return (scores[:, 0], scores[:, 1])
 
     @classmethod
+    def normalize_score(
+        cls,
+        fb_data: ForwardBackwardData,
+        frame_score: float
+    ) -> float:
+        num_outputs = fb_data.metadata.num_outputs
+        # approximate the maximal minimum distance between num_outputs points spread in the unit square
+        maxmin_dist = approximate_maxmin_distance(num_outputs)
+        # scale the distance wrt the video resolution. 
+        # this is definitely not perfect for rectangular resolutions but it gets close enough.
+        scaled_maxmin_dist = maxmin_dist * np.sqrt(fb_data.metadata.width * fb_data.metadata.height)
+        # normalize the frame score
+        num_bp = len(fb_data.metadata.bodyparts)
+        return frame_score / (scaled_maxmin_dist * num_bp)
+
+    @classmethod
     def restore_all_except_fix_frame(
         cls,
         fb_data: ForwardBackwardData,
         frame_idx: int,
+        frame_score: float,
         fix_frame_data: List[ForwardBackwardFrame],
         prog_bar: ProgressBar,
         reset_bar: bool = False,
@@ -571,8 +599,10 @@ class FixFrame(FramePass):
     ) -> ForwardBackwardData:
         # For passes to use....
         fb_data.metadata.fixed_frame_index = int(frame_idx)
+        fb_data.metadata.fixed_frame_score = frame_score
+        fb_data.metadata.normalized_fixed_frame_score = cls.normalize_score(fb_data,frame_score)
         fb_data.metadata.is_pre_initialized = is_pre_initialized
-
+        
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
 
@@ -604,6 +634,7 @@ class FixFrame(FramePass):
         self._scores, fallback_scores = self.compute_scores(fb_data, prog_bar, False)
 
         self._max_frame_idx = int(np.argmax(self._scores))
+        self._max_frame_score = self._scores[self._max_frame_idx]
 
         if(np.isneginf(self._scores[self._max_frame_idx])):
             self._max_frame_idx = int(np.argmax(fallback_scores))
@@ -616,7 +647,8 @@ class FixFrame(FramePass):
 
         if(self.config.DEBUG):
             print(f"Max Scoring Frame: {self._max_frame_idx}")
-
+            print(f"Max Score: {self._max_frame_score}")
+            
         self._fixed_frame = self.create_fix_frame(
             fb_data,
             self._max_frame_idx,
@@ -629,6 +661,7 @@ class FixFrame(FramePass):
             return self.restore_all_except_fix_frame(
                 fb_data,
                 self._max_frame_idx,
+                self._max_frame_score,
                 self._fixed_frame,
                 prog_bar,
                 False
@@ -639,7 +672,7 @@ class FixFrame(FramePass):
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
-            "DEBUG": (False, bool, "Set to True to dump additional information while the pass is running."),
+            "DEBUG": (True, bool, "Set to True to dump additional information while the pass is running."),
             "fix_frame_override": (
                 None,
                 tc.Union(tc.Literal(None), tc.RangedInteger(0, np.inf)),
