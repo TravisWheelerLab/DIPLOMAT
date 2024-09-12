@@ -354,45 +354,6 @@ class FixFrame(FramePass):
 
         return fixed_frame
 
-    @classmethod 
-    def compute_skeleton_variance(
-        cls,
-        frames: List[ForwardBackwardFrame],
-        num_outputs: int,
-        down_scaling: float,
-        skeleton: Optional[StorageGraph],
-    ) -> float:
-        # slow! don't deploy like this
-        differences = []
-
-        for bp in range(len(frames)):
-            bp_group_off, bp_off = divmod(bp, num_outputs)
-
-            f1_loc = cls.get_max_location(
-                frames[bp_group_off * num_outputs + bp_off], down_scaling
-            )
-
-            if (f1_loc[0] is None):
-                continue
-
-            for (bp2_group_off, (__, __, avg)) in skeleton[bp_group_off]:
-                min_score = np.inf
-
-                for bp2_off in range(num_outputs):
-                    f2_loc = cls.get_max_location(
-                        frames[bp2_group_off * num_outputs + bp2_off],
-                        down_scaling
-                    )
-
-                    if(f2_loc[0] is None):
-                        continue
-                    
-                    result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
-                    min_score = min(result, min_score)
-                
-                differences.append(min_score)
-        return np.mean(differences)
-
     @classmethod
     def compute_single_score(
         cls,
@@ -642,11 +603,6 @@ class FixFrame(FramePass):
         fb_data.metadata.normalized_fixed_frame_score = cls.normalize_score(fb_data,frame_score)
         fb_data.metadata.is_pre_initialized = is_pre_initialized
         
-        #variance = cls.compute_skeleton_variance(
-        #    fb_data.frames[frame_idx], fb_data.metadata.num_outputs, fb_data.metadata.down_scaling, fb_data.metadata.skeleton
-        #)
-        #print(f"skeletal variance for fix frame is {variance}\ncapped inverse square variance is {min(1,variance ** -2 )}")
-
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
 
