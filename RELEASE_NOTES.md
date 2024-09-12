@@ -1,5 +1,3 @@
 Changes for this version of DIPLOMAT:
-- reworked occlusion logic to support decay, merge current visible and prior occluded probabilities through a maximum.
-- enter state is now being used again; patched a bug that made DIPLOMAT unable to use enter state when frames are missing body parts.
-- patched domination logic to avoid NaN probabilities when complete domination occurs immediately after the enter state is used.
-- applied sidebar radiobutton color fix from interactive mode to tweak mode. UI colors now update when the tracking colors update.
+- implemented a geometric normalizer for frame score, based on patterns that give approximations to the packing circles / spreading points problem by Szabo/Csendes/Casado/Garcia (Packing Equal Circles in a Square, 2001)
+- using the frame score normalizer, the fix frame of a segment now augments the skeleton weight constant. fix frames with poor separability will have reduced skeleton weight. fix frames with missing limbs will have a minimal (1e-4) skeleton weight. testing indicates this reduces rapid switching to some extent.
