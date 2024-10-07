@@ -115,7 +115,8 @@ class ClusterFrames(FramePass):
                     nearest[body_idx][frame_idx, bp_idx] = np.argmin(distances)
                     #print("nearest", nearest[body_idx][frame_idx, bp_idx])
         for i,n in enumerate(nearest):
-            print(i, np.sum(i != n))
+            framewise_unique_ids = [len(np.unique(n[frame_idx,:])) for frame_idx in range(num_frames)]
+            print(f"body {i}, matches {np.sum(i == n)} splits {np.sum(i != n)} unique ids {len(np.unique(n))} framewise unique ids {np.max(framewise_unique_ids)}")
         input()
     @classmethod
     def _cluster_frames(
