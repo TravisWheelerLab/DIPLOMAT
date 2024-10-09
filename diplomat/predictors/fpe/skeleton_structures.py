@@ -175,7 +175,7 @@ class StorageGraph:
 
         :returns: A list of integers, representing the connected nodes/components they are a part of. All nodes as
                   indexes of the list that are a part of the same connected component will have the same integer id as
-                  there value in the list.
+                  their value in the list.
         """
         traversal_function = traversal_function if(traversal_function is not None) else lambda a, b: None
         visited = [-1] * len(self)
