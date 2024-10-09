@@ -76,48 +76,8 @@ class ClusterFrames(FramePass):
 
         fb_data.metadata.is_clustered = True
 
-        ClusterFrames._detect_splits(fb_data)
-
         return fb_data
 
-    @classmethod
-    def _detect_splits(
-        cls,
-        fb_data,
-    ):
-        num_frames = len(fb_data.frames)
-        num_out = fb_data.metadata.num_outputs
-        num_bp = len(fb_data.metadata.bodyparts)
-        parts = [np.zeros((num_frames,num_bp,2)) for _ in range(num_out)]
-        for frame_idx in range(num_frames):
-            for part_index in range(num_out * num_bp):
-                bp_group, bp_off = divmod(part_index, num_out)
-                c = fb_data.frames[frame_idx][part_index].src_data.coords
-                if c:
-                    y,x = zip(*c)
-                else:
-                    x = []
-                    y = []
-                mean_x = np.mean(x)
-                mean_y = np.mean(y)
-                parts[bp_off][frame_idx,bp_group,:] = [mean_x,mean_y]
-        centers = [np.mean(p,axis=1) for p in parts]
-        nearest = [np.zeros(shape=(num_frames,num_bp),dtype=int) for _ in range(num_out)]
-        for body_idx in range(num_out):
-            for frame_idx in range(num_frames):
-                for bp_idx in range(num_bp):
-                    #print(f"body {body_idx} frame {frame_idx} part {bp_idx}")
-                    x, y = parts[body_idx][frame_idx, bp_idx, :]
-                    #print("x, y", (x, y))
-                    body_centers = [centers[body_idx2][frame_idx, :] for body_idx2 in range(num_out)]
-                    #print("centers", body_centers)
-                    distances = [(x - cx) ** 2 + (y - cy) ** 2 for (cx,cy) in body_centers]
-                    nearest[body_idx][frame_idx, bp_idx] = np.argmin(distances)
-                    #print("nearest", nearest[body_idx][frame_idx, bp_idx])
-        for i,n in enumerate(nearest):
-            framewise_unique_ids = [len(np.unique(n[frame_idx,:])) for frame_idx in range(num_frames)]
-            print(f"body {i}, matches {np.sum(i == n)} splits {np.sum(i != n)} unique ids {len(np.unique(n))} framewise unique ids {np.max(framewise_unique_ids)}")
-        input()
     @classmethod
     def _cluster_frames(
         cls,
