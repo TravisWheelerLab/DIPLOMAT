@@ -24,7 +24,7 @@ class RepairClusters(FramePass):
 
         return {
             "max_difference_factor": (
-                2, int,     "Sets the threshold by which a distance between"
+                5, int,     "Sets the threshold by which a distance between"
                             "body parts can exceed the expected distance from"
                             "the skeleton. Defaults to 2x."
             )
@@ -55,6 +55,12 @@ class RepairClusters(FramePass):
         splits = RepairClusters._locate_splits(
             fb_data,
         )
+
+
+        num_frames = len(fb_data.frames)
+        num_bodies = fb_data.metadata.num_outputs
+
+        print(f"num splits {len(splits)} / {num_frames * num_bodies}")
 
         best_comps = RepairClusters._select_best_components(
             splits,
@@ -87,7 +93,7 @@ class RepairClusters(FramePass):
         num_bodies: int,
         num_parts: int,
         down_scaling: int,
-        max_difference_factor: int = 2,
+        max_difference_factor: int = 5,
     ) -> List[int]:
         """
         Detects split bodies from the body part frames at a particular timestep 
@@ -105,8 +111,8 @@ class RepairClusters(FramePass):
                     break
                 # recover location of first part
                 idx = (num_bodies * part_idx) + body_idx
-                if not (body_idx, part_idx == divmod(idx, num_bodies)):
-                    print((body_idx, part_idx),divmod(idx, num_bodies))
+                if not ((part_idx, body_idx) == divmod(idx, num_bodies)):
+                    print((part_idx, body_idx),divmod(idx, num_bodies))
                     assert False
                 part_x, part_y, part_p = FixFrame.get_max_location(frames[idx], down_scaling)
                 if (part_x == None or part_y == None):
@@ -114,8 +120,8 @@ class RepairClusters(FramePass):
                 for part2_idx in range(part_idx + 1, num_parts):
                     # recover location of second part
                     idx2 = (num_bodies * part2_idx) + body_idx
-                    if not (body_idx, part2_idx == divmod(idx2, num_bodies)): 
-                        print((body_idx, part2_idx),divmod(idx2, num_bodies))
+                    if not ((part2_idx, body_idx) == divmod(idx2, num_bodies)): 
+                        print((part2_idx, body_idx),divmod(idx2, num_bodies))
                         assert False
                     part2_x, part2_y, part2_p = FixFrame.get_max_location(frames[idx2], down_scaling)
                     # measure distance between parts
@@ -128,7 +134,7 @@ class RepairClusters(FramePass):
                         if measured_distance > max_difference_factor * expected_distance:
                             # if past threshold, mark split body,
                             # and break both part loops.
-                            split[body_idx] == True
+                            split[body_idx] = True
                             break
                     except KeyError:
                         pass
@@ -168,7 +174,7 @@ class RepairClusters(FramePass):
         return split_locations
 
     @classmethod
-    def _create_body_graphs(
+    def _create_body_graph(
         cls,
         frames: List[ForwardBackwardFrame],
         skeleton: StorageGraph,
@@ -176,7 +182,7 @@ class RepairClusters(FramePass):
         num_bodies: int,
         num_parts: int,
         down_scaling: int,
-        max_difference_factor: int = 2,
+        max_difference_factor: int = 5,
     ) -> List[StorageGraph]:
         """
         Construct graphs for each body with body parts as nodes and edges
@@ -188,24 +194,27 @@ class RepairClusters(FramePass):
         for part_idx in range(num_parts):
             # recover location of first part
             idx = (num_bodies * part_idx) + body_idx
-            if not (body_idx, part_idx == divmod(idx, num_bodies)):
-                print((body_idx, part_idx),divmod(idx, num_bodies))
+            if not ((part_idx, body_idx) == divmod(idx, num_bodies)):
+                print((part_idx, body_idx),divmod(idx, num_bodies))
                 assert False
             part_x, part_y, part_p = FixFrame.get_max_location(frames[idx], down_scaling)
             for part2_idx in range(part_idx + 1, num_parts):
                 # recover location of second part
                 idx2 = (num_bodies * part2_idx) + body_idx
-                if not (body_idx, part2_idx == divmod(idx2, num_bodies)): 
-                    print((body_idx, part2_idx),divmod(idx2, num_bodies))
+                if not ((part2_idx, body_idx) == divmod(idx2, num_bodies)): 
+                    print((part2_idx, body_idx),divmod(idx2, num_bodies))
                     assert False
                 part2_x, part2_y, part2_p = FixFrame.get_max_location(frames[idx2], down_scaling)
                 # measure distance between parts
                 measured_distance = FixFrame.dist((part_x,part_y),(part2_x,part2_y))
                 # compare to skeleton distribution
-                expected_distance = skeleton[part_idx,part2_idx][2]
-                if measured_distance < max_difference_factor * expected_distance:
-                    # if below threshold, create an edge.
-                    body_graphs[body_idx][part_idx,part2_idx] = measured_distance
+                try:
+                    expected_distance = skeleton[part_idx,part2_idx][2]
+                    if measured_distance < max_difference_factor * expected_distance:
+                        # if below threshold, create an edge.
+                        body_graph[part_idx,part2_idx] = measured_distance
+                except KeyError:
+                    pass
         
         return body_graph
 
@@ -223,15 +232,21 @@ class RepairClusters(FramePass):
     ) -> List[float]:
         """
         """
+        node_names = skeleton.node_names()
         component_ids = np.unique(components)
         component_node_lists = [np.arange(num_parts)[components == cid] for cid in component_ids]
         component_scores = [0] * len(component_ids)
         for (component_idx, component_nodes) in enumerate(component_node_lists):
+            # singleton components are maximum badness.
+            if len(component_nodes) == 1:
+                component_scores[component_idx] = -np.inf
+                continue
+            # if not a singleton, score by the edge distance variance.
             for node in component_nodes:
-                for (node2, measured_distance) in body_graph[node]:
+                for (node2, measured_distance) in body_graph[node_names[node]]:
                     # to avoid double counting
                     if node2 > node:
-                        expected_distance = skeleton[node,node2][2]
+                        expected_distance = skeleton[node_names[node],node_names[node2]][2]
                         component_scores[component_idx] -= (expected_distance - measured_distance) ** 2
         return component_ids, component_scores
         
@@ -295,30 +310,35 @@ class RepairClusters(FramePass):
         reference_parts: List[int],
         skeleton_tables: StorageGraph,
         frames: List[ForwardBackwardFrame],
+        down_scaling,
         num_bodies,
     ) -> SparseTrackingData:
         """
         Using a subset of body parts in a frame to assign skeletal 
         probabilities, create a new SparseTrackingData object.
         """
+        node_names = skeleton_tables.node_names()
         # recover the unclustered frame data
         target_frame_data = frames[(num_bodies * target_part_idx) + body_idx].orig_data
         y_coords,x_coords,probs,x_offsets,y_offsets = target_frame_data.unpack()
         # generate new probabilities
-        skeleton_augmented_probs = np.copy(probs)
+        skeleton_augmented_probs = np.zeros_like(probs)
         for reference_part_idx in reference_parts:
-            table = skeleton_tables[target_part_idx, reference_part_idx]
-            frame_data = frames[(num_bodies * reference_part_idx) + body_idx]
-            part_x, part_y, part_p = cls.get_max_location(frame_data, down_scaling)
-            part_x = np.array([part_x])
-            part_y = np.array([part_y])
-            aug_probs = fpe_math.table_transition((part_x,part_y),(x_coords,y_coords))
-            print(aug_probs.shape)
-            skeleton_augmented_probs += aug_probs
+            try:
+                frame_data = frames[(num_bodies * reference_part_idx) + body_idx]
+                part_x, part_y, part_p = FixFrame.get_max_location(frame_data, down_scaling)
+                part_x = np.array([int(part_x)])
+                part_y = np.array([int(part_y)])
+                table = skeleton_tables[node_names[target_part_idx], node_names[reference_part_idx]]
+                aug_probs = fpe_math.table_transition((part_x,part_y),(x_coords,y_coords),table)
+                aug_probs = np.reshape(aug_probs,len(x_coords))
+                skeleton_augmented_probs += aug_probs
+            except KeyError:
+                pass
         # pack new probablities into a new frame data object
-        new_frame_data = SparseTrackingData() 
-        new_frame_data.pack(y_coords,x_coords,skeleton_augmented_probs,x_offsets,y_offsets)
-        return new_frame_data
+        #new_frame_data = SparseTrackingData() 
+        target_frame_data.pack(y_coords,x_coords,skeleton_augmented_probs,x_offsets,y_offsets)
+        return target_frame_data
 
 
     @classmethod
@@ -355,17 +375,20 @@ class RepairClusters(FramePass):
         # maximum-probability location in this skeleton-augmented frame data. 
         num_splits = len(splits)
         num_bodies = fb_data.metadata.num_outputs
+        down_scaling = fb_data.metadata.down_scaling
         assert len(best_components) == num_splits
         for split_idx in range(num_splits):
-            frame_idx, body_idx = splits[i]
-            optimal_parts, misplaced_parts = best_components[i]
-            for part_idx in misplaced_part:
+            frame_idx, body_idx = splits[split_idx]
+            optimal_parts, misplaced_parts = best_components[split_idx]
+            #print(f"optimal parts", len(optimal_parts))
+            for part_idx in misplaced_parts:
                 repaired_frame_data = cls._rebuild_frame_data(
                     body_idx,
                     part_idx,
                     optimal_parts,
                     skeleton_tables,
                     fb_data.frames[frame_idx],
+                    down_scaling,
                     num_bodies,
                 )
                 fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = repaired_frame_data
