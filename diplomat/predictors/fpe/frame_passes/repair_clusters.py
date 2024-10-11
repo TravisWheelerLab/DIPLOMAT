@@ -102,8 +102,10 @@ class RepairClusters(FramePass):
         Returns a list of body indices for bodies that are split.
         """
         split = [False] * num_bodies
-        
+
+        print()        
         for body_idx in range(num_bodies):
+            split_difs = []
             for part_idx in range(num_parts):
                 if split[body_idx]:
                     # a split has already been identified in this body; 
@@ -131,6 +133,7 @@ class RepairClusters(FramePass):
                     # compare to skeleton distribution
                     try:
                         expected_distance = skeleton[part_idx,part2_idx][2]
+                        split_difs.append((measured_distance,expected_distance))
                         if measured_distance > max_difference_factor * expected_distance:
                             # if past threshold, mark split body,
                             # and break both part loops.
@@ -138,6 +141,7 @@ class RepairClusters(FramePass):
                             break
                     except KeyError:
                         pass
+            print(f"body {body_idx} has dists {split_difs}")
         return np.arange(num_bodies)[split]
                         
 
@@ -198,6 +202,8 @@ class RepairClusters(FramePass):
                 print((part_idx, body_idx),divmod(idx, num_bodies))
                 assert False
             part_x, part_y, part_p = FixFrame.get_max_location(frames[idx], down_scaling)
+            if (part_x == None or part_y == None):
+                continue
             for part2_idx in range(part_idx + 1, num_parts):
                 # recover location of second part
                 idx2 = (num_bodies * part2_idx) + body_idx
@@ -206,6 +212,8 @@ class RepairClusters(FramePass):
                     assert False
                 part2_x, part2_y, part2_p = FixFrame.get_max_location(frames[idx2], down_scaling)
                 # measure distance between parts
+                if (part2_x == None or part2_y == None):
+                    continue
                 measured_distance = FixFrame.dist((part_x,part_y),(part2_x,part2_y))
                 # compare to skeleton distribution
                 try:
@@ -327,6 +335,8 @@ class RepairClusters(FramePass):
             try:
                 frame_data = frames[(num_bodies * reference_part_idx) + body_idx]
                 part_x, part_y, part_p = FixFrame.get_max_location(frame_data, down_scaling)
+                if (part_x == None or part_y == None):
+                    continue
                 part_x = np.array([int(part_x)])
                 part_y = np.array([int(part_y)])
                 table = skeleton_tables[node_names[target_part_idx], node_names[reference_part_idx]]
