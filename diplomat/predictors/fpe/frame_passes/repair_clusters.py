@@ -408,17 +408,14 @@ class RepairClusters(FramePass):
             optimal_parts, misplaced_parts = best_components[split_idx]
             for part_idx in misplaced_parts:
                 ## attempt to rebuild frame data based on skeletal constraints
-                # repaired_frame_data = cls._rebuild_frame_data(
-                #     body_idx,
-                #     part_idx,
-                #     optimal_parts,
-                #     skeleton_tables,
-                #     fb_data.frames[frame_idx],
-                #     down_scaling,
-                #     num_bodies
-                # )
-                # fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = repaired_frame_data
-
-                # discard the clustering altogether on misplaced parts
-                fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].orig_data.duplicate()
-        return fb_data
+                repaired_frame_data = cls._rebuild_frame_data(
+                    body_idx,
+                    part_idx,
+                    optimal_parts,
+                    skeleton_tables,
+                    fb_data.frames[frame_idx],
+                    down_scaling,
+                    num_bodies
+                )
+                fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = repaired_frame_data
+    return fb_data
