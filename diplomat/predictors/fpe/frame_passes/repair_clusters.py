@@ -418,4 +418,4 @@ class RepairClusters(FramePass):
                     num_bodies
                 )
                 fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = repaired_frame_data
-    return fb_data
+        return fb_data
