@@ -103,9 +103,7 @@ class RepairClusters(FramePass):
         """
         split = [False] * num_bodies
 
-        print()        
         for body_idx in range(num_bodies):
-            split_difs = []
             for part_idx in range(num_parts):
                 if split[body_idx]:
                     # a split has already been identified in this body; 
@@ -118,7 +116,8 @@ class RepairClusters(FramePass):
                     assert False
                 part_x, part_y, part_p = FixFrame.get_max_location(frames[idx], down_scaling)
                 if (part_x == None or part_y == None):
-                    continue
+                    split[body_idx] = True
+                    break
                 for part2_idx in range(part_idx + 1, num_parts):
                     # recover location of second part
                     idx2 = (num_bodies * part2_idx) + body_idx
@@ -133,7 +132,6 @@ class RepairClusters(FramePass):
                     # compare to skeleton distribution
                     try:
                         expected_distance = skeleton[part_idx,part2_idx][2]
-                        split_difs.append((measured_distance,expected_distance))
                         if measured_distance > max_difference_factor * expected_distance:
                             # if past threshold, mark split body,
                             # and break both part loops.
@@ -141,7 +139,6 @@ class RepairClusters(FramePass):
                             break
                     except KeyError:
                         pass
-            print(f"body {body_idx} has dists {split_difs}")
         return np.arange(num_bodies)[split]
                         
 
@@ -347,7 +344,11 @@ class RepairClusters(FramePass):
                 pass
         # pack new probablities into a new frame data object
         #new_frame_data = SparseTrackingData() 
-        target_frame_data.pack(y_coords,x_coords,skeleton_augmented_probs,x_offsets,y_offsets)
+        #target_frame_data.pack(y_coords,x_coords,skeleton_augmented_probs,x_offsets,y_offsets)
+        #new_x, new_y, new_p = FixFrame.get_max_location(target_frame_data, down_scaling)
+        best_idx = np.argmax(skeleton_augmented_probs)
+        new_y, new_x, new_p = y_coords[best_idx], x_coords[best_idx], probs[best_idx]
+        target_frame_data.pack(np.array([new_y]),np.array([new_x]),np.array([new_p]),np.array([0]),np.array([0]))
         return target_frame_data
 
 
