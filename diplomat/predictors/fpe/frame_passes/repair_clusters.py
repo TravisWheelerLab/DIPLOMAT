@@ -342,10 +342,8 @@ class RepairClusters(FramePass):
                 skeleton_augmented_probs += aug_probs
             except KeyError:
                 pass
-        # pack new probablities into a new frame data object
-        #new_frame_data = SparseTrackingData() 
+        # pack new probablities into the existing frame data object
         #target_frame_data.pack(y_coords,x_coords,skeleton_augmented_probs,x_offsets,y_offsets)
-        #new_x, new_y, new_p = FixFrame.get_max_location(target_frame_data, down_scaling)
         best_idx = np.argmax(skeleton_augmented_probs)
         new_y, new_x, new_p = y_coords[best_idx], x_coords[best_idx], probs[best_idx]
         target_frame_data.pack(np.array([new_y]),np.array([new_x]),np.array([new_p]),np.array([0]),np.array([0]))
