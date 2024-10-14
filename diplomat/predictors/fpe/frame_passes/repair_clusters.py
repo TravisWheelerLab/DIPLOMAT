@@ -5,7 +5,7 @@ from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardData, ForwardBackwardFrame, SparseTrackingData, AttributeDict
 from diplomat.predictors.fpe.frame_pass import FramePass, PassOrderError
 from diplomat.predictors.fpe.frame_passes.fix_frame import FixFrame
-from diplomat.predictors.fpe.frame_passes.mit_viterbi import norm
+from diplomat.predictors.fpe.frame_passes.mit_viterbi import norm, to_log_space, from_log_space
 import numpy as np
 
 class RepairClusters(FramePass):
@@ -236,6 +236,8 @@ class RepairClusters(FramePass):
         down_scaling: int,
     ) -> List[float]:
         """
+        Measures the variance of clusters' edges' distances from the average 
+        distance in the skeleton.
         """
         node_names = skeleton.node_names()
         component_ids = np.unique(components)
@@ -279,7 +281,7 @@ class RepairClusters(FramePass):
         best_components = [None] * num_splits
         
         for (split_idx, (frame_idx, body_idx)) in enumerate(splits):
-            # create body graph, find components
+            # create body graph, find connected components
             body_graph = cls._create_body_graph(
                 fb_data.frames[frame_idx],
                 skeleton,
@@ -288,7 +290,7 @@ class RepairClusters(FramePass):
                 num_parts,
                 down_scaling)
             body_components = np.array(body_graph.dfs())
-            # score components
+            # score components by variance of edges from skeleton mean distance
             component_ids, component_scores = cls._score_components(
                 body_components,
                 body_graph,
@@ -299,7 +301,8 @@ class RepairClusters(FramePass):
                 num_parts,
                 down_scaling)
             optimal_component_idx = component_ids[np.argmax(component_scores)]
-            # create partition of optimal component parts, nonoptimal parts
+            # create partition of parts into those present in the optimal 
+            # component, and everything else.
             optimal_component_parts = np.arange(num_parts)[body_components == optimal_component_idx]
             nonoptimal_parts = np.arange(num_parts)[body_components != optimal_component_idx]
 
@@ -315,9 +318,9 @@ class RepairClusters(FramePass):
         reference_parts: List[int],
         skeleton_tables: StorageGraph,
         frames: List[ForwardBackwardFrame],
-        down_scaling,
-        num_bodies,
-        verbose = False
+        down_scaling: int,
+        num_bodies: int,
+        mode: int = 1
     ) -> SparseTrackingData:
         """
         Using a subset of body parts in a frame to assign skeletal 
@@ -327,8 +330,9 @@ class RepairClusters(FramePass):
         # recover the unclustered frame data
         target_frame_data = frames[(num_bodies * target_part_idx) + body_idx].orig_data.duplicate()
         y_coords,x_coords,probs,x_offsets,y_offsets = target_frame_data.unpack()
-        # generate new probabilities
-        skeleton_augmented_probs = np.zeros_like(probs)
+        # aggregate skeleton probabilities
+        skeleton_augmented_probs = to_log_space(np.copy(probs))
+        #skeleton_augmented_probs = np.copy(probs)
         for reference_part_idx in reference_parts:
             try:
                 frame_data = frames[(num_bodies * reference_part_idx) + body_idx]
@@ -341,28 +345,21 @@ class RepairClusters(FramePass):
                 aug_probs = fpe_math.table_transition((part_x,part_y),(x_coords,y_coords),table)
                 aug_probs = np.reshape(aug_probs,len(x_coords))
                 skeleton_augmented_probs += aug_probs
+                #skeleton_augmented_probs += from_log_space(aug_probs)
             except KeyError:
                 pass
-        if np.all(skeleton_augmented_probs == 0):
-            skeleton_augmented_probs = probs
-        # pack new probablities into the existing frame data object
+        skeleton_augmented_probs = from_log_space(skeleton_augmented_probs)
+        #skeleton_augmented_probs = skeleton_augmented_probs / np.max(skeleton_augmented_probs)
 
-        ## mode 0 - pack the same orig_data with probs + skeleton probs
+        # pack new probablities into the existing frame data object
+        target_frame_data.pack(
+            y_coords,
+            x_coords,
+            skeleton_augmented_probs,
+            x_offsets,
+            y_offsets)
         
-        ## mode 1 - pack the same orig_data with skeleton probs
-        target_frame_data.pack(y_coords,x_coords,skeleton_augmented_probs,x_offsets,y_offsets)
-        
-        if verbose:
-            print(y_coords.shape)
-            print(x_coords.shape)
-            print(skeleton_augmented_probs.shape)
-            print(x_offsets.shape)
-            print(y_offsets.shape)
-        
-        ## mode 2 - pack the same orig_data with skeleton probs, omitting offsets
-        #target_frame_data.pack(y_coords,x_coords,skeleton_augmented_probs,np.zeros_like(x_offsets),np.zeros_like(y_offsets))
-        
-        ## mode 3 - select the best position in orig_data according to skeleton probs, discarding everything else.
+        ## select the best position in orig_data according to skeleton probs, discarding everything else.
         #best_idx = np.argmax(skeleton_augmented_probs)
         #new_y, new_x, new_p = y_coords[best_idx], x_coords[best_idx], skeleton_augmented_probs[best_idx]
         #target_frame_data.pack(np.array([new_y]),np.array([new_x]),np.array([new_p]),np.array([0]),np.array([0]))
@@ -409,17 +406,19 @@ class RepairClusters(FramePass):
         for split_idx in range(num_splits):
             frame_idx, body_idx = splits[split_idx]
             optimal_parts, misplaced_parts = best_components[split_idx]
-            #print(f"optimal parts", len(optimal_parts))
             for part_idx in misplaced_parts:
-                #repaired_frame_data = cls._rebuild_frame_data(
-                #    body_idx,
-                #    part_idx,
-                #    optimal_parts,
-                #    skeleton_tables,
-                #    fb_data.frames[frame_idx],
-                #    down_scaling,
-                #    num_bodies,
-                #    verbose = (frame_idx == 168)
-                #)
-                fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].orig_data #repaired_frame_data
+                ## attempt to rebuild frame data based on skeletal constraints
+                # repaired_frame_data = cls._rebuild_frame_data(
+                #     body_idx,
+                #     part_idx,
+                #     optimal_parts,
+                #     skeleton_tables,
+                #     fb_data.frames[frame_idx],
+                #     down_scaling,
+                #     num_bodies
+                # )
+                # fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = repaired_frame_data
+
+                # discard the clustering altogether on misplaced parts
+                fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].orig_data.duplicate()
         return fb_data
