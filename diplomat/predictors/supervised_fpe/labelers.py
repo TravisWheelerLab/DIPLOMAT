@@ -307,10 +307,10 @@ class Approximate(labeler_lib.PoseLabeler):
 
 
         group = bp // num_outputs
-        print(f"Group : {group}")
+        #print(f"Group : {group}")
 
         other_body_part_indices = [group * num_outputs + i for i in range(num_outputs) if i != bp % num_outputs]
-        print(f"Other body part indices: {other_body_part_indices}")
+        #print(f"Other body part indices: {other_body_part_indices}")
 
         body_part_is_orig = {bp: False for bp in other_body_part_indices}
         old_body_part_data = {} #keep track of these for the undo function 
@@ -344,15 +344,15 @@ class Approximate(labeler_lib.PoseLabeler):
             new_data = SparseTrackingData()
             new_data.pack(*[np.array([item]) for item in [y[max_prob_idx], x[max_prob_idx], 1, x_offset[max_prob_idx], y_offset[max_prob_idx]]])
 
-            print(f"Point location: {(x[max_prob_idx], y[max_prob_idx])}")
+            #print(f"Point location: {(x[max_prob_idx], y[max_prob_idx])}")
             for other_bp in other_body_part_indices:
                 bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset = copy.deepcopy(frames[frm][other_bp].orig_data).unpack()
                 idx = 0
                 for c_x, c_y in zip(bp_x, bp_y):
-                    print(f"Checking location: {(c_x, c_y)}")
+                    #print(f"Checking location: {(c_x, c_y)}")
                     if c_x == x[max_prob_idx] and c_y == y[max_prob_idx]:
-                        print(f"Found matching location: {(c_x, c_y)}")
-                        print()
+                        #print(f"Found matching location: {(c_x, c_y)}")
+                        #print()
                         bp_prob[idx] = 0
 
                         new_bp_data = SparseTrackingData()
@@ -368,7 +368,7 @@ class Approximate(labeler_lib.PoseLabeler):
                         new_body_part_data[other_bp] = new_bp_frame
 
                     idx += 1
-            print(f"New body part data: {new_body_part_data}")
+            #print(f"New body part data: {new_body_part_data}")
                         
 
 
@@ -514,7 +514,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
 
         peak_locs = find_peaks(xs, ys, probs, meta.width)
         peak_locs = peak_locs[probs[peak_locs] >= config.minimum_peak_value]
-        print(peak_locs)
+        #print(peak_locs)
         if(len(peak_locs) <= 1):
             # No peaks, or only one peak, perform basically a no-op, return prior frame state...
             x, y, prob = self._frame_engine.scmap_to_video_coord(
@@ -572,10 +572,10 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         num_outputs = self._frame_engine.frame_data.metadata.num_outputs #the number of individuals
 
         group = bp // num_outputs
-        print(f"Group : {group}")
+        #print(f"Group : {group}")
 
         other_body_part_indices = [group * num_outputs + i for i in range(num_outputs) if i != bp % num_outputs]
-        print(f"Other body part indices: {other_body_part_indices}")
+        #print(f"Other body part indices: {other_body_part_indices}")
 
         body_part_is_orig = {bp: False for bp in other_body_part_indices}
         old_body_part_data = {} #keep track of these for the undo function 
