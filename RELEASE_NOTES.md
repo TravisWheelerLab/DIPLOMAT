@@ -1,2 +1,3 @@
 Changes for this version of DIPLOMAT:
-- implemented the RepairClusters frame pass to identify and resolve clustering errors before fix frames are selected
+- changed re-run icon from a triangle to a pair of circularly-arranged arrows 
+- decluttered terminal output during supervised mode
