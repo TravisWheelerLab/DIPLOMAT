@@ -19,6 +19,7 @@ class RepairClusters(FramePass):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    @classmethod
     def get_config_options(cls) -> ConfigSpec:
         import diplomat.processing.type_casters as tc
 
