@@ -165,3 +165,67 @@ Troubleshooting for DIPLOMAT-SLEAP
 If the Mamba method fails to install DIPLOMAT and SLEAP, you may need to downgrade the 
 numpy version manually. Activate the mamba environment with ``mamba activate DIPLOMAT-SLEAP``,
 then downgrade numpy with ``pip install numpy<1.23.0``. 
+
+Verifying the DIPLOMAT installation
+-----------------------------------
+
+Downloading the Sample data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sample models and a video are provided `on Zenodo <https://zenodo.org/records/14232002>`_ for
+verifying the installation. Download the video clip `N5PZS.avi` and the model corresponding to
+your installation (DLC_5bp.zip for DeepLabCut, SLEAP_5bp.zip for SLEAP.) Unzip the model. Your
+working directory should now contain both the video file `N5PZS.avi` and the model folder, either 
+`test_dlc_5/` or `test_sleap_5/`. Verify that both are present by running ``ls``.
+
+Activating the environment
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Next, you will activate the environment for DIPLOMAT. Unless you installed with the 
+`Using PIP` method, you have to activate the environment that was created for DIPLOMAT in 
+a previous step.
+
+Activating with Mamba
+~~~~~~~~~~~~~~~~~~~~~
+If you used the mamba installation 
+process, you'll run 
+``mamba activate DIPLOMAT-DEEPLABCUT`` or
+``mamba activate DIPLOMAT-SLEAP``. 
+
+Activating with venv
+~~~~~~~~~~~~~~~~~~
+If you followed the virtual environment-based methods (DLC troubleshooting or developer 
+install) you'll run ``venv/scripts/Activate`` on Windows or ``source venv/bin/activate`` 
+on Mac/Linux (replacing `venv` with whatever you named the virtual environment.) 
+
+Activating with PIP
+~~~~~~~~~~~~~~~~~~~
+If you followed the PIP-only method and installed DIPLOMAT to your default environment, 
+no action is necessary.
+
+Verify
+^^^^^^
+In the directory containing the sample video and model, you can run track to verify that 
+all of DIPLOMAT's functionality were installed properly.
+
+Verify tracking without GUI
+~~~~~~~~~~~~~~~~~~~~
+For DeepLabCut, run 
+``diplomat track -c test_dlc_5 -v N5PZS.avi``. 
+
+For SLEAP, run 
+``diplomat track -c test_sleap_5 -v N5PZS.avi``. 
+
+If the tracking completes successfully, a new file ending with extension either `.h5` or 
+`.slp` will now be present.
+
+Verify tracking with GUI
+~~~~~~~~~~~~~~~~~
+For DeepLabCut, run 
+``diplomat track_and_interact -c test_dlc_5 -v N5PZS.avi``. 
+
+For SLEAP, run 
+``diplomat track_and_interact -c test_sleap_5 -v N5PZS.avi``. 
+
+After tracking completes, the manual annotation window will be opened and you should be 
+able to make changes to the automated results.
