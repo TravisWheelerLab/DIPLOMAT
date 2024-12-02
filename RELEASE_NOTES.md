@@ -1,3 +1,4 @@
 Changes for this version of DIPLOMAT:
-- changed re-run icon from a triangle to a pair of circularly-arranged arrows 
-- decluttered terminal output during supervised mode
+- added installation troubleshooting procedure to docs
+- added installation verification procedure to docs
+- created a zenodo record for sample data and models.
