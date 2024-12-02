@@ -21,32 +21,7 @@ DIPLOMAT provides a multi-animal pose estimation and editing interface. It relie
 | ![Example of tracking 2 Degus](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png) | ![Example of tracking 3 Rats](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png) |
 ## Installation
 
-DIPLOMAT also includes four environment configuration files for setting up DIPLOMAT with 
-[mamba](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html), which can
-be installed on Windows, Linux, or MacOS using the [Miniforge](https://github.com/conda-forge/miniforge) installer.
-To create an environment using mamba, run one of these four commands:
-```bash
-# Create the environment for using DIPLOMAT with DeepLabCut
-# GPU:
-mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
-# CPU only:
-mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT-CPU.yaml
-# OR Create an environment for using DIPLOMAT with SLEAP instead...
-# GPU:
-mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
-# CPU only:
-mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP-CPU.yaml
-```
-And then activate the environment with one of these two commands:
-```bash
-# Activate the DeepLabCut/DIPLOMAT environment...
-mamba activate DIPLOMAT-DEEPLABCUT
-# Activate the SLEAP/DIPLOMAT environment...
-mamba activate DIPLOMAT-SLEAP
-```
-
-For a more thorough explanation of the installation process and alternative installation methods, see the 
-[documentation](https://diplomat.readthedocs.io/en/latest/installation.html).
+For detailed installation instructions, please refer to the [documentation](https://diplomat.readthedocs.io/en/latest/installation.html)!
 
 ## Usage
 
