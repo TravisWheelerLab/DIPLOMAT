@@ -22,6 +22,63 @@ and install process that is consistent across platforms. To install Miniforge:
 Installing DIPLOMAT
 -------------------
 
+With Support for SLEAP Projects
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Using Mamba or Conda
+~~~~~~~~~~~~~~~~~~~~
+
+Once you have a mamba installed, you'll want to open a terminal and type one of these two commands:
+
+.. code-block:: sh
+
+    # Install diplomat with GPU support...
+    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
+    # Install diplomat with CPU support only...
+    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP-CPU.yaml
+
+.. hint::
+
+    Both running and installing diplomat requires access to a terminal. To access one:
+
+    **Windows:** Open the start menu and search for *Miniforge Prompt*.
+
+    **Linux:** Press :kbd:`CTRL` + :kbd:`ALT` + :kbd:`T`. This will open a terminal window.
+
+    **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
+    then search for *Terminal*.
+
+Once done, simply activate the brand new environment.
+
+.. code-block:: sh
+
+    mamba activate DIPLOMAT-SLEAP
+
+From here, the ``diplomat`` command will be available from the command line.
+
+Using PIP
+~~~~~~~~~
+
+If you are using an alternative package for managing python environments, you can install
+DIPLOMAT with SLEAP support by simply using pip, using one of the two commands below:
+
+NOTE: SLEAP is known to have installation issues on Windows when attempting to use pip. If you're
+trying to install DIPLOMAT with SLEAP support on Windows, prefer using the mamba/miniforge method above.
+
+.. code-block:: sh
+
+    # Install DIPLOMAT with SLEAP with GUI support.
+    pip install diplomat-track[sleap, gui]
+    # Install DIPLOMAT with SLEAP without UI support.
+    pip install diplomat-track[sleap]
+
+Troubleshooting for DIPLOMAT-SLEAP
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If the Mamba method fails to install DIPLOMAT and SLEAP, or if DIPLOMAT does not run after installation, 
+you may need to downgrade the numpy version manually. 
+Activate the mamba environment with ``mamba activate DIPLOMAT-SLEAP``, then downgrade numpy with ``pip install numpy<1.23.0``. 
+
 With Support for DeepLabCut Projects
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -98,8 +155,10 @@ as Miniforge.
     venv/scripts/Activate
     ## Activate the venv on Mac/Linux.
     source venv/bin/activate
+    # Update PIP
+    python -m pip install --upgrade pip
     # Finally, install DIPLOMAT and DLC. The installation may take several minutes to complete.
-    python -m pip install -e .[dlc,gui] --ignore-installed
+    python -m pip install -e ".[dlc,gui]" --ignore-installed
     # Verify that the installation was successful. The following command should output the current version number.
     diplomat --version
 
@@ -108,63 +167,6 @@ Download the .zip from https://www.dllme.com/dll/files/libomp140_x86_64/versions
 it, and copy the .dll file to the torch libraries folder of your virtual environment, which 
 should be located at ``.\venv\lib\site-packages\torch\lib`` within the DIPLOMAT directory. 
 If you named your virtual environment something other than ``venv``, change the path accordingly.
-
-With Support for SLEAP Projects
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Using Mamba or Conda
-~~~~~~~~~~~~~~~~~~~~
-
-Once you have a mamba installed, you'll want to open a terminal and type one of these two commands:
-
-.. code-block:: sh
-
-    # Install diplomat with GPU support...
-    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
-    # Install diplomat with CPU support only...
-    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP-CPU.yaml
-
-.. hint::
-
-    Both running and installing diplomat requires access to a terminal. To access one:
-
-    **Windows:** Open the start menu and search for *Miniforge Prompt*.
-
-    **Linux:** Press :kbd:`CTRL` + :kbd:`ALT` + :kbd:`T`. This will open a terminal window.
-
-    **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
-    then search for *Terminal*.
-
-Once done, simply activate the brand new environment.
-
-.. code-block:: sh
-
-    mamba activate DIPLOMAT-SLEAP
-
-From here, the ``diplomat`` command will be available from the command line.
-
-Using PIP
-~~~~~~~~~
-
-If you are using an alternative package for managing python environments, you can install
-DIPLOMAT with SLEAP support by simply using pip, using one of the two commands below:
-
-NOTE: SLEAP is known to have installation issues on Windows when attempting to use pip. If you're
-trying to install DIPLOMAT with SLEAP support on Windows, prefer using the mamba/miniforge method above.
-
-.. code-block:: sh
-
-    # Install DIPLOMAT with SLEAP with GUI support.
-    pip install diplomat-track[sleap, gui]
-    # Install DIPLOMAT with SLEAP without UI support.
-    pip install diplomat-track[sleap]
-
-Troubleshooting for DIPLOMAT-SLEAP
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-If the Mamba method fails to install DIPLOMAT and SLEAP, you may need to downgrade the 
-numpy version manually. Activate the mamba environment with ``mamba activate DIPLOMAT-SLEAP``,
-then downgrade numpy with ``pip install numpy<1.23.0``. 
 
 Verifying the DIPLOMAT installation
 -----------------------------------

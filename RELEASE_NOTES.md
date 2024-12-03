@@ -1,3 +1,4 @@
 Changes for this version of DIPLOMAT:
-- changed re-run icon from a triangle to a pair of circularly-arranged arrows 
-- decluttered terminal output during supervised mode
+- updated installation procedure to include updating pip
+- added quotes around the editable installation path + options for zsh compatibility 
+- change order of installation instructions to prioritize DIPLOMAT-SLEAP
