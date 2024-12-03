@@ -1,4 +1,4 @@
 Changes for this version of DIPLOMAT:
-- added installation troubleshooting procedure to docs
-- added installation verification procedure to docs
-- created a zenodo record for sample data and models.
+- updated installation procedure to include updating pip
+- added quotes around the editable installation path + options for zsh compatibility 
+- change order of installation instructions to prioritize DIPLOMAT-SLEAP
