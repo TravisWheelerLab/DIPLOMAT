@@ -33,6 +33,12 @@ Installing DIPLOMAT
     **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
     then search for *Terminal*.
 
+.. hint::
+
+    In these instructions, we use the commands ``python3`` and ``python3 -m pip`` to invoke Python, and PIP, respectively.
+
+    Your machine may vary! If the commands are not recognized, try ``python`` for Python, and ``python -m pip`` or just ``pip`` for PIP.
+
 MacOS and Linux
 ^^^^^^^^^^^^^^^
 
@@ -58,10 +64,10 @@ refer to the `SLEAP installation guide <https://sleap.ai/installation.html>`_.
 .. code-block:: sh
 
     # install SLEAP and verify
-    pip install "sleap[pypi]"
+    python3 -m pip install "sleap[pypi]"
     python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
-    python -c "import sleap; sleap.versions()"
-    python -c "import sleap; sleap.system_summary()"
+    python3 -c "import sleap; sleap.versions()"
+    python3 -c "import sleap; sleap.system_summary()"
 
 Install DIPLOMAT. 
 Omit the `[gui]` option if you are installing on HPC or other headless systems.
@@ -69,7 +75,7 @@ Omit the `[gui]` option if you are installing on HPC or other headless systems.
 .. code-block:: sh
 
     # install DIPLOMAT and verify
-    pip install "diplomat-track[gui]"
+    python3 -m pip install "diplomat-track[gui]"
     diplomat --version
 
 In order to verify the installation, download the testing resources 
@@ -113,8 +119,8 @@ refer to the `DeepLabCut installation guide <https://deeplabcut.github.io/DeepLa
 .. code-block:: sh
 
     # install DeepLabCut and verify
-    pip install "numpy<1.24.0"
-    pip install "deeplabcut[tf]"
+    python3 -m pip install "numpy<1.24.0"
+    python3 -m pip install "deeplabcut[tf]"
     python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
 
 Install DIPLOMAT. 
@@ -123,7 +129,7 @@ Omit the `[gui]` option if you are installing on HPC or other headless systems.
 .. code-block:: sh
 
     # install DIPLOMAT and verify
-    pip install "diplomat-track[gui]"
+    python3 -m pip install "diplomat-track[gui]"
     diplomat --version
 
 In order to verify the installation, download the testing resources 
@@ -169,12 +175,12 @@ First, create the environment and activate.
     mamba activate DIPLOMAT-SLEAP
 
     # fix the Numpy version
-    pip install "numpy<1.23.0"
+    python3 -m pip install "numpy<1.23.0"
 
     # verify
     python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
-    python -c "import sleap; sleap.versions()"
-    python -c "import sleap; sleap.system_summary()"
+    python3 -c "import sleap; sleap.versions()"
+    python3 -c "import sleap; sleap.system_summary()"
     diplomat --version
 
 In order to verify the installation, download the testing resources 
@@ -218,8 +224,8 @@ refer to the `DeepLabCut installation guide <https://deeplabcut.github.io/DeepLa
 .. code-block:: sh
 
     # install DLC and verify
-    pip install "numpy<1.24.0"
-    pip install "deeplabcut[tf]"
+    python3 -m pip install "numpy<1.24.0"
+    python3 -m pip install "deeplabcut[tf]"
     python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
 
 Install DIPLOMAT. 
@@ -228,7 +234,7 @@ Omit the `[gui]` option if you are installing on HPC or other headless systems.
 .. code-block:: sh
 
     # install DIPLOMAT and verify
-    pip install "diplomat-track[gui]"
+    python3 -m pip install "diplomat-track[gui]"
     diplomat --version
 
 In order to verify the installation, download the testing resources 
