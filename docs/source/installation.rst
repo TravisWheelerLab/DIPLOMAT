@@ -22,21 +22,6 @@ and install process that is consistent across platforms. To install Miniforge:
 Installing DIPLOMAT
 -------------------
 
-With Support for SLEAP Projects
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Using Mamba or Conda
-~~~~~~~~~~~~~~~~~~~~
-
-Once you have a mamba installed, you'll want to open a terminal and type one of these two commands:
-
-.. code-block:: sh
-
-    # Install diplomat with GPU support...
-    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
-    # Install diplomat with CPU support only...
-    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP-CPU.yaml
-
 .. hint::
 
     Both running and installing diplomat requires access to a terminal. To access one:
@@ -48,186 +33,227 @@ Once you have a mamba installed, you'll want to open a terminal and type one of 
     **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
     then search for *Terminal*.
 
-Once done, simply activate the brand new environment.
+MacOS and Linux
+^^^^^^^^^^^^^^^
+
+With support for SLEAP projects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+First, create the environment and activate.
+**You will need to activate this environment every time you use DIPLOMAT.**
 
 .. code-block:: sh
 
-    mamba activate DIPLOMAT-SLEAP
+    # create a Python 3.10 virtual environment
+    python3 -m venv venv
 
-From here, the ``diplomat`` command will be available from the command line.
-
-Using PIP
-~~~~~~~~~
-
-If you are using an alternative package for managing python environments, you can install
-DIPLOMAT with SLEAP support by simply using pip, using one of the two commands below:
-
-NOTE: SLEAP is known to have installation issues on Windows when attempting to use pip. If you're
-trying to install DIPLOMAT with SLEAP support on Windows, prefer using the mamba/miniforge method above.
-
-.. code-block:: sh
-
-    # Install DIPLOMAT with SLEAP with GUI support.
-    pip install diplomat-track[sleap, gui]
-    # Install DIPLOMAT with SLEAP without UI support.
-    pip install diplomat-track[sleap]
-
-Troubleshooting for DIPLOMAT-SLEAP
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-If the Mamba method fails to install DIPLOMAT and SLEAP, or if DIPLOMAT does not run after installation, 
-you may need to downgrade the numpy version manually. 
-Activate the mamba environment with ``mamba activate DIPLOMAT-SLEAP``, then downgrade numpy with ``pip install numpy<1.23.0``. 
-
-With Support for DeepLabCut Projects
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Using Mamba or Conda
-~~~~~~~~~~~~~~~~~~~~
-
-Once you have mamba or a mamba compatible CLI installed, you'll want to open a terminal and type one of these
-two commands:
-
-.. code-block:: sh
-
-    # Install diplomat with GPU support...
-    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
-    # Install diplomat with CPU support only...
-    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT-CPU.yaml
-
-.. hint::
-
-    Both running and installing diplomat requires access to a terminal. To access one:
-
-    **Windows:** Open the start menu and search for *Miniforge Prompt*.
-
-    **Linux:** Press :kbd:`CTRL` + :kbd:`ALT` + :kbd:`T`. This will open a terminal window.
-
-    **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
-    then search for *Terminal*.
-
-Once done, simply activate the brand new environment.
-
-.. code-block:: sh
-
-    mamba activate DIPLOMAT-DEEPLABCUT
-
-From here, the ``diplomat`` command will be available from the command line.
-
-Using PIP
-~~~~~~~~~
-
-If you are using an alternative package for managing python environments, you can install
-DIPLOMAT with DeepLabCut support by simply using pip, using one of the two commands below:
-
-.. code-block:: sh
-
-    # Install DIPLOMAT with DeepLabCut with GUI support.
-    pip install diplomat-track[dlc, gui]
-    # Install DIPLOMAT with DeepLabCut without UI support.
-    pip install diplomat-track[dlc]
-
-Troubleshooting for DIPLOMAT-DLC
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-If the standard methods fail to install DIPLOMAT and DLC, you can install from 
-the Github source code. This method requires `git <https://git-scm.com/downloads>`_, as well 
-as Miniforge. 
-
-.. code-block:: sh
-
-    # Clone the DIPLOMAT repository and navigate into it.
-    git clone https://github.com/TravisWheelerLab/DIPLOMAT
-    cd DIPLOMAT
-    # With Miniforge, create a Python 3.10 environment and activate it.
-    conda create -n py310 python==3.10
-    conda activate py310
-    # Use the environment you just activated to create a virtual environment ("venv") containing Python 3.10.
-    python -m venv venv
-    # Fully deactivate the Miniforge environment.
-    # (run the command twice)
-    conda deactivate
-    conda deactivate 
-    # Now, activate the virtual environment.
-    ## On Windows, the first time you activate the venv, you may need to configure your execution policy. 
-    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-    ## Activate the venv on Windows.
-    venv/scripts/Activate
-    ## Activate the venv on Mac/Linux.
+    # activate the environment
     source venv/bin/activate
-    # Update PIP
-    python -m pip install --upgrade pip
-    # Finally, install DIPLOMAT and DLC. The installation may take several minutes to complete.
-    python -m pip install -e ".[dlc,gui]" --ignore-installed
-    # Verify that the installation was successful. The following command should output the current version number.
+
+
+Next, you'll install SLEAP.
+For more information about the SLEAP installation process, 
+refer to the `SLEAP installation guide <https://sleap.ai/installation.html>`_.
+
+.. code-block:: sh
+
+    # install SLEAP and verify
+    pip install "sleap[pypi]"
+    python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+    python -c "import sleap; sleap.versions()"
+    python -c "import sleap; sleap.system_summary()"
+
+Install DIPLOMAT. 
+Omit the `[gui]` option if you are installing on HPC or other headless systems.
+
+.. code-block:: sh
+
+    # install DIPLOMAT and verify
+    pip install "diplomat-track[gui]"
     diplomat --version
 
-On Windows, if DIPLOMAT crashes with "OSError: [WinError 126]", you need the libomp DLL. 
-Download the .zip from https://www.dllme.com/dll/files/libomp140_x86_64/versions, extract 
-it, and copy the .dll file to the torch libraries folder of your virtual environment, which 
-should be located at ``.\venv\lib\site-packages\torch\lib`` within the DIPLOMAT directory. 
-If you named your virtual environment something other than ``venv``, change the path accordingly.
+In order to verify the installation, download the testing resources 
+`N5PZS.avi` and `SLEAP_5bp.zip` from our Zenodo record: `https://zenodo.org/records/14232002`_.
+Unzip `SLEAP_5bp.zip`. 
+Alternatively, use these `curl` commands to download and unzip the resources. 
 
-Verifying the DIPLOMAT installation
------------------------------------
+.. code-block:: sh
 
-Downloading the Sample data
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    # download and unzip files from https://zenodo.org/records/14232002,
+    # or do it in the terminal with curl:
+    curl https://zenodo.org/records/14232002/files/SLEAP_5bp.zip --output SLEAP_5bp.zip && unzip SLEAP_5bp.zip
+    curl https://zenodo.org/records/14232002/files/N5PZS.avi --output N5PZS.avi
 
-Sample models and a video are provided `on Zenodo <https://zenodo.org/records/14232002>`_ for
-verifying the installation. Download the video clip `N5PZS.avi` and the model corresponding to
-your installation (DLC_5bp.zip for DeepLabCut, SLEAP_5bp.zip for SLEAP.) Unzip the model. Your
-working directory should now contain both the video file `N5PZS.avi` and the model folder, either 
-`test_dlc_5/` or `test_sleap_5/`. Verify that both are present by running ``ls``.
+Finally, verify the tracking functionality for DIPLOMAT-SLEAP.
+**Make sure both the video file `N5PZS.avi` and the SLEAP project folder `test_sleap_5` are in your current directory.**
 
-Activating the environment
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. code-block:: sh
 
-Next, you will activate the environment for DIPLOMAT. Unless you installed with the 
-`Using PIP` method, you have to activate the environment that was created for DIPLOMAT in 
-a previous step.
+    # verify that tracking works
+    diplomat track -c test_sleap_5/ -v N5PZS.avi -no 3
 
-Activating with Mamba
-~~~~~~~~~~~~~~~~~~~~~
-If you used the mamba installation 
-process, you'll run 
-``mamba activate DIPLOMAT-DEEPLABCUT`` or
-``mamba activate DIPLOMAT-SLEAP``. 
+With support for DeepLabCut projects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Activating with venv
-~~~~~~~~~~~~~~~~~~
-If you followed the virtual environment-based methods (DLC troubleshooting or developer 
-install) you'll run ``venv/scripts/Activate`` on Windows or ``source venv/bin/activate`` 
-on Mac/Linux (replacing `venv` with whatever you named the virtual environment.) 
+First, create the environment and activate.
+**You will need to activate this environment every time you use DIPLOMAT.**
 
-Activating with PIP
-~~~~~~~~~~~~~~~~~~~
-If you followed the PIP-only method and installed DIPLOMAT to your default environment, 
-no action is necessary.
+.. code-block:: sh
 
-Verify
-^^^^^^
-In the directory containing the sample video and model, you can run track to verify that 
-all of DIPLOMAT's functionality were installed properly.
+    # create a Python 3.10 virtual environment
+    python3 -m venv venv
 
-Verify tracking without GUI
-~~~~~~~~~~~~~~~~~~~~
-For DeepLabCut, run 
-``diplomat track -c test_dlc_5 -v N5PZS.avi``. 
+    # activate the environment
+    source venv/bin/activate
 
-For SLEAP, run 
-``diplomat track -c test_sleap_5 -v N5PZS.avi``. 
+Next, you'll install DeepLabCut.
+For more information about the DeepLabCut installation process, 
+refer to the `DeepLabCut installation guide <https://deeplabcut.github.io/DeepLabCut/README.html>`_.
 
-If the tracking completes successfully, a new file ending with extension either `.h5` or 
-`.slp` will now be present.
+.. code-block:: sh
 
-Verify tracking with GUI
-~~~~~~~~~~~~~~~~~
-For DeepLabCut, run 
-``diplomat track_and_interact -c test_dlc_5 -v N5PZS.avi``. 
+    # install DeepLabCut and verify
+    pip install "numpy<1.24.0"
+    pip install "deeplabcut[tf]"
+    python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
 
-For SLEAP, run 
-``diplomat track_and_interact -c test_sleap_5 -v N5PZS.avi``. 
+Install DIPLOMAT. 
+Omit the `[gui]` option if you are installing on HPC or other headless systems.
 
-After tracking completes, the manual annotation window will be opened and you should be 
-able to make changes to the automated results.
+.. code-block:: sh
+
+    # install DIPLOMAT and verify
+    pip install "diplomat-track[gui]"
+    diplomat --version
+
+In order to verify the installation, download the testing resources 
+`N5PZS.avi` and `SLEAP_5bp.zip` from our Zenodo record: `https://zenodo.org/records/14232002`_.
+Unzip `SLEAP_5bp.zip`. 
+Alternatively, use these `curl` commands to download and unzip the resources. 
+
+.. code-block:: sh
+
+    # download and unzip files from https://zenodo.org/records/14232002,
+    # or do it in the terminal with curl:
+    curl https://zenodo.org/records/14232002/files/DLC_5bp.zip --output DLC_5bp.zip && unzip DLC_5bp.zip
+    curl https://zenodo.org/records/14232002/files/N5PZS.avi --output N5PZS.avi
+
+    # your working directory should now contain "test_dlc_5" and "N5PZS.avi".
+
+Finally, verify the tracking functionality for DIPLOMAT-DLC.
+**Make sure both the video file `N5PZS.avi` and the DLC project folder `test_dlc_5` are in your current directory.**
+
+.. code-block:: sh
+
+    # verify that tracking works
+    diplomat track -c test_dlc_5/config.yaml -v N5PZS.avi -no 3
+
+Windows
+^^^^^^^
+
+With support for SLEAP projects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+First, create the environment and activate.
+**You will need to activate this environment every time you use DIPLOMAT.**
+
+.. code-block:: sh
+
+    # create the environment
+    ## with GPU
+    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
+    ## with CPU
+    mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP-CPU.yaml
+    
+    # activate the environment
+    mamba activate DIPLOMAT-SLEAP
+
+    # fix the Numpy version
+    pip install "numpy<1.23.0"
+
+    # verify
+    python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+    python -c "import sleap; sleap.versions()"
+    python -c "import sleap; sleap.system_summary()"
+    diplomat --version
+
+In order to verify the installation, download the testing resources 
+`N5PZS.avi` and `SLEAP_5bp.zip` from our Zenodo record: `https://zenodo.org/records/14232002`_.
+Unzip `SLEAP_5bp.zip`. 
+Alternatively, use these `curl` commands to download and unzip the resources. 
+
+.. code-block:: sh
+
+    # download and unzip files from https://zenodo.org/records/14232002,
+    # or do it in the terminal with curl:
+    curl https://zenodo.org/records/14232002/files/SLEAP_5bp.zip --output SLEAP_5bp.zip && unzip SLEAP_5bp.zip
+    curl https://zenodo.org/records/14232002/files/N5PZS.avi --output N5PZS.avi
+
+Finally, verify the tracking functionality for DIPLOMAT-SLEAP.
+**Make sure both the video file `N5PZS.avi` and the SLEAP project folder `test_sleap_5` are in your current directory.**
+
+.. code-block:: sh
+
+    # verify that tracking works
+    diplomat track -c test_sleap_5/ -v N5PZS.avi -no 3
+
+With support for DeepLabCut projects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+First, create the environment and activate.
+**You will need to activate this environment every time you use DIPLOMAT.**
+
+.. code-block:: sh
+
+    # create the environment
+    conda create -n diplomat_dlc python==3.10
+    
+    # activate the environment
+    conda activate diplomat_dlc
+
+Next, you'll install DeepLabCut.
+For more information about the DeepLabCut installation process, 
+refer to the `DeepLabCut installation guide <https://deeplabcut.github.io/DeepLabCut/README.html>`_.
+
+.. code-block:: sh
+
+    # install DLC and verify
+    pip install "numpy<1.24.0"
+    pip install "deeplabcut[tf]"
+    python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+
+Install DIPLOMAT. 
+Omit the `[gui]` option if you are installing on HPC or other headless systems.
+
+.. code-block:: sh
+
+    # install DIPLOMAT and verify
+    pip install "diplomat-track[gui]"
+    diplomat --version
+
+In order to verify the installation, download the testing resources 
+`N5PZS.avi` and `SLEAP_5bp.zip` from our Zenodo record: `https://zenodo.org/records/14232002`_.
+Unzip `SLEAP_5bp.zip`. 
+Alternatively, use these `curl` commands to download and unzip the resources. 
+
+.. code-block:: sh
+
+    # download and unzip files from https://zenodo.org/records/14232002,
+    # or do it in the terminal with curl:
+    curl https://zenodo.org/records/14232002/files/DLC_5bp.zip --output DLC_5bp.zip && unzip DLC_5bp.zip
+    curl https://zenodo.org/records/14232002/files/N5PZS.avi --output N5PZS.avi
+
+    # your working directory should now contain "test_dlc_5" and "N5PZS.avi".
+
+Finally, verify the tracking functionality for DIPLOMAT-DLC.
+**Make sure both the video file `N5PZS.avi` and the DLC project folder `test_dlc_5` are in your current directory.**
+
+.. code-block:: sh
+
+    # verify that tracking works
+    diplomat track -c test_dlc_5/config.yaml -v N5PZS.avi -no 3
+
+Alternate Methods
+^^^^^^^^^^^^^^^^^
+
+If the standard methods do not work, consider installing DIPLOMAT from source with the `developer installation method <advanced_usage.html>`_.
