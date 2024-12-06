@@ -19,6 +19,19 @@ and install process that is consistent across platforms. To install Miniforge:
  - Select the installer for your OS from the list of installers.
  - Run the installer and follow the installation instructions.
 
+.. hint::
+
+    In these instructions, we use the commands ``python3`` and ``python3 -m pip`` to invoke Python and PIP, respectively.
+
+    Your machine may vary! If the commands are not recognized, try ``python`` for Python, and ``python -m pip`` or just ``pip`` for PIP.
+
+.. hint::
+
+    We recommend using a Python version between 3.8 and 3.10. Check your python version by running ``python3 --version``.
+    If your version of Python falls outside of this range, you can use Miniforge or conda to create an appropriately-versioned environment.
+    For example, to create a Python 3.10 environment, run ``conda create -n py310 python==3.10``, and activate it with ``conda activate py310``.
+    Now check again that your Python has the correct version with ``python3 --version``.
+
 Installing DIPLOMAT
 -------------------
 
@@ -32,12 +45,6 @@ Installing DIPLOMAT
 
     **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
     then search for *Terminal*.
-
-.. hint::
-
-    In these instructions, we use the commands ``python3`` and ``python3 -m pip`` to invoke Python, and PIP, respectively.
-
-    Your machine may vary! If the commands are not recognized, try ``python`` for Python, and ``python -m pip`` or just ``pip`` for PIP.
 
 MacOS and Linux
 ^^^^^^^^^^^^^^^
@@ -79,8 +86,8 @@ Omit the `[gui]` option if you are installing on HPC or other headless systems.
     diplomat --version
 
 In order to verify the installation, download the testing resources 
-`N5PZS.avi` and `SLEAP_5bp.zip` from our Zenodo record: `https://zenodo.org/records/14232002`_.
-Unzip `SLEAP_5bp.zip`. 
+**N5PZS.avi** and **SLEAP_5bp.zip** from our Zenodo record: `Zenodo record <https://zenodo.org/records/14232002>`_.
+Unzip **SLEAP_5bp.zip** and put the **test_sleap_5** folder in the same directory as **N5PZS.avi**. 
 Alternatively, use these `curl` commands to download and unzip the resources. 
 
 .. code-block:: sh
@@ -133,8 +140,8 @@ Omit the `[gui]` option if you are installing on HPC or other headless systems.
     diplomat --version
 
 In order to verify the installation, download the testing resources 
-`N5PZS.avi` and `SLEAP_5bp.zip` from our Zenodo record: `https://zenodo.org/records/14232002`_.
-Unzip `SLEAP_5bp.zip`. 
+**N5PZS.avi** and **DLC_5bp.zip** from our Zenodo record: `Zenodo record <https://zenodo.org/records/14232002>`_.
+Unzip **DLC_5bp.zip** and put the **test_dlc_5** folder in the same directory as **N5PZS.avi**. 
 Alternatively, use these `curl` commands to download and unzip the resources. 
 
 .. code-block:: sh
@@ -184,8 +191,8 @@ First, create the environment and activate.
     diplomat --version
 
 In order to verify the installation, download the testing resources 
-`N5PZS.avi` and `SLEAP_5bp.zip` from our Zenodo record: `https://zenodo.org/records/14232002`_.
-Unzip `SLEAP_5bp.zip`. 
+**N5PZS.avi** and **SLEAP_5bp.zip** from our Zenodo record: `Zenodo record <https://zenodo.org/records/14232002>`_.
+Unzip **SLEAP_5bp.zip** and put the **test_sleap_5** folder in the same directory as **N5PZS.avi**. 
 Alternatively, use these `curl` commands to download and unzip the resources. 
 
 .. code-block:: sh
@@ -238,8 +245,8 @@ Omit the `[gui]` option if you are installing on HPC or other headless systems.
     diplomat --version
 
 In order to verify the installation, download the testing resources 
-`N5PZS.avi` and `SLEAP_5bp.zip` from our Zenodo record: `https://zenodo.org/records/14232002`_.
-Unzip `SLEAP_5bp.zip`. 
+**N5PZS.avi** and **DLC_5bp.zip** from our Zenodo record: `Zenodo record <https://zenodo.org/records/14232002>`_.
+Unzip **DLC_5bp.zip** and put the **test_dlc_5** folder in the same directory as **N5PZS.avi**. 
 Alternatively, use these `curl` commands to download and unzip the resources. 
 
 .. code-block:: sh
