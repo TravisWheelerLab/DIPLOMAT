@@ -33,6 +33,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.imgmath",
     "sphinx.ext.viewcode",
+    "sphinx_toolbox.collapse",
     "plugin_docgen"
 ]
 

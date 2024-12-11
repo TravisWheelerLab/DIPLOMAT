@@ -1,5 +1,6 @@
 sphinx
 sphinx-rtd-theme
+sphinx-toolbox
 typing_extensions>=3.8
 matplotlib
 opencv-python
