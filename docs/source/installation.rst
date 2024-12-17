@@ -47,7 +47,7 @@ and **this environment must be activated every time you wish to use DIPLOMAT**.
 In the first step, you will install whichever front-end you want to use. 
 We currently support `SLEAP <https://sleap.ai/installation.html>`_ and `DeepLabCut <https://deeplabcut.github.io/DeepLabCut/README.html>`_. 
 Be aware that these are third-party tools with potentially complex installation procedures.
-The installation tutorials we provide use the methods that we found to be most reliable across most systems, 
+The installation tutorials recommend methods that we found to be most reliable across most systems, 
 but *we cannot guarantee that any third-party tool will work on your computer*.
 If you have difficulty installing a particular front-end, you are encouraged to refer to its internal documentation.
 
