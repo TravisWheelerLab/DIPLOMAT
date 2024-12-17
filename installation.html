@@ -138,34 +138,16 @@
 
         <section>
             <h3>1. Environment Setup</h3>
-            <p>To create an environment using mamba, run one of these commands based on your requirements:</p>
-            <div class="commands">
-                <pre># Create the environment for using DIPLOMAT with DeepLabCut
-# GPU:
-mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT.yaml
-# CPU only:
-mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-DEEPLABCUT-CPU.yaml
-
-# OR Create an environment for using DIPLOMAT with SLEAP instead...
-# GPU:
-mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP.yaml
-# CPU only:
-mamba env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-SLEAP-CPU.yaml</pre>
-            </div>
+            <p>Installing DIPLOMAT alone is straightforward, but installing either the SLEAP or DeepLabCut front-end can be tricky. For tutorials on creating an environment with both DIPLOMAT and the front-end of your choosing, 
+                refer to the installation tutorials on our <a href="https://diplomat.readthedocs.io/en/latest/installation.html">Read the Docs</a>.
+            </p>
         </section>
 
         <div class="divider"></div>
 
         <section>
             <h3>2. Activating the Environment</h3>
-            <p>After creating the environment, activate it using one of the following commands:</p>
-            <div class="commands">
-                <pre># Activate the DeepLabCut/DIPLOMAT environment...
-mamba activate DIPLOMAT-DEEPLABCUT
-
-# Activate the SLEAP/DIPLOMAT environment...
-mamba activate DIPLOMAT-SLEAP</pre>
-            </div>
+            <p>After installing DIPLOMAT and the front-end, remember to activate the environment you created.</p>
         </section>
 
         <div class="divider"></div>
