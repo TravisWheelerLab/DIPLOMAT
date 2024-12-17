@@ -69,8 +69,8 @@ you will be able to install DIPLOMAT to that environment.
     **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
     then search for *Terminal*.
 
-Install on Linux
-^^^^^^^^^^^^^^^^
+Install on Linux (with PIP)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. collapse:: Install DIPLOMAT-SLEAP on Linux
 
@@ -82,11 +82,13 @@ Install on Linux
 	.. code-block:: sh
 
 	    # create a Python 3.10 virtual environment
-	    python3 -m venv venv
+	    python3 -m venv venv-sleap
 
 	    # activate the environment
-	    source venv/bin/activate
+	    source venv-sleap/bin/activate
 
+	    # upgrade pip
+	    python3 -m pip upgrade pip
 
 	Next, you'll install SLEAP.
 	For more information about the SLEAP installation process, 
@@ -121,10 +123,13 @@ Install on Linux
 	.. code-block:: sh
 
 	    # create a Python 3.10 virtual environment
-	    python3 -m venv venv
+	    python3 -m venv venv-dlc
 
 	    # activate the environment
-	    source venv/bin/activate
+	    source venv-dlc/bin/activate
+
+	    # upgrade pip
+	    python3 -m pip upgrade pip
 
 	Next, you'll install DeepLabCut.
 	For more information about the DeepLabCut installation process, 
@@ -150,11 +155,12 @@ Install on Linux
 
 These procedures were tested primarily on Ubuntu and CentOS. 
 If you're running a different distro, we trust that you can make the appropriate changes.
+The *MacOS (with conda)* tutorials below may also work on some Linux systems. 
 
 |
 
-Install on MacOS
-^^^^^^^^^^^^^^^^
+Install on MacOS (with conda)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. collapse:: Install DIPLOMAT-SLEAP on MacOS
 
@@ -314,16 +320,6 @@ Install on Windows
 Troubleshooting
 ---------------
 
-.. collapse:: Installing SLEAP and DLC to the same environment
-
-	|
-	
-	If you want to install both SLEAP and DLC to the same environment, 
-	**the SLEAP installation must be performed before the DLC installation!**
-	Generally, we recommend creating a distinct environment for each front-end.
-
-| 
-
 .. collapse:: MacOS Tips
 	
 	|
@@ -334,22 +330,50 @@ Troubleshooting
 
 	* In some cases, it may be necessary to pre-configure conda before a Python environment can be created:
 
-	.. code-block:: sh 
+		.. code-block:: sh 
 
-		% conda config --add channels conda-forge
-		% conda config --set channel_priority strict
+			% conda config --add channels conda-forge
+			% conda config --set channel_priority strict
 
 	|
 	
 	* Some users have reported success using SLEAP's default mamba installation method to create an environment: 
+		
+		.. code-block:: 
+
+			mamba create -y -n diplomat-sleap -c conda-forge -c anaconda -c sleap sleap=1.3.3
+			conda activate diplomat-sleap
+			pip install "diplomat-track[gui]"
+
+		* However, on many systems this will result in a Python 3.7 environment, which is incompatible with DIPLOMAT.
+
+| 
+
+.. collapse:: Linux Tips
+
+	|
+
+	* On some systems it may be easier to use a conda environment rather than a PIP venv. If you can't get DIPLOMAT working with the PIP methods in the Linux section, try using the conda methods in the MacOS section.
+
+	|
+
+	* When installing DLC, you may need to run ``pip install "numpy<1.24.0"`` *after* installing DLC in addition to running it before.
+
+| 
+
+.. collapse:: GPU Troubles
+
+	|
+
+	* Your system may not have the necessary NVIDIA, CUDA, and cuDNN libraries pre-installed. In this case, refer to `TensorFlow's Software requirements <https://www.tensorflow.org/install/pip#software_requirements>`_ for links to the relevant libraries. For an installation tutorial, refer to the `NVIDIA installation docs <https://docs.nvidia.com/deeplearning/cudnn/latest/installation/linux.html>`_. Alternatively, if the conda (MacOS) method works on your machine, you can run ``conda install -c conda-forge cudatoolkit cudnn`` before proceeding to the DLC or SLEAP installation step.
+
+|
+
+.. collapse:: Installing SLEAP and DLC to the same environment
+
+	|
 	
-	.. code-block:: 
-
-		mamba create -y -n diplomat-sleap -c conda-forge -c anaconda -c sleap sleap=1.3.3
-		conda activate diplomat-sleap
-		pip install "diplomat-track[gui]"
-
-	However, on many systems this will result in a Python 3.7 environment, which is incompatible with DIPLOMAT.
+	* If you want to install both SLEAP and DLC to the same environment, **the SLEAP installation must be performed before the DLC installation!** Generally, we recommend creating a distinct environment for each front-end.
 
 | 
 
@@ -357,7 +381,7 @@ Troubleshooting
 
 	|
 
-	If the standard methods do not work, consider installing DIPLOMAT from source with the `developer installation method <advanced_usage.html>`_.
+	* If the standard methods do not work, consider installing DIPLOMAT from source with the `developer installation method <advanced_usage.html>`_.
 
 |
 
