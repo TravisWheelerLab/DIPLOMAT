@@ -650,7 +650,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._height = self._frame_holder.metadata.height
             self._resolve_frame_orderings(progress_bar)
 
-        progress_bar.message("Selecting Maximums")
+        progress_bar.message("Selecting Maximums - Segmented SFPE")
         poses = self.get_maximums(
             self._frame_holder,
             self._segments,
