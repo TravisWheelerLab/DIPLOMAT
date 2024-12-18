@@ -509,6 +509,7 @@ class SegmentedFramePassEngine(Predictor):
         it creates a new frame holder based on the current settings, which could be in-memory, disk-backed, or a hybrid
         of both. It also initializes segments and segment scores if they are available in the frame holder's metadata.
         """
+        print(f"\n\nself._restore_path {self._restore_path}\nself.settings.storage_mode {self.settings.storage_mode}\n\n")
         if(self._restore_path is not None):
             # Ignore everything else,
             self._restore_path = Path(self._restore_path).resolve()
@@ -535,8 +536,13 @@ class SegmentedFramePassEngine(Predictor):
 
             self._segments = np.array(self._frame_holder.metadata["segments"], dtype=np.int64)
             self._segment_scores = np.array(self._frame_holder.metadata["segment_scores"], dtype=np.float32)
-        elif(self.settings.storage_mode in ["memory","hybrid"]):
+        elif(self.settings.storage_mode == "memory"):
             self._frame_holder = ForwardBackwardData(self.num_frames, self._num_total_bp)
+        elif(self.settings.storage_mode == "hybrid"):
+            new_frame_holder = self.get_frame_holder()
+            self._copy_to_disk(progress_bar, new_frame_holder)
+            self._frame_holder = new_frame_holder
+            self._frame_holder._frames.flush()
         else:
             self._frame_holder = self.get_frame_holder()
 
