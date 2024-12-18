@@ -187,6 +187,7 @@ def track_with(
     predictor: Optional[str] = None,
     predictor_settings: Optional[Dict[str, Any]] = None,
     help_extra: Flag = False,
+    dipui_file: Optional[PathLike] = None,
     **extra_args
 ):
     """
@@ -211,7 +212,7 @@ def track_with(
     from diplomat import CLI_RUN
 
     print(f"framestores: {frame_stores}")
-    #print(f"dipui_file: {dipui_file}")
+    print(f"dipui_file: {dipui_file}")
 
     selected_frontend_name, selected_frontend = _find_frontend(
         contracts=[DIPLOMATCommands.analyze_videos, DIPLOMATCommands.analyze_videos],
@@ -254,6 +255,7 @@ def track_with(
             num_outputs=num_outputs,
             predictor=predictor,
             predictor_settings=predictor_settings,
+            dipui_file=dipui_file,
             **_get_casted_args(selected_frontend.analyze_frames, extra_args)
         )
 
