@@ -409,7 +409,7 @@ class FramePassEngine(Predictor):
                 self.settings.export_all_info
             )
 
-        progress_bar.message("Selecting Maximums")
+        progress_bar.message("Selecting Maximums - FPE")
         return self.get_maximums(
             self._frame_holder, progress_bar,
             relaxed_radius=self.settings.relaxed_maximum_radius

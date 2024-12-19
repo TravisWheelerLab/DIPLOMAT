@@ -471,7 +471,7 @@ class SegmentedFramePassEngine(Predictor):
             output_path = Path(self.settings.dipui_file).resolve()
             if os.path.exists(output_path):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_path += timestamp
+                output_path = Path(self.settings.dipui_file + timestamp).resolve()
         else:
             output_path = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
 
@@ -535,7 +535,7 @@ class SegmentedFramePassEngine(Predictor):
 
             self._segments = np.array(self._frame_holder.metadata["segments"], dtype=np.int64)
             self._segment_scores = np.array(self._frame_holder.metadata["segment_scores"], dtype=np.float32)
-        elif(self.settings.storage_mode in ["memory","hybrid"]):
+        elif(self.settings.storage_mode in ["memory", "hybrid"]):
             self._frame_holder = ForwardBackwardData(self.num_frames, self._num_total_bp)
         else:
             self._frame_holder = self.get_frame_holder()
@@ -1458,6 +1458,17 @@ class SegmentedFramePassEngine(Predictor):
                         if(p_bar is not None):
                             p_bar.update()
 
+    def _copy_to_disk(self, progress_bar: ProgressBar, new_frame_holder: ForwardBackwardData):
+        progress_bar.message("Saving to Disk")
+        progress_bar.reset(self._frame_holder.num_frames * self._frame_holder.num_bodyparts)
+
+        new_frame_holder.metadata = self._frame_holder.metadata
+        for frame_idx in range(len(self._frame_holder.frames)):
+            for bodypart_idx in range(len(self._frame_holder.frames[frame_idx])):
+                new_frame_holder.frames[frame_idx][bodypart_idx] = self._frame_holder.frames[frame_idx][
+                    bodypart_idx]
+                progress_bar.update()
+
     def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         if(self._restore_path is None):
             self._run_frame_passes(progress_bar)
@@ -1483,7 +1494,14 @@ class SegmentedFramePassEngine(Predictor):
             self._height = self._frame_holder.metadata.height
             self._resolve_frame_orderings(progress_bar)
 
-        progress_bar.message("Selecting Maximums")
+        progress_bar.message("Selecting Maximums - SFPE")
+
+        if(self._restore_path is None and self.settings.storage_mode == "hybrid"):
+            new_frame_holder = self.get_frame_holder()
+            self._copy_to_disk(progress_bar, new_frame_holder)
+            self._frame_holder = new_frame_holder
+            self._frame_holder._frames.flush()
+        
         return self.get_maximums(
             self._frame_holder,
             self._segments,
