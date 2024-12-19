@@ -196,8 +196,7 @@ def _analyze_video(
     save_as_csv,
     dest_folder=None,
     predictor_cls=None,
-    predictor_settings=None,
-    dipui_file=None
+    predictor_settings=None
 ) -> str:
     print(f"Analyzing video: {video}")
 

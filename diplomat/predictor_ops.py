@@ -21,12 +21,44 @@ def list_predictor_plugins():
         print("\t", predictor.get_description())
         print()
 
+def _get_predictor_settings(predictor_name: Optional[Union[List[str], str]] = None):
+    """
+    Returns the available/modifiable settings for a specified predictor plugin.
+
+    :param predictor_name: The string or list of strings being the names of the predictor plugins to view customizable
+                      settings for. If None, will print settings for all currently available predictors.
+                      Defaults to None.
+
+    :return: ConfigSpec, a dictionary relating each predictor setting to a 3-tuple of its default value, type, and description strnig.
+    """
+    from typing import Iterable
+
+    # Convert whatever the predictor_name argument is to a list of predictor plugins
+    if predictor_name is None:
+        predictors = processing.get_predictor_plugins()
+    elif isinstance(predictor_name, str):
+        predictors = [processing.get_predictor(predictor_name)]
+    elif isinstance(predictor_name, Iterable):
+        predictor_name = [processing.get_predictor(name) for name in predictor]
+    else:
+        raise ValueError(
+            "Argument 'predictor_name' not of type Iterable[str], string, or None!!!"
+        )
+
+    # yield name and settings for each plugin.
+    for predictor in predictors:
+        plugin_name = predictor.get_name()
+        config_spec = predictor.get_settings()
+        if config_spec is None:
+            yield (plugin_name, {})
+        else:
+            yield (plugin_name, config_spec)
 
 @typecaster_function
 @positional_argument_count(1)
 def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
     """
-    Gets the available/modifiable settings for a specified predictor plugin.
+    Prints the available/modifiable settings for a specified predictor plugin.
 
     :param predictor: The string or list of strings being the names of the predictor plugins to view customizable
                       settings for. If None, will print settings for all currently available predictors.
@@ -34,28 +66,15 @@ def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
 
     :return: Nothing, prints to console....
     """
-    from typing import Iterable
-
-    # Convert whatever the predictor_name argument is to a list of predictor plugins
-    if predictor is None:
-        predictors = processing.get_predictor_plugins()
-    elif isinstance(predictor, str):
-        predictors = [processing.get_predictor(predictor)]
-    elif isinstance(predictor, Iterable):
-        predictors = [processing.get_predictor(name) for name in predictor]
-    else:
-        raise ValueError(
-            "Argument 'predictor_name' not of type Iterable[str], string, or None!!!"
-        )
 
     # Print name, and settings for each plugin.
-    for predictor in predictors:
-        print(f"Plugin Name: {predictor.get_name()}")
+    for (plugin_name, config_spec) in _get_predictor_settings(predictor):
+        print(f"Plugin Name: {plugin_name}")
         print("Arguments: ")
-        if predictor.get_settings() is None:
+        if config_spec is {}:
             print("None")
         else:
-            for name, (def_val, val_type, desc) in predictor.get_settings().items():
+            for name, (def_val, val_type, desc) in config_spec.items():
                 print(f"Name: '{name}'")
                 print(f"Type: {get_type_name(val_type)}")
                 print(f"Default Value: {def_val}")

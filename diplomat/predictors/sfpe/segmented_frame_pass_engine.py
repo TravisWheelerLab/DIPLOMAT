@@ -471,7 +471,7 @@ class SegmentedFramePassEngine(Predictor):
             output_path = Path(self.settings.dipui_file).resolve()
             if os.path.exists(output_path):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_path += timestamp
+                output_path = Path(self.settings.dipui_file + timestamp).resolve()
         else:
             output_path = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
 
@@ -509,7 +509,6 @@ class SegmentedFramePassEngine(Predictor):
         it creates a new frame holder based on the current settings, which could be in-memory, disk-backed, or a hybrid
         of both. It also initializes segments and segment scores if they are available in the frame holder's metadata.
         """
-        print(f"\n\nself._restore_path {self._restore_path}\nself.settings.storage_mode {self.settings.storage_mode}\n\n")
         if(self._restore_path is not None):
             # Ignore everything else,
             self._restore_path = Path(self._restore_path).resolve()
@@ -1497,8 +1496,6 @@ class SegmentedFramePassEngine(Predictor):
 
         progress_bar.message("Selecting Maximums - SFPE")
 
-        print("again")        
-        print(f"\n\nself._restore_path {self._restore_path}\nself.settings.storage_mode {self.settings.storage_mode}\n\n")
         if(self._restore_path is None and self.settings.storage_mode == "hybrid"):
             new_frame_holder = self.get_frame_holder()
             self._copy_to_disk(progress_bar, new_frame_holder)
