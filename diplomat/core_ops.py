@@ -59,11 +59,12 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
 
     return new_args
 
-def _reconcile_arguments_with_predictor_settings(predictor_name, extra_args, passed_predictor_settings):
+def _reconcile_arguments_with_predictor_settings(predictor_name, extra_args, passed_predictor_settings, precasted_args):
     """
     PRIVATE: Compare items in extra_args to the predictor's ConfigSpec. 
     If a key/value pair in the argument matches a pair of setting name/type in the predictor ConfigSpec, 
-    add it to passed_predictor_settings and remove it from extra_args.
+    add it to passed_predictor_settings and remove it from extra_args. If the setting has already been set,
+    either in passed_predictor_settings or in precasted_args, then it will be ignored.
     """
     if passed_predictor_settings == None:
         passed_predictor_settings = {}
@@ -71,8 +72,10 @@ def _reconcile_arguments_with_predictor_settings(predictor_name, extra_args, pas
     for plugin_name, config_spec in _get_predictor_settings(predictor_name):
         for k, v in extra_args.items():
             arg_type = type(v)
-            if k in config_spec:
-                print(f"converted command line argument {(k,v)} to a {plugin_name} setting.")
+            if((k in precasted_args) or (k in passed_predictor_settings)):
+                print(f"Warning: {k} is already set; skipping")
+            elif(k in config_spec):
+                print(f"Info: converted command line argument {(k,v)} to a {plugin_name} setting.")
                 passed_predictor_settings[k] = v
             else:
                 extra_args[k] = v
@@ -230,8 +233,6 @@ def track_with(
                        To see valid values, run track with extra_help flag set to true.
     """
     from diplomat import CLI_RUN
-
-    extra_args, predictor_settings = _reconcile_arguments_with_predictor_settings(predictor, extra_args, predictor_settings)
     
     selected_frontend_name, selected_frontend = _find_frontend(
         contracts=[DIPLOMATCommands.analyze_videos, DIPLOMATCommands.analyze_videos],
@@ -257,7 +258,11 @@ def track_with(
 
     # If some videos are supplied, run the frontends video analysis function.
     if(videos is not None):
-        print("Running on videos... TEST")
+        print("Running on videos...")
+        
+        precasted_args = _get_casted_args(selected_frontend.analyze_videos, extra_args, error_on_miss = False)
+        extra_args, predictor_settings = _reconcile_arguments_with_predictor_settings(predictor, extra_args, predictor_settings, precasted_args)
+        
         selected_frontend.analyze_videos(
             config=config,
             videos=videos,
@@ -270,6 +275,10 @@ def track_with(
     # If some frame stores are supplied, run the frontends frame analysis function.
     if(frame_stores is not None):
         print("Running on frame stores...")
+
+        precasted_args = _get_casted_args(selected_frontend.analyze_frames, extra_args, error_on_miss = False)
+        extra_args, predictor_settings = _reconcile_arguments_with_predictor_settings(predictor, extra_args, predictor_settings, precasted_args)
+        
         selected_frontend.analyze_frames(
             config=config,
             frame_stores=frame_stores,
