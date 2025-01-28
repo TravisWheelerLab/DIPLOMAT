@@ -202,7 +202,7 @@ class MITViterbi(FramePass):
                     self.config.lowest_skeleton_score
                 )
             
-            self.config.skeleton_weight = self._augment_skeleton_weight(self.config.skeleton_weight, metadata.normalized_fixed_frame_score)
+            #self.config.skeleton_weight = self._augment_skeleton_weight(self.config.skeleton_weight, metadata.normalized_fixed_frame_score)
         else:
             self.config.skeleton_weight = 0
 
