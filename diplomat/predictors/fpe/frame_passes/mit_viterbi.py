@@ -638,8 +638,7 @@ class MITViterbi(FramePass):
         cls,
         occluded_coords: np.ndarray,
         occluded_probs: np.ndarray,
-        max_count: int,
-        min_prob: float,
+        max_count: int
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Filter occluded coordinates and probabilities such that there is only max_count of them left, those with the
@@ -929,8 +928,7 @@ class MITViterbi(FramePass):
             c, p = cls.filter_occluded_probabilities(
                 current[bp_i].occluded_coords,
                 occ_prob[occ_idx],
-                metadata.obscured_survival_max,
-                metadata.minimum_obscured_probability
+                metadata.obscured_survival_max
             )
             current[bp_i].occluded_coords = c
             current[bp_i].occluded_probs = p - norm_val
