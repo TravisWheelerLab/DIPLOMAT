@@ -1006,7 +1006,7 @@ class MITViterbi(FramePass):
         #print(f"generate_occluded\n\t{new_coords.shape}\n\t{new_probs.shape}")
         return (
             new_coords,
-            new_probs
+            np.full(new_coords.shape[0], to_log_space(0)) if disable_occluded else new_probs
         )
 
     @classmethod
