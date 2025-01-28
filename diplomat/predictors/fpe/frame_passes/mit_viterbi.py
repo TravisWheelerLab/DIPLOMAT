@@ -991,22 +991,17 @@ class MITViterbi(FramePass):
         decay_rate: float,
         disable_occluded: bool
     ) -> Tuple[np.ndarray, np.ndarray]:
-        # otherwise the visible probs will override the occluded probs and the occluded state becomes "sticky."
-        current_frame_probs = current_frame_probs + to_log_space(occluded_prob)
-
-        merged_probs, merged_coords, _ = arr_utils.pad_coordinates_and_probs(
-            [current_frame_probs, prior_occluded_probs],
-            [current_frame_coords, prior_occluded_coords],
-            -np.inf
+        new_coords = np.unique(
+            np.concatenate((current_frame_coords, prior_occluded_coords)),
+            axis=0
         )
 
-        new_coords = merged_coords[0]
-        new_probs = np.maximum(*merged_probs) + to_log_space(decay_rate)
-
-        #print(f"generate_occluded\n\t{new_coords.shape}\n\t{new_probs.shape}")
         return (
             new_coords,
-            np.full(new_coords.shape[0], to_log_space(0)) if disable_occluded else new_probs
+            np.full(
+                new_coords.shape[0],
+                to_log_space(0 if(disable_occluded) else occluded_prob)
+            )
         )
 
     @classmethod
