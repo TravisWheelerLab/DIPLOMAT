@@ -1532,7 +1532,7 @@ class SegmentedFramePassEngine(Predictor):
                     "ClusterFrames",
                     "OptimizeStandardDeviation",
                     "CreateSkeleton",
-                    "RepairClusters"
+                    #"RepairClusters"
                 ],
                 type_casters.List(
                     type_casters.Union(

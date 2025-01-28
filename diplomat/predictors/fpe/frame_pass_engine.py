@@ -438,7 +438,7 @@ class FramePassEngine(Predictor):
                     "ClusterFrames",
                     "OptimizeStandardDeviation",
                     "CreateSkeleton",
-                    "RepairClusters",
+                    #"RepairClusters",
                     "FixFrame",
                     "MITViterbi",
                 ],
