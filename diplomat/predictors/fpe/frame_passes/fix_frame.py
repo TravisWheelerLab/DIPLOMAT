@@ -605,7 +605,6 @@ class FixFrame(FramePass):
         self._scores, fallback_scores = self.compute_scores(fb_data, prog_bar, False)
 
         self._max_frame_idx = int(np.argmax(self._scores))
-        self._max_frame_score = self._scores[self._max_frame_idx]
 
         if(np.isneginf(self._scores[self._max_frame_idx])):
             self._max_frame_idx = int(np.argmax(fallback_scores))

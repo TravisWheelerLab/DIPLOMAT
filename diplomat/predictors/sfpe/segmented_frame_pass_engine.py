@@ -861,7 +861,6 @@ class SegmentedFramePassEngine(Predictor):
         height: int,
         allow_multi_threading: bool,
         fix_frame_idx: int, 
-        fix_frame_score: float,
         progress_bar: Optional[ProgressBar] = None,
     ):
         return cls._run_segment(
@@ -871,7 +870,6 @@ class SegmentedFramePassEngine(Predictor):
             height,
             allow_multi_threading,
             fix_frame_idx, 
-            fix_frame_score,
             progress_bar,
             True
         )
@@ -885,7 +883,6 @@ class SegmentedFramePassEngine(Predictor):
         height: int,
         allow_multi_threading: bool,
         fix_frame_idx: int, 
-        fix_frame_score,
         progress_bar: Optional[ProgressBar] = None,
         is_pre_initialized: bool = False
     ) -> ForwardBackwardData:
@@ -912,7 +909,6 @@ class SegmentedFramePassEngine(Predictor):
         sub_frame = FixFrame.restore_all_except_fix_frame(
             sub_frame,
             fix_frame_idx, 
-            fix_frame_score,
             fix_frame,
             progress_bar,
             True,
@@ -941,14 +937,13 @@ class SegmentedFramePassEngine(Predictor):
 
     def _get_segment(self, index: int):
         start, end, fix_frame = self._segments[index]
-        segment_score = self._segment_scores[index]
 
         sub_frame = ForwardBackwardData(0, 0)
 
         sub_frame.frames = self._frame_holder.frames[start:end]
         sub_frame.metadata = self._frame_holder.metadata
 
-        return (sub_frame, self.SEGMENTED_PASSES, self._width, self._height, False, fix_frame - start, segment_score)
+        return (sub_frame, self.SEGMENTED_PASSES, self._width, self._height, False, fix_frame - start)
 
     def _set_segment(self, index: int, frame_data: ForwardBackwardData):
         start, end, fix_frame = self._segments[index]
@@ -1095,13 +1090,13 @@ class SegmentedFramePassEngine(Predictor):
                     FramePass.GLOBAL_POOL = AntiCloseObject(pool)
                     for is_pre_init, segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
                         for idx in segment_idx:
-                            frm, segs, width, height, __, fix_frame_idx, fix_frame_score = self._get_segment(idx)
-                            self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, fix_frame_score, wrapper_bar, is_pre_init)
+                            frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
+                            self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar, is_pre_init)
             else:
                 for is_pre_init, segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
                     for idx in segment_idx:
-                        frm, segs, width, height, __, fix_frame_idx, fix_frame_score = self._get_segment(idx)
-                        self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, fix_frame_score, wrapper_bar, is_pre_init)
+                        frm, segs, width, height, __, fix_frame_idx = self._get_segment(idx)
+                        self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, wrapper_bar, is_pre_init)
 
             FramePass.GLOBAL_POOL = None
         else:

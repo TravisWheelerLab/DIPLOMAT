@@ -259,7 +259,6 @@ class MITViterbi(FramePass):
 
             #the index of the frame that marks the segment, in which animals are most separable
             fix_frame_index = fb_data.metadata.fixed_frame_index
-            fix_frame_score = fb_data.metadata.fixed_frame_score
 
             self._init_gaussian_table(fb_data.metadata)
             self._init_skeleton(fb_data.metadata)
