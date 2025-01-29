@@ -252,7 +252,7 @@ def track_with(
             num_outputs=num_outputs,
             predictor=predictor,
             predictor_settings=predictor_settings,
-            dipui_file=dipui_file,
+            #dipui_file=dipui_file,
             **_get_casted_args(selected_frontend.analyze_frames, extra_args)
         )
 
