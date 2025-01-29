@@ -910,14 +910,24 @@ class MITViterbi(FramePass):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
             frm_prob[frm_prob < frame_dominators] = -np.inf
 
-            if(not np.all(occ_prob < occ_dominators)):
-                occ_prob[occ_prob < occ_dominators] = -np.inf
-            else:
-                # Bad domination step, lost all occluded and in-frame probabilities, so keep the best location...
-                best_occ = np.argmax(occ_prob)
-                occ_prob[occ_prob < occ_dominators] = -np.inf
-                occ_prob[best_occ] = 0  # 1 in log space...
+            # New occluded-domination logic
+            best_occ = np.argmax(occ_prob)
+            occ_prob[occ_prob < occ_dominators] = -np.inf
+            all_dominated = np.all(occ_prob == -np.inf)
+            disable_occ = current[bp_i].disable_occluded
+            cy_none = cy is not None
+            if all_dominated and not(disable_occ or cy_none):
+                occ_prob[best_occ] = 0
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
+
+            #if(not np.all(occ_prob < occ_dominators)):
+            #    occ_prob[occ_prob < occ_dominators] = -np.inf
+            #else:
+            #    # Bad domination step, lost all occluded and in-frame probabilities, so keep the best location...
+            #    best_occ = np.argmax(occ_prob)
+            #    occ_prob[occ_prob < occ_dominators] = -np.inf
+            #    occ_prob[best_occ] = 0  # 1 in log space...
+            #    occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
             
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
