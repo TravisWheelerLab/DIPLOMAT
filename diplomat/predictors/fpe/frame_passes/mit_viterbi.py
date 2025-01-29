@@ -907,16 +907,16 @@ class MITViterbi(FramePass):
         for bp_i, frm_prob, occ_prob, frm_idx, occ_idx, enter_prob in zip(
             group_range, frm_probs, occ_probs, frm_idxs, occ_idxs, enter_probs
         ):
-            # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
-            frm_prob[frm_prob < frame_dominators] = -np.inf
-            
-            # New occluded-domination logic
-            best_occ = np.argmax(occ_prob)
-            occ_prob[occ_prob < occ_dominators] = -np.inf
-            if np.all(occ_prob == -np.inf):
-                occ_prob[occ_prob < occ_dominators] = -np.inf
-                occ_prob[best_occ] = 0
-                occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
+            ## Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
+            #frm_prob[frm_prob < frame_dominators] = -np.inf
+            #
+            ## New occluded-domination logic
+            #best_occ = np.argmax(occ_prob)
+            #occ_prob[occ_prob < occ_dominators] = -np.inf
+            #if np.all(occ_prob == -np.inf):
+            #    occ_prob[occ_prob < occ_dominators] = -np.inf
+            #    occ_prob[best_occ] = 0
+            #    occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
             
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
