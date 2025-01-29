@@ -354,7 +354,7 @@ class FixFrame(FramePass):
 
         return fixed_frame
 
-    @classmethod
+     @classmethod
     def compute_single_score(
         cls,
         frames: List[ForwardBackwardFrame],
@@ -387,9 +387,6 @@ class FixFrame(FramePass):
         score = 0
         score2 = 0
 
-        geometric_component = 0.0
-        geometric_component2 = 0.0
-
         for bp_group_off in range(num_bp):
 
             min_dist = np.inf
@@ -405,7 +402,7 @@ class FixFrame(FramePass):
                 )
 
                 if (f1_loc[0] is None):
-                    geometric_component = -np.inf
+                    score = -np.inf
                     continue
 
                 for j in range(i + 1, num_outputs):
@@ -414,7 +411,7 @@ class FixFrame(FramePass):
                     )
 
                     if (f2_loc[0] is None):
-                        geometric_component = -np.inf
+                        score = -np.inf
                         continue
                     
                     #mininum distance between the two body parts
@@ -428,15 +425,13 @@ class FixFrame(FramePass):
                 # BAD! We found a frame that failed to cluster properly...
 
                 #looks like this is the difference between score and score2? 
-                geometric_component = -np.inf
+                score = -np.inf
 
             # Minimum distance, weighted by average skeleton-pair confidence...
             if(count > 0):
-                geometric_component += min_dist * (total_conf / count)
-                geometric_component2 += min_dist * (total_conf / count)
-
-        skeletal_component = 0.0
-        skeletal_component2 = 0.0
+                score += min_dist * (total_conf / count)
+                score2 += min_dist * (total_conf / count)
+        
 
         # If skeleton is implemented...
         if (skeleton is not None):
@@ -453,8 +448,8 @@ class FixFrame(FramePass):
                 )
 
                 if (f1_loc[0] is None):
-                    skeletal_component = -np.inf
-                    skeletal_component2 -= (max_dist / num_pairs)
+                    score = -np.inf
+                    score2 -= (max_dist / num_pairs)
                     continue
 
                 for (bp2_group_off, (__, __, avg)) in skel[bp_group_off]:
@@ -467,21 +462,16 @@ class FixFrame(FramePass):
                         )
 
                         if(f2_loc[0] is None):
-                            skeletal_component = -np.inf
+                            score = -np.inf
                             result = max_dist
                         else:
                             result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
 
                         min_score = min(result, min_score)
 
-                    skeletal_component -= (min_score / num_pairs)
-                    skeletal_component2 -= (min_score / num_pairs)
+                    score -= (min_score / num_pairs)
+                    score2 -= (min_score / num_pairs)
 
-        #print(f"geometric component {geometric_component}\nskeletal component {skeletal_component}\n")
-
-        score = geometric_component + skeletal_component
-        score2 = geometric_component2 + skeletal_component2
-        
         return score, score2
 
     @classmethod

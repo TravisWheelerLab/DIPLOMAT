@@ -78,6 +78,7 @@ def _reconcile_arguments_with_predictor_settings(predictor_name, extra_args, pas
                 print(f"Info: converted command line argument {(k,v)} to a {plugin_name} setting.")
                 passed_predictor_settings[k] = v
             else:
+                print(f"Arg {k, v} not recognized, storing it in extra.")
                 extra_args[k] = v
 
     return new_extra_args, passed_predictor_settings
