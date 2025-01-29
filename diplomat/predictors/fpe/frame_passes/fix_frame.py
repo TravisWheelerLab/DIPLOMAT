@@ -354,7 +354,7 @@ class FixFrame(FramePass):
 
         return fixed_frame
 
-     @classmethod
+    @classmethod
     def compute_single_score(
         cls,
         frames: List[ForwardBackwardFrame],
