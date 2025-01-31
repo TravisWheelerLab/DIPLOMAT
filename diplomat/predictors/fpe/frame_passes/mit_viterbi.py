@@ -254,6 +254,7 @@ class MITViterbi(FramePass):
 
             #the index of the frame that marks the segment, in which animals are separable
             fix_frame_index = fb_data.metadata.fixed_frame_index
+            print(f"fix frame index: {fix_frame_index}")
 
             if(reset_bar and prog_bar is not None):
                 prog_bar.reset(fb_data.num_frames * 3)
