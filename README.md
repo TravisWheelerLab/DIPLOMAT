@@ -10,7 +10,9 @@ If you are a user (not a developer contributing code), you may want to visit:
 
 ## About
 
-DIPLOMAT provides a multi-animal pose estimation and editing interface. It relies on a trained CNN model (currently supporting SLEAP and DeepLabCut packages) and uses algorithms to first _**Track**_ the animal body part in a way that reduces body part losses and identity swaps, and then provides an intuitive and memory/time efficient _**Interact**_ interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more nuanced tracking results.
+DIPLOMAT provides a multi-animal tracking/pose-estimation interface that (1) reduces identity swaps and body part losses, and (2) simplifies correction of automated tracking errors. After pre-processing a video with a pose estimation tool (currently supporting SLEAP and DeepLabCut packages), DIPLOMAT computes a multi-animal maximum-probability trace to _**Track**_ multiple animals (and their body parts); it then provides an intuitive and memory/time efficient _**Interact**_ interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more accurate tracking results.
+
+
 
 ![UI Demo Showing user correcting tracking in a video](interact_retrack_gif.gif)
 
@@ -104,7 +106,7 @@ See `LICENSE` for details.
 
 ## Authors
 
-If you have any questions, feel free to reach out to George Glidden, at [georgeglidden@arizona.edu](mailto:georgeglidden@arizona.edu)
+If you have any questions, feel free to reach out to George Glidden, at [help@diplomattrack.org](mailto:help@diplomattrack.org)
 
-See `AUTHORS` the full list of authors.
+See `AUTHORS` for the full list of authors.
 
