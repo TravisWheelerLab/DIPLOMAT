@@ -13,7 +13,7 @@
 import numpy as np
 
 def linear_sum_assignment(cost_matrix):
-    """Solve the linear sum assignment problem.
+    r"""Solve the linear sum assignment problem.
 
     The linear sum assignment problem is also known as minimum weight matching
     in bipartite graphs. A problem instance is described by a matrix C, where
