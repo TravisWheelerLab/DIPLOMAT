@@ -916,11 +916,14 @@ class MITViterbi(FramePass):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
             frm_prob[frm_prob < frame_dominators] = -np.inf
             
+            
             # New occluded-domination logic
             best_occ = np.argmax(occ_prob)
             occ_prob[occ_prob < occ_dominators] = -np.inf
-            if np.all(occ_prob == -np.inf):
-                occ_prob[occ_prob < occ_dominators] = -np.inf
+            all_dominated = np.all(occ_prob == -np.inf)
+            disable_occ = current[bp_i].disable_occluded
+            cy_none = cy is not None
+            if all_dominated and not(disable_occ or cy_none):
                 occ_prob[best_occ] = 0
                 occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
             
@@ -1001,9 +1004,8 @@ class MITViterbi(FramePass):
         )
 
         new_coords = merged_coords[0]
-        new_probs = np.maximum(*merged_probs) + to_log_space(decay_rate)
+        new_probs = np.full(new_coords.shape[0], to_log_space(0)) if (disable_occluded) else np.maximum(*merged_probs) + to_log_space(decay_rate)
 
-        #print(f"generate_occluded\n\t{new_coords.shape}\n\t{new_probs.shape}")
         return (
             new_coords,
             new_probs
