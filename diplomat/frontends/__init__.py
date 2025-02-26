@@ -17,15 +17,27 @@ import typing
 
 
 class Select(Union):
+    def __init__(self, *types: TypeCaster):
+        super().__init__(*types)
+        self._all_valid_types = []
+        for tp in types:
+            if(isinstance(tp, Union)):
+                self._all_valid_types.extend(tp._valid_types)
+            else:
+                self._all_valid_types.append(tp)
+
     def __eq__(self, other: TypeCaster):
         if(isinstance(other, Union)):
             # Subset check...
             return all(self.__eq__(val) for val in other._valid_types)
         else:
-            if(other in self._valid_types):
+            if(other in self._all_valid_types):
                 return True
             else:
-                return super().__eq__(other)
+                res = super().__eq__(other)
+                if(res is NotImplemented):
+                    return False
+                return res
 
     def to_metavar(self) -> str:
         raise ValueError("Select should only be used for type enforcement, not type hints!")
