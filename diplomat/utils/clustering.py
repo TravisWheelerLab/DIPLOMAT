@@ -4,10 +4,6 @@ import numpy as np
 from enum import IntEnum
 
 
-def hierarchical_clustering():
-    pass
-
-
 _numeric = Union[np.ndarray, int]
 
 

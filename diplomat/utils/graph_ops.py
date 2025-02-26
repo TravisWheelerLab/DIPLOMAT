@@ -215,13 +215,13 @@ def _min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]
     return (np.arange(cost_matrix.shape[0], dtype=np.int64), col_solution)
 
 
-def to_valid_graph(g: np.ndarray) -> np.ndarray:
+def to_valid_graph(g: np.ndarray, diag_fill: float = np.inf) -> np.ndarray:
     """
     Convert an arbitrary adjacency matrix to a valid undirected graph. Diagonal is set to positive infinity
     and graph is made symmetric by copying the lower triangle of the graph to the upper triangle.
     """
     g = g.copy()
-    np.fill_diagonal(g, np.inf)
+    np.fill_diagonal(g, diag_fill)
     i_upper = np.triu_indices(g.shape[0], 1)
     g[i_upper] = g.T[i_upper]
     return g
