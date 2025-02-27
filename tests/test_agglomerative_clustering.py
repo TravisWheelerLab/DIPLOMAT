@@ -14,6 +14,26 @@ def assert_all_close(arr1, arr2):
     return False
 
 
+def remove_cluster_indexes(n1, n2):
+    n1res = n1.copy()
+    n2res = n2.copy()
+    lowest_node = np.arange((len(n1) + 1) + len(n1))
+    next_clust = len(n1)
+
+    for i in range(len(n1)):
+        a = n1[i]
+        b = n2[i]
+        n1res[i], n2res[i] = sorted([lowest_node[a], lowest_node[b]])
+        low_node = min(a, b)
+        lowest_node[a] = low_node
+        lowest_node[b] = low_node
+        lowest_node[next_clust] = low_node
+        next_clust += 1
+
+    return n1res, n2res
+
+
+
 def test_vs_scipy():
     np.random.seed(0)
 
