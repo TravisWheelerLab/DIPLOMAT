@@ -202,7 +202,7 @@ def _uf_union(uf: UnionFindType, n1: int, n2: int) -> int:
     return merged_size
 
 
-@numba.njit("i8[:](i8[:, :], f8[:], i8)")
+@numba.njit("types.Tuple((i8[:], i8))(i8[:, :], f8[:], i8)")
 def get_components(merge_list: np.ndarray, distances: np.ndarray, num_components: int):
     assert merge_list.ndim == 2
     assert distances.ndim == 1
@@ -232,5 +232,5 @@ def get_components(merge_list: np.ndarray, distances: np.ndarray, num_components
             component_index += 1
         components[j] = components[root]
 
-    return components
+    return components, num_components
 

@@ -49,9 +49,13 @@ class RepairClusters(FramePass):
             )
 
         if(skeleton is None):
+            """
+            Issue: this breaks diplomat when there is no skeleton, we'll make this pass a no-op in that scenario...
             raise PassOrderError(
                 "Skeleton must be created before cluster repair!"
             )
+            """
+            return fb_data
 
         splits = RepairClusters._locate_splits(
             fb_data,

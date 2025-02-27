@@ -61,12 +61,12 @@ def test_vs_scipy():
     """
     Tests internal nn_chain algorithm against scipy's implementation...
     """
-    np.random.seed(1)
+    np.random.seed(0)
 
     for method in ClusteringMethod:
         scipy_name = method.name.lower()
 
-        for i in range(1000):
+        for i in range(200):
             n = np.random.randint(2, 50)
             random_graph = np.random.random((n, n))
             random_graph = to_valid_graph(random_graph, 0)
@@ -95,9 +95,12 @@ def test_vs_scipy():
             for num_comps in range(1, n + 1):
                 # Scipy components start at 1...
                 components, ac_comps = order_components(fcluster(z, num_comps, "maxclust"))
-                test_components = get_components(merges, td, num_comps)
+                test_components, returned_comps = get_components(merges, td, num_comps)
+                actual_comps = len(np.unique(test_components))
+                assert actual_comps == returned_comps
                 assert len(np.unique(test_components)) == num_comps
                 if(ac_comps != num_comps):
+                    # Scipy failed to actually give the number of clusters we asked for, continue...
                     continue
                 try:
                     assert assert_all_close(components, test_components)

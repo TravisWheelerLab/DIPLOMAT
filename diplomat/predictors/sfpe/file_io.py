@@ -314,10 +314,6 @@ class DiplomatFPEState:
                 self._frame_offsets[index] = (new_offset, needed_size)
 
             offset, size = self._frame_offsets[index]
-            from multiprocessing.process import current_process
-            p = current_process()
-            with open("DEBUG.txt", "a") as f:
-                print(f"PROCESS {p.name} PID {p.pid}, WRITE FRAME {index} to {offset} with size {size}", file=f)
 
             if(self._immediate_mode):
                 self._write_offsets()
@@ -335,11 +331,6 @@ class DiplomatFPEState:
 
             header_type = DIPST_FRAME_HEADER if(index != 0) else DIPST_METADATA_HEADER
             offset, size = self._frame_offsets[index]
-
-            from multiprocessing.process import current_process
-            p = current_process()
-            with open("DEBUG.txt", "a") as f:
-                print(f"PROCESS {p.name} PID {p.pid}, READ FRAME {index} from {offset} with size {size}", file=f)
 
             if(size == 0):
                 return (header_type, b"")
