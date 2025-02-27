@@ -152,13 +152,17 @@ def nn_chain(dists: np.ndarray, linkage_mode: int):
     return nodes_and_merge[idx_order], merge_distances[idx_order]
 
 
-UnionFindType = Tuple[np.ndarray, np.ndarray]
+UnionFindType = np.ndarray
 
-@numba.njit("types.UniTuple(i8[:], 2)(i8)")
+
+@numba.njit("i8[:, :](i8)")
 def _new_union_find(size: int) -> UnionFindType:
-    return np.arange(size, dtype=np.int64), np.ones(size, dtype=np.int64)
+    res = np.ones((2, size), dtype=np.int64)
+    res[0, :] = np.arange(size, dtype=np.int64)
+    return res
 
-@numba.njit("i8(types.UniTuple(i8[:], 2), i8)")
+
+@numba.njit("i8(i8[:, :], i8)")
 def _uf_compress(uf: UnionFindType, n: int) -> int:
     parents = uf[0]
 
@@ -170,9 +174,20 @@ def _uf_compress(uf: UnionFindType, n: int) -> int:
         return root
 
 
-@numba.njit("i8(types.UniTuple(i8[:], 2), i8, i8)")
+@numba.njit("i8(i8[:, :], i8)")
+def _uf_find(uf: UnionFindType, n: int):
+    return _uf_compress(uf, n)
+
+
+@numba.njit("i8(i8[:, :], i8, i8)")
 def _uf_union(uf: UnionFindType, n1: int, n2: int) -> int:
     parents, sizes = uf
+
+    n1 = _uf_find(uf, n1)
+    n2 = _uf_find(uf, n2)
+
+    if(n1 == n2):
+        return sizes[n1]
 
     n1_size = sizes[n1]
     n2_size = sizes[n2]
@@ -182,16 +197,9 @@ def _uf_union(uf: UnionFindType, n1: int, n2: int) -> int:
     merged_size = n1_size + n2_size
     sizes[n1] = merged_size
     sizes[n2] = merged_size
-
     parents[n2] = n1
-    _uf_compress(uf, n2)
 
     return merged_size
-
-
-@numba.njit("i8(types.UniTuple(i8[:], 2), i8)")
-def _uf_find(uf: UnionFindType, n: int):
-    return _uf_compress(uf, n)
 
 
 @numba.njit("i8[:](i8[:, :], f8[:], i8)")
@@ -202,7 +210,8 @@ def get_components(merge_list: np.ndarray, distances: np.ndarray, num_components
     assert merge_list.shape[0] >= 1 and merge_list.shape[0] == distances.shape[0]
 
     size = merge_list.shape[0] + 1
-    assert 0 < num_components <= size
+    assert 0 < num_components
+    num_components = min(num_components, size)
 
     components = np.full(size, fill_value=-1, dtype=np.int64)
     iters = size - num_components
@@ -225,9 +234,3 @@ def get_components(merge_list: np.ndarray, distances: np.ndarray, num_components
 
     return components
 
-
-arr = np.random.random((10, 10))
-print(arr)
-merges, dists = nn_chain(arr, ClusteringMethod.SINGLE)
-print(merges, dists)
-print(get_components(merges, dists, 3))
