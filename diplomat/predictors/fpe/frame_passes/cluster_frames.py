@@ -18,10 +18,12 @@ class ClusterFrames(FramePass):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Table is distances squared div in half,
+        # same as exponent of gaussian centered at 0, 0 with identity covariance matrix...
         self._cost_table = fpe_math.get_func_table(
             self.height,
             self.width,
-            lambda x, y: np.sqrt(x * x + y * y),
+            lambda x, y: (x * x + y * y),
             False
         )
 
@@ -148,7 +150,13 @@ class ClusterFrames(FramePass):
         trans = fpe_math.table_transition((x_true, y_true), (x_true, y_true), cost_table)
         # graph = (2 + trans) - (np.expand_dims(prob, 1)) - (np.expand_dims(prob, 0))  ??? What was I thinking???
         # A kind of "intra-transition" scoring scheme... I believe this was the prior scheme, not sure why I replaced it...
-        graph = to_valid_graph(trans * np.expand_dims(prob, 1) * np.expand_dims(prob, 0))
+        log_prob = np.log(prob)
+        # Minimizing this is the same as maximizing p_i * N(i,j|[0, 0], I) * p_j
+        # where p is the probabilities in the flat matrix,
+        # You can get formula below (d[i,j]^2/2 - ln(p_i) - ln(p_j) by simplifying
+        # min(-log(p_i * N(i,j|[0, 0], I) * p_j)), and removing leftover constant coefficients
+        # as they don't affect the optimization...
+        graph = to_valid_graph(trans - np.expand_dims(log_prob, 1) - np.expand_dims(log_prob, 0))
 
         merges, distances = nn_chain(graph, clustering_mode)
         components, num_clusts_returned = get_components(merges, distances, num_clusters)
