@@ -581,7 +581,7 @@ class MITViterbi(FramePass):
         #Normalization: Finally, the probabilities are normalized to ensure they are within a valid range 
         # and to facilitate comparison between different paths.
         return norm_together([
-            t + s * skeleton_weight for t, s in zip(trans_res, skel_res)
+            to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight) for t, s in zip(trans_res, skel_res)
         ])
 
     @classmethod
@@ -703,6 +703,7 @@ class MITViterbi(FramePass):
         if(skeleton_table is None):
             return [0] * len(current_data) if(merge_results) else []
 
+        num_bp = len(metadata.bodyparts)
         bp_group_idx = bp_idx // metadata.num_outputs
         bp_off = bp_idx % metadata.num_outputs
 
@@ -751,10 +752,8 @@ class MITViterbi(FramePass):
             for i, (current_total, bp_sub_res) in enumerate(zip(final_result, bp_res)):
                 if(np.all(np.isneginf(bp_sub_res))):
                     continue
-                merged_result = current_total + bp_sub_res
+                merged_result = current_total + (bp_sub_res / num_bp)
                 final_result[i] = merged_result
-
-            final_result = norm_together(final_result)
 
         return final_result
 
@@ -875,7 +874,7 @@ class MITViterbi(FramePass):
             )
 
             results.append([
-                t + s * skeleton_weight 
+                to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
                 for t, s in zip(from_transition, from_skel)
             ])
 
@@ -1066,7 +1065,7 @@ class MITViterbi(FramePass):
             "obscured_probability": (
                 1e-6, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
-                "prior probability of being in any hidden state cell."
+                "prior probability of being in any obscured state cell."
             ),
             "minimum_obscured_probability": (
                 1e-12, tc.RangedFloat(0, 1),
