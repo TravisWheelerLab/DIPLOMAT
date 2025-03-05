@@ -80,6 +80,8 @@ class SparseTrackingData:
         """
         Makes a new tracking data with all empty fields.
         """
+        # TODO: Remove down_scaling factor from offsets, this will simplify some code,
+        #       but this will require adjust code in several places.
         self._coords = None
         self._offsets_probs = None
         self._coords_access = None

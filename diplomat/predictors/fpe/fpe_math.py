@@ -181,3 +181,34 @@ def table_transition(prior_coords: Coords, current_coords: Coords, lookup_table:
     delta_y = np.abs(np.expand_dims(cy, 1) - np.expand_dims(py, 0))
 
     return lookup_table[delta_y.flatten(), delta_x.flatten()].reshape(delta_y.shape)
+
+
+def table_transition_interpolate(prior_coords: Coords, current_coords: Coords, lookup_table: np.ndarray):
+    """
+    Compute transition probabilities from a transition probability table. Unlike table_transition, this method
+    supports floats (in-between) coordinated, which it resolves using bi-linear interpolation.
+
+    :param prior_coords: The prior frame coordinates, 2xN numpy array (x, y).
+    :param current_coords: The current frame coordinates, 2xN numpy array (x, y).
+    :param lookup_table: The 2D probability lookup table ([delta x, delta y] -> prob). A numpy array.
+
+    :return: A 2D array containing all the transition probabilities for going from any pixel in prior to
+             any pixel in current.
+    """
+    px, py = prior_coords
+    cx, cy = current_coords
+
+    def trans(x, y):
+        return lookup_table[y.flatten(), x.flatten()].reshape(y.shape)
+
+    delta_x = np.abs(np.expand_dims(cx, 1) - np.expand_dims(px, 0))
+    delta_y = np.abs(np.expand_dims(cy, 1) - np.expand_dims(py, 0))
+
+    lx = delta_x.astype(np.int64)
+    ly = delta_y.astype(np.int64)
+    rx = delta_x - lx
+    ry = delta_y - ly
+
+    top_interp = trans(lx, ly) * (1 - rx) + trans(lx + 1, ly) * rx
+    bottom_interp = trans(lx, ly + 1) * (1 - rx) + trans(lx + 1, ly + 1) * rx
+    return top_interp * (1 - ry) + bottom_interp * ry
