@@ -913,15 +913,22 @@ class MITViterbi(FramePass):
             group_range, frm_probs, occ_probs, frm_idxs, occ_idxs, enter_probs
         ):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
+            best_frm = np.argmax(frm_prob)
             frm_prob[frm_prob < frame_dominators] = -np.inf
             
             # New occluded-domination logic
             best_occ = np.argmax(occ_prob)
             occ_prob[occ_prob < occ_dominators] = -np.inf
-            if np.all(occ_prob == -np.inf):
-                occ_prob[occ_prob < occ_dominators] = -np.inf
-                occ_prob[best_occ] = 0
-                occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
+            all_dominated = np.all(occ_prob == -np.inf)
+            occ_enabled = not current[bp_i].disable_occluded
+            if all_dominated:
+                if occ_enabled:
+                    occ_prob[best_occ] = 0
+                    occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
+                else:
+                    # We run the fix in frame if this frame has the occluded state disabled...
+                    frm_prob[best_frm] = 0
+                    frame_dominators[best_frm] = 0
             
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
@@ -1000,9 +1007,8 @@ class MITViterbi(FramePass):
         )
 
         new_coords = merged_coords[0]
-        new_probs = np.maximum(*merged_probs) + to_log_space(decay_rate)
+        new_probs = np.full(new_coords.shape[0], to_log_space(0)) if (disable_occluded) else np.maximum(*merged_probs) + to_log_space(decay_rate)
 
-        #print(f"generate_occluded\n\t{new_coords.shape}\n\t{new_probs.shape}")
         return (
             new_coords,
             new_probs
