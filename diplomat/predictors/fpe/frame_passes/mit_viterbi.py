@@ -581,7 +581,7 @@ class MITViterbi(FramePass):
         #Normalization: Finally, the probabilities are normalized to ensure they are within a valid range 
         # and to facilitate comparison between different paths.
         return norm_together([
-            t + s * skeleton_weight for t, s in zip(trans_res, skel_res)
+            to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight) for t, s in zip(trans_res, skel_res)
         ])
 
     @classmethod
@@ -703,6 +703,7 @@ class MITViterbi(FramePass):
         if(skeleton_table is None):
             return [0] * len(current_data) if(merge_results) else []
 
+        num_bp = len(metadata.bodyparts)
         bp_group_idx = bp_idx // metadata.num_outputs
         bp_off = bp_idx % metadata.num_outputs
 
@@ -751,10 +752,8 @@ class MITViterbi(FramePass):
             for i, (current_total, bp_sub_res) in enumerate(zip(final_result, bp_res)):
                 if(np.all(np.isneginf(bp_sub_res))):
                     continue
-                merged_result = current_total + bp_sub_res
+                merged_result = current_total + (bp_sub_res / num_bp)
                 final_result[i] = merged_result
-
-            final_result = norm_together(final_result)
 
         return final_result
 
@@ -875,7 +874,7 @@ class MITViterbi(FramePass):
             )
 
             results.append([
-                t + s * skeleton_weight 
+                to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
                 for t, s in zip(from_transition, from_skel)
             ])
 
@@ -914,15 +913,22 @@ class MITViterbi(FramePass):
             group_range, frm_probs, occ_probs, frm_idxs, occ_idxs, enter_probs
         ):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
+            best_frm = np.argmax(frm_prob)
             frm_prob[frm_prob < frame_dominators] = -np.inf
             
             # New occluded-domination logic
             best_occ = np.argmax(occ_prob)
             occ_prob[occ_prob < occ_dominators] = -np.inf
-            if np.all(occ_prob == -np.inf):
-                occ_prob[occ_prob < occ_dominators] = -np.inf
-                occ_prob[best_occ] = 0
-                occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
+            all_dominated = np.all(occ_prob == -np.inf)
+            occ_enabled = not current[bp_i].disable_occluded
+            if all_dominated:
+                if occ_enabled:
+                    occ_prob[best_occ] = 0
+                    occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
+                else:
+                    # We run the fix in frame if this frame has the occluded state disabled...
+                    frm_prob[best_frm] = 0
+                    frame_dominators[best_frm] = 0
             
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
@@ -1001,9 +1007,8 @@ class MITViterbi(FramePass):
         )
 
         new_coords = merged_coords[0]
-        new_probs = np.maximum(*merged_probs) + to_log_space(decay_rate)
+        new_probs = np.full(new_coords.shape[0], to_log_space(0)) if (disable_occluded) else np.maximum(*merged_probs) + to_log_space(decay_rate)
 
-        #print(f"generate_occluded\n\t{new_coords.shape}\n\t{new_probs.shape}")
         return (
             new_coords,
             new_probs
@@ -1066,7 +1071,7 @@ class MITViterbi(FramePass):
             "obscured_probability": (
                 1e-6, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
-                "prior probability of being in any hidden state cell."
+                "prior probability of being in any obscured state cell."
             ),
             "minimum_obscured_probability": (
                 1e-12, tc.RangedFloat(0, 1),
