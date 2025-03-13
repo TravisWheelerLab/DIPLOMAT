@@ -74,12 +74,10 @@ def _reconcile_arguments_with_predictor_settings(predictor_name, extra_args, pas
             arg_type = type(v)
             if((k in precasted_args) or (k in passed_predictor_settings)):
                 print(f"Warning: {k} is already set; skipping")
+                new_extra_args[k] = v
             elif(k in config_spec):
                 print(f"Info: converted command line argument {(k,v)} to a {plugin_name} setting.")
                 passed_predictor_settings[k] = v
-            else:
-                extra_args[k] = v
-
     return new_extra_args, passed_predictor_settings
 
 
