@@ -25,29 +25,9 @@ class FixFrame(FramePass):
         self._fixed_frame = None
 
     @classmethod
-    def merge_tracks(cls, track_data: List[SparseTrackingData]) -> SparseTrackingData:
-        if(len(track_data) == 0):
-            raise ValueError("No arguments passed!")
-
-        new_merged_data = SparseTrackingData()
-
-        if(all([data.probs is None for data in track_data])):
-            return new_merged_data
-
-        new_merged_data.pack(
-            *(
-                np.concatenate([data.unpack()[i] for data in track_data if(data.probs is not None)])
-                for i in range(len(track_data[0].unpack()))
-            )
-        )
-
-        return new_merged_data
-
-    @classmethod
     def get_max_location(
         cls,
         frame: ForwardBackwardFrame,
-        down_scaling: float
     ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
         """
         Determines the maximum location within a frame after downscaling.
@@ -64,7 +44,7 @@ class FixFrame(FramePass):
         - Tuple[Optional[float], Optional[float], Optional[float]]: The adjusted x and y coordinates of the maximum
           location and its probability. Returns None for each value if the probability data is not available.
         """
-        y, x, prob, x_off, y_off = frame.src_data.unpack()
+        x, y, prob = frame.src_data.unpack()
 
         if(prob is None):
             return (None, None, None)
@@ -72,8 +52,8 @@ class FixFrame(FramePass):
         max_idx = np.argmax(prob)
 
         return (
-            x[max_idx] + 0.5 + (x_off[max_idx] / down_scaling),
-            y[max_idx] + 0.5 + (y_off[max_idx] / down_scaling),
+            x[max_idx],
+            y[max_idx],
             prob[max_idx]
         )
 
@@ -87,11 +67,10 @@ class FixFrame(FramePass):
         avg: float,
         frame1: ForwardBackwardFrame,
         frame2: ForwardBackwardFrame,
-        down_scaling: float
     ) -> float:
         return np.abs((avg - cls.dist(
-            cls.get_max_location(frame1, down_scaling),
-            cls.get_max_location(frame2, down_scaling)
+            cls.get_max_location(frame1),
+            cls.get_max_location(frame2)
         )) ** 2)
 
     @classmethod
@@ -100,7 +79,6 @@ class FixFrame(FramePass):
         storage_graph: StorageGraph,
         frame_list: List[ForwardBackwardFrame],
         num_outputs: int,
-        down_scaling: float,
         fixed_group: int = 0
     ) -> List[List[Dict[int, float]]]:
         # Construct a graph...
@@ -125,7 +103,7 @@ class FixFrame(FramePass):
                             idx2 = node_group2 * num_outputs + node_off2
 
                             graph[idx1][idx2] = cls.skel_score(
-                                avg, frame_list[idx1], frame_list[idx2], down_scaling
+                                avg, frame_list[idx1], frame_list[idx2]
                             )
 
             graphs.append(graph)
@@ -251,11 +229,11 @@ class FixFrame(FramePass):
         for bp_i in range(fb_data.num_bodyparts):
             fixed_frame[bp_i] = fb_data.frames[frame_idx][bp_i].copy()
 
-            __, __, prob, __, __ = fixed_frame[bp_i].src_data.unpack()
+            __, __, prob = fixed_frame[bp_i].src_data.unpack()
             if(prob is None):
                 # Fallback fix frame: We just create a single cell with 0 probability, forcing viterbi to use entry
                 # states...
-                src_data = SparseTrackingData().pack([0], [0], [0], [0], [0])
+                src_data = SparseTrackingData().pack([0], [0], [0])
                 fixed_frame[bp_i].src_data = src_data
                 fb_data.frames[frame_idx][bp_i].src_data = src_data
 
@@ -268,7 +246,6 @@ class FixFrame(FramePass):
                 skeleton,
                 fb_data.frames[frame_idx],
                 num_outputs,
-                down_scaling,
                 fixed_group
             )
 

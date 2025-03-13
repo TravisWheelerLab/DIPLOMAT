@@ -274,7 +274,7 @@ class FramePassEngine(Predictor):
                 probs = np.zeros(len(data[2]), np.float32)
 
             res = SparseTrackingData()
-            res.pack(*data[:2], probs, *data[3:])
+            res.pack(*data[:2], probs)
             res = res.desparsify(header.frame_width - spc, header.frame_height - spc, header.stride)
 
             dest_frame.get_prob_table(*dst_idx)[start:end, start:end] = res.get_prob_table(0, 0)
@@ -286,10 +286,9 @@ class FramePassEngine(Predictor):
 
             o_x, o_y = tuple(src_frame.occluded_coords.T)
             x, y = o_x + 1, o_y + 1
-            off_x = off_y = np.zeros(len(x), dtype=np.float32)
 
             res = SparseTrackingData()
-            res.pack(y, x, probs, off_x, off_y)
+            res.pack(x, y, probs)
 
             # Add 2 to resolve additional padding as needed for the edges...
             res = res.desparsify(header.frame_width - spc + 2, header.frame_height - spc + 2, header.stride)

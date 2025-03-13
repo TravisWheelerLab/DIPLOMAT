@@ -45,129 +45,69 @@ class SparseModes(IntEnum):
     OFFSET_COMBINATION: int = 2
     OFFSET_SUMMATION: int = 3
 
-
+class SparseTrackingData:
+    pass
+'''
 class SparseTrackingData:
     """
     Represents sparse tracking data. Includes probabilities, offsets, and x/y coordinates in the probability map.
     """
     SparseModes = SparseModes
-    __slots__ = ["_coords", "_offsets_probs", "_coords_access", "_off_access", "_prob_access"]
-
-    class NumpyAccessor:
-        """
-        A numpy accessor class, allows for controlled access to a numpy array (Disables direct assignment).
-        """
-
-        def __init__(self, src_arr: ndarray, post_index: Tuple[Indexer] = None):
-            self._src_arr = src_arr
-            self._post_idx = post_index if (post_index is not None) else tuple()
-
-        def __getitem__(self, *index: Indexer):
-            if (self._post_idx is None):
-                return self._src_arr[index]
-            return self._src_arr[index + self._post_idx]
-
-        def __setitem__(self, *index: Indexer, value: ndarray):
-            self._src_arr[index, self._post_idx] = value
-
-        def __str__(self):
-            return self.__repr__()
-
-        def __repr__(self):
-            return f"{type(self).__name__}({self[:]})"
 
     def __init__(self):
         """
         Makes a new tracking data with all empty fields.
         """
-        self._coords = None
-        self._offsets_probs = None
-        self._coords_access = None
-        self._off_access = None
-        self._prob_access = None
+        self._data = None
 
     @property
     def coords(self):
         """
         The coordinates of this SparceTrackingData in [y, x] order.
         """
-        return self._coords_access
+        return self._data[:2]
 
     @property
     def probs(self):
         """
         The probabilities of this SparceTrackingData.
         """
-        return self._prob_access
+        return self._data[2]
 
-    @property
-    def offsets(self):
-        """
-        The offsets of this SparceTrackingData.
-        """
-        return self._off_access
 
-    def _set_data(self, coords: ndarray, offsets: ndarray, probs: ndarray):
-        # If no coordinates are passed, set everything to None as there is no data.
-        if (coords is None or len(coords) == 0):
-            self._coords = None
-            self._coords_access = None
-            self._offsets_probs = None
-            self._off_access = None
-            self._prob_access = None
-            return
-        # Combine offsets and probabilities into one numpy array...
-        offsets_plus_probs = np.concatenate((np.transpose(np.expand_dims(probs, axis=0)), offsets), axis=1)
-
-        if ((len(offsets_plus_probs.shape) != 2) and offsets_plus_probs.shape[1] == 3):
-            raise ValueError("Offset/Probability array must be n by 3...")
-
-        if (len(coords.shape) != 2 or coords.shape[0] != offsets_plus_probs.shape[0] or coords.shape[1] != 2):
-            raise ValueError("Coordinate array must be n by 2...")
-
-        # Set the arrays to the data and make new numpy accessors which point to the new numpy arrays
-        self._coords = coords
-        self._coords_access = self.NumpyAccessor(self._coords)
-        self._offsets_probs = offsets_plus_probs
-        self._off_access = self.NumpyAccessor(self._offsets_probs, (slice(1, 3),))
-        self._prob_access = self.NumpyAccessor(self._offsets_probs, (0,))
-
-    def pack(self, y_coords: Optional[ndarray], x_coords: Optional[ndarray], probs: Optional[ndarray],
-             x_offset: Optional[ndarray], y_offset: Optional[ndarray]) -> "SparseTrackingData":
+    def pack(self, x_coords: Optional[ndarray], y_coords: Optional[ndarray], probs: Optional[ndarray]) -> "SparseTrackingData":
         """
         Pack the passed data into this SparceTrackingData object.
 
         :param y_coords: Y coordinate value of each probability within the probability map.
         :param x_coords: X coordinate value of each probability within the probability map.
         :param probs: The probabilities of the probability frame.
-        :param x_offset: The x offset coordinate values within the original video.
-        :param y_offset: The y offset coordinate values within the original video.
 
         :returns: This SparseTrackingData Object.
         """
         if(y_coords is None):
-            self._coords = None
-            self._coords_access = None
-            self._offsets_probs = None
-            self._off_access = None
-            self._prob_access = None
+            self._data = None
             return self
 
-        self._set_data(np.transpose((y_coords, x_coords)), np.transpose((x_offset, y_offset)), probs)
+        self._data = np.stack([
+            x_coords,
+            y_coords,
+            probs
+        ], axis=0)
         return self
 
     # noinspection PyTypeChecker
     def unpack(self) -> Tuple[
-        Optional[ndarray], Optional[ndarray], Optional[ndarray], Optional[ndarray], Optional[ndarray]]:
+        Optional[ndarray], Optional[ndarray], Optional[ndarray]]:
         """
         Return all fields of this SparseTrackingData
 
         :return: A tuple of 1 dimensional numpy arrays, being: (y_coord, x_coord, probs, x_offset, y_offset)
         """
         if (self._coords is None):
-            return (None, None, None, None, None)
+            return (None, None, None)
 
-        return tuple(np.transpose(self._coords)) + tuple(np.transpose(self._offsets_probs))
+        return self._data
 
     def duplicate(self) -> "SparseTrackingData":
         """
@@ -211,7 +151,7 @@ class SparseTrackingData:
         :return: A new TrackingData object, with data matching the original SparseTrackingData object. Returns an empty
                  TrackingData if this object has no data stored yet...
         """
-        y, x, probs, x_off, y_off = self.unpack()
+        y, x, probs = self.unpack()
 
         new_td = TrackingData.empty_tracking_data(1, 1, orig_width, orig_height, orig_stride)
         new_td.set_offset_map(np.zeros((1, orig_height, orig_width, 1, 2), dtype=np.float32))
@@ -219,9 +159,14 @@ class SparseTrackingData:
         if(y is None):
             return new_td
 
-        new_td.get_source_map()[0, y, x, 0] = probs
-        new_td.get_offset_map()[0, y, x, 0, 0] = x_off
-        new_td.get_offset_map()[0, y, x, 0, 1] = y_off
+        x_int = x.astype(np.int64)
+        y_int = y.astype(np.int64)
+        x_off = ((x - x_int) - 0.5) * orig_stride
+        y_off = ((x - y_int) - 0.5) * orig_stride
+
+        new_td.get_source_map()[0, y_int, x_int, 0] = probs
+        new_td.get_offset_map()[0, y_int, x_int, 0, 0] = x_off
+        new_td.get_offset_map()[0, y_int, x_int, 0, 1] = y_off
 
         return new_td
 
@@ -266,7 +211,7 @@ class SparseTrackingData:
         y, x = np.nonzero(track_data.get_prob_table(frame, bodypart) > threshold)
 
         if(len(y) == 0):
-            new_sparse_data.pack(None, None, None, None, None)
+            new_sparse_data.pack(None, None, None)
             return new_sparse_data
 
         if (track_data.get_offset_map() is None):
@@ -283,8 +228,8 @@ class SparseTrackingData:
             true_y = full_y.astype(int)
 
             # Update x_off and y_off to be in the same square as true_x and true_y...
-            x_off = ((full_x % 1) - 0.5) * track_data.get_down_scaling()
-            y_off = ((full_y % 1) - 0.5) * track_data.get_down_scaling()
+            x_off = ((full_x % 1) - 0.5)
+            y_off = ((full_y % 1) - 0.5)
 
             if(mode == SparseModes.OFFSET_COMBINATION):
                 # Combination, we'll use np.unique to get the unique values, and then bincount to get the averages...
@@ -347,54 +292,40 @@ class SparseTrackingData:
             x_off = x_off[top_k]
             y_off = y_off[top_k]
 
-        new_sparse_data.pack(y, x, probs, x_off, y_off)
+        x = x + 0.5 + x_off
+        y = y + 0.5 + y_off
 
+        new_sparse_data.pack(x, y, probs)
         return new_sparse_data
 
-    def to_bytes(self, float_dtype: str, int_dtype: str) -> bytes:
+
+    def to_bytes(self, float_dtype: str) -> bytes:
         if(float_dtype.lstrip("<>") not in ["f2", "f4", "f8"]):
             raise ValueError("Invalid float datatype!")
-        if(int_dtype.lstrip("<>") not in ["u2", "u4", "u8", "i2", "i4", "i8"]):
-            raise ValueError("Invalid integer datatype!")
 
-        if(self._offsets_probs is None):
-            # Null is encoded as all 1's
-            return np.asarray(0, dtype="<u4").tobytes()
-
-        length = self._offsets_probs.shape[0]
+        length = self._data.shape[-1]
         enc_length = np.asarray(length, dtype="<u4").tobytes()
 
         return b"".join([
             enc_length,
-            self._coords.astype(int_dtype).tobytes(),
-            self._offsets_probs.astype(float_dtype).tobytes()
+            self._data.astype(float_dtype).tobytes()
         ])
 
     def from_bytes_include_length(
         self,
         float_dtype: str,
-        int_dtype: str,
         data: Union[bytes, memoryview]
     ) -> Tuple["SparseTrackingData", int]:
         if(float_dtype.lstrip("<>") not in ["f2", "f4", "f8"]):
             raise ValueError("Invalid float datatype!")
-        if(int_dtype.lstrip("<>") not in ["u2", "u4", "u8", "i2", "i4", "i8"]):
-            raise ValueError("Invalid integer datatype!")
 
         length = np.frombuffer(data, "<u4", 1)[0]
         if(length == 0):
-            self._coords = None
-            self._offsets_probs = None
-            self._off_access = None
-            self._coords_access = None
-            self._prob_access = None
+            self._data = None
             return self, 4
 
-        float_offset = 4 + length * 2 * np.dtype(int_dtype).itemsize
-
-        # Calculate the expected size of the data based on `length` and `int_dtype`
-        int_dtype_size = np.dtype(int_dtype).itemsize  # Size of int_dtype in bytes
-        expected_data_size = length * 2 * int_dtype_size + 4  # +4 for the offset
+        float_data_size = np.dtype(float_dtype).itemsize
+        expected_data_size = 4 + length * float_data_size * 3
 
         # Check if the actual data buffer is smaller than expected
         if len(data) < expected_data_size:
@@ -402,29 +333,23 @@ class SparseTrackingData:
 
         # Proceed with the original line, wrapped in a try-except block for safety
         try:
-            self._coords = np.frombuffer(data, np.dtype(int_dtype), length * 2, 4).reshape((length, 2))
+            self._data = np.frombuffer(data, np.dtype(float_dtype), length * 3, 4).reshape((3, length))
         except ValueError as e:
             print(f"Encountered an error when trying to reshape the data: {e}")
 
-
-        #self._coords = np.frombuffer(data, np.dtype(int_dtype), length * 2, 4).reshape((length, 2))
-        self._coords_access = self.NumpyAccessor(self._coords)
-        self._offsets_probs = np.frombuffer(data, np.dtype(float_dtype), length * 3, float_offset).reshape((length, 3))
-        self._off_access = self.NumpyAccessor(self._offsets_probs, (slice(1, 3),))
-        self._prob_access = self.NumpyAccessor(self._offsets_probs, (0,))
-
-        return self, float_offset + length * 3 * np.dtype(float_dtype).itemsize
+        return self, expected_data_size
 
     def from_bytes(self, float_dtype: str, int_dtype: str, data: bytes) -> "SparseTrackingData":
-        return self.from_bytes_include_length(float_dtype, int_dtype, data)[0]
+        return self.from_bytes_include_length(float_dtype, data)[0]
 
 
     def __str__(self):
         return self.__repr__()
 
     def __repr__(self):
-        return f"SparseTrackingData(coords={self.coords}, probs={self.probs}, offsets={self.offsets})"
-
+        x, y, probs = self.unpack()
+        return f"SparseTrackingData(x={x}, y={y}, probs={probs})"
+'''
 
 # Improves memory performance by using slots instead of a dictionary to store attributes...
 def add_slots(cls):
@@ -513,15 +438,13 @@ class ForwardBackwardFrame:
                 raise ValueError("No frame probabilities!")
             unpack_data = self.src_data.unpack()
             return SparseTrackingData().pack(
-                *unpack_data[:2], self.frame_probs, *unpack_data[3:]
+                *unpack_data[:2], self.frame_probs
             )
         elif(field == "occluded"):
             if (self.occluded_probs is None or self.occluded_coords is None):
                 raise ValueError("No occluded probabilities!")
             return SparseTrackingData().pack(
-                *tuple(reversed(self.occluded_coords.T)), self.occluded_probs,
-                np.zeros(len(self.occluded_probs)),
-                np.zeros(len(self.occluded_probs))
+                *tuple(self.occluded_coords.T), self.occluded_probs
             )
         else:
             raise ValueError(f"Invalid field value. ('{field}')")
@@ -583,10 +506,10 @@ class ForwardBackwardFrame:
         byte_list = [
             np.asarray([self.ignore_clustering, self.disable_occluded], dtype="?").tobytes(),
             np.asarray([self.enter_state], dtype=float_dtype).tobytes(),
-            self.orig_data.to_bytes(float_dtype, int_dtype),
-            self.src_data.to_bytes(float_dtype, int_dtype),
+            self.orig_data.to_bytes(float_dtype),
+            self.src_data.to_bytes(float_dtype),
             self._save_arr(self.frame_probs, float_dtype),
-            self._save_arr(self.occluded_coords, int_dtype),
+            self._save_arr(self.occluded_coords, float_dtype),
             self._save_arr(self.occluded_probs, float_dtype)
         ]
 
@@ -612,28 +535,27 @@ class ForwardBackwardFrame:
     def _load_sparse_track(
         data: bytes,
         float_dtype: str,
-        int_dtype: str,
         offset: int
     ) -> Tuple[Optional[SparseTrackingData], int]:
         size_indicator = np.frombuffer(data, "<u4", 1, offset)[0]
         if(size_indicator == 0xFFFFFFFF):
             return (None, 4)
 
-        return SparseTrackingData().from_bytes_include_length(float_dtype, int_dtype, memoryview(data)[offset:])
+        return SparseTrackingData().from_bytes_include_length(float_dtype, memoryview(data)[offset:])
 
-    def from_bytes(self, float_dtype: str, int_dtype: str, data: bytes) -> "ForwardBackwardFrame":
+    def from_bytes(self, float_dtype: str, data: bytes) -> "ForwardBackwardFrame":
         self.ignore_clustering, self.disable_occluded = np.frombuffer(data, np.dtype("?"), 2)
         self.enter_state = np.frombuffer(data, float_dtype, 1, 2)[0]
 
         offset = 2 + np.dtype(float_dtype).itemsize
-        self.orig_data, size = self._load_sparse_track(data, float_dtype, int_dtype, offset)
+        self.orig_data, size = self._load_sparse_track(data, float_dtype, offset)
         offset += size
-        self.src_data, size = self._load_sparse_track(data, float_dtype, int_dtype, offset)
+        self.src_data, size = self._load_sparse_track(data, float_dtype, offset)
         offset += size
 
         self.frame_probs, size = self._load_array(data, float_dtype, offset)
         offset += size
-        self.occluded_coords, size = self._load_array(data, int_dtype, offset)
+        self.occluded_coords, size = self._load_array(data, float_dtype, offset)
         offset += size
         self.occluded_probs, size = self._load_array(data, float_dtype, offset)
         offset += size
