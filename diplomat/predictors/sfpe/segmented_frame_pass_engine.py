@@ -1628,9 +1628,11 @@ class SegmentedFramePassEngine(Predictor):
                 type_casters.RangedInteger(1, np.inf),
                 "Size of lifo cache used to temporarily store frames loaded from disk if running in disk storage_mode."
             ),
-            "dipui_file": (None, type_casters.Union(type_casters.Literal(None), str), "A path specifying where to save the dipui file"
+            "dipui_file": (
+                None,
+                type_casters.Union(type_casters.Literal(None), str),
+                "A path specifying where to save the dipui file"
             )
-
         }
 
     @classmethod

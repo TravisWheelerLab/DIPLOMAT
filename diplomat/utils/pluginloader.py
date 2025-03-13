@@ -1,7 +1,7 @@
 """
 Module includes methods useful to loading all plugins placed in a folder, or module.
 """
-
+import importlib
 from typing import Set
 from typing import Type
 from typing import TypeVar
@@ -55,10 +55,9 @@ def load_plugin_classes(
         # modules...
         if (package_name not in sys.modules) or do_reload:
             try:
-                sub_module = importer.find_module(package_name).load_module(
-                    package_name
-                )
-                sys.modules[package_name] = sub_module
+                if(package_name in sys.modules):
+                    del sys.modules[package_name]
+                sub_module = importlib.import_module(package_name)
             except Exception as e:
                 if(display_error):
                     import traceback
