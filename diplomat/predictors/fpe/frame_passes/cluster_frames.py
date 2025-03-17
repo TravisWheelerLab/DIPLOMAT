@@ -103,14 +103,14 @@ class ClusterFrames(FramePass):
         for i, frame in enumerate(frame_data):
             group_idx, group_offset = divmod(i, num_outputs)
 
-            y, x, prob, x_off, y_off = frame.orig_data.unpack()
+            x, y, prob = frame.orig_data.unpack()
             if (y is None):
                 continue
 
             if(not frame.ignore_clustering):
                 if(clusters[group_idx] is None):
                     clusters[group_idx] = cls._compute_cluster(
-                        y, x, prob, x_off, y_off,
+                        x, y, prob,
                         num_outputs, width,
                         cost_table, down_scaling,
                         config.minimum_cluster_size,
@@ -130,8 +130,6 @@ class ClusterFrames(FramePass):
         x: np.ndarray,
         y: np.ndarray,
         prob: np.ndarray,
-        x_off: np.ndarray,
-        y_off: np.ndarray,
         num_clusters: int,
         cost_table: np.ndarray,
         down_scaling: float,
@@ -144,10 +142,7 @@ class ClusterFrames(FramePass):
         if(len(x) < num_clusters):
             return None
 
-        x_true = (x + 0.5 + x_off / down_scaling).astype(int)
-        y_true = (y + 0.5 + y_off / down_scaling).astype(int)
-
-        trans = fpe_math.table_transition((x_true, y_true), (x_true, y_true), cost_table)
+        trans = fpe_math.table_transition((x, y), (x, y), cost_table)
         # graph = (2 + trans) - (np.expand_dims(prob, 1)) - (np.expand_dims(prob, 0))  ??? What was I thinking???
         # A kind of "intra-transition" scoring scheme... I believe this was the prior scheme, not sure why I replaced it...
         log_prob = np.log(prob)
@@ -171,8 +166,6 @@ class ClusterFrames(FramePass):
                 x[keep],
                 y[keep],
                 prob[keep],
-                x_off[keep],
-                y_off[keep],
                 num_clusters,
                 cost_table,
                 down_scaling,
@@ -196,11 +189,9 @@ class ClusterFrames(FramePass):
     @classmethod
     def _compute_cluster(
         cls,
-        y: np.ndarray,
         x: np.ndarray,
+        y: np.ndarray,
         prob: np.ndarray,
-        x_off: np.ndarray,
-        y_off: np.ndarray,
         num_clusters: int,
         width: int,
         cost_table: np.ndarray,
@@ -212,11 +203,11 @@ class ClusterFrames(FramePass):
     ) -> List[Tuple[np.ndarray, ...]]:
         # Special case: When cluster size is 1...
         if(num_clusters == 1):
-            return [(y, x, prob, x_off, y_off)]
+            return [(x, y, prob)]
 
         # Find peak locations...
         if(cluster_with == "PEAKS"):
-            top_indexes = find_peaks(x, y, prob, width)
+            top_indexes = find_peaks(x.astype(int), y.astype(int), prob, width)
         else:
             top_indexes = np.ones(len(x), dtype=bool)
 
@@ -224,8 +215,6 @@ class ClusterFrames(FramePass):
             x[top_indexes],
             y[top_indexes],
             prob[top_indexes],
-            x_off[top_indexes],
-            y_off[top_indexes],
             num_clusters,
             cost_table,
             down_scaling,
@@ -235,7 +224,7 @@ class ClusterFrames(FramePass):
         )
 
         if(components is None):
-            return [(y, x, prob, x_off, y_off) for i in range(num_clusters)]
+            return [(x, y, prob) for i in range(num_clusters)]
 
         if(cluster_with == "PEAKS"):
             cx = [np.mean(x[components == i]) for i in range(num_clusters)]
@@ -249,13 +238,13 @@ class ClusterFrames(FramePass):
         masks = [mask_arr == i for i in range(num_clusters)]
         
         return [
-            (y[mask], x[mask], prob[mask], x_off[mask], y_off[mask]) for mask in masks
+            (x[mask], y[mask], prob[mask]) for mask in masks
         ]
 
     def run_step(self, prior: Optional[ForwardBackwardFrame], current: ForwardBackwardFrame, frame_index: int,
                  bodypart_index: int, metadata: AttributeDict) -> Optional[ForwardBackwardFrame]:
         num_out = metadata.num_outputs
-        y, x, prob, x_off, y_off = current.orig_data.unpack()
+        x, y, prob = current.orig_data.unpack()
         if(y is None):
             return None
 
@@ -266,7 +255,7 @@ class ClusterFrames(FramePass):
 
         if((not current.ignore_clustering) and ((frame_index, bp_group) not in self._cluster_dict)):
             self._cluster_dict[(frame_index, bp_group)] = self._compute_cluster(
-                y, x, prob, x_off, y_off, num_out, metadata.width,
+                x, y, prob, num_out, metadata.width,
                 self._cost_table, metadata.down_scaling,
                 self.config.minimum_cluster_size,
                 self.config.max_throwaway_count,

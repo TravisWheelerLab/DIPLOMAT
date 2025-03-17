@@ -1,4 +1,6 @@
 from typing import Tuple, Any, Optional, MutableMapping
+
+from PIL.ImageChops import offset
 from typing_extensions import Protocol
 import copy
 from diplomat.predictors.fpe import fpe_math
@@ -18,7 +20,7 @@ class EditableFramePassEngine(Protocol):
     def frame_data(self) -> ForwardBackwardData:
         raise NotImplementedError
 
-    def video_to_scmap_coord(self, coord: Tuple[float, float, float]) -> Tuple[int, int, float, float, float]:
+    def video_to_scmap_coord(self, coord: Tuple[float, float, float]) -> Tuple[float, float, float]:
         pass
 
     def scmap_to_video_coord(
@@ -26,13 +28,11 @@ class EditableFramePassEngine(Protocol):
         x_scmap: float,
         y_scmap: float,
         prob: float,
-        x_off: float,
-        y_off: float,
         down_scaling: float
     ) -> Tuple[float, float, float]:
         pass
 
-    def get_maximum_with_defaults(self, frame: ForwardBackwardFrame) -> Tuple[int, int, float, float, float]:
+    def get_maximum_with_defaults(self, frame: ForwardBackwardFrame) -> Tuple[float, float, float]:
         pass
 
 
@@ -71,7 +71,7 @@ class Point(labeler_lib.PoseLabeler):
         changed_frames = self._frame_engine.changed_frames
         frames = self._frame_engine.frame_data.frames
 
-        x, y, off_x, off_y, prob = self._frame_engine.video_to_scmap_coord((x, y, p))
+        x, y, prob = self._frame_engine.video_to_scmap_coord((x, y, p))
         old_frame_data = frames[frm][bp]
         is_orig = False
 
@@ -82,7 +82,7 @@ class Point(labeler_lib.PoseLabeler):
 
         new_data = SparseTrackingData()
         if (prob > 0):
-            new_data.pack(*[np.array([item]) for item in [y, x, prob, off_x, off_y]])
+            new_data.pack(*[np.array([item]) for item in [x, y, prob]])
 
         new_frame = ForwardBackwardFrame()
         new_frame.orig_data = new_data
@@ -194,12 +194,10 @@ class Approximate(labeler_lib.PoseLabeler):
         x: np.ndarray,
         y: np.ndarray,
         probs: np.ndarray,
-        x_off: np.ndarray,
-        y_off: np.ndarray,
         max_cell_count: int
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         top_k = np.argpartition(probs, -max_cell_count)[-max_cell_count:]
-        return (x[top_k], y[top_k], probs[top_k], x_off[top_k], y_off[top_k])
+        return (x[top_k], y[top_k], probs[top_k])
 
     def predict_location(
         self,
@@ -229,7 +227,7 @@ class Approximate(labeler_lib.PoseLabeler):
             return ((frame_idx, bp_idx, None, (x, y)), (x, y, 0))
 
         xvid, yvid = x, y
-        x, y, x_off, y_off, prob = self._frame_engine.video_to_scmap_coord((x, y, probability))
+        x, y, prob = self._frame_engine.video_to_scmap_coord((x, y, probability))
         gp, gc = self._cached_gaussian
         gc = gc + np.array([[x], [y]], dtype=int)
 
@@ -237,11 +235,14 @@ class Approximate(labeler_lib.PoseLabeler):
         gc = gc[:, good_locs]
         gp = gp[good_locs]
 
-        fy, fx, fp, foffx, foffy = [a if(a is not None) else np.array([]) for a in frame.orig_data.unpack()]
-        final_p, (final_x, final_y), (final_off_x, final_off_y) = self._absorb_frame_data(
+        fx, fy, fp = [a if(a is not None) else np.array([]) for a in frame.orig_data.unpack()]
+        f_coords = np.asarray([fx, fy])
+        f_off = f_coords - f_coords.astype(int)
+
+        final_p, (final_x, final_y), (fox, foy) = self._absorb_frame_data(
             fp * ((1 - user_amp) / np.max(fp)) if(len(fp) > 0) else fp,
-            np.asarray([fx, fy]),
-            np.asarray([foffx, foffy]),
+            f_coords.astype(int),
+            f_off,
             gp * user_amp,
             gc,
             np.asarray([
@@ -250,21 +251,20 @@ class Approximate(labeler_lib.PoseLabeler):
             ])
         )
 
-        final_x, final_y, final_p, final_off_x, final_off_y = self._filter_cell_count(
+        final_x = final_x + fox
+        final_y = final_y + foy
+
+        final_x, final_y, final_p = self._filter_cell_count(
             final_x,
             final_y,
             final_p,
-            final_off_x,
-            final_off_y,
             self.CELL_LIMIT
         )
 
-        final_x = final_x.astype(np.int32)
-        final_y = final_y.astype(np.int32)
         final_p /= np.max(final_p)
 
         sp = SparseTrackingData()
-        sp.pack(final_y, final_x, final_p, final_off_x, final_off_y)
+        sp.pack(final_x, final_y, final_p)
         temp_f = ForwardBackwardFrame(src_data=sp, frame_probs=final_p)
 
         x, y, prob = self._frame_engine.scmap_to_video_coord(
@@ -307,9 +307,7 @@ class Approximate(labeler_lib.PoseLabeler):
 
 
         group = bp // num_outputs
-        #print(f"Group : {group}")
-
-        other_body_part_indices = [group * num_outputs + i for i in range(num_outputs) if i != bp % num_outputs]
+        other_body_part_indices = (group * num_outputs + i for i in range(num_outputs) if i != bp % num_outputs)
         #print(f"Other body part indices: {other_body_part_indices}")
 
         body_part_is_orig = {bp: False for bp in other_body_part_indices}
@@ -331,46 +329,39 @@ class Approximate(labeler_lib.PoseLabeler):
             changed_frames[idx] = old_frame_data
             is_orig = True
 
-
         if(suggested_frame is None):
             new_data = SparseTrackingData()
-            x, y, off_x, off_y, prob = self._frame_engine.video_to_scmap_coord(
+            x, y, prob = self._frame_engine.video_to_scmap_coord(
                 coord + (0,)
             )
-            new_data.pack(*[np.array([item]) for item in [y, x, prob, off_x, off_y]])
+            new_data.pack(*[np.array([item]) for item in [x, y, prob]])
         else:
-            y, x, prob, x_offset, y_offset = suggested_frame.src_data.unpack()
+            x, y, prob = suggested_frame.src_data.unpack()
             max_prob_idx = np.argmax(prob)
             new_data = SparseTrackingData()
-            new_data.pack(*[np.array([item]) for item in [y[max_prob_idx], x[max_prob_idx], 1, x_offset[max_prob_idx], y_offset[max_prob_idx]]])
+            new_data.pack(*[np.array([item]) for item in [x[max_prob_idx], y[max_prob_idx], 1]])
 
             #print(f"Point location: {(x[max_prob_idx], y[max_prob_idx])}")
             for other_bp in other_body_part_indices:
-                bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset = copy.deepcopy(frames[frm][other_bp].orig_data).unpack()
-                idx = 0
-                for c_x, c_y in zip(bp_x, bp_y):
-                    #print(f"Checking location: {(c_x, c_y)}")
-                    if c_x == x[max_prob_idx] and c_y == y[max_prob_idx]:
-                        #print(f"Found matching location: {(c_x, c_y)}")
-                        #print()
-                        bp_prob[idx] = 0
+                bp_x, bp_y, bp_prob = frames[frm][other_bp].orig_data.unpack()
 
-                        new_bp_data = SparseTrackingData()
+                any_matches = (
+                    (x[max_prob_idx].astype(int) == bp_x.astype(int))
+                    & (y[max_prob_idx].astype(int) == bp_y.astype(int))
+                )
 
-                        new_bp_data.pack(bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset)
+                if(np.any(any_matches)):
+                    bp_x = bp_prob.copy()
+                    bp_prob = bp_prob.copy()
+                    bp_prob[any_matches] = 0
 
-
-                        new_bp_frame = ForwardBackwardFrame()
-                        new_bp_frame.orig_data = new_bp_data
-                        new_bp_frame.src_data = new_bp_data
-                        new_bp_frame.disable_occluded = True
-                        new_bp_frame.ignore_clustering = True
-                        new_body_part_data[other_bp] = new_bp_frame
-
-                    idx += 1
-            #print(f"New body part data: {new_body_part_data}")
-                        
-
+                    new_bp_data = SparseTrackingData().pack(bp_x, bp_y, bp_prob)
+                    new_bp_frame = ForwardBackwardFrame()
+                    new_bp_frame.orig_data = new_bp_data
+                    new_bp_frame.src_data = new_bp_data
+                    new_bp_frame.disable_occluded = True
+                    new_bp_frame.ignore_clustering = True
+                    new_body_part_data[other_bp] = new_bp_frame
 
         new_frame = ForwardBackwardFrame()
         new_frame.orig_data = new_data
@@ -419,7 +410,6 @@ class Approximate(labeler_lib.PoseLabeler):
             frames[frm][other_bp] = other_frame
             
             new_body_part_is_orig[other_bp] = new_other_is_orig
-
 
         return (frm, bp, new_is_orig, new_old_frame_data, new_other_old_frame_data, new_body_part_is_orig)
 
@@ -464,11 +454,9 @@ class ApproximateSourceOnly(Approximate):
         x: np.ndarray,
         y: np.ndarray,
         probs: np.ndarray,
-        x_off: np.ndarray,
-        y_off: np.ndarray,
         max_cell_count: int
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        return (x, y, probs, x_off, y_off)
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        return (x, y, probs)
 
 
 class NearestPeakInSource(labeler_lib.PoseLabeler):
@@ -510,9 +498,9 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
             )
             return ((frame_idx, bp_idx, None, (x, y)), (x, y, 0))
 
-        ys, xs, probs, off_xs, off_ys = frame.orig_data.unpack()
+        xs, ys, probs = frame.orig_data.unpack()
 
-        peak_locs = find_peaks(xs, ys, probs, meta.width)
+        peak_locs = find_peaks(xs.astype(int), ys.astype(int), probs, meta.width)
         peak_locs = peak_locs[probs[peak_locs] >= config.minimum_peak_value]
         #print(peak_locs)
         if(len(peak_locs) <= 1):
@@ -527,12 +515,12 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
             return _x + 0.5 + (_x_off / meta.down_scaling), _y + 0.5 + (_y_off / meta.down_scaling)
 
         # Compute nearest location...
-        xp, yp, pp, xp_off, yp_off = self._frame_engine.video_to_scmap_coord((x, y, probability))
+        xp, yp, pp = self._frame_engine.video_to_scmap_coord((x, y, probability))
 
-        xp_ex, yp_ex = to_exact(xp, yp, xp_off, yp_off)
-        x_ex, y_ex = to_exact(xs[peak_locs], ys[peak_locs], off_xs[peak_locs], off_ys[peak_locs])
+        #xp_ex, yp_ex = to_exact(xp, yp)
+        x_ex, y_ex = xs[peak_locs], ys[peak_locs]
 
-        dists = (xp_ex - x_ex) ** 2 + (yp_ex - y_ex) ** 2
+        dists = (xp - x_ex) ** 2 + (yp - y_ex) ** 2
         nearest_idx = np.argmin(dists)
 
         # Compute belonging of every cell...
@@ -550,7 +538,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         probs = probs * multipliers[owner_peak]
 
         temp_f = ForwardBackwardFrame(
-            src_data=SparseTrackingData().pack(ys, xs, probs, off_xs, off_ys), frame_probs=probs
+            src_data=SparseTrackingData().pack(xs, ys, probs), frame_probs=probs
         )
 
         x, y, prob = self._frame_engine.scmap_to_video_coord(
@@ -572,10 +560,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         num_outputs = self._frame_engine.frame_data.metadata.num_outputs #the number of individuals
 
         group = bp // num_outputs
-        #print(f"Group : {group}")
-
-        other_body_part_indices = [group * num_outputs + i for i in range(num_outputs) if i != bp % num_outputs]
-        #print(f"Other body part indices: {other_body_part_indices}")
+        other_body_part_indices = (group * num_outputs + i for i in range(num_outputs) if i != bp % num_outputs)
 
         body_part_is_orig = {bp: False for bp in other_body_part_indices}
         old_body_part_data = {} #keep track of these for the undo function 
@@ -592,40 +577,42 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         
         new_body_part_data = {}
 
-
-
         if(idx not in changed_frames):
             changed_frames[idx] = old_frame_data
             is_orig = True
 
         if(suggested_frame is None):
             new_data = SparseTrackingData()
-            x, y, off_x, off_y, prob = self._frame_engine.video_to_scmap_coord(
+            x, y, prob = self._frame_engine.video_to_scmap_coord(
                 coord + (0,)
             )
-            new_data.pack(*[np.array([item]) for item in [y, x, prob, off_x, off_y]])
+            new_data.pack(*[np.array([item]) for item in [x, y, prob]])
         else:
-            y, x, prob, x_offset, y_offset = suggested_frame.src_data.unpack()
+            x, y, prob = suggested_frame.src_data.unpack()
             max_prob_idx = np.argmax(prob)
             new_data = SparseTrackingData()
-            new_data.pack(*[np.array([item]) for item in [y[max_prob_idx], x[max_prob_idx], 1, x_offset[max_prob_idx], y_offset[max_prob_idx]]])
+            new_data.pack(*[np.array([item]) for item in [x[max_prob_idx], y[max_prob_idx], 1]])
 
             for other_bp in other_body_part_indices:
-                bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset = copy.deepcopy(frames[frm][other_bp].orig_data).unpack()
-                idx = 0
-                for c_x, c_y in zip(bp_x, bp_y):
-                    if c_x == x[max_prob_idx] and c_y == y[max_prob_idx]:
-                        bp_prob[idx] = 0
+                bp_x, bp_y, bp_prob = frames[frm][other_bp].orig_data.unpack()
 
-                        new_bp_data = SparseTrackingData()
-                        new_bp_data.pack(bp_y, bp_x, bp_prob, bp_x_offset, bp_y_offset)
-                        new_bp_frame = ForwardBackwardFrame()
-                        new_bp_frame.orig_data = new_bp_data
-                        new_bp_frame.src_data = new_bp_data
-                        new_bp_frame.disable_occluded = True
-                        new_bp_frame.ignore_clustering = True
-                        new_body_part_data[other_bp] = new_bp_frame
-                    idx += 1
+                any_matches = (
+                    (x[max_prob_idx].astype(int) == bp_x.astype(int))
+                    & (y[max_prob_idx].astype(int) == bp_y.astype(int))
+                )
+
+                if(np.any(any_matches)):
+                    bp_x = bp_prob.copy()
+                    bp_prob = bp_prob.copy()
+                    bp_prob[any_matches] = 0
+
+                    new_bp_data = SparseTrackingData().pack(bp_x, bp_y, bp_prob)
+                    new_bp_frame = ForwardBackwardFrame()
+                    new_bp_frame.orig_data = new_bp_data
+                    new_bp_frame.src_data = new_bp_data
+                    new_bp_frame.disable_occluded = True
+                    new_bp_frame.ignore_clustering = True
+                    new_body_part_data[other_bp] = new_bp_frame
 
         new_frame = ForwardBackwardFrame()
         new_frame.orig_data = new_data
@@ -657,7 +644,6 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
 
         frames[frm][bp] = frame_data
 
-
         new_body_part_is_orig = {}
         new_other_old_frame_data = {}
 
@@ -675,7 +661,6 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
             frames[frm][other_bp] = other_frame
             
             new_body_part_is_orig[other_bp] = new_other_is_orig
-
 
         return (frm, bp, new_is_orig, new_old_frame_data, new_other_old_frame_data, new_body_part_is_orig)
 
