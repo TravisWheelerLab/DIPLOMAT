@@ -1,8 +1,6 @@
 from typing import Tuple, Any, Optional, MutableMapping
 
-from PIL.ImageChops import offset
 from typing_extensions import Protocol
-import copy
 from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.arr_utils import find_peaks
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
