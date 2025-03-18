@@ -109,15 +109,15 @@ class EntropyOfTransitions(ScoreEngine):
         current_frame: ForwardBackwardFrame,
         trans_matrix: np.ndarray
     ) -> float:
-        py, px, __, __, __ = prior_frame.src_data.unpack()
-        cy, cx, __, __, __ = current_frame.src_data.unpack()
+        px, py, __ = prior_frame.src_data.unpack()
+        cx, cy, __ = current_frame.src_data.unpack()
 
         if(py is None or cy is None):
             return 0
 
         return float(np.sum(
             np.expand_dims(current_frame.frame_probs, 1)
-            * fpe_math.table_transition((px, py), (cx, cy), trans_matrix)
+            * fpe_math.table_transition_interpolate((px, py), (cx, cy), trans_matrix)
             * np.expand_dims(prior_frame.frame_probs, 0)
         ))
 

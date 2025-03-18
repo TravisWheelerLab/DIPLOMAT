@@ -2,7 +2,7 @@
 Provides the :py:class:`~diplomat.processing.pose.Pose` class, used for storing final predicted body part locations.
 """
 
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Literal
 from numpy import ndarray
 import numpy as np
 
@@ -83,7 +83,7 @@ class Pose:
         frame: Index,
         bodypart: Index,
         scmap_coord: PointData,
-        offset: Optional[FloatPointData],
+        offset: Union[FloatPointData, None],
         prob: Union[float, ndarray],
         down_scale: int,
     ):
@@ -111,6 +111,38 @@ class Pose:
         scmap_x = scmap_coord[0] * down_scale + (0.5 * down_scale) + offset[0]
         scmap_y = scmap_coord[1] * down_scale + (0.5 * down_scale) + offset[1]
 
+        self.set_x_at(frame, bodypart, scmap_x)
+        self.set_y_at(frame, bodypart, scmap_y)
+        self.set_prob_at(frame, bodypart, prob)
+
+    def set_at_no_offset(
+        self,
+        frame: Index,
+        bodypart: Index,
+        scmap_coord: PointData,
+        prob: Union[float, ndarray],
+        down_scale: int,
+    ):
+        """
+        Set the probability data at a given location or locations to the specified data.
+
+        :param frame: The index of the frame or frames to set, an integer or a slice.
+        :param bodypart: The index of the bodypart or bodyparts to set, integer or a slice
+        :param scmap_coord: The source map index to set this Pose's location to, specifically the index directly
+                            selected from the downscaled source map stored in the TrackingData object,
+                            including the offset. It is a tuple of two floats or numpy arrays of floats representing
+                            exact x and y coordinates. They are assumed to be downscaled, so they are multiplied by the
+                            downscale factor.
+        :param prob: The probabilities to be set in this Pose object, between 0 and 1. Is a numpy array
+                     of floating point numbers or a single floating point number.
+        :param down_scale: The downscale factor of the original source map relative to the video, an integer.
+                                  this is typically collected from the method TrackingData.get_down_scaling().
+                                  Ex. Value of 8 means TrackingData probability map is 1/8th the size of the original
+                                  video.
+        :return: Nothing...
+        """
+        scmap_x = scmap_coord[0] * down_scale
+        scmap_y = scmap_coord[1] * down_scale
         self.set_x_at(frame, bodypart, scmap_x)
         self.set_y_at(frame, bodypart, scmap_y)
         self.set_prob_at(frame, bodypart, prob)

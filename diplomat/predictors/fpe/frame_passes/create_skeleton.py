@@ -157,7 +157,7 @@ class CreateSkeleton(FramePass):
             self._prior_max_locations = [val for val in self._max_locations]
 
         # Add max location in frame to list of body part maximums for this frame.
-        y, x, probs, ox, oy = current.src_data.unpack()
+        x, y, probs = current.src_data.unpack()
 
         if(probs is None):
             self._max_locations[bodypart_index] = (None, 0, 0)
@@ -167,8 +167,8 @@ class CreateSkeleton(FramePass):
 
         self._max_locations[bodypart_index] = (
             probs[max_loc],
-            x[max_loc] + 0.5 + (ox[max_loc] / metadata.down_scaling),
-            y[max_loc] + 0.5 + (oy[max_loc] / metadata.down_scaling)
+            x[max_loc],
+            y[max_loc]
         )
 
         return None

@@ -117,7 +117,7 @@ class RepairClusters(FramePass):
                 if not ((part_idx, body_idx) == divmod(idx, num_bodies)):
                     print((part_idx, body_idx),divmod(idx, num_bodies))
                     assert False
-                part_x, part_y, part_p = FixFrame.get_max_location(frames[idx], down_scaling)
+                part_x, part_y, part_p = FixFrame.get_max_location(frames[idx])
                 if (part_x == None or part_y == None):
                     split[body_idx] = True
                     break
@@ -127,7 +127,7 @@ class RepairClusters(FramePass):
                     if not ((part2_idx, body_idx) == divmod(idx2, num_bodies)): 
                         print((part2_idx, body_idx),divmod(idx2, num_bodies))
                         assert False
-                    part2_x, part2_y, part2_p = FixFrame.get_max_location(frames[idx2], down_scaling)
+                    part2_x, part2_y, part2_p = FixFrame.get_max_location(frames[idx2])
                     # measure distance between parts
                     if (part2_x == None or part2_y == None):
                         continue
@@ -201,7 +201,7 @@ class RepairClusters(FramePass):
             if not ((part_idx, body_idx) == divmod(idx, num_bodies)):
                 print((part_idx, body_idx),divmod(idx, num_bodies))
                 assert False
-            part_x, part_y, part_p = FixFrame.get_max_location(frames[idx], down_scaling)
+            part_x, part_y, part_p = FixFrame.get_max_location(frames[idx])
             if (part_x == None or part_y == None):
                 continue
             for part2_idx in range(part_idx + 1, num_parts):
@@ -210,7 +210,7 @@ class RepairClusters(FramePass):
                 if not ((part2_idx, body_idx) == divmod(idx2, num_bodies)): 
                     print((part2_idx, body_idx),divmod(idx2, num_bodies))
                     assert False
-                part2_x, part2_y, part2_p = FixFrame.get_max_location(frames[idx2], down_scaling)
+                part2_x, part2_y, part2_p = FixFrame.get_max_location(frames[idx2])
                 # measure distance between parts
                 if (part2_x == None or part2_y == None):
                     continue
@@ -341,5 +341,7 @@ class RepairClusters(FramePass):
             optimal_parts, misplaced_parts = best_components[split_idx]
             for part_idx in misplaced_parts:
                 # discard the clustering altogether on misplaced parts
-                fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].orig_data.duplicate()
+                fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].src_data = (
+                    fb_data.frames[frame_idx][(num_bodies * part_idx) + body_idx].orig_data.duplicate()
+                )
         return fb_data

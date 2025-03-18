@@ -45,9 +45,7 @@ class SparseModes(IntEnum):
     OFFSET_COMBINATION: int = 2
     OFFSET_SUMMATION: int = 3
 
-class SparseTrackingData:
-    pass
-'''
+
 class SparseTrackingData:
     """
     Represents sparse tracking data. Includes probabilities, offsets, and x/y coordinates in the probability map.
@@ -151,7 +149,7 @@ class SparseTrackingData:
         :return: A new TrackingData object, with data matching the original SparseTrackingData object. Returns an empty
                  TrackingData if this object has no data stored yet...
         """
-        y, x, probs = self.unpack()
+        x, y, probs = self.unpack()
 
         new_td = TrackingData.empty_tracking_data(1, 1, orig_width, orig_height, orig_stride)
         new_td.set_offset_map(np.zeros((1, orig_height, orig_width, 1, 2), dtype=np.float32))
@@ -349,7 +347,7 @@ class SparseTrackingData:
     def __repr__(self):
         x, y, probs = self.unpack()
         return f"SparseTrackingData(x={x}, y={y}, probs={probs})"
-'''
+
 
 # Improves memory performance by using slots instead of a dictionary to store attributes...
 def add_slots(cls):

@@ -96,7 +96,7 @@ class ViterbiTransitionTable:
         elif(self._is_enter_state(current_coords)):
             return np.full((len(current_probs), len(prior_probs)), -np.inf, np.float32)
 
-        return fpe_math.table_transition(
+        return fpe_math.table_transition_interpolate(
             prior_coords, current_coords, self._table
         )
 
@@ -352,13 +352,13 @@ class MITViterbi(FramePass):
                     prior = fb_data.frames[frame_idx + self._prior_off][bp_idx]
                     current = fb_data.frames[frame_idx][bp_idx]
 
-                    py, px, __, __, __ = prior.src_data.unpack()
-                    cy, cx, __, __, __ = current.src_data.unpack()
+                    px, py, __ = prior.src_data.unpack()
+                    cx, cy, __ = current.src_data.unpack()
 
                     if (py is None):
-                        px = py = np.array([0])
+                        px = py = np.array([0.0])
                     if (cy is None):
-                        cx = cy = np.array([0])
+                        cx = cy = np.array([0.0])
 
                     # Compute the max of all the priors...
                     combined, combined_coords, source_idxs = arr_utils.pad_coordinates_and_probs(
@@ -370,9 +370,10 @@ class MITViterbi(FramePass):
 
                     prior_max_idxs = np.argmax(combined, axis=1)
                     max_of_maxes = np.argmax(
-                        np.max(combined, axis=1))  # Is it in occluded or frame?
+                        np.max(combined, axis=1)
+                    )  # Is it in occluded or frame?
 
-                    # If edge state is higher, select it over the actual frame coordinates...
+                    # If enter state is higher than occluded or frame state, select it over the actual frame coordinates...
                     #TODO what is going on here
                     if(combined[max_of_maxes][prior_max_idxs[max_of_maxes]] < prior.enter_state):
                         prob, coords = prior.enter_state, [-np.inf, -np.inf]
@@ -590,10 +591,10 @@ class MITViterbi(FramePass):
         frame: ForwardBackwardFrame,
         metadata: AttributeDict
     ) -> ForwardBackwardFrame:
-        y, x, probs, x_off, y_off = frame.src_data.unpack()
+        x, y, probs = frame.src_data.unpack()
 
         if len(y) == 1:
-            if(y == x == probs == x_off == y_off == [0]):
+            if(y == x == probs == [0]):
                 print("Invalid frame to start on! Using enter state...")
                 # The enter_state is used when no good fix frame is found over the entire video 
                 # (one where all parts are separable) the best scoring frame for the video 
@@ -641,7 +642,7 @@ class MITViterbi(FramePass):
         occluded_coords: np.ndarray,
         occluded_probs: np.ndarray,
         max_count: int,
-        min_prob: float,
+        min_prob: float
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Filter occluded coordinates and probabilities such that there is only max_count of them left, those with the
@@ -657,7 +658,7 @@ class MITViterbi(FramePass):
             return (occluded_coords, occluded_probs)
 
         indexes = np.argpartition(occluded_probs, -max_count)[-max_count:]
-
+        # TODO: Why was this commented out?
         #indexes = indexes[occluded_probs[indexes] > min_prob]
 
         return (occluded_coords[indexes], occluded_probs[indexes])
@@ -714,7 +715,7 @@ class MITViterbi(FramePass):
             # Grab the prior frame...
             prior_frame = prior[other_bp_group_idx * metadata.num_outputs + bp_off]
             if(isinstance(prior_frame, ForwardBackwardFrame)):
-                py, px, __, __, __ = prior_frame.src_data.unpack()
+                px, py, __, = prior_frame.src_data.unpack()
 
                 # If wasn't found, don't include in the result.
                 if(prior_frame.frame_probs is None):
@@ -724,7 +725,7 @@ class MITViterbi(FramePass):
                 nf_a = lambda: np.array([-np.inf])
 
                 prior_data = [
-                    (prior_frame.frame_probs, (px, py) if(py is not None) else (z_a(), z_a())),
+                    (prior_frame.frame_probs, (px, py) if(px is not None) else (z_a(), z_a())),
                     (prior_frame.occluded_probs, prior_frame.occluded_coords.T),
                     (np.array([prior_frame.enter_state]), (nf_a(), nf_a()))
                 ]
@@ -804,8 +805,8 @@ class MITViterbi(FramePass):
 
         for bp_i in group_range:
             #the source data from deep lab cut or sleap
-            py, px, pprob, p_occx, p_occy = prior[bp_i].src_data.unpack()
-            cy, cx, cprob, c_occx, c_occy = current[bp_i].src_data.unpack()
+            px, py, pprob = prior[bp_i].src_data.unpack()
+            cx, cy, cprob = current[bp_i].src_data.unpack()
 
             if((cprob is not None) and np.all(cprob <= 0)):
                 current[bp_i].src_data = SparseTrackingData()

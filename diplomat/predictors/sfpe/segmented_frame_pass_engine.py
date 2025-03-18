@@ -638,7 +638,7 @@ class SegmentedFramePassEngine(Predictor):
         frame: ForwardBackwardFrame,
         relaxed_radius: float = 0,
         verbose = False,
-    ) -> Tuple[int, int, float, float, float]:
+    ) -> Tuple[float, float, float]:
         """
         PRIVATE: Get the maximum location of a single forward backward frame.
         Returns a tuple containing the values x, y, probability, x offset,
@@ -650,18 +650,17 @@ class SegmentedFramePassEngine(Predictor):
             if verbose: print("\tno frame data")
             if(frame.occluded_probs is None):
                 if verbose: print("\t\tno occluded data")
-                return (-1, -1, 0, 0, 0)
+                return (-1.0, -1.0, 0.0)
             # No frame data, but the item is in the occluded state, so return that...
             max_occluded_loc = np.argmax(frame.occluded_probs)
             m_occ_x, m_occ_y = frame.occluded_coords[max_occluded_loc]
-            return (m_occ_x, m_occ_y, 0, 0, 0)
+            return (m_occ_x, m_occ_y, 0.0)
         else:
             # Get the max location in the frame....
-            y_coords, x_coords, orig_probs, x_offsets, y_offsets = frame.src_data.unpack()
+            x_coords, y_coords, orig_probs = frame.src_data.unpack()
 
             max_loc = np.argmax(frame.frame_probs)
-            m_y, m_x, m_p = y_coords[max_loc], x_coords[max_loc], frame.frame_probs[max_loc]
-            m_offx, m_offy = x_offsets[max_loc], y_offsets[max_loc]
+            m_x, m_y, m_p = x_coords[max_loc], y_coords[max_loc], frame.frame_probs[max_loc]
 
             # Get the max location on the occluded state...
             try:
@@ -679,12 +678,12 @@ class SegmentedFramePassEngine(Predictor):
                 # Return correct location for occluded, but return a
                 # probability of 0.
                 if verbose: print("\toccluded loc")
-                return (m_occ_x, m_occ_y, 0, 0, 0)
+                return (m_occ_x, m_occ_y, 0.0)
             else:
                 if (relaxed_radius <= 0):
                     # If no relaxed radius, just set pose...
                     if verbose: print("\t wout radius")
-                    return (m_x, m_y, m_p, m_offx, m_offy)
+                    return (m_x, m_y, m_p)
                 else:
                     # Now find locations within the radius...
                     dists = np.sqrt(
@@ -693,14 +692,15 @@ class SegmentedFramePassEngine(Predictor):
 
                     # No other neighbors, return initially suggested value...
                     if (len(res) <= 0):
-                        if verbose: print("\t no neighbors")
-                        return (m_x, m_y, m_p, m_offx, m_offy)
+                        if verbose:
+                            print("\t no neighbors")
+                        return (m_x, m_y, m_p)
                     else:
                         best_idx = res[np.argmax(orig_probs[res])]
-                        if verbose: print("\t w neighbors", m_p)
+                        if verbose:
+                            print("\t w neighbors", m_p)
                         return (
-                            x_coords[best_idx], y_coords[best_idx], m_p,
-                            x_offsets[best_idx], y_offsets[best_idx]
+                            x_coords[best_idx], y_coords[best_idx], m_p
                         )
 
     @classmethod
@@ -748,12 +748,12 @@ class SegmentedFramePassEngine(Predictor):
 
             for f_idx in range(start, end):
                 for bp_idx in range(frame_list.num_bodyparts):
-                    x, y, p, x_off, y_off = cls.get_maximum(
+                    x, y, p = cls.get_maximum(
                         frame_list.frames[f_idx][bp_idx], relaxed_radius
                     )
 
-                    poses.set_at(
-                        f_idx, alignment[bp_idx], (x, y), (x_off, y_off), p,
+                    poses.set_at_no_offset(
+                        f_idx, alignment[bp_idx], (x, y), p,
                         frame_list.metadata.down_scaling
                     )
 
@@ -962,23 +962,6 @@ class SegmentedFramePassEngine(Predictor):
         run_level_data: Optional[Tuple[np.ndarray, np.ndarray, int]]
     ) -> Iterable[Tuple[bool, Sequence[int]]]:
         """
-        Determines what segments should be run next 
-        For example if you have a segment without any fixed frames (frames with good separation, all segments are at most 200 frames)
-        It tries to always put the fixed frame at the beginning of the segment 
-        
-        Any segment that does have a fixed frame is returned immediately 
-
-        Then you have to do special logic for all of the segments where there is not a fixed frame 
-
-        Whcih is : take the nearest good segment (rightmost) and include the first frame into the given bad segment
-        and continue Viterbi from that good segment 
-
-        but you can only do that for the bad segment that is closest to a good segmentxxw
-        so you kind of have to run viterbi in 'tiers'
-        you run all of the ones that you can run, yield, and then you'll have updated the ones that are 'good' and then you rerun it 
-
-
-
         Iterates through segments to run levels of processing based on the provided segment indices and run level data.
 
         This method determines the correct order to run segments in. 
@@ -987,16 +970,8 @@ class SegmentedFramePassEngine(Predictor):
         by just continuing the Viterbi from the good segment. This can happen recursively, 
         to allow for long viterbi runs through difficult segments. 
         
-        This figures out what segments can be run in parallel next, and what segments still have dependencies on other segments.
-
-        Parameters:
-        - segment_idxs: np.ndarray, an array of segment indices that are to be processed.
-        - run_level_data: Optional[Tuple[np.ndarray, np.ndarray, int]], a tuple containing arrays of level values and booleans indicating if a segment
-          is before the fixed frame, along with the maximum level value. If None, default values are used.
-
-        Yields:
-        - Tuple[bool, Sequence[int]], a tuple where the first element is a boolean indicating if the segment is before the fixed frame, and the second
-          element is a sequence of segment indices to be processed at the current level.
+        This figures out what segments can be run in parallel next, and what segments still have dependencies on
+        other segments.
         """
         segment_idxs = np.asarray(segment_idxs)
 
@@ -1038,13 +1013,11 @@ class SegmentedFramePassEngine(Predictor):
                 for bp_i in range(self._frame_holder.num_bodyparts):
                     frame = self._frame_holder.frames[fi][bp_i]
 
-                    sy, sx, sp, sx_off, sy_off = frame.orig_data.unpack()
+                    sx, sy, sp = frame.orig_data.unpack()
                     repl_p, repl_p_occ, repl_c_occ = frame.frame_probs, frame.occluded_probs, frame.occluded_coords
 
                     if(sy is None or repl_p is None or len(repl_p) == 0):
                         # Just use occluded values...
-                        new_x_off = np.zeros(len(repl_c_occ))
-                        new_y_off = np.zeros(len(repl_c_occ))
                         new_p = repl_p_occ.copy()
                     else:
                         def _to_keys(_x, _y):
@@ -1053,15 +1026,10 @@ class SegmentedFramePassEngine(Predictor):
                         lookup = _NumpyDict(_to_keys(repl_c_occ[:, 0], repl_c_occ[:, 1]), np.arange(len(repl_p_occ)), -1)
                         indexes = lookup[_to_keys(sx, sy)]
 
-                        new_x_off = np.zeros(len(repl_c_occ))
-                        new_y_off = np.zeros(len(repl_c_occ))
-                        new_x_off[indexes] = sx_off
-                        new_y_off[indexes] = sy_off
-
                         new_p = repl_p_occ.copy()
                         new_p[indexes] = np.nanmax([repl_p_occ[indexes], repl_p], axis=0)
 
-                    frame.src_data.pack(repl_c_occ[:, 1], repl_c_occ[:, 0], new_p, new_x_off, new_y_off)
+                    frame.src_data.pack(repl_c_occ[:, 0], repl_c_occ[:, 1], new_p)
                     frame.orig_data = frame.src_data.duplicate()
                     frame.frame_probs = new_p
 
@@ -1362,7 +1330,7 @@ class SegmentedFramePassEngine(Predictor):
                 probs = np.zeros(len(data[2]), np.float32)
 
             res = SparseTrackingData()
-            res.pack(*data[:2], probs, *data[3:])
+            res.pack(*data[:2], probs)
             res = res.desparsify(header.frame_width - spc, header.frame_height - spc, header.stride)
 
             dest_frame.get_prob_table(*dst_idx)[start:end, start:end] = res.get_prob_table(0, 0)
@@ -1375,10 +1343,9 @@ class SegmentedFramePassEngine(Predictor):
 
             o_x, o_y = tuple(src_frame.occluded_coords.T)
             x, y = o_x + 1, o_y + 1
-            off_x = off_y = np.zeros(len(x), dtype=np.float32)
 
             res = SparseTrackingData()
-            res.pack(y, x, probs, off_x, off_y)
+            res.pack(x, y, probs)
 
             # Add 2 to resolve additional padding as needed for the edges...
             res = res.desparsify(header.frame_width - spc + 2, header.frame_height - spc + 2, header.stride)

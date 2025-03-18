@@ -26,7 +26,6 @@ class EditableFramePassEngine(Protocol):
         x_scmap: float,
         y_scmap: float,
         prob: float,
-        down_scaling: float
     ) -> Tuple[float, float, float]:
         pass
 
@@ -58,7 +57,6 @@ class Point(labeler_lib.PoseLabeler):
             #should we be returning this prob value or the probability value?
             x, y, prob = self._frame_engine.scmap_to_video_coord(
                 *self._frame_engine.get_maximum_with_defaults(frame),
-                meta.down_scaling
             )
             return ((frame_idx, bp_idx, x, y, 0), (x, y, 0))
 
@@ -220,7 +218,6 @@ class Approximate(labeler_lib.PoseLabeler):
         if(x is None):
             x, y, prob = self._frame_engine.scmap_to_video_coord(
                 *self._frame_engine.get_maximum_with_defaults(frame),
-                meta.down_scaling
             )
             return ((frame_idx, bp_idx, None, (x, y)), (x, y, 0))
 
@@ -267,7 +264,6 @@ class Approximate(labeler_lib.PoseLabeler):
 
         x, y, prob = self._frame_engine.scmap_to_video_coord(
             *self._frame_engine.get_maximum_with_defaults(temp_f),
-            meta.down_scaling
         )
 
         return ((frame_idx, bp_idx, temp_f, (x, y)), (x, y, prob))
@@ -492,7 +488,6 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         if(x is None):
             x, y, prob = self._frame_engine.scmap_to_video_coord(
                 *self._frame_engine.get_maximum_with_defaults(frame),
-                meta.down_scaling
             )
             return ((frame_idx, bp_idx, None, (x, y)), (x, y, 0))
 
@@ -504,8 +499,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         if(len(peak_locs) <= 1):
             # No peaks, or only one peak, perform basically a no-op, return prior frame state...
             x, y, prob = self._frame_engine.scmap_to_video_coord(
-                *self._frame_engine.get_maximum_with_defaults(frame),
-                meta.down_scaling
+                *self._frame_engine.get_maximum_with_defaults(frame)
             )
             return ((frame_idx, bp_idx, frame, (x, y)), (x, y, prob))
 
@@ -540,8 +534,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         )
 
         x, y, prob = self._frame_engine.scmap_to_video_coord(
-            *self._frame_engine.get_maximum_with_defaults(temp_f),
-            meta.down_scaling
+            *self._frame_engine.get_maximum_with_defaults(temp_f)
         )
 
         return ((frame_idx, bp_idx, temp_f, (x, y)), (x, y, prob))

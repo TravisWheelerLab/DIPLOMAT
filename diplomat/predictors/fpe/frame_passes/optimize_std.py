@@ -92,7 +92,7 @@ class OptimizeStandardDeviation(FramePass):
             self._max_locations = [None] * self.fb_data.num_bodyparts
             self._current_frame = frame_index
 
-        y, x, probs, ox, oy = current.src_data.unpack()
+        x, y, probs = current.src_data.unpack()
 
         if(y is None):
             self._max_locations[bodypart_index] = (None, 0, 0)
@@ -102,8 +102,8 @@ class OptimizeStandardDeviation(FramePass):
 
         self._max_locations[bodypart_index] = (
             probs[max_loc],
-            x[max_loc] + 0.5 + ox[max_loc] / metadata.down_scaling,
-            y[max_loc] + 0.5 + oy[max_loc] / metadata.down_scaling
+            x[max_loc],
+            y[max_loc]
         )
 
         return None

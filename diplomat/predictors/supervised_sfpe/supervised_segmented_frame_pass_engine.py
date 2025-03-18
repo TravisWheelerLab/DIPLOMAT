@@ -207,7 +207,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._segment_bp_order
         )
 
-    def get_maximum_with_defaults(self, frame) -> Tuple[int, int, float, float, float]:
+    def get_maximum_with_defaults(self, frame) -> Tuple[float, float, float]:
         return self.get_maximum(frame, self.settings.relaxed_maximum_radius)
 
     @property
@@ -218,21 +218,18 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
     def height(self) -> int:
         return self._height
 
-    @classmethod
     def scmap_to_video_coord(
-        cls,
+        self,
         x_scmap: float,
         y_scmap: float,
-        prob: float,
-        x_off: float,
-        y_off: float,
-        down_scaling: float
+        prob: float
     ) -> Tuple[float, float, float]:
-        x_video = (x_scmap + 0.5) * down_scaling + x_off
-        y_video = (y_scmap + 0.5) * down_scaling + y_off
+        d_scale = self._frame_holder.metadata.down_scaling
+        x_video = x_scmap * d_scale
+        y_video = y_scmap * d_scale
         return (x_video, y_video, prob)
 
-    def video_to_scmap_coord(self, coord: Tuple[float, float, float]) -> Tuple[int, int, float, float, float]:
+    def video_to_scmap_coord(self, coord: Tuple[float, float, float]) -> Tuple[float, float, float]:
         """
         PRIVATE: Convert a coordinate in video space to a coordinate in source map space.
 
@@ -242,15 +239,9 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                   map space.
         """
         down_scaling = self._frame_holder.metadata.down_scaling
-
         vid_x, vid_y, prob = coord
-        x, off_x = divmod(vid_x, down_scaling)
-        y, off_y = divmod(vid_y, down_scaling)
-        # Correct offsets to be relative to the center of the stride block...
-        off_x = off_x - (down_scaling * 0.5)
-        off_y = off_y - (down_scaling * 0.5)
 
-        return (int(x), int(y), off_x, off_y, prob)
+        return (vid_x / down_scaling, vid_y / down_scaling, prob)
 
     def _make_plot_of(
         self,
@@ -368,7 +359,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 # Plot post MIT-Viterbi frame data if it exists...
                 data = orig_data.unpack()
                 track_data = SparseTrackingData()
-                track_data.pack(*data[:2], frames, *data[3:])
+                track_data.pack(*data[:2], frames)
 
                 new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Post Passes", track_data))
 
@@ -498,8 +489,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             x, y, prob = self.scmap_to_video_coord(
                 *self.get_maximum_with_defaults(
                     sparse_frame
-                ),
-                d_scale
+                )
             )
 
             for score in self._fb_editor.score_displays:

@@ -142,7 +142,7 @@ class ClusterFrames(FramePass):
         if(len(x) < num_clusters):
             return None
 
-        trans = fpe_math.table_transition((x, y), (x, y), cost_table)
+        trans = fpe_math.table_transition_interpolate((x, y), (x, y), cost_table)
         # graph = (2 + trans) - (np.expand_dims(prob, 1)) - (np.expand_dims(prob, 0))  ??? What was I thinking???
         # A kind of "intra-transition" scoring scheme... I believe this was the prior scheme, not sure why I replaced it...
         log_prob = np.log(prob)
