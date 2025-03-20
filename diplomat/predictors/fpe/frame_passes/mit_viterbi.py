@@ -1070,16 +1070,16 @@ class MITViterbi(FramePass):
                 "probabilities can reach."
             ),
             "obscured_probability": (
-                1e-6, tc.RangedFloat(0, 1),
+                1e-30, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
                 "prior probability of being in any obscured state cell."
             ),
             "minimum_obscured_probability": (
-                1e-12, tc.RangedFloat(0, 1),
+                1e-30, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that sets a cutoff for obscured state probabilities."
             ),
             "enter_state_probability": (
-                1e-12, tc.RangedFloat(0, 1),
+                1e-30, tc.RangedFloat(0, 1),
                 "A constant, the probability of being in the enter state."
             ),
             "enter_state_exit_probability": (

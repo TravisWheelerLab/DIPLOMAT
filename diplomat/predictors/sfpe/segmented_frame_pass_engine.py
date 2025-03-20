@@ -1158,27 +1158,15 @@ class SegmentedFramePassEngine(Predictor):
                     pidx = bp_group * num_in_group + poff
                     cidx = bp_group * num_in_group + coff
 
-                    cx, cy, cp, cx_off, cy_off = self.get_maximum(
+                    cx, cy, cp = self.get_maximum(
                         current_frame[cidx],
                         self.settings.relaxed_maximum_radius
                     )
-                    px, py, pp, px_off, py_off = self.get_maximum(
+                    px, py, pp = self.get_maximum(
                         prior_frame[pidx],
                         self.settings.relaxed_maximum_radius
                     )
-
-                    d_scale = self._frame_holder.metadata.down_scaling
-
-                    score_matrix[poff, coff] = FixFrame.dist(
-                        (
-                            px + px_off / d_scale,
-                            py + py_off / d_scale
-                        ),
-                        (
-                            cx + cx_off / d_scale,
-                            cy + cy_off / d_scale
-                        )
-                    )
+                    score_matrix[poff, coff] = FixFrame.dist((px, py),(cx, cy))
 
         for label in labels:
             component_locs = np.flatnonzero(components == label)

@@ -500,7 +500,7 @@ class ForwardBackwardFrame:
             return np.asarray([0xFFFFFFFF], dtype="<u4").tobytes()
         return std.to_bytes(float_dtype, int_dtype)
 
-    def to_bytes(self, float_dtype: str, int_dtype: str) -> bytes:
+    def to_bytes(self, float_dtype: str) -> bytes:
         byte_list = [
             np.asarray([self.ignore_clustering, self.disable_occluded], dtype="?").tobytes(),
             np.asarray([self.enter_state], dtype=float_dtype).tobytes(),
