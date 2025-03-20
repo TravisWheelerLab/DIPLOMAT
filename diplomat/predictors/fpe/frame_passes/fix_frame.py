@@ -126,8 +126,8 @@ class FixFrame(FramePass):
         for g_i in range(num_groups):
             for i_out in range(num_outputs):
                 for j_out in range(i_out + 1, num_outputs):
-                    m1 = cls.get_max_location(frame_list[g_i * num_outputs + i_out], down_scaling)
-                    m2 = cls.get_max_location(frame_list[g_i * num_outputs + j_out], down_scaling)
+                    m1 = cls.get_max_location(frame_list[g_i * num_outputs + i_out])
+                    m2 = cls.get_max_location(frame_list[g_i * num_outputs + j_out])
                     if(m1[0] is None or m2[0] is None):
                         group_dist_scores[g_i] = -np.inf
                     else:
@@ -376,19 +376,14 @@ class FixFrame(FramePass):
             # For body part groupings...
             for i in range(num_outputs - 1):
                 #get the maximum probability location for the body part
-                f1_loc = cls.get_max_location(
-                    frames[bp_group_off * num_outputs + i],
-                    down_scaling
-                )
+                f1_loc = cls.get_max_location(frames[bp_group_off * num_outputs + i])
 
                 if (f1_loc[0] is None):
                     geometric_component = -np.inf
                     continue
 
                 for j in range(i + 1, num_outputs):
-                    f2_loc = cls.get_max_location(
-                        frames[bp_group_off * num_outputs + j], down_scaling
-                    )
+                    f2_loc = cls.get_max_location(frames[bp_group_off * num_outputs + j])
 
                     if (f2_loc[0] is None):
                         geometric_component = -np.inf
@@ -425,9 +420,7 @@ class FixFrame(FramePass):
                 bp_group_off, bp_off = divmod(bp, num_outputs)
 
                 num_pairs = num_outputs * len(skel[bp_group_off])
-                f1_loc = cls.get_max_location(
-                    frames[bp_group_off * num_outputs + bp_off], down_scaling
-                )
+                f1_loc = cls.get_max_location(frames[bp_group_off * num_outputs + bp_off])
 
                 if (f1_loc[0] is None):
                     skeletal_component = -np.inf
@@ -438,10 +431,7 @@ class FixFrame(FramePass):
                     min_score = np.inf
 
                     for bp2_off in range(num_outputs):
-                        f2_loc = cls.get_max_location(
-                            frames[bp2_group_off * num_outputs + bp2_off],
-                            down_scaling
-                        )
+                        f2_loc = cls.get_max_location(frames[bp2_group_off * num_outputs + bp2_off])
 
                         if(f2_loc[0] is None):
                             skeletal_component = -np.inf

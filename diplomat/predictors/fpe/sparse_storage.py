@@ -102,7 +102,7 @@ class SparseTrackingData:
 
         :return: A tuple of 1 dimensional numpy arrays, being: (y_coord, x_coord, probs, x_offset, y_offset)
         """
-        if (self._coords is None):
+        if (self._data is None):
             return (None, None, None)
 
         return self._data
@@ -115,7 +115,7 @@ class SparseTrackingData:
         """
         new_sparse_data = SparseTrackingData()
 
-        if(self._coords is None):
+        if(self._data is None):
             return new_sparse_data
 
         new_sparse_data.pack(*(np.copy(arr) for arr in self.unpack()))
@@ -129,7 +129,7 @@ class SparseTrackingData:
         """
         new_sparse_data = SparseTrackingData()
 
-        if(self._coords is None):
+        if(self._data is None):
             return new_sparse_data
 
         new_sparse_data.pack(*(arr for arr in self.unpack()))
