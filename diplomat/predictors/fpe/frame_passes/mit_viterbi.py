@@ -108,7 +108,6 @@ class MITViterbi(FramePass):
     to have taken.
     """
 
-    ND_UNIT_PER_SIDE_COUNT = 10
     # Hidden attribute used for checking if this plugin class uses a pool...
     UTILIZE_GLOBAL_POOL = True
 
@@ -142,20 +141,6 @@ class MITViterbi(FramePass):
             self.height, self.width, self._scaled_std, conf.amplitude,
             conf.lowest_value, self._flatten_std, conf.square_distances, True
         ))
-
-        if(conf.include_soft_domination):
-            self._gaussian_repel_table = norm(fpe_math.gaussian_table(
-                self.height,
-                self.width,
-                self._scaled_std * conf.soft_domination_spread,
-                conf.amplitude,
-                conf.lowest_value,
-                self._flatten_std * conf.soft_domination_spread if(self._flatten_std is not None) else None,
-                conf.square_distances,
-                True
-            ))
-
-        metadata.include_soft_domination = self.config.include_soft_domination
 
     def _augment_skeleton_weight(self, skeleton_weight, normalized_score):
         if normalized_score == -np.inf:
@@ -547,8 +532,6 @@ class MITViterbi(FramePass):
 
         skeleton_table: A StorageGraph object that stores the relationship between different body parts as defined in the skeleton data from the metadata.
         An optional parameter that, if provided, contains skeleton information that can be used to enhance the tracking by considering the structural relationships between different body parts.
-
-        soft_dom_weight: A float representing the weight of the soft domination factor. 
 
         skeleton_weight: A float representing the weight of the skeleton factor.
 
@@ -999,7 +982,7 @@ class MITViterbi(FramePass):
         disable_occluded: bool
     ) -> Tuple[np.ndarray, np.ndarray]:
         # otherwise the visible probs will override the occluded probs and the occluded state becomes "sticky."
-        current_frame_probs = current_frame_probs + to_log_space(occluded_prob)
+        current_frame_probs = np.full(current_frame_probs.shape, to_log_space(occluded_prob))
 
         merged_probs, merged_coords, _ = arr_utils.pad_coordinates_and_probs(
             [current_frame_probs, prior_occluded_probs],
@@ -1046,19 +1029,6 @@ class MITViterbi(FramePass):
                 "Avoiding a zero skeleton weight is necessary to stop "
                 "information loss across segment boundaries in SFPE."
             ),
-            "soft_domination_weight": (
-                1, float,
-                "A positive float, determines how much impact probabilities "
-                "from soft domination transitions should have in each "
-                "forward/backward step if soft domination was enabled "
-                "This is not a probability, but rather a ratio."
-            ),
-            "soft_domination_spread": (
-                3, float,
-                "A positive float, the standard deviation of the viterbi is "
-                "multiplied by this value to determine the standard deviation "
-                "of the soft domination gaussian."
-            ),
             "amplitude": (
                 1, float,
                 "The max amplitude of the 2D Gaussian curve used for "
@@ -1070,16 +1040,16 @@ class MITViterbi(FramePass):
                 "probabilities can reach."
             ),
             "obscured_probability": (
-                1e-30, tc.RangedFloat(0, 1),
+                0, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
                 "prior probability of being in any obscured state cell."
             ),
             "minimum_obscured_probability": (
-                1e-30, tc.RangedFloat(0, 1),
+                0, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that sets a cutoff for obscured state probabilities."
             ),
             "enter_state_probability": (
-                1e-30, tc.RangedFloat(0, 1),
+                1e-10, tc.RangedFloat(0, 1),
                 "A constant, the probability of being in the enter state."
             ),
             "enter_state_exit_probability": (
@@ -1107,11 +1077,6 @@ class MITViterbi(FramePass):
                 "A boolean. If True, include skeleton information in the "
                 "forward backward pass, otherwise don't. If no skeleton has "
                 "been built in a prior pass, does nothing."
-            ),
-            "include_soft_domination": (
-                False, bool,
-                "A boolean, if True, enable soft domination in MIT-Viterbi algorithm."
-                "Otherwise soft domination probabilities are excluded."
             ),
             "square_distances": (
                 False, bool,

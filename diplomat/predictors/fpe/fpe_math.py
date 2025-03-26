@@ -177,6 +177,8 @@ def table_transition(prior_coords: Coords, current_coords: Coords, lookup_table:
     px, py = prior_coords
     cx, cy = current_coords
 
+    cx, cy, px, py = [v.astype(np.int64) if not np.issubdtype(cx.dtype, np.integer) else v for v in (cx, cy, px, py)]
+
     delta_x = np.abs(np.expand_dims(cx, 1) - np.expand_dims(px, 0))
     delta_y = np.abs(np.expand_dims(cy, 1) - np.expand_dims(py, 0))
 

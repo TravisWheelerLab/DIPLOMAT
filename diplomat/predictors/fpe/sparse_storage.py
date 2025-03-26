@@ -52,11 +52,12 @@ class SparseTrackingData:
     """
     SparseModes = SparseModes
 
-    def __init__(self):
+    def __init__(self, downscaling: float = 1):
         """
         Makes a new tracking data with all empty fields.
         """
         self._data = None
+        self._downscaling = downscaling
 
     @property
     def coords(self):
@@ -160,7 +161,7 @@ class SparseTrackingData:
         x_int = x.astype(np.int64)
         y_int = y.astype(np.int64)
         x_off = ((x - x_int) - 0.5) * orig_stride
-        y_off = ((x - y_int) - 0.5) * orig_stride
+        y_off = ((y - y_int) - 0.5) * orig_stride
 
         new_td.get_source_map()[0, y_int, x_int, 0] = probs
         new_td.get_offset_map()[0, y_int, x_int, 0, 0] = x_off
