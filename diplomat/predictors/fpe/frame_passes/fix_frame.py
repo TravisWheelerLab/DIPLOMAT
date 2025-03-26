@@ -471,16 +471,18 @@ class FixFrame(FramePass):
                             result = max_dist
                         else:
                             result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
-
-                        if result / relative_std > 2:
-                            result = -np.inf
                         
                         min_score = min(result, min_score)
 
-                    skeletal_component -= (min_score / num_pairs)
-                    skeletal_component2 -= (min_score / num_pairs)
-
-        #print(f"geometric component {geometric_component}\nskeletal component {skeletal_component}\n")
+                    if min_score / relative_std > 2:
+                        #print("weird edge!")
+                        skeletal_component = -np.inf
+                        skeletal_component2 -= (max_dist / num_pairs)
+                        #print(f"\tskeleton avg {avg}, std {relative_std}\n\tpart pair dist {min_score}\n\tmax dist {max_dist}")
+                    else:
+                        #print(".", end = '')
+                        skeletal_component -= (min_score / num_pairs)
+                        skeletal_component2 -= (min_score / num_pairs)
 
         score = geometric_component + skeletal_component
         score2 = geometric_component2 + skeletal_component2
