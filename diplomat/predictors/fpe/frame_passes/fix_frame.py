@@ -111,7 +111,7 @@ class FixFrame(FramePass):
 
             # Now traverse the storage graph making connection between things...
             for node_group1 in range(len(storage_graph)):
-                for node_group2, (__, __, avg) in storage_graph[node_group1]:
+                for node_group2, (__, __, avg, __) in storage_graph[node_group1]:
                     for node_off1 in range(num_outputs):
                         if(node_group1 == fixed_group and node_off1 != i):
                             continue
@@ -457,7 +457,7 @@ class FixFrame(FramePass):
                     skeletal_component2 -= (max_dist / num_pairs)
                     continue
 
-                for (bp2_group_off, (__, __, avg)) in skel[bp_group_off]:
+                for (bp2_group_off, (__, __, avg, relative_std)) in skel[bp_group_off]:
                     min_score = np.inf
 
                     for bp2_off in range(num_outputs):
@@ -471,6 +471,9 @@ class FixFrame(FramePass):
                             result = max_dist
                         else:
                             result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
+
+                        # compute the variation of the distance `result` from the expected distance via the skeleton
+
 
                         min_score = min(result, min_score)
 

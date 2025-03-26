@@ -188,7 +188,7 @@ class MITViterbi(FramePass):
         if("skeleton" in metadata):
             self._skeleton_tables = StorageGraph(metadata.skeleton.node_names())
 
-            for ((n1, n2), (bin_val, freq, avg)) in metadata.skeleton.items():
+            for ((n1, n2), (bin_val, freq, avg, __)) in metadata.skeleton.items():
                 fill_func = lambda x, y: fpe_math.skeleton_formula(
                     x, y, avg, **metadata.skeleton_config, in_log_space=True
                 )
