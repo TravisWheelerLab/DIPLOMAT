@@ -472,9 +472,9 @@ class FixFrame(FramePass):
                         else:
                             result = np.abs(cls.dist(f1_loc, f2_loc) - avg)
 
-                        # compute the variation of the distance `result` from the expected distance via the skeleton
-
-
+                        if result / relative_std > 2:
+                            result = -np.inf
+                        
                         min_score = min(result, min_score)
 
                     skeletal_component -= (min_score / num_pairs)

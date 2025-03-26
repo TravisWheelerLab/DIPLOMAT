@@ -55,9 +55,7 @@ class CreateSkeleton(FramePass):
                 b, freq, avg_val = hist.get_max()
                 relative_std = hist.get_std_using_mean(avg_val)
                 true_mean, true_std = hist.get_mean_and_std()
-                print(f"bin {b}: {freq}\n{avg_val}, {relative_std}\n{true_mean}, {true_std}")
-                input()
-                new_skeleton_info[edge] = (b, freq, avg_val, relative_std)#hist.get_max()
+                new_skeleton_info[edge] = (b, freq, avg_val, relative_std)
 
         new_frame_data.metadata.skeleton = new_skeleton_info
         new_frame_data.metadata.skeleton_config = {
