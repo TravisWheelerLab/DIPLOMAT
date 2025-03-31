@@ -361,6 +361,7 @@ class FixFrame(FramePass):
         num_outputs: int,
         down_scaling: float,
         skeleton: Optional[StorageGraph],
+        optimal_std: float,
         max_dist: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> Tuple[float, float]:
@@ -421,13 +422,11 @@ class FixFrame(FramePass):
                     min_dist = min(cls.dist(f1_loc, f2_loc), min_dist)
                     total_conf += f1_loc[2] * f2_loc[2]
                     count += 1
-
+                
             if(np.isinf(min_dist)):
                 min_dist = 0
-            if(min_dist == 0 or count == 0):
+            if(min_dist < optimal_std or count == 0):
                 # BAD! We found a frame that failed to cluster properly...
-
-                #looks like this is the difference between score and score2? 
                 geometric_component = -np.inf
 
             # Minimum distance, weighted by average skeleton-pair confidence...
@@ -474,13 +473,13 @@ class FixFrame(FramePass):
                         
                         min_score = min(result, min_score)
 
+                    # detect malformed poses:
                     if min_score / relative_std > 2:
-                        #print("weird edge!")
+                        # if the best score for this pose is still an outlier, the frame will be filtered out.
                         skeletal_component = -np.inf
                         skeletal_component2 -= (max_dist / num_pairs)
-                        #print(f"\tskeleton avg {avg}, std {relative_std}\n\tpart pair dist {min_score}\n\tmax dist {max_dist}")
                     else:
-                        #print(".", end = '')
+                        # otherwise, this frame can be used.
                         skeletal_component -= (min_score / num_pairs)
                         skeletal_component2 -= (min_score / num_pairs)
 
@@ -496,6 +495,7 @@ class FixFrame(FramePass):
         num_outputs: int,
         down_scaling: float,
         skeleton: Optional[StorageGraph],
+        optimal_std: float,
         max_dist: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> np.ndarray:
@@ -506,7 +506,7 @@ class FixFrame(FramePass):
 
         for i, frame in enumerate(frames):
             #this will be a tuple of scores per frame 
-            final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton, max_dist)
+            final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton, optimal_std, max_dist)
 
             if(progress_bar is not None):
                 progress_bar.update()
@@ -549,6 +549,7 @@ class FixFrame(FramePass):
         num_frames = fb_data.num_frames
         down_scaling = fb_data.metadata.down_scaling
         skeleton = fb_data.metadata.get("skeleton", None)
+        optimal_std = fb_data.metadata.optimal_std[2]
 
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
@@ -561,14 +562,14 @@ class FixFrame(FramePass):
             with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
                 pool.fast_map(
                     cls.compute_list_of_scores,
-                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, down_scaling, skeleton, max_dist),
+                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, down_scaling, skeleton, optimal_std, max_dist),
                     lambda i, val: scores.__setitem__(to_index(i), val),
                     (fb_data.num_frames + (cls.SCORES_PER_CHUNK - 1)) // cls.SCORES_PER_CHUNK
                 )
         else:
             for f_idx in range(num_frames):
                 scores[f_idx] = cls.compute_single_score(
-                    fb_data.frames[f_idx], num_outputs, down_scaling, skeleton, max_dist
+                    fb_data.frames[f_idx], num_outputs, down_scaling, skeleton, optimal_std, max_dist
                 )
                 if (prog_bar is not None):
                     prog_bar.update(1)
