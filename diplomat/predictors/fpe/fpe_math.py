@@ -195,7 +195,7 @@ def table_transition_interpolate(prior_coords: Coords, current_coords: Coords, l
     :param lookup_table: The 2D probability lookup table ([delta x, delta y] -> prob). A numpy array.
 
     :return: A 2D array containing all the transition probabilities for going from any pixel in prior to
-             any pixel in current.
+             any pixel in current, indexed by current first, prior second...
     """
     px, py = prior_coords
     cx, cy = current_coords

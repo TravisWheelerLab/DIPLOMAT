@@ -247,7 +247,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         self,
         figsize: Tuple[float, float],
         dpi: int, title: str,
-        track_data: SparseTrackingData
+        track_data: SparseTrackingData,
+        **kwargs
     ) -> wx.Bitmap:
         # Get the frame...
         import matplotlib
@@ -262,7 +263,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         down_scaling = self.frame_data.metadata.down_scaling
         track_data = track_data.desparsify(w, h, down_scaling)
 
-        axes.imshow(track_data.get_prob_table(0, 0))
+        axes.imshow(track_data.get_prob_table(0, 0), **kwargs)
         figure.tight_layout()
         figure.canvas.draw()
 
@@ -351,9 +352,9 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
             if ((frame_idx, bp_idx) in self.changed_frames):
                 f = self.changed_frames[frame_idx, bp_idx]
-                frames, occluded, orig_data = f.frame_probs, f.occluded_probs, f.orig_data
+                frames, occluded, occ_coords, orig_data = f.frame_probs, f.occluded_probs, f.occluded_coords, f.orig_data
             else:
-                frames, occluded, orig_data = all_data.frame_probs, all_data.occluded_probs, all_data.orig_data
+                frames, occluded, occ_coords, orig_data = all_data.frame_probs, all_data.occluded_probs, all_data.occluded_coords, all_data.orig_data
 
             if(frames is not None):
                 # Plot post MIT-Viterbi frame data if it exists...
@@ -361,7 +362,14 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 track_data = SparseTrackingData()
                 track_data.pack(*data[:2], frames)
 
-                new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Post Passes", track_data))
+                new_bitmap_list.append(self._make_plot_of(
+                    figsize, dpi, bp_name + " Post Passes", track_data, vmin=0, vmax=1
+                ))
+
+                occ_data = SparseTrackingData().pack(*occ_coords.T, occluded)
+                new_bitmap_list.append(self._make_plot_of(
+                    figsize, dpi, bp_name + " Post Passes Occluded", occ_data, vmin=0, vmax=1
+                ))
 
             # Plot Pre-MIT-Viterbi frame data, or the original suggested probability frame...
             new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Original Source Frame", orig_data))

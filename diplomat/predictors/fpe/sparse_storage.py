@@ -46,11 +46,26 @@ class SparseModes(IntEnum):
     OFFSET_SUMMATION: int = 3
 
 
+def _next_after_dtype(val, towards, dtype):
+    return np.nextafter(np.asarray(val).astype(dtype), np.asarray(towards).astype(dtype))
+
+
+def cell_clamp(coord, dtype):
+    c_int = coord.astype(np.int64)
+    return np.clip(
+        coord,
+        _next_after_dtype(c_int, c_int + 1, dtype),
+        _next_after_dtype(c_int + 1, c_int, dtype),
+        dtype=dtype
+    )
+
+
 class SparseTrackingData:
     """
     Represents sparse tracking data. Includes probabilities, offsets, and x/y coordinates in the probability map.
     """
     SparseModes = SparseModes
+    mem_type = np.float32
 
     def __init__(self, downscaling: float = 1):
         """
@@ -62,7 +77,7 @@ class SparseTrackingData:
     @property
     def coords(self):
         """
-        The coordinates of this SparceTrackingData in [y, x] order.
+        The coordinates of this SparceTrackingData in [x, y] order.
         """
         return self._data[:2]
 
@@ -88,11 +103,16 @@ class SparseTrackingData:
             self._data = None
             return self
 
+        if(x_coords.dtype != self.mem_type):
+            x_coords = cell_clamp(x_coords, self.mem_type)
+        if(y_coords.dtype != self.mem_type):
+            y_coords = cell_clamp(y_coords, self.mem_type)
+
         self._data = np.stack([
             x_coords,
             y_coords,
             probs
-        ], axis=0)
+        ], dtype=self.mem_type, axis=0)
         return self
 
     # noinspection PyTypeChecker
@@ -101,7 +121,7 @@ class SparseTrackingData:
         """
         Return all fields of this SparseTrackingData
 
-        :return: A tuple of 1 dimensional numpy arrays, being: (y_coord, x_coord, probs, x_offset, y_offset)
+        :return: A tuple of 1 dimensional numpy arrays, being: (x_coord, y_coord, probs)
         """
         if (self._data is None):
             return (None, None, None)
@@ -133,7 +153,7 @@ class SparseTrackingData:
         if(self._data is None):
             return new_sparse_data
 
-        new_sparse_data.pack(*(arr for arr in self.unpack()))
+        new_sparse_data.pack(*self.unpack())
         return new_sparse_data
 
     def desparsify(self, orig_width: int, orig_height: int, orig_stride: int) -> TrackingData:
@@ -291,8 +311,18 @@ class SparseTrackingData:
             x_off = x_off[top_k]
             y_off = y_off[top_k]
 
-        x = x + 0.5 + x_off
-        y = y + 0.5 + y_off
+        x = np.clip(
+            (x + 0.5 + x_off),
+            _next_after_dtype(x, x + 1, cls.mem_type),
+            _next_after_dtype(x + 1, x, cls.mem_type),
+            dtype=cls.mem_type
+        )
+        y = np.clip(
+            (y + 0.5 + y_off),
+            _next_after_dtype(y, y + 1, cls.mem_type),
+            _next_after_dtype(y + 1, y, cls.mem_type),
+            dtype=cls.mem_type
+        )
 
         new_sparse_data.pack(x, y, probs)
         return new_sparse_data
@@ -332,13 +362,13 @@ class SparseTrackingData:
 
         # Proceed with the original line, wrapped in a try-except block for safety
         try:
-            self._data = np.frombuffer(data, np.dtype(float_dtype), length * 3, 4).reshape((3, length))
+            self._data = np.frombuffer(data, float_dtype, length * 3, 4).reshape((3, length))
         except ValueError as e:
             print(f"Encountered an error when trying to reshape the data: {e}")
 
         return self, expected_data_size
 
-    def from_bytes(self, float_dtype: str, int_dtype: str, data: bytes) -> "SparseTrackingData":
+    def from_bytes(self, float_dtype: str, data: bytes) -> "SparseTrackingData":
         return self.from_bytes_include_length(float_dtype, data)[0]
 
 
@@ -496,17 +526,17 @@ class ForwardBackwardFrame:
         ])
 
     @staticmethod
-    def _save_sparse_track(std: Optional[SparseTrackingData], float_dtype: str, int_dtype: str) -> bytes:
+    def _save_sparse_track(std: Optional[SparseTrackingData], float_dtype: str) -> bytes:
         if(std is None):
             return np.asarray([0xFFFFFFFF], dtype="<u4").tobytes()
-        return std.to_bytes(float_dtype, int_dtype)
+        return std.to_bytes(float_dtype)
 
     def to_bytes(self, float_dtype: str) -> bytes:
         byte_list = [
             np.asarray([self.ignore_clustering, self.disable_occluded], dtype="?").tobytes(),
             np.asarray([self.enter_state], dtype=float_dtype).tobytes(),
-            self.orig_data.to_bytes(float_dtype),
-            self.src_data.to_bytes(float_dtype),
+            self._save_sparse_track(self.orig_data, float_dtype),
+            self._save_sparse_track(self.src_data, float_dtype),
             self._save_arr(self.frame_probs, float_dtype),
             self._save_arr(self.occluded_coords, float_dtype),
             self._save_arr(self.occluded_probs, float_dtype)

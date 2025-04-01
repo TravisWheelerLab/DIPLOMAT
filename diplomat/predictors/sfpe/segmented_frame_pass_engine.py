@@ -1021,7 +1021,7 @@ class SegmentedFramePassEngine(Predictor):
                         new_p = repl_p_occ.copy()
                     else:
                         def _to_keys(_x, _y):
-                            return _y * self._width + _x
+                            return _y.astype(np.int64) * self._width + _x.astype(np.int64)
 
                         lookup = _NumpyDict(_to_keys(repl_c_occ[:, 0], repl_c_occ[:, 1]), np.arange(len(repl_p_occ)), -1)
                         indexes = lookup[_to_keys(sx, sy)]

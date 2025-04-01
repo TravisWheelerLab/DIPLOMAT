@@ -602,7 +602,7 @@ class MITViterbi(FramePass):
         # The first occluded state is constructed from the source pixels, 
         # whose probabilities are augmented by the obscured probability.
         occ_coord = np.array([x, y]).T
-        occ_probs = np.array(frame_probs) + to_log_space(metadata.obscured_prob)
+        occ_probs = frame_probs + to_log_space(metadata.obscured_prob)
 
         # Filter probabilities to limit occluded state.
         occ_coord, occ_probs = cls.filter_occluded_probabilities(
@@ -735,10 +735,15 @@ class MITViterbi(FramePass):
         for __, bp_res in results:
             for i, (current_total, bp_sub_res) in enumerate(zip(final_result, bp_res)):
                 if(np.all(np.isneginf(bp_sub_res))):
+                    # If this skeletal transition is uninformative (all negative infinity), ignore...
                     continue
                 merged_result = current_total + (bp_sub_res / num_bp)
                 final_result[i] = merged_result
 
+        # If not a single skeletal contribution was informative, set to -inf. Note this is necessary
+        # with new arithmetic based combination of in frame and skeleton scores as just setting to
+        # 0 can cause the occluded state to be way too high...
+        final_result = [res if(res is not 0) else -np.inf for res in final_result]
         return final_result
 
 
@@ -816,9 +821,9 @@ class MITViterbi(FramePass):
 
             #only have source data for the current frame
             c_frame_data = (
-                (norm(to_log_space(cprob)), 
-                (cx, cy)) if(cy is not None) else (to_log_space(z_arr()), 
-                (z_arr(), z_arr()))
+                (norm(to_log_space(cprob)), (cx, cy))
+                if(cy is not None) else
+                (to_log_space(z_arr()), (z_arr(), z_arr()))
             )
 
             #occluded coordinates are constrained by the coordinate probabilities in the previous frame 
@@ -857,22 +862,15 @@ class MITViterbi(FramePass):
                 transition_function
             )
 
+            # Reverting, the arithmatic avg was destroying performance,
+            # causing occluded state to basically always be used...
             results.append([
-                to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
+                t + s * skeleton_weight  # to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
                 for t, s in zip(from_transition, from_skel)
             ])
 
             # Result coordinates, exclude the enter state...
             result_coords.append([c[1] for c in current_data[:-1]])
-
-            #TODO i want the coordinates of the source of each pixel in the current frame
-            #which would be the coordinate that has the highest transition probability
-            # source_coords = []*len(c_frame_data[:-1])
-            # for i, c in enumerate(current_data[:-1]):
-            #     if(np.all(np.isneginf(results[-1][i]))):
-            #         continue
-            #     best = np.argmax(results[-1][i])
-            #     source_coords[i] = c[1][best]
 
         # Pad all arrays so we can do element-wise comparisons between them...
         frm_probs, frm_coords, frm_idxs = arr_utils.pad_coordinates_and_probs(
@@ -903,7 +901,7 @@ class MITViterbi(FramePass):
             # New occluded-domination logic
             best_occ = np.argmax(occ_prob)
             occ_prob[occ_prob < occ_dominators] = -np.inf
-            all_dominated = np.all(occ_prob == -np.inf)
+            all_dominated = np.all(np.isneginf(occ_prob)) and np.all(np.isneginf(frm_prob))
             occ_enabled = not current[bp_i].disable_occluded
             if all_dominated:
                 if occ_enabled:
@@ -982,7 +980,7 @@ class MITViterbi(FramePass):
         disable_occluded: bool
     ) -> Tuple[np.ndarray, np.ndarray]:
         # otherwise the visible probs will override the occluded probs and the occluded state becomes "sticky."
-        current_frame_probs = np.full(current_frame_probs.shape, to_log_space(occluded_prob))
+        current_frame_probs = current_frame_probs + to_log_space(occluded_prob)
 
         merged_probs, merged_coords, _ = arr_utils.pad_coordinates_and_probs(
             [current_frame_probs, prior_occluded_probs],
@@ -991,7 +989,11 @@ class MITViterbi(FramePass):
         )
 
         new_coords = merged_coords[0]
-        new_probs = np.full(new_coords.shape[0], to_log_space(0)) if (disable_occluded) else np.maximum(*merged_probs) + to_log_space(decay_rate)
+        new_probs = (
+            np.full(new_coords.shape[0], to_log_space(0))
+            if disable_occluded else
+            np.maximum(*merged_probs) + to_log_space(decay_rate)
+        )
 
         return (
             new_coords,
@@ -1040,16 +1042,16 @@ class MITViterbi(FramePass):
                 "probabilities can reach."
             ),
             "obscured_probability": (
-                0, tc.RangedFloat(0, 1),
+                1e-8, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
                 "prior probability of being in any obscured state cell."
             ),
             "minimum_obscured_probability": (
-                0, tc.RangedFloat(0, 1),
+                1e-12, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that sets a cutoff for obscured state probabilities."
             ),
             "enter_state_probability": (
-                1e-10, tc.RangedFloat(0, 1),
+                1e-12, tc.RangedFloat(0, 1),
                 "A constant, the probability of being in the enter state."
             ),
             "enter_state_exit_probability": (

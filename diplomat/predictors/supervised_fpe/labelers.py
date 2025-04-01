@@ -192,6 +192,13 @@ class Approximate(labeler_lib.PoseLabeler):
         probs: np.ndarray,
         max_cell_count: int
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        # Remove duplicate positions...
+        ordered = np.argsort(-probs)
+        __, idx = np.unique(np.stack([x, y])[:, ordered].astype(np.int64), True, axis=-1)
+        x = x[ordered][idx]
+        y = y[ordered][idx]
+        probs = probs[ordered][idx]
+        # Filter to max amount...
         top_k = np.argpartition(probs, -max_cell_count)[-max_cell_count:]
         return (x[top_k], y[top_k], probs[top_k])
 
@@ -345,7 +352,6 @@ class Approximate(labeler_lib.PoseLabeler):
                 )
 
                 if(np.any(any_matches)):
-                    bp_x = bp_prob.copy()
                     bp_prob = bp_prob.copy()
                     bp_prob[any_matches] = 0
 
@@ -593,7 +599,6 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
                 )
 
                 if(np.any(any_matches)):
-                    bp_x = bp_prob.copy()
                     bp_prob = bp_prob.copy()
                     bp_prob[any_matches] = 0
 
