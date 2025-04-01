@@ -44,6 +44,7 @@ class SparseModes(IntEnum):
     OFFSET_DOMINATION: int = 1
     OFFSET_COMBINATION: int = 2
     OFFSET_SUMMATION: int = 3
+    UPSCALE: int = 4
 
 
 def _next_after_dtype(val, towards, dtype):
@@ -67,7 +68,7 @@ class SparseTrackingData:
     SparseModes = SparseModes
     mem_type = np.float32
 
-    def __init__(self, downscaling: float = 1):
+    def __init__(self, downscaling: float):
         """
         Makes a new tracking data with all empty fields.
         """
@@ -88,8 +89,20 @@ class SparseTrackingData:
         """
         return self._data[2]
 
+    @property
+    def downscaling(self):
+        """
+        The downscaling factor for the cells in this sparse frame...
+        """
+        return self._downscaling
 
-    def pack(self, x_coords: Optional[ndarray], y_coords: Optional[ndarray], probs: Optional[ndarray]) -> "SparseTrackingData":
+
+    def pack(
+        self,
+        x_coords: Optional[ndarray],
+        y_coords: Optional[ndarray],
+        probs: Optional[ndarray]
+    ) -> "SparseTrackingData":
         """
         Pack the passed data into this SparceTrackingData object.
 
@@ -134,7 +147,7 @@ class SparseTrackingData:
 
         :return: A new SparseTrackingData, which is identical to the current SparseTrackingData.
         """
-        new_sparse_data = SparseTrackingData()
+        new_sparse_data = SparseTrackingData(self.downscaling)
 
         if(self._data is None):
             return new_sparse_data
@@ -148,7 +161,7 @@ class SparseTrackingData:
 
         :return: A new SparseTrackingData, which is identical to the current SparseTrackingData.
         """
-        new_sparse_data = SparseTrackingData()
+        new_sparse_data = SparseTrackingData(self.downscaling)
 
         if(self._data is None):
             return new_sparse_data
@@ -156,7 +169,7 @@ class SparseTrackingData:
         new_sparse_data.pack(*self.unpack())
         return new_sparse_data
 
-    def desparsify(self, orig_width: int, orig_height: int, orig_stride: int) -> TrackingData:
+    def desparsify(self, orig_width: int, orig_height: int) -> TrackingData:
         """
         Desparsifies this SparseTrackingData object.
 
@@ -164,15 +177,13 @@ class SparseTrackingData:
                            constructed TrackingData object.
         :param orig_height: The original height of the tracking data object, will be the frame height of the newly
                            constructed TrackingData object.
-        :param orig_stride: The stride of the newly constructed tracking object (upscaling factor to scale to the size
-                            of the original video).
 
         :return: A new TrackingData object, with data matching the original SparseTrackingData object. Returns an empty
                  TrackingData if this object has no data stored yet...
         """
         x, y, probs = self.unpack()
 
-        new_td = TrackingData.empty_tracking_data(1, 1, orig_width, orig_height, orig_stride)
+        new_td = TrackingData.empty_tracking_data(1, 1, orig_width, orig_height, self._downscaling)
         new_td.set_offset_map(np.zeros((1, orig_height, orig_width, 1, 2), dtype=np.float32))
 
         if(y is None):
@@ -180,8 +191,8 @@ class SparseTrackingData:
 
         x_int = x.astype(np.int64)
         y_int = y.astype(np.int64)
-        x_off = ((x - x_int) - 0.5) * orig_stride
-        y_off = ((y - y_int) - 0.5) * orig_stride
+        x_off = ((x - x_int) - 0.5) * self._downscaling
+        y_off = ((y - y_int) - 0.5) * self._downscaling
 
         new_td.get_source_map()[0, y_int, x_int, 0] = probs
         new_td.get_offset_map()[0, y_int, x_int, 0, 0] = x_off
@@ -197,7 +208,8 @@ class SparseTrackingData:
         bodypart: int,
         threshold: float,
         max_cell_count: Optional[int] = None,
-        mode: SparseModes = SparseModes.IGNORE_OFFSETS
+        mode: SparseModes = SparseModes.IGNORE_OFFSETS,
+        upscale_std: float = 1.0
     ) -> "SparseTrackingData":
         """
         Sparsify the TrackingData.
@@ -221,10 +233,11 @@ class SparseTrackingData:
             - SparseModes.OFFSET_SUMMATION: Same as OFFSET_DOMINATION, except cell probabilities are determined by
                                             adding all the cells that point to a cell and then normalizing this sum
                                             array.
+            - SparseModes.UPSCALE:
 
         :return: A new SparseTrackingData object containing the data of the TrackingData object.
         """
-        new_sparse_data = cls()
+        new_sparse_data = cls(track_data.get_down_scaling() if(mode != SparseModes.UPSCALE) else 1)
 
         width, height = track_data.get_frame_width(), track_data.get_frame_height()
         y, x = np.nonzero(track_data.get_prob_table(frame, bodypart) > threshold)
@@ -240,7 +253,9 @@ class SparseTrackingData:
 
         probs = track_data.get_prob_table(frame, bodypart)[y, x]
 
-        if(mode != SparseModes.IGNORE_OFFSETS):
+        if(mode == SparseModes.UPSCALE):
+            raise ValueError("Not implemented!")
+        elif(mode != SparseModes.IGNORE_OFFSETS):
             full_x = x + 0.5 + x_off / track_data.get_down_scaling()
             full_y = y + 0.5 + y_off / track_data.get_down_scaling()
             true_x = full_x.astype(int)
@@ -334,9 +349,11 @@ class SparseTrackingData:
 
         length = self._data.shape[-1]
         enc_length = np.asarray(length, dtype="<u4").tobytes()
+        enc_ds = np.asarray(self._downscaling, dtype=float_dtype).tobytes()
 
         return b"".join([
             enc_length,
+            enc_ds,
             self._data.astype(float_dtype).tobytes()
         ])
 
@@ -348,13 +365,15 @@ class SparseTrackingData:
         if(float_dtype.lstrip("<>") not in ["f2", "f4", "f8"]):
             raise ValueError("Invalid float datatype!")
 
+        float_data_size = np.dtype(float_dtype).itemsize
+
         length = np.frombuffer(data, "<u4", 1)[0]
+        down_scaling = np.frombuffer(data, float_dtype, 1, 4)[0]
         if(length == 0):
             self._data = None
-            return self, 4
+            return self, 4 + float_data_size
 
-        float_data_size = np.dtype(float_dtype).itemsize
-        expected_data_size = 4 + length * float_data_size * 3
+        expected_data_size = 4 + float_data_size + length * float_data_size * 3
 
         # Check if the actual data buffer is smaller than expected
         if len(data) < expected_data_size:
@@ -362,7 +381,8 @@ class SparseTrackingData:
 
         # Proceed with the original line, wrapped in a try-except block for safety
         try:
-            self._data = np.frombuffer(data, float_dtype, length * 3, 4).reshape((3, length))
+            self._data = np.frombuffer(data, float_dtype, length * 3, 4 + float_data_size).reshape((3, length))
+            self._downscaling = down_scaling
         except ValueError as e:
             print(f"Encountered an error when trying to reshape the data: {e}")
 
@@ -371,13 +391,12 @@ class SparseTrackingData:
     def from_bytes(self, float_dtype: str, data: bytes) -> "SparseTrackingData":
         return self.from_bytes_include_length(float_dtype, data)[0]
 
-
     def __str__(self):
         return self.__repr__()
 
     def __repr__(self):
         x, y, probs = self.unpack()
-        return f"SparseTrackingData(x={x}, y={y}, probs={probs})"
+        return f"SparseTrackingData(x={x}, y={y}, probs={probs}, downscaling={self.downscaling})"
 
 
 # Improves memory performance by using slots instead of a dictionary to store attributes...
@@ -466,13 +485,13 @@ class ForwardBackwardFrame:
             if(self.frame_probs is None):
                 raise ValueError("No frame probabilities!")
             unpack_data = self.src_data.unpack()
-            return SparseTrackingData().pack(
+            return SparseTrackingData(self.src_data.downscaling).pack(
                 *unpack_data[:2], self.frame_probs
             )
         elif(field == "occluded"):
             if (self.occluded_probs is None or self.occluded_coords is None):
                 raise ValueError("No occluded probabilities!")
-            return SparseTrackingData().pack(
+            return SparseTrackingData(self.src_data.downscaling).pack(
                 *tuple(self.occluded_coords.T), self.occluded_probs
             )
         else:
@@ -570,7 +589,10 @@ class ForwardBackwardFrame:
         if(size_indicator == 0xFFFFFFFF):
             return (None, 4)
 
-        return SparseTrackingData().from_bytes_include_length(float_dtype, memoryview(data)[offset:])
+        res, length = SparseTrackingData(-1).from_bytes_include_length(float_dtype, memoryview(data)[offset:])
+        if(res.downscaling == -1):
+            raise ValueError("Bad SparseTrackingData Frame!")
+        return res, length
 
     def from_bytes(self, float_dtype: str, data: bytes) -> "ForwardBackwardFrame":
         self.ignore_clustering, self.disable_occluded = np.frombuffer(data, np.dtype("?"), 2)

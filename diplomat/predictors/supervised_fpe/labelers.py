@@ -63,7 +63,7 @@ class Point(labeler_lib.PoseLabeler):
         return ((frame_idx, bp_idx, x, y, probability), (x, y, probability))
 
     def pose_change(self, new_state: Any) -> Any:
-        frm, bp, x, y, p = new_state
+        frm, bp, x, y, p, ds = new_state
         changed_frames = self._frame_engine.changed_frames
         frames = self._frame_engine.frame_data.frames
 
@@ -76,7 +76,7 @@ class Point(labeler_lib.PoseLabeler):
             changed_frames[idx] = old_frame_data
             is_orig = True
 
-        new_data = SparseTrackingData()
+        new_data = SparseTrackingData(old_frame_data.src_data.downscaling)
         if (prob > 0):
             new_data.pack(*[np.array([item]) for item in [x, y, prob]])
 
@@ -134,12 +134,11 @@ class Approximate(labeler_lib.PoseLabeler):
         self._cached_gaussian_std = None
         self._cached_gaussian = None
 
-    def _make_gaussian(self, new_std: float):
+    def _make_gaussian(self, new_std: float, down_scaling: float):
         self._cached_gaussian_std = new_std
         meta = self._frame_engine.frame_data.metadata
 
-        d_scale = meta.down_scaling
-        std = self._cached_gaussian_std / d_scale
+        std = self._cached_gaussian_std / down_scaling
         two_std = min(
             np.ceil(self._cached_gaussian_std * 2),
             max(meta.width, meta.height)
@@ -212,8 +211,6 @@ class Approximate(labeler_lib.PoseLabeler):
     ) -> Tuple[Any, Tuple[float, float, float]]:
         info = self._settings.get_values()
         user_amp = info.user_input_strength / 1000
-        if((self._cached_gaussian is None) or (info.user_input_spread != self._cached_gaussian_std)):
-            self._make_gaussian(info.user_input_spread)
 
         meta = self._frame_engine.frame_data.metadata
         modified_frames = self._frame_engine.changed_frames
@@ -221,6 +218,9 @@ class Approximate(labeler_lib.PoseLabeler):
             frame = modified_frames[(frame_idx, bp_idx)]
         else:
             frame = self._frame_engine.frame_data.frames[frame_idx][bp_idx]
+
+        if((self._cached_gaussian is None) or (info.user_input_spread != self._cached_gaussian_std)):
+            self._make_gaussian(info.user_input_spread, frame.src_data.downscaling)
 
         if(x is None):
             x, y, prob = self._frame_engine.scmap_to_video_coord(
@@ -265,7 +265,7 @@ class Approximate(labeler_lib.PoseLabeler):
 
         final_p /= np.max(final_p)
 
-        sp = SparseTrackingData()
+        sp = SparseTrackingData(frame.src_data.downscaling)
         sp.pack(final_x, final_y, final_p)
         temp_f = ForwardBackwardFrame(src_data=sp, frame_probs=final_p)
 
@@ -331,7 +331,7 @@ class Approximate(labeler_lib.PoseLabeler):
             is_orig = True
 
         if(suggested_frame is None):
-            new_data = SparseTrackingData()
+            new_data = SparseTrackingData(old_frame_data.src_data.downscaling)
             x, y, prob = self._frame_engine.video_to_scmap_coord(
                 coord + (0,)
             )
@@ -339,7 +339,7 @@ class Approximate(labeler_lib.PoseLabeler):
         else:
             x, y, prob = suggested_frame.src_data.unpack()
             max_prob_idx = np.argmax(prob)
-            new_data = SparseTrackingData()
+            new_data = SparseTrackingData(old_frame_data.src_data.downscaling)
             new_data.pack(*[np.array([item]) for item in [x[max_prob_idx], y[max_prob_idx], 1]])
 
             #print(f"Point location: {(x[max_prob_idx], y[max_prob_idx])}")
@@ -355,7 +355,7 @@ class Approximate(labeler_lib.PoseLabeler):
                     bp_prob = bp_prob.copy()
                     bp_prob[any_matches] = 0
 
-                    new_bp_data = SparseTrackingData().pack(bp_x, bp_y, bp_prob)
+                    new_bp_data = SparseTrackingData(old_frame_data.src_data.downscaling).pack(bp_x, bp_y, bp_prob)
                     new_bp_frame = ForwardBackwardFrame()
                     new_bp_frame.orig_data = new_bp_data
                     new_bp_frame.src_data = new_bp_data
@@ -536,7 +536,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         probs = probs * multipliers[owner_peak]
 
         temp_f = ForwardBackwardFrame(
-            src_data=SparseTrackingData().pack(xs, ys, probs), frame_probs=probs
+            src_data=SparseTrackingData(frame.orig_data.downscaling).pack(xs, ys, probs), frame_probs=probs
         )
 
         x, y, prob = self._frame_engine.scmap_to_video_coord(
@@ -579,7 +579,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
             is_orig = True
 
         if(suggested_frame is None):
-            new_data = SparseTrackingData()
+            new_data = SparseTrackingData(old_frame_data.src_data.downscaling)
             x, y, prob = self._frame_engine.video_to_scmap_coord(
                 coord + (0,)
             )
@@ -587,7 +587,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
         else:
             x, y, prob = suggested_frame.src_data.unpack()
             max_prob_idx = np.argmax(prob)
-            new_data = SparseTrackingData()
+            new_data = SparseTrackingData(old_frame_data.src_data.downscaling)
             new_data.pack(*[np.array([item]) for item in [x[max_prob_idx], y[max_prob_idx], 1]])
 
             for other_bp in other_body_part_indices:
@@ -602,7 +602,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
                     bp_prob = bp_prob.copy()
                     bp_prob[any_matches] = 0
 
-                    new_bp_data = SparseTrackingData().pack(bp_x, bp_y, bp_prob)
+                    new_bp_data = SparseTrackingData(old_frame_data.src_data.downscaling).pack(bp_x, bp_y, bp_prob)
                     new_bp_frame = ForwardBackwardFrame()
                     new_bp_frame.orig_data = new_bp_data
                     new_bp_frame.src_data = new_bp_data

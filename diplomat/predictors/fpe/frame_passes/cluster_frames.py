@@ -35,7 +35,6 @@ class ClusterFrames(FramePass):
             self._frame_data.metadata.num_outputs,
             self._cost_table,
             self.config,
-            self._frame_data.metadata.down_scaling,
             self.width,
             ClusteringMethod[self.config.clustering_mode],
             self.config.cluster_with
@@ -90,7 +89,6 @@ class ClusterFrames(FramePass):
         num_outputs: int,
         cost_table: np.ndarray,
         config: Config,
-        down_scaling: float,
         width: int,
         clustering_mode: ClusteringMethod,
         cluster_method: str,
@@ -112,14 +110,14 @@ class ClusterFrames(FramePass):
                     clusters[group_idx] = cls._compute_cluster(
                         x, y, prob,
                         num_outputs, width,
-                        cost_table, down_scaling,
+                        cost_table,
                         config.minimum_cluster_size,
                         config.max_throwaway_count,
                         clustering_mode,
                         cluster_method
                     )
 
-                frame.src_data = SparseTrackingData()
+                frame.src_data = SparseTrackingData(frame.orig_data.downscaling)
                 frame.src_data.pack(*(clusters[group_idx][group_offset]))
 
         return frame_data
@@ -132,7 +130,6 @@ class ClusterFrames(FramePass):
         prob: np.ndarray,
         num_clusters: int,
         cost_table: np.ndarray,
-        down_scaling: float,
         balance: float,
         attempts: int,
         clustering_mode: ClusteringMethod,
@@ -168,7 +165,6 @@ class ClusterFrames(FramePass):
                 prob[keep],
                 num_clusters,
                 cost_table,
-                down_scaling,
                 balance,
                 attempts - 1,
                 clustering_mode,
@@ -195,7 +191,6 @@ class ClusterFrames(FramePass):
         num_clusters: int,
         width: int,
         cost_table: np.ndarray,
-        down_scaling: float,
         balance: float,
         attempts: int,
         clustering_mode: ClusteringMethod,
@@ -217,7 +212,6 @@ class ClusterFrames(FramePass):
             prob[top_indexes],
             num_clusters,
             cost_table,
-            down_scaling,
             balance,
             int(attempts),
             clustering_mode
@@ -256,7 +250,7 @@ class ClusterFrames(FramePass):
         if((not current.ignore_clustering) and ((frame_index, bp_group) not in self._cluster_dict)):
             self._cluster_dict[(frame_index, bp_group)] = self._compute_cluster(
                 x, y, prob, num_out, metadata.width,
-                self._cost_table, metadata.down_scaling,
+                self._cost_table,
                 self.config.minimum_cluster_size,
                 self.config.max_throwaway_count,
                 ClusteringMethod[self.config.clustering_mode],
@@ -264,7 +258,7 @@ class ClusterFrames(FramePass):
             )
 
         if(not current.ignore_clustering):
-            current.src_data = SparseTrackingData()
+            current.src_data = SparseTrackingData(current.orig_data.downscaling)
             current.src_data.pack(*(self._cluster_dict[(frame_index, bp_group)][bp_off]))
 
         return current

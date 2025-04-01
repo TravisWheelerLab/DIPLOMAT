@@ -95,7 +95,6 @@ class RepairClusters(FramePass):
         skeleton: StorageGraph,
         num_bodies: int,
         num_parts: int,
-        down_scaling: int,
         max_difference_factor: int = 5,
     ) -> List[int]:
         """
@@ -169,8 +168,8 @@ class RepairClusters(FramePass):
                 fb_data.frames[frame_idx],
                 skeleton,
                 num_bodies,
-                num_parts,
-                down_scaling)
+                num_parts
+            )
             split_locations.extend(zip(
                 [frame_idx] * len(split_bodies), 
                 split_bodies))

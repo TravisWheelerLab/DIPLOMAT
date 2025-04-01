@@ -684,10 +684,9 @@ class MITViterbi(FramePass):
         if(skeleton_table is None):
             return [0] * len(current_data) if(merge_results) else []
 
-        num_bp = len(metadata.bodyparts)
         bp_group_idx = bp_idx // metadata.num_outputs
         bp_off = bp_idx % metadata.num_outputs
-        num_links = len(skeleton_table[bp_group_idx])
+        num_links = 0
 
         results = []
         final_result = [0] * len(current_data)
@@ -714,6 +713,7 @@ class MITViterbi(FramePass):
                 prior_data = prior_frame
 
             # No skeleton penalty for transitioning from enter state
+            num_links += 1
             transition_func = ViterbiTransitionTable(trans_table, 0.5, 0.5)
 
             results.append((
@@ -795,7 +795,7 @@ class MITViterbi(FramePass):
             cx, cy, cprob = current[bp_i].src_data.unpack()
 
             if((cprob is not None) and np.all(cprob <= 0)):
-                current[bp_i].src_data = SparseTrackingData()
+                current[bp_i].src_data = SparseTrackingData(current[bp_i].src_data.downscaling)
                 cy = cx = cprob = None
 
             z_arr = lambda: np.array([0])

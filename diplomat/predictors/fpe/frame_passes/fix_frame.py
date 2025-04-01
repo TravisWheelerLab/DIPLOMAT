@@ -38,7 +38,6 @@ class FixFrame(FramePass):
 
         Parameters:
         - frame: ForwardBackwardFrame, the frame to analyze.
-        - down_scaling: float, the factor by which the frame's coordinates are downscaled.
 
         Returns:
         - Tuple[Optional[float], Optional[float], Optional[float]]: The adjusted x and y coordinates of the maximum
@@ -116,7 +115,6 @@ class FixFrame(FramePass):
         storage_graph: StorageGraph,
         frame_list: List[ForwardBackwardFrame],
         num_outputs: int,
-        down_scaling: float
     ) -> int:
         degrees = [len(storage_graph[i]) for i in range(len(storage_graph))]
 
@@ -223,7 +221,6 @@ class FixFrame(FramePass):
 
         fixed_frame = [None] * fb_data.num_bodyparts
         num_outputs = fb_data.metadata.num_outputs
-        down_scaling = fb_data.metadata.down_scaling
 
         # Copy over data to start, ignoring skeleton...
         for bp_i in range(fb_data.num_bodyparts):
@@ -233,14 +230,16 @@ class FixFrame(FramePass):
             if(prob is None):
                 # Fallback fix frame: We just create a single cell with 0 probability, forcing viterbi to use entry
                 # states...
-                src_data = SparseTrackingData().pack([0], [0], [0])
+                src_data = SparseTrackingData(
+                    fixed_frame[bp_i].src_data.downscaling
+                ).pack([0], [0], [0])
                 fixed_frame[bp_i].src_data = src_data
                 fb_data.frames[frame_idx][bp_i].src_data = src_data
 
             fixed_frame[bp_i].disable_occluded = True
 
         if(skeleton is not None):
-            fixed_group = cls.get_fixed_group(skeleton, fb_data.frames[frame_idx], num_outputs, down_scaling)
+            fixed_group = cls.get_fixed_group(skeleton, fb_data.frames[frame_idx], num_outputs)
 
             score_graphs = cls.get_bidirectional_score_graphs(
                 skeleton,
@@ -336,7 +335,6 @@ class FixFrame(FramePass):
         cls,
         frames: List[ForwardBackwardFrame],
         num_outputs: int,
-        down_scaling: float,
         skeleton: Optional[StorageGraph],
         max_dist: float,
         progress_bar: Optional[ProgressBar] = None
@@ -468,7 +466,7 @@ class FixFrame(FramePass):
 
         for i, frame in enumerate(frames):
             #this will be a tuple of scores per frame 
-            final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton, max_dist)
+            final_scores[i] = cls.compute_single_score(frame, num_outputs, skeleton, max_dist)
 
             if(progress_bar is not None):
                 progress_bar.update()
@@ -530,7 +528,7 @@ class FixFrame(FramePass):
         else:
             for f_idx in range(num_frames):
                 scores[f_idx] = cls.compute_single_score(
-                    fb_data.frames[f_idx], num_outputs, down_scaling, skeleton, max_dist
+                    fb_data.frames[f_idx], num_outputs, skeleton, max_dist
                 )
                 if (prog_bar is not None):
                     prog_bar.update(1)

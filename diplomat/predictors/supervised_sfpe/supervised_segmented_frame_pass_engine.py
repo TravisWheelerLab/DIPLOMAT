@@ -359,14 +359,14 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             if(frames is not None):
                 # Plot post MIT-Viterbi frame data if it exists...
                 data = orig_data.unpack()
-                track_data = SparseTrackingData()
+                track_data = SparseTrackingData(orig_data.downscaling)
                 track_data.pack(*data[:2], frames)
 
                 new_bitmap_list.append(self._make_plot_of(
                     figsize, dpi, bp_name + " Post Passes", track_data, vmin=0, vmax=1
                 ))
 
-                occ_data = SparseTrackingData().pack(*occ_coords.T, occluded)
+                occ_data = SparseTrackingData(orig_data.downscaling).pack(*occ_coords.T, occluded)
                 new_bitmap_list.append(self._make_plot_of(
                     figsize, dpi, bp_name + " Post Passes Occluded", occ_data, vmin=0, vmax=1
                 ))

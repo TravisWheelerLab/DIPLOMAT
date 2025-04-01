@@ -608,7 +608,6 @@ class SegmentedFramePassEngine(Predictor):
         if(self._width is None):
             self._width = scmap.get_frame_width()
             self._height = scmap.get_frame_height()
-            self._frame_holder.metadata.down_scaling = scmap.get_down_scaling()
             self._frame_holder.metadata.width = scmap.get_frame_width()
             self._frame_holder.metadata.height = scmap.get_frame_height()
 
@@ -1317,7 +1316,7 @@ class SegmentedFramePassEngine(Predictor):
             if (probs is None):
                 probs = np.zeros(len(data[2]), np.float32)
 
-            res = SparseTrackingData()
+            res = SparseTrackingData(src_frame.src_data.downscaling)
             res.pack(*data[:2], probs)
             res = res.desparsify(header.frame_width - spc, header.frame_height - spc, header.stride)
 
@@ -1332,7 +1331,7 @@ class SegmentedFramePassEngine(Predictor):
             o_x, o_y = tuple(src_frame.occluded_coords.T)
             x, y = o_x + 1, o_y + 1
 
-            res = SparseTrackingData()
+            res = SparseTrackingData(src_frame.src_data.downscaling)
             res.pack(x, y, probs)
 
             # Add 2 to resolve additional padding as needed for the edges...

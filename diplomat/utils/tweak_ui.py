@@ -48,7 +48,7 @@ class _DummySubPoseList(Sequence[ForwardBackwardFrame]):
 
         sx, sy, sp = _DummyFramePassEngine.video_to_scmap_coord((x, y, p))
 
-        res = SparseTrackingData().pack([sx], [sy], [sp])
+        res = SparseTrackingData(1).pack([sx], [sy], [sp])
         return ForwardBackwardFrame(
             orig_data=res,
             src_data=res,
@@ -78,7 +78,6 @@ class _DummyForwardBackwardData(ForwardBackwardData):
         super().__init__(0, 0)
         self._frames = _DummyPoseList(poses)
         self._num_bps = poses.get_bodypart_count()
-        self.metadata.down_scaling = 1
         self.metadata.num_outputs = num_outputs
 
     @property
