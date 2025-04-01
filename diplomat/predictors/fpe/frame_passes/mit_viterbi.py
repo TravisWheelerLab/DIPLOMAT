@@ -564,7 +564,8 @@ class MITViterbi(FramePass):
         #Normalization: Finally, the probabilities are normalized to ensure they are within a valid range 
         # and to facilitate comparison between different paths.
         return norm_together([
-            to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight) for t, s in zip(trans_res, skel_res)
+            # to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
+            t + s * skeleton_weight for t, s in zip(trans_res, skel_res)
         ])
 
     @classmethod
@@ -686,6 +687,7 @@ class MITViterbi(FramePass):
         num_bp = len(metadata.bodyparts)
         bp_group_idx = bp_idx // metadata.num_outputs
         bp_off = bp_idx % metadata.num_outputs
+        num_links = len(skeleton_table[bp_group_idx])
 
         results = []
         final_result = [0] * len(current_data)
@@ -733,7 +735,7 @@ class MITViterbi(FramePass):
                 if(np.all(np.isneginf(bp_sub_res))):
                     # If this skeletal transition is uninformative (all negative infinity), ignore...
                     continue
-                merged_result = current_total + (bp_sub_res / num_bp)
+                merged_result = current_total + (bp_sub_res / num_links)
                 final_result[i] = merged_result
 
         # If not a single skeletal contribution was informative, set to -inf. Note this is necessary
