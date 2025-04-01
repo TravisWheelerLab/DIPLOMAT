@@ -195,7 +195,6 @@ class MITViterbi(FramePass):
         """Initialize probabilities relating to an obscured state"""
         metadata.obscured_prob = self.config.obscured_probability
         metadata.obscured_survival_max = self.config.obscured_survival_max
-        metadata.minimum_obscured_probability = self.config.minimum_obscured_probability
         metadata.obscured_decay_rate = self.config.obscured_decay_rate
 
     def _init_edge_state(self, metadata: AttributeDict):
@@ -606,7 +605,7 @@ class MITViterbi(FramePass):
 
         # Filter probabilities to limit occluded state.
         occ_coord, occ_probs = cls.filter_occluded_probabilities(
-            occ_coord, occ_probs, metadata.obscured_survival_max, metadata.minimum_obscured_probability,
+            occ_coord, occ_probs, metadata.obscured_survival_max
         )
 
         # Store results in current frame.
@@ -625,7 +624,6 @@ class MITViterbi(FramePass):
         occluded_coords: np.ndarray,
         occluded_probs: np.ndarray,
         max_count: int,
-        min_prob: float
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Filter occluded coordinates and probabilities such that there is only max_count of them left, those with the
@@ -641,8 +639,6 @@ class MITViterbi(FramePass):
             return (occluded_coords, occluded_probs)
 
         indexes = np.argpartition(occluded_probs, -max_count)[-max_count:]
-        # TODO: Why was this commented out?
-        #indexes = indexes[occluded_probs[indexes] > min_prob]
 
         return (occluded_coords[indexes], occluded_probs[indexes])
 
@@ -921,8 +917,7 @@ class MITViterbi(FramePass):
             c, p = cls.filter_occluded_probabilities(
                 current[bp_i].occluded_coords,
                 occ_prob[occ_idx],
-                metadata.obscured_survival_max,
-                metadata.minimum_obscured_probability
+                metadata.obscured_survival_max
             )
             current[bp_i].occluded_coords = c
             current[bp_i].occluded_probs = p - norm_val
@@ -1042,13 +1037,9 @@ class MITViterbi(FramePass):
                 "probabilities can reach."
             ),
             "obscured_probability": (
-                1e-8, tc.RangedFloat(0, 1),
+                1e-6, tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
                 "prior probability of being in any obscured state cell."
-            ),
-            "minimum_obscured_probability": (
-                1e-12, tc.RangedFloat(0, 1),
-                "A constant float between 0 and 1 that sets a cutoff for obscured state probabilities."
             ),
             "enter_state_probability": (
                 1e-12, tc.RangedFloat(0, 1),
