@@ -606,10 +606,10 @@ class SegmentedFramePassEngine(Predictor):
             None: This method updates the frame holder in-place and does not return any value.
         """
         if(self._width is None):
-            self._width = scmap.get_frame_width()
-            self._height = scmap.get_frame_height()
-            self._frame_holder.metadata.width = scmap.get_frame_width()
-            self._frame_holder.metadata.height = scmap.get_frame_height()
+            self._width = scmap.get_frame_width() * scmap.get_down_scaling()
+            self._height = scmap.get_frame_height() * scmap.get_down_scaling()
+            #self._frame_holder.metadata.width = scmap.get_frame_width() * scmap.get_down_scaling()
+            #self._frame_holder.metadata.height = scmap.get_frame_height() * scmap.get_down_scaling()
 
         for f_idx in range(scmap.get_frame_count()):
             for bp_idx in range(self._num_total_bp):
@@ -753,7 +753,7 @@ class SegmentedFramePassEngine(Predictor):
 
                     poses.set_at_no_offset(
                         f_idx, alignment[bp_idx], (x, y), p,
-                        frame_list.metadata.down_scaling
+                        frame_list.frames[f_idx][bp_idx].src_data.downscaling
                     )
 
                 if (progress_bar is not None):

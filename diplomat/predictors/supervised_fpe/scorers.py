@@ -38,13 +38,12 @@ class EntropyOfTransitions(ScoreEngine):
     def __init__(self, frame_engine: ScoreAbleFramePassEngine):
         super().__init__()
         self._frame_engine = frame_engine
-        down_scaling = self._frame_engine.frame_data.metadata.down_scaling
 
         self._gaussian_table = None
         self._std = self._get_std(self._frame_engine.frame_data.metadata)
         self._init_gaussian_table(
-            int(frame_engine.width * down_scaling) + 1,
-            int(frame_engine.height * down_scaling) + 1
+            int(frame_engine.width) + 1,
+            int(frame_engine.height) + 1
         )
 
         self._settings = labeler_lib.SettingCollection(
@@ -55,7 +54,7 @@ class EntropyOfTransitions(ScoreEngine):
         if("optimal_std" in metadata):
             return metadata.optimal_std[2]
         else:
-            return 1 / metadata.down_scaling
+            return 1
 
     def _init_gaussian_table(self, width, height):
         if(self._gaussian_table is None):
@@ -89,7 +88,7 @@ class EntropyOfTransitions(ScoreEngine):
                     pprobs = poses.get_prob_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
 
                     matrix = np.expand_dims(cprobs, 1) * fpe_math.table_transition_interpolate(
-                        (pxs, pys), (cxs, cys), self._gaussian_table
+                        (pxs, pys), 1, (cxs, cys), 1, self._gaussian_table, 1
                     ) * np.expand_dims(pprobs, 0)
 
                     k = np.nanmax(normalized_shanon_entropy(matrix))
@@ -126,7 +125,7 @@ class MaximumJumpInStandardDeviations(ScoreEngine):
 
     def _get_std(self, metadata):
         if ("optimal_std" in metadata):
-            return metadata.optimal_std[2] * metadata.down_scaling
+            return metadata.optimal_std[2]
         else:
             return 1
 

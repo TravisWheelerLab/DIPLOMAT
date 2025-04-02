@@ -158,7 +158,6 @@ class RepairClusters(FramePass):
         num_frames = len(fb_data.frames)
         num_bodies = fb_data.metadata.num_outputs
         num_parts = len(fb_data.metadata.bodyparts)
-        down_scaling = fb_data.metadata.down_scaling
         skeleton = fb_data.metadata.skeleton
 
         split_locations = []
@@ -184,7 +183,6 @@ class RepairClusters(FramePass):
         body_idx: int,
         num_bodies: int,
         num_parts: int,
-        down_scaling: int,
         max_difference_factor: int = 5,
     ) -> List[StorageGraph]:
         """
@@ -235,7 +233,6 @@ class RepairClusters(FramePass):
         body_idx: int,
         num_bodies: int,
         num_parts: int,
-        down_scaling: int,
     ) -> List[float]:
         """
         Measures the variance of clusters' edges' distances from the average 
@@ -276,7 +273,6 @@ class RepairClusters(FramePass):
         num_frames = len(fb_data.frames)
         num_bodies = fb_data.metadata.num_outputs
         num_parts = len(fb_data.metadata.bodyparts)
-        down_scaling = fb_data.metadata.down_scaling
         skeleton = fb_data.metadata.skeleton
 
         num_splits = len(splits)
@@ -290,7 +286,7 @@ class RepairClusters(FramePass):
                 body_idx,
                 num_bodies,
                 num_parts,
-                down_scaling)
+            )
             body_components = np.array(body_graph.dfs())
             # score components by variance of edges from skeleton mean distance
             component_ids, component_scores = cls._score_components(
@@ -301,7 +297,7 @@ class RepairClusters(FramePass):
                 body_idx,
                 num_bodies,
                 num_parts,
-                down_scaling)
+            )
             optimal_component_idx = component_ids[np.argmax(component_scores)]
             # create partition of parts into those present in the optimal 
             # component, and everything else.
@@ -333,7 +329,6 @@ class RepairClusters(FramePass):
         # maximum-probability location in this skeleton-augmented frame data. 
         num_splits = len(splits)
         num_bodies = fb_data.metadata.num_outputs
-        down_scaling = fb_data.metadata.down_scaling
         assert len(best_components) == num_splits
         for split_idx in range(num_splits):
             frame_idx, body_idx = splits[split_idx]

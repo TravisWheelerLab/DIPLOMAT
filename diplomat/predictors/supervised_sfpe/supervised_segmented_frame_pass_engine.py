@@ -164,7 +164,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         if(offset is not None):
             y, x = offset
             w, h = self._frame_holder.metadata.width, self._frame_holder.metadata.height
-            w, h = w * down_scaling, h * down_scaling
             return (int(x), int(y), int(w), int(h))
 
         return None

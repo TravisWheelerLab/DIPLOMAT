@@ -133,7 +133,7 @@ class MITViterbi(FramePass):
         if (std == "auto" and ("optimal_std" in metadata)):
             self._scaled_std = metadata.optimal_std[2]
         else:
-            self._scaled_std = (std if (std != "auto") else 1) / metadata.down_scaling
+            self._scaled_std = (std if (std != "auto") else 1)
 
         #flat topped gaussian 
         self._flatten_std = None if (conf.gaussian_plateau is None) else self._scaled_std * conf.gaussian_plateau

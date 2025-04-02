@@ -454,7 +454,6 @@ class FixFrame(FramePass):
         cls,
         frames: List[List[ForwardBackwardFrame]],
         num_outputs: int,
-        down_scaling: float,
         skeleton: Optional[StorageGraph],
         max_dist: float,
         progress_bar: Optional[ProgressBar] = None
@@ -507,7 +506,6 @@ class FixFrame(FramePass):
 
         num_outputs = fb_data.metadata.num_outputs
         num_frames = fb_data.num_frames
-        down_scaling = fb_data.metadata.down_scaling
         skeleton = fb_data.metadata.get("skeleton", None)
 
         if(reset_bar and prog_bar is not None):
@@ -521,7 +519,7 @@ class FixFrame(FramePass):
             with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
                 pool.fast_map(
                     cls.compute_list_of_scores,
-                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, down_scaling, skeleton, max_dist),
+                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, skeleton, max_dist),
                     lambda i, val: scores.__setitem__(to_index(i), val),
                     (fb_data.num_frames + (cls.SCORES_PER_CHUNK - 1)) // cls.SCORES_PER_CHUNK
                 )
