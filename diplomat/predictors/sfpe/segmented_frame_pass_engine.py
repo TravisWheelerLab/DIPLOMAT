@@ -608,8 +608,8 @@ class SegmentedFramePassEngine(Predictor):
         if(self._width is None):
             self._width = scmap.get_frame_width() * scmap.get_down_scaling()
             self._height = scmap.get_frame_height() * scmap.get_down_scaling()
-            #self._frame_holder.metadata.width = scmap.get_frame_width() * scmap.get_down_scaling()
-            #self._frame_holder.metadata.height = scmap.get_frame_height() * scmap.get_down_scaling()
+            self._frame_holder.metadata.width = scmap.get_frame_width() * scmap.get_down_scaling()
+            self._frame_holder.metadata.height = scmap.get_frame_height() * scmap.get_down_scaling()
 
         for f_idx in range(scmap.get_frame_count()):
             for bp_idx in range(self._num_total_bp):
@@ -1251,6 +1251,7 @@ class SegmentedFramePassEngine(Predictor):
         num_frames: int,
         frame_metadata: AttributeDict,
         video_metadata: Config,
+        down_scaling: int,
         file_format: str,
         file: BinaryIO,
         export_all: bool = False
@@ -1277,12 +1278,15 @@ class SegmentedFramePassEngine(Predictor):
                 f"{bp}_{track}" for bp in frame_metadata.bodyparts for track in range(frame_metadata.num_outputs)
             ]
 
+        w = int(frame_metadata.width / down_scaling)
+        h = int(frame_metadata.height / down_scaling)
+
         header = frame_store_fmt.DLFSHeader(
             num_frames,
-            (frame_metadata.height + 2) if(export_all) else frame_metadata.height,
-            (frame_metadata.width + 2) if(export_all) else frame_metadata.width,
+            (h + 2) if(export_all) else h,
+            (w + 2) if(export_all) else w,
             video_metadata["fps"],
-            frame_metadata.down_scaling,
+            down_scaling,
             *video_metadata["size"],
             *((None, None) if (video_metadata["cropping-offset"] is None) else video_metadata["cropping-offset"]),
             bp_list
@@ -1362,13 +1366,15 @@ class SegmentedFramePassEngine(Predictor):
         if(p_bar is not None):
             p_bar.reset(frames.num_frames)
 
+        down_scaling = frames.frames[0][0].src_data.downscaling
+
         with path.open("wb") as f:
             if(video_metadata["orig-video-path"] is not None):
                 with open(video_metadata["orig-video-path"], "rb") as v:
                     shutil.copyfileobj(v, f)
 
             with cls._get_frame_writer(
-                frames.num_frames, frames.metadata, video_metadata, file_format, f, export_all
+                frames.num_frames, frames.metadata, video_metadata, down_scaling, file_format, f, export_all
             ) as fw:
                 header = fw.get_header()
 
@@ -1379,7 +1385,7 @@ class SegmentedFramePassEngine(Predictor):
                             frames.num_bodyparts * (3 if(export_all) else 1),
                             header.frame_width,
                             header.frame_height,
-                            frames.metadata.down_scaling,
+                            down_scaling,
                             True
                         )
 

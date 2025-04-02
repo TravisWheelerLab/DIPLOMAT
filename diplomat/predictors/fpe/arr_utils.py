@@ -120,7 +120,7 @@ class _NumpyDict:
         return vals
 
 
-def find_peaks(x: np.ndarray, y: np.ndarray, prob: np.ndarray, width: int, fill_value: float = 0):
+def find_peaks(x: np.ndarray, y: np.ndarray, prob: np.ndarray, fill_value: float = 0):
     """
     Finds the peaks of a sparse frame, or locations where all neighboring values are less than the value at this
     location (including diagonals).
@@ -139,9 +139,10 @@ def find_peaks(x: np.ndarray, y: np.ndarray, prob: np.ndarray, width: int, fill_
         y = y.astype(np.int64)
 
     keep_arr = np.ones(prob.shape, dtype=np.uint8)
+    x_max = np.max(x)
 
     def to_keys(_x, _y):
-        return _y * width + _x
+        return _y * (x_max + 1) + _x
 
     lookup_table = _NumpyDict(to_keys(x, y), prob, fill_value)
 

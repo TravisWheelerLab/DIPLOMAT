@@ -3,7 +3,8 @@ from typing import Tuple, Any, Optional, MutableMapping
 from typing_extensions import Protocol
 from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.arr_utils import find_peaks
-from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
+from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData, \
+    video_to_sparse_tracking_data_point, sparse_tracking_data_to_video_point
 from diplomat.wx_gui import labeler_lib
 
 import numpy as np
@@ -17,17 +18,6 @@ class EditableFramePassEngine(Protocol):
     @property
     def frame_data(self) -> ForwardBackwardData:
         raise NotImplementedError
-
-    def video_to_scmap_coord(self, coord: Tuple[float, float, float]) -> Tuple[float, float, float]:
-        pass
-
-    def scmap_to_video_coord(
-        self,
-        x_scmap: float,
-        y_scmap: float,
-        prob: float,
-    ) -> Tuple[float, float, float]:
-        pass
 
     def get_maximum_with_defaults(self, frame: ForwardBackwardFrame) -> Tuple[float, float, float]:
         pass
@@ -50,13 +40,12 @@ class Point(labeler_lib.PoseLabeler):
         y: float,
         probability: float
     ) -> Tuple[Any, Tuple[float, float, float]]:
-        meta = self._frame_engine.frame_data.metadata
         frame = self._frame_engine.frame_data.frames[frame_idx][bp_idx]
 
         if(x is None):
             #should we be returning this prob value or the probability value?
-            x, y, prob = self._frame_engine.scmap_to_video_coord(
-                *self._frame_engine.get_maximum_with_defaults(frame),
+            x, y, prob = sparse_tracking_data_to_video_point(
+                *self._frame_engine.get_maximum_with_defaults(frame), frame.src_data.downscaling
             )
             return ((frame_idx, bp_idx, x, y, 0), (x, y, 0))
 
@@ -67,8 +56,8 @@ class Point(labeler_lib.PoseLabeler):
         changed_frames = self._frame_engine.changed_frames
         frames = self._frame_engine.frame_data.frames
 
-        x, y, prob = self._frame_engine.video_to_scmap_coord((x, y, p))
         old_frame_data = frames[frm][bp]
+        x, y, prob = video_to_sparse_tracking_data_point(x, y, p, old_frame_data.src_data.downscaling)
         is_orig = False
 
         idx = (frm, bp)
@@ -141,7 +130,7 @@ class Approximate(labeler_lib.PoseLabeler):
         std = self._cached_gaussian_std / down_scaling
         two_std = min(
             np.ceil(self._cached_gaussian_std * 2),
-            max(meta.width, meta.height)
+            int(max(meta.width / down_scaling, meta.height / down_scaling))
         )
 
         eval_vals = np.arange(-two_std, two_std + 1)
@@ -228,8 +217,10 @@ class Approximate(labeler_lib.PoseLabeler):
             )
             return ((frame_idx, bp_idx, None, (x, y)), (x, y, 0))
 
+        d_scale = frame.orig_data.downscaling
+
         xvid, yvid = x, y
-        x, y, prob = self._frame_engine.video_to_scmap_coord((x, y, probability))
+        x, y, prob = video_to_sparse_tracking_data_point(x, y, probability, d_scale)
         gp, gc = self._cached_gaussian
         gc = gc + np.array([[x], [y]], dtype=int)
 
@@ -248,8 +239,8 @@ class Approximate(labeler_lib.PoseLabeler):
             gp * user_amp,
             gc,
             np.asarray([
-                xvid - (gc[0] * meta.down_scaling + meta.down_scaling * 0.5),
-                yvid - (gc[1] * meta.down_scaling + meta.down_scaling * 0.5)
+                xvid - (gc[0] * d_scale + d_scale * 0.5),
+                yvid - (gc[1] * d_scale + d_scale * 0.5)
             ])
         )
 
@@ -269,7 +260,7 @@ class Approximate(labeler_lib.PoseLabeler):
         sp.pack(final_x, final_y, final_p)
         temp_f = ForwardBackwardFrame(src_data=sp, frame_probs=final_p)
 
-        x, y, prob = self._frame_engine.scmap_to_video_coord(
+        x, y, prob = sparse_tracking_data_to_video_point(
             *self._frame_engine.get_maximum_with_defaults(temp_f),
         )
 
@@ -492,20 +483,20 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
             frame = self._frame_engine.frame_data.frames[frame_idx][bp_idx]
 
         if(x is None):
-            x, y, prob = self._frame_engine.scmap_to_video_coord(
-                *self._frame_engine.get_maximum_with_defaults(frame),
+            x, y, prob = sparse_tracking_data_to_video_point(
+                *self._frame_engine.get_maximum_with_defaults(frame), frame.src_data.downscaling
             )
             return ((frame_idx, bp_idx, None, (x, y)), (x, y, 0))
 
         xs, ys, probs = frame.orig_data.unpack()
 
-        peak_locs = find_peaks(xs.astype(int), ys.astype(int), probs, meta.width)
+        peak_locs = find_peaks(xs.astype(int), ys.astype(int), probs)
         peak_locs = peak_locs[probs[peak_locs] >= config.minimum_peak_value]
         #print(peak_locs)
         if(len(peak_locs) <= 1):
             # No peaks, or only one peak, perform basically a no-op, return prior frame state...
-            x, y, prob = self._frame_engine.scmap_to_video_coord(
-                *self._frame_engine.get_maximum_with_defaults(frame)
+            x, y, prob = sparse_tracking_data_to_video_point(
+                *self._frame_engine.get_maximum_with_defaults(frame), frame.src_data.downscaling
             )
             return ((frame_idx, bp_idx, frame, (x, y)), (x, y, prob))
 
@@ -513,7 +504,7 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
             return _x + 0.5 + (_x_off / meta.down_scaling), _y + 0.5 + (_y_off / meta.down_scaling)
 
         # Compute nearest location...
-        xp, yp, pp = self._frame_engine.video_to_scmap_coord((x, y, probability))
+        xp, yp, pp = video_to_sparse_tracking_data_point(x, y, probability, frame.src_data.downscaling)
 
         #xp_ex, yp_ex = to_exact(xp, yp)
         x_ex, y_ex = xs[peak_locs], ys[peak_locs]
@@ -539,8 +530,8 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
             src_data=SparseTrackingData(frame.orig_data.downscaling).pack(xs, ys, probs), frame_probs=probs
         )
 
-        x, y, prob = self._frame_engine.scmap_to_video_coord(
-            *self._frame_engine.get_maximum_with_defaults(temp_f)
+        x, y, prob = sparse_tracking_data_to_video_point(
+            *self._frame_engine.get_maximum_with_defaults(temp_f), frame.src_data.downscaling
         )
 
         return ((frame_idx, bp_idx, temp_f, (x, y)), (x, y, prob))
@@ -580,8 +571,8 @@ class NearestPeakInSource(labeler_lib.PoseLabeler):
 
         if(suggested_frame is None):
             new_data = SparseTrackingData(old_frame_data.src_data.downscaling)
-            x, y, prob = self._frame_engine.video_to_scmap_coord(
-                coord + (0,)
+            x, y, prob = video_to_sparse_tracking_data_point(
+                *coord, 0, old_frame_data.src_data.downscaling
             )
             new_data.pack(*[np.array([item]) for item in [x, y, prob]])
         else:

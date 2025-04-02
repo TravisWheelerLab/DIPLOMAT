@@ -85,7 +85,7 @@ class Pose:
         scmap_coord: PointData,
         offset: Union[FloatPointData, None],
         prob: Union[float, ndarray],
-        down_scale: int,
+        down_scale: int = 1,
     ):
         """
         Set the probability data at a given location or locations to the specified data.
@@ -121,7 +121,7 @@ class Pose:
         bodypart: Index,
         scmap_coord: PointData,
         prob: Union[float, ndarray],
-        down_scale: int,
+        down_scale: int = 1,
     ):
         """
         Set the probability data at a given location or locations to the specified data.

@@ -159,7 +159,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         PRIVATE: Get the cropping box of the passed video, uses internally stored _vid_meta dictionary.
         """
         offset = self.video_metadata["cropping-offset"]
-        down_scaling = self._frame_holder.metadata.down_scaling
 
         if(offset is not None):
             y, x = offset
@@ -217,31 +216,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
     def height(self) -> int:
         return self._height
 
-    def scmap_to_video_coord(
-        self,
-        x_scmap: float,
-        y_scmap: float,
-        prob: float
-    ) -> Tuple[float, float, float]:
-        d_scale = self._frame_holder.metadata.down_scaling
-        x_video = x_scmap * d_scale
-        y_video = y_scmap * d_scale
-        return (x_video, y_video, prob)
-
-    def video_to_scmap_coord(self, coord: Tuple[float, float, float]) -> Tuple[float, float, float]:
-        """
-        PRIVATE: Convert a coordinate in video space to a coordinate in source map space.
-
-        :param coord: A tuple of (x, y, probability), the x and y being represented as floating point numbers in video
-                      pixel space.
-        :returns: A tuple of (x index, y index, x offset, y offset, probability) being the coordinate stored in source
-                  map space.
-        """
-        down_scaling = self._frame_holder.metadata.down_scaling
-        vid_x, vid_y, prob = coord
-
-        return (vid_x / down_scaling, vid_y / down_scaling, prob)
-
     def _make_plot_of(
         self,
         figsize: Tuple[float, float],
@@ -259,8 +233,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         axes.set_title(title)
 
         h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
-        down_scaling = self.frame_data.metadata.down_scaling
-        track_data = track_data.desparsify(w, h, down_scaling)
+        track_data = track_data.desparsify(w, h)
 
         axes.imshow(track_data.get_prob_table(0, 0), **kwargs)
         figure.tight_layout()
@@ -295,7 +268,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         axes.set_title(title)
 
         h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
-        down_scaling = self.frame_data.metadata.down_scaling
 
         counts = 0
         img = 0
@@ -304,7 +276,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             cmap = plt.get_cmap(cmap).copy()
             cmap.set_extremes(bad=(0, 0, 0, 0), under=(0, 0, 0, 0), over=(0, 0, 0, 0))
 
-            track_data = track_data.desparsify(w, h, down_scaling).get_prob_table(0, 0)
+            track_data = track_data.desparsify(w, h).get_prob_table(0, 0)
 
             track_data /= np.nanmax(track_data)
             track_data *= 0.75
@@ -478,7 +450,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         # Vital: If _frame_holder got updated when FB was run.
         frames = self._frame_holder.frames
-        d_scale = self._frame_holder.metadata.down_scaling
 
         # Restore old user edits...
         for score in self._fb_editor.score_displays:

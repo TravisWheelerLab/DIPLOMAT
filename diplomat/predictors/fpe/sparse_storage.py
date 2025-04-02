@@ -128,6 +128,20 @@ class SparseTrackingData:
         ], dtype=self.mem_type, axis=0)
         return self
 
+    def unpack_unscaled(self):
+        x, y, p = self.unpack()
+        return x * self._downscaling, y * self._downscaling, p
+
+    def pack_unscaled(
+        self,
+        x_coords: Optional[ndarray],
+        y_coords: Optional[ndarray],
+        probs: Optional[ndarray]
+    ):
+        x_coords = x_coords / self._downscaling
+        y_coords = y_coords / self._downscaling
+        return self.pack(x_coords, y_coords, probs)
+
     # noinspection PyTypeChecker
     def unpack(self) -> Tuple[
         Optional[ndarray], Optional[ndarray], Optional[ndarray]]:
@@ -209,7 +223,6 @@ class SparseTrackingData:
         threshold: float,
         max_cell_count: Optional[int] = None,
         mode: SparseModes = SparseModes.IGNORE_OFFSETS,
-        upscale_std: float = 1.0
     ) -> "SparseTrackingData":
         """
         Sparsify the TrackingData.
@@ -397,6 +410,13 @@ class SparseTrackingData:
     def __repr__(self):
         x, y, probs = self.unpack()
         return f"SparseTrackingData(x={x}, y={y}, probs={probs}, downscaling={self.downscaling})"
+
+
+def video_to_sparse_tracking_data_point(x: float, y: float, prob: float, downscale: float):
+    return x / downscale, y / downscale, prob
+
+def sparse_tracking_data_to_video_point(x: float, y: float, prob: float, downscale: float):
+    return x * downscale, y * downscale, prob
 
 
 # Improves memory performance by using slots instead of a dictionary to store attributes...

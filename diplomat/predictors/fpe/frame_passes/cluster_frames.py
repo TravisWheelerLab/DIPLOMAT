@@ -35,7 +35,6 @@ class ClusterFrames(FramePass):
             self._frame_data.metadata.num_outputs,
             self._cost_table,
             self.config,
-            self.width,
             ClusteringMethod[self.config.clustering_mode],
             self.config.cluster_with
         )
@@ -89,7 +88,6 @@ class ClusterFrames(FramePass):
         num_outputs: int,
         cost_table: np.ndarray,
         config: Config,
-        width: int,
         clustering_mode: ClusteringMethod,
         cluster_method: str,
         progress_bar: Optional[ProgressBar] = None
@@ -109,7 +107,7 @@ class ClusterFrames(FramePass):
                 if(clusters[group_idx] is None):
                     clusters[group_idx] = cls._compute_cluster(
                         x, y, prob,
-                        num_outputs, width,
+                        num_outputs,
                         cost_table,
                         config.minimum_cluster_size,
                         config.max_throwaway_count,
@@ -127,9 +125,11 @@ class ClusterFrames(FramePass):
         cls,
         x: np.ndarray,
         y: np.ndarray,
+        d_scale: float,
         prob: np.ndarray,
         num_clusters: int,
         cost_table: np.ndarray,
+        cost_table_dscale: float,
         balance: float,
         attempts: int,
         clustering_mode: ClusteringMethod,
@@ -139,7 +139,14 @@ class ClusterFrames(FramePass):
         if(len(x) < num_clusters):
             return None
 
-        trans = fpe_math.table_transition_interpolate((x, y), (x, y), cost_table)
+        trans = fpe_math.table_transition_interpolate(
+            (x, y),
+            d_scale,
+            (x, y),
+            d_scale,
+            cost_table,
+            cost_table_dscale
+        )
         # graph = (2 + trans) - (np.expand_dims(prob, 1)) - (np.expand_dims(prob, 0))  ??? What was I thinking???
         # A kind of "intra-transition" scoring scheme... I believe this was the prior scheme, not sure why I replaced it...
         log_prob = np.log(prob)
@@ -189,7 +196,6 @@ class ClusterFrames(FramePass):
         y: np.ndarray,
         prob: np.ndarray,
         num_clusters: int,
-        width: int,
         cost_table: np.ndarray,
         balance: float,
         attempts: int,
@@ -202,7 +208,7 @@ class ClusterFrames(FramePass):
 
         # Find peak locations...
         if(cluster_with == "PEAKS"):
-            top_indexes = find_peaks(x.astype(int), y.astype(int), prob, width)
+            top_indexes = find_peaks(x.astype(int), y.astype(int), prob)
         else:
             top_indexes = np.ones(len(x), dtype=bool)
 

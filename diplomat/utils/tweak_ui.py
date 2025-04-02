@@ -46,13 +46,12 @@ class _DummySubPoseList(Sequence[ForwardBackwardFrame]):
         if(np.isnan(x) or np.isnan(y)):
             x, y, p = 0, 0, 0
 
-        sx, sy, sp = _DummyFramePassEngine.video_to_scmap_coord((x, y, p))
-
-        res = SparseTrackingData(1).pack([sx], [sy], [sp])
+        # noinspection INSPECTION_NAME
+        res = SparseTrackingData(1).pack(np.array([x]), np.array([y]), np.array([p]))
         return ForwardBackwardFrame(
             orig_data=res,
             src_data=res,
-            frame_probs=np.array([sp])
+            frame_probs=np.array([p])
         )
 
     def __len__(self) -> int:
@@ -128,18 +127,6 @@ class _DummyFramePassEngine:
     @property
     def changed_frames(self) -> MutableMapping[Tuple[int, int], ForwardBackwardFrame]:
         return self._changed_frames
-
-    @staticmethod
-    def video_to_scmap_coord(coord: Tuple[float, float, float]) -> Tuple[float, float, float]:
-        return coord
-
-    @staticmethod
-    def scmap_to_video_coord(
-        x_scmap: float,
-        y_scmap: float,
-        prob: float
-    ) -> Tuple[float, float, float]:
-        return (x_scmap, y_scmap, prob)
 
     @staticmethod
     def get_maximum_with_defaults(frame: ForwardBackwardFrame) -> Tuple[float, float, float]:
