@@ -549,7 +549,7 @@ class FixFrame(FramePass):
                 "Clustering must be done before frame fixing!"
             )
 
-        outlier_threshold = self.config.outlier_threshold
+        outlier_threshold = cls.get_config_options()["outlier_threshold"][0]
 
         scores = np.zeros((fb_data.num_frames, 2))
 
@@ -644,7 +644,7 @@ class FixFrame(FramePass):
     ) -> ForwardBackwardData:
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames * 2)
-
+        
         self._scores, fallback_scores = self.compute_scores(fb_data, prog_bar, False)
 
         self._max_frame_idx = int(np.argmax(self._scores))
