@@ -363,6 +363,7 @@ class FixFrame(FramePass):
         skeleton: Optional[StorageGraph],
         optimal_std: float,
         max_dist: float,
+        outlier_threshold: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> Tuple[float, float]:
         """
@@ -390,6 +391,10 @@ class FixFrame(FramePass):
 
         geometric_component = 0.0
         geometric_component2 = 0.0
+
+        if skeleton is None:
+            # disable body part overlap detection
+            optimal_std = -np.inf
 
         for bp_group_off in range(num_bp):
 
@@ -474,7 +479,7 @@ class FixFrame(FramePass):
                         min_score = min(result, min_score)
 
                     # detect malformed poses:
-                    if min_score / relative_std > 2:
+                    if min_score / relative_std > outlier_threshold:
                         # if the best score for this pose is still an outlier, the frame will be filtered out.
                         skeletal_component = -np.inf
                         skeletal_component2 -= (max_dist / num_pairs)
@@ -497,6 +502,7 @@ class FixFrame(FramePass):
         skeleton: Optional[StorageGraph],
         optimal_std: float,
         max_dist: float,
+        outlier_threshold: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> np.ndarray:
         final_scores = np.zeros((len(frames), 2))
@@ -506,7 +512,7 @@ class FixFrame(FramePass):
 
         for i, frame in enumerate(frames):
             #this will be a tuple of scores per frame 
-            final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton, optimal_std, max_dist)
+            final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton, optimal_std, max_dist, outlier_threshold)
 
             if(progress_bar is not None):
                 progress_bar.update()
@@ -543,6 +549,8 @@ class FixFrame(FramePass):
                 "Clustering must be done before frame fixing!"
             )
 
+        outlier_threshold = self.config.outlier_threshold
+
         scores = np.zeros((fb_data.num_frames, 2))
 
         num_outputs = fb_data.metadata.num_outputs
@@ -562,14 +570,14 @@ class FixFrame(FramePass):
             with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
                 pool.fast_map(
                     cls.compute_list_of_scores,
-                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, down_scaling, skeleton, optimal_std, max_dist),
+                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, down_scaling, skeleton, optimal_std, max_dist, outlier_threshold),
                     lambda i, val: scores.__setitem__(to_index(i), val),
                     (fb_data.num_frames + (cls.SCORES_PER_CHUNK - 1)) // cls.SCORES_PER_CHUNK
                 )
         else:
             for f_idx in range(num_frames):
                 scores[f_idx] = cls.compute_single_score(
-                    fb_data.frames[f_idx], num_outputs, down_scaling, skeleton, optimal_std, max_dist
+                    fb_data.frames[f_idx], num_outputs, down_scaling, skeleton, optimal_std, max_dist, outlier_threshold
                 )
                 if (prog_bar is not None):
                     prog_bar.update(1)
@@ -688,5 +696,10 @@ class FixFrame(FramePass):
                 "hungarian",
                 tc.Literal("greedy", "hungarian"),
                 "The algorithm to use for assigning body parts to skeletons when creating the fix frame."
+            ),
+            "outlier_threshold": (
+                2.0,
+                float,
+                "The threshold z-score used to detect when a pose is an outlier in the skeletal distance distribution."
             )
         }
