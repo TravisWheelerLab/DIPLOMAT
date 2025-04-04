@@ -14,6 +14,7 @@ import numpy as np
 from numpy import ndarray
 from diplomat.processing import TrackingData
 from diplomat.utils.extract_frames import pretty_frame_string, FrameStringFormats, BorderStyle
+from diplomat.predictors.fpe.fpe_math import gaussian_formula
 
 # Represents a valid numpy indexing type.
 Indexer = Union[slice, int, List[int], Tuple[int], None]
@@ -223,6 +224,8 @@ class SparseTrackingData:
         threshold: float,
         max_cell_count: Optional[int] = None,
         mode: SparseModes = SparseModes.IGNORE_OFFSETS,
+        upscale_std: float = 1.0,
+        truncate_std: float = 4.0
     ) -> "SparseTrackingData":
         """
         Sparsify the TrackingData.
@@ -267,7 +270,36 @@ class SparseTrackingData:
         probs = track_data.get_prob_table(frame, bodypart)[y, x]
 
         if(mode == SparseModes.UPSCALE):
-            raise ValueError("Not implemented!")
+            ds = track_data.get_down_scaling()
+            w = int(width * ds)
+            h = int(height * ds)
+            full_x = (x + 0.5) * ds + x_off
+            full_y = (y + 0.5) * ds + y_off
+            true_x = full_x.astype(int)
+            true_y = full_y.astype(int)
+
+            sigma_true = upscale_std * ds
+            sigma_trunc_true = int(np.ceil(truncate_std * ds))
+
+            tmp_frame = np.zeros((w, h), dtype=np.float32)
+            offsets = np.arange(-sigma_true, sigma_true + 1, dtype=int)
+            gcx, gcy = np.meshgrid(offsets, offsets)
+            dist = gcx ** 2 + gcy ** 2
+            gcx = gcx[dist < sigma_trunc_true ** 2]
+            gcy = gcy[dist < sigma_trunc_true ** 2]
+
+            gaussian = gaussian_formula(0, gcx, 0, gcy, sigma_true, 1)
+            gaussian = gaussian * np.expand_dims(probs, 1)
+            fx = gcx + np.expand_dims(true_x, 1)
+            fy = gcy + np.expand_dims(true_y, 1)
+
+            # Apply Gaussians...
+            in_bounds = (0 <= fx) & (fx < w) & (0 <= fy) & (fy < h)
+            np.maximum.at(tmp_frame, (fx[in_bounds], fy[in_bounds]), gaussian[in_bounds])
+            # Remake into sparse frame...
+            x, y = np.nonzero(tmp_frame > threshold)
+            probs = tmp_frame[x, y]
+            x_off, y_off = np.zeros(x.shape, dtype=np.float32), np.zeros(y.shape, dtype=np.float32)
         elif(mode != SparseModes.IGNORE_OFFSETS):
             full_x = x + 0.5 + x_off / track_data.get_down_scaling()
             full_y = y + 0.5 + y_off / track_data.get_down_scaling()

@@ -34,6 +34,7 @@ class ClusterFrames(FramePass):
             list(self._frame_data.frames[index]),
             self._frame_data.metadata.num_outputs,
             self._cost_table,
+            1,
             self.config,
             ClusteringMethod[self.config.clustering_mode],
             self.config.cluster_with
@@ -87,6 +88,7 @@ class ClusterFrames(FramePass):
         frame_data: List[ForwardBackwardFrame],
         num_outputs: int,
         cost_table: np.ndarray,
+        cost_table_dscale: float,
         config: Config,
         clustering_mode: ClusteringMethod,
         cluster_method: str,
@@ -106,9 +108,12 @@ class ClusterFrames(FramePass):
             if(not frame.ignore_clustering):
                 if(clusters[group_idx] is None):
                     clusters[group_idx] = cls._compute_cluster(
-                        x, y, prob,
+                        x, y,
+                        frame.orig_data.downscaling,
+                        prob,
                         num_outputs,
                         cost_table,
+                        cost_table_dscale,
                         config.minimum_cluster_size,
                         config.max_throwaway_count,
                         clustering_mode,
@@ -169,9 +174,11 @@ class ClusterFrames(FramePass):
             result = cls._cluster_algorithm(
                 x[keep],
                 y[keep],
+                d_scale,
                 prob[keep],
                 num_clusters,
                 cost_table,
+                cost_table_dscale,
                 balance,
                 attempts - 1,
                 clustering_mode,
@@ -194,9 +201,11 @@ class ClusterFrames(FramePass):
         cls,
         x: np.ndarray,
         y: np.ndarray,
+        d_scale: float,
         prob: np.ndarray,
         num_clusters: int,
         cost_table: np.ndarray,
+        cost_table_dscale: float,
         balance: float,
         attempts: int,
         clustering_mode: ClusteringMethod,
@@ -215,9 +224,11 @@ class ClusterFrames(FramePass):
         components = cls._cluster_algorithm(
             x[top_indexes],
             y[top_indexes],
+            d_scale,
             prob[top_indexes],
             num_clusters,
             cost_table,
+            cost_table_dscale,
             balance,
             int(attempts),
             clustering_mode
@@ -255,8 +266,10 @@ class ClusterFrames(FramePass):
 
         if((not current.ignore_clustering) and ((frame_index, bp_group) not in self._cluster_dict)):
             self._cluster_dict[(frame_index, bp_group)] = self._compute_cluster(
-                x, y, prob, num_out, metadata.width,
+                x, y, current.orig_data.downscaling,
+                prob, num_out,
                 self._cost_table,
+                1,
                 self.config.minimum_cluster_size,
                 self.config.max_throwaway_count,
                 ClusteringMethod[self.config.clustering_mode],

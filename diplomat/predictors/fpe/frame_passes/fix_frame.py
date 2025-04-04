@@ -28,6 +28,7 @@ class FixFrame(FramePass):
     def get_max_location(
         cls,
         frame: ForwardBackwardFrame,
+        down_scaled: bool = False
     ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
         """
         Determines the maximum location within a frame after downscaling.
@@ -43,17 +44,17 @@ class FixFrame(FramePass):
         - Tuple[Optional[float], Optional[float], Optional[float]]: The adjusted x and y coordinates of the maximum
           location and its probability. Returns None for each value if the probability data is not available.
         """
-        x, y, prob = frame.src_data.unpack()
+        x, y, prob = frame.src_data.unpack() if down_scaled else frame.src_data.unpack_unscaled()
 
         if(prob is None):
-            return (None, None, None)
+            return None, None, None
 
         max_idx = np.argmax(prob)
 
         return (
-            x[max_idx],
-            y[max_idx],
-            prob[max_idx]
+            float(x[max_idx]),
+            float(y[max_idx]),
+            float(prob[max_idx])
         )
 
     @classmethod

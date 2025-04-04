@@ -52,7 +52,7 @@ class Point(labeler_lib.PoseLabeler):
         return ((frame_idx, bp_idx, x, y, probability), (x, y, probability))
 
     def pose_change(self, new_state: Any) -> Any:
-        frm, bp, x, y, p, ds = new_state
+        frm, bp, x, y, p = new_state
         changed_frames = self._frame_engine.changed_frames
         frames = self._frame_engine.frame_data.frames
 
@@ -186,6 +186,9 @@ class Approximate(labeler_lib.PoseLabeler):
         x = x[ordered][idx]
         y = y[ordered][idx]
         probs = probs[ordered][idx]
+        # Avoid filtering if below max count...
+        if(probs.shape[0] <= max_cell_count):
+            return (x, y, probs)
         # Filter to max amount...
         top_k = np.argpartition(probs, -max_cell_count)[-max_cell_count:]
         return (x[top_k], y[top_k], probs[top_k])
@@ -212,8 +215,8 @@ class Approximate(labeler_lib.PoseLabeler):
             self._make_gaussian(info.user_input_spread, frame.src_data.downscaling)
 
         if(x is None):
-            x, y, prob = self._frame_engine.scmap_to_video_coord(
-                *self._frame_engine.get_maximum_with_defaults(frame),
+            x, y, prob = sparse_tracking_data_to_video_point(
+                *self._frame_engine.get_maximum_with_defaults(frame), frame.src_data.downscaling
             )
             return ((frame_idx, bp_idx, None, (x, y)), (x, y, 0))
 
@@ -224,7 +227,7 @@ class Approximate(labeler_lib.PoseLabeler):
         gp, gc = self._cached_gaussian
         gc = gc + np.array([[x], [y]], dtype=int)
 
-        good_locs = ((0 <= gc[0]) & (gc[0] < meta.width)) & ((0 <= gc[1]) & (gc[1] < meta.height))
+        good_locs = ((0 <= gc[0]) & (gc[0] < int(meta.width / d_scale))) & ((0 <= gc[1]) & (gc[1] < (meta.height / d_scale)))
         gc = gc[:, good_locs]
         gp = gp[good_locs]
 
@@ -239,8 +242,8 @@ class Approximate(labeler_lib.PoseLabeler):
             gp * user_amp,
             gc,
             np.asarray([
-                xvid - (gc[0] * d_scale + d_scale * 0.5),
-                yvid - (gc[1] * d_scale + d_scale * 0.5)
+                (xvid / d_scale) - (gc[0]),
+                (yvid / d_scale) - (gc[1])
             ])
         )
 
@@ -261,7 +264,7 @@ class Approximate(labeler_lib.PoseLabeler):
         temp_f = ForwardBackwardFrame(src_data=sp, frame_probs=final_p)
 
         x, y, prob = sparse_tracking_data_to_video_point(
-            *self._frame_engine.get_maximum_with_defaults(temp_f),
+            *self._frame_engine.get_maximum_with_defaults(temp_f), temp_f.src_data.downscaling
         )
 
         return ((frame_idx, bp_idx, temp_f, (x, y)), (x, y, prob))
@@ -323,8 +326,8 @@ class Approximate(labeler_lib.PoseLabeler):
 
         if(suggested_frame is None):
             new_data = SparseTrackingData(old_frame_data.src_data.downscaling)
-            x, y, prob = self._frame_engine.video_to_scmap_coord(
-                coord + (0,)
+            x, y, prob = video_to_sparse_tracking_data_point(
+                *coord, 0, old_frame_data.src_data.downscaling
             )
             new_data.pack(*[np.array([item]) for item in [x, y, prob]])
         else:

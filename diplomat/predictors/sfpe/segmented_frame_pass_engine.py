@@ -587,7 +587,8 @@ class SegmentedFramePassEngine(Predictor):
             bp_idx,
             self.THRESHOLD,
             self.settings.max_cells_per_frame,
-            SparseTrackingData.SparseModes[self.settings.sparsification_mode]
+            SparseTrackingData.SparseModes[self.settings.sparsification_mode],
+            self.settings.sparse_upscale_spread
         )
         fb_frame.src_data = fb_frame.orig_data
 
@@ -605,11 +606,12 @@ class SegmentedFramePassEngine(Predictor):
         Returns:
             None: This method updates the frame holder in-place and does not return any value.
         """
+        c_int = lambda n: int(np.ceil(n))
         if(self._width is None):
-            self._width = scmap.get_frame_width() * scmap.get_down_scaling()
-            self._height = scmap.get_frame_height() * scmap.get_down_scaling()
-            self._frame_holder.metadata.width = scmap.get_frame_width() * scmap.get_down_scaling()
-            self._frame_holder.metadata.height = scmap.get_frame_height() * scmap.get_down_scaling()
+            self._width = c_int(scmap.get_frame_width() * scmap.get_down_scaling())
+            self._height = c_int(scmap.get_frame_height() * scmap.get_down_scaling())
+            self._frame_holder.metadata.width = c_int(scmap.get_frame_width() * scmap.get_down_scaling())
+            self._frame_holder.metadata.height = c_int(scmap.get_frame_height() * scmap.get_down_scaling())
 
         for f_idx in range(scmap.get_frame_count()):
             for bp_idx in range(self._num_total_bp):
@@ -1568,9 +1570,15 @@ class SegmentedFramePassEngine(Predictor):
                 "measured in cell units, not video units."
             ),
             "sparsification_mode": (
-                SparseTrackingData.SparseModes.OFFSET_DOMINATION.name,
+                SparseTrackingData.SparseModes.UPSCALE.name,
                 type_casters.Literal(*[mode.name for mode in SparseTrackingData.SparseModes]),
                 "The mode to utilize during sparsification."
+            ),
+            "sparse_upscale_spread": (
+                0.1,
+                type_casters.RangedFloat(1e-8, np.inf),
+                "Only used if sparsification_mode is set to UPSCALE. If so"
+                "controls how spread out points will be when resized via gaussian."
             ),
             "assignment_algorithm": (
                 "hungarian",

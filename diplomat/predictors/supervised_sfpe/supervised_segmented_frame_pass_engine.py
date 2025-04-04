@@ -11,7 +11,7 @@ from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, Max
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
 from diplomat.wx_gui.fpe_editor import FPEEditor
-from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData
+from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData, sparse_tracking_data_to_video_point
 from diplomat.processing import *
 
 import cv2
@@ -233,7 +233,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         axes.set_title(title)
 
         h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
-        track_data = track_data.desparsify(w, h)
+        track_data = track_data.desparsify(int(w / track_data.downscaling), int(h / track_data.downscaling))
 
         axes.imshow(track_data.get_prob_table(0, 0), **kwargs)
         figure.tight_layout()
@@ -276,7 +276,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             cmap = plt.get_cmap(cmap).copy()
             cmap.set_extremes(bad=(0, 0, 0, 0), under=(0, 0, 0, 0), over=(0, 0, 0, 0))
 
-            track_data = track_data.desparsify(w, h).get_prob_table(0, 0)
+            track_data = track_data.desparsify(int(w / track_data.downscaling), int(h / track_data.downscaling)).get_prob_table(0, 0)
 
             track_data /= np.nanmax(track_data)
             track_data *= 0.75
@@ -464,10 +464,10 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._reverse_segment_bp_order,
             self._segment_bp_order
         ).items():
-            x, y, prob = self.scmap_to_video_coord(
+            x, y, prob = sparse_tracking_data_to_video_point(
                 *self.get_maximum_with_defaults(
                     sparse_frame
-                )
+                ), sparse_frame.src_data.downscaling
             )
 
             for score in self._fb_editor.score_displays:
