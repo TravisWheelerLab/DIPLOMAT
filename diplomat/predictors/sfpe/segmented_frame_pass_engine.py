@@ -1563,14 +1563,14 @@ class SegmentedFramePassEngine(Predictor):
                 "Only works if export_frame_path is set, and overrides export_final_probs."
             ),
             "relaxed_maximum_radius": (
-                1.8,
+                0,
                 type_casters.RangedFloat(0, np.inf),
                 "Determines the radius of relaxed maximum selection. "
                 "Set to 0 to disable relaxed maximum selection. This value is "
                 "measured in cell units, not video units."
             ),
             "sparsification_mode": (
-                SparseTrackingData.SparseModes.UPSCALE.name,
+                SparseTrackingData.SparseModes.OFFSET_DOMINATION.name,
                 type_casters.Literal(*[mode.name for mode in SparseTrackingData.SparseModes]),
                 "The mode to utilize during sparsification."
             ),
