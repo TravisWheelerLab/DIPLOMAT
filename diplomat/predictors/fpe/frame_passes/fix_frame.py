@@ -5,7 +5,7 @@ from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
 from diplomat.utils.graph_ops import min_cost_matching
 import numpy as np
-from diplomat.processing import ProgressBar, ConfigSpec
+from diplomat.processing import ProgressBar, ConfigSpec, Config
 import diplomat.processing.type_casters as tc
 from diplomat.utils.point_spread_patterns import approximate_maxmin_distance
 
@@ -89,7 +89,7 @@ class FixFrame(FramePass):
 
             # Now traverse the storage graph making connection between things...
             for node_group1 in range(len(storage_graph)):
-                for node_group2, (__, __, avg) in storage_graph[node_group1]:
+                for node_group2, (__, __, avg, __) in storage_graph[node_group1]:
                     for node_off1 in range(num_outputs):
                         if(node_group1 == fixed_group and node_off1 != i):
                             continue
@@ -337,7 +337,9 @@ class FixFrame(FramePass):
         frames: List[ForwardBackwardFrame],
         num_outputs: int,
         skeleton: Optional[StorageGraph],
+        optimal_std: float,
         max_dist: float,
+        outlier_threshold: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> Tuple[float, float]:
         """
@@ -365,6 +367,10 @@ class FixFrame(FramePass):
 
         geometric_component = 0.0
         geometric_component2 = 0.0
+
+        if skeleton is None:
+            # disable body part overlap detection
+            optimal_std = -np.inf
 
         for bp_group_off in range(num_bp):
 
@@ -395,10 +401,8 @@ class FixFrame(FramePass):
 
             if(np.isinf(min_dist)):
                 min_dist = 0
-            if(min_dist == 0 or count == 0):
+            if(min_dist < optimal_std or count == 0):
                 # BAD! We found a frame that failed to cluster properly...
-
-                #looks like this is the difference between score and score2? 
                 geometric_component = -np.inf
 
             # Minimum distance, weighted by average skeleton-pair confidence...
@@ -426,7 +430,7 @@ class FixFrame(FramePass):
                     skeletal_component2 -= (max_dist / num_pairs)
                     continue
 
-                for (bp2_group_off, (__, __, avg)) in skel[bp_group_off]:
+                for (bp2_group_off, (__, __, avg, relative_std)) in skel[bp_group_off]:
                     min_score = np.inf
 
                     for bp2_off in range(num_outputs):
@@ -440,10 +444,15 @@ class FixFrame(FramePass):
 
                         min_score = min(result, min_score)
 
-                    skeletal_component -= (min_score / num_pairs)
-                    skeletal_component2 -= (min_score / num_pairs)
-
-        #print(f"geometric component {geometric_component}\nskeletal component {skeletal_component}\n")
+                    # detect malformed poses:
+                    if min_score / relative_std > outlier_threshold:
+                        # if the best score for this pose is still an outlier, the frame will be filtered out.
+                        skeletal_component = -np.inf
+                        skeletal_component2 -= (max_dist / num_pairs)
+                    else:
+                        # otherwise, this frame can be used.
+                        skeletal_component -= (min_score / num_pairs)
+                        skeletal_component2 -= (min_score / num_pairs)
 
         score = geometric_component + skeletal_component
         score2 = geometric_component2 + skeletal_component2
@@ -456,7 +465,9 @@ class FixFrame(FramePass):
         frames: List[List[ForwardBackwardFrame]],
         num_outputs: int,
         skeleton: Optional[StorageGraph],
+        optimal_std: float,
         max_dist: float,
+        outlier_threshold: float,
         progress_bar: Optional[ProgressBar] = None
     ) -> np.ndarray:
         final_scores = np.zeros((len(frames), 2))
@@ -466,7 +477,7 @@ class FixFrame(FramePass):
 
         for i, frame in enumerate(frames):
             #this will be a tuple of scores per frame 
-            final_scores[i] = cls.compute_single_score(frame, num_outputs, skeleton, max_dist)
+            final_scores[i] = cls.compute_single_score(frame, num_outputs, skeleton, optimal_std, max_dist, outlier_threshold)
 
             if(progress_bar is not None):
                 progress_bar.update()
@@ -477,6 +488,7 @@ class FixFrame(FramePass):
     def compute_scores(
         cls,
         fb_data: ForwardBackwardData,
+        config: Config,
         prog_bar: ProgressBar,
         reset_bar: bool = False,
         thread_count: int = 0
@@ -503,11 +515,13 @@ class FixFrame(FramePass):
                 "Clustering must be done before frame fixing!"
             )
 
+        outlier_threshold = config.outlier_threshold
         scores = np.zeros((fb_data.num_frames, 2))
 
         num_outputs = fb_data.metadata.num_outputs
         num_frames = fb_data.num_frames
         skeleton = fb_data.metadata.get("skeleton", None)
+        optimal_std = fb_data.metadata.optimal_std[2]
 
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames)
@@ -520,14 +534,14 @@ class FixFrame(FramePass):
             with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
                 pool.fast_map(
                     cls.compute_list_of_scores,
-                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, skeleton, max_dist),
+                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, skeleton, optimal_std, max_dist, outlier_threshold),
                     lambda i, val: scores.__setitem__(to_index(i), val),
                     (fb_data.num_frames + (cls.SCORES_PER_CHUNK - 1)) // cls.SCORES_PER_CHUNK
                 )
         else:
             for f_idx in range(num_frames):
                 scores[f_idx] = cls.compute_single_score(
-                    fb_data.frames[f_idx], num_outputs, skeleton, max_dist
+                    fb_data.frames[f_idx], num_outputs, skeleton, optimal_std, max_dist, outlier_threshold
                 )
                 if (prog_bar is not None):
                     prog_bar.update(1)
@@ -595,7 +609,7 @@ class FixFrame(FramePass):
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames * 2)
 
-        self._scores, fallback_scores = self.compute_scores(fb_data, prog_bar, False)
+        self._scores, fallback_scores = self.compute_scores(fb_data, self.config, prog_bar, False)
 
         self._max_frame_idx = int(np.argmax(self._scores))
         self._max_frame_score = self._scores[self._max_frame_idx]
@@ -646,5 +660,10 @@ class FixFrame(FramePass):
                 "hungarian",
                 tc.Literal("greedy", "hungarian"),
                 "The algorithm to use for assigning body parts to skeletons when creating the fix frame."
+            ),
+            "outlier_threshold": (
+                1.0,
+                float,
+                "The threshold z-score used to detect when a pose is an outlier in the skeletal distance distribution."
             )
         }
