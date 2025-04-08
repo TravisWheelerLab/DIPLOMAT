@@ -5,7 +5,7 @@ from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
 from diplomat.utils.graph_ops import min_cost_matching
 import numpy as np
-from diplomat.processing import ProgressBar, ConfigSpec
+from diplomat.processing import ProgressBar, ConfigSpec, Config
 import diplomat.processing.type_casters as tc
 from diplomat.utils.point_spread_patterns import approximate_maxmin_distance
 
@@ -488,6 +488,7 @@ class FixFrame(FramePass):
     def compute_scores(
         cls,
         fb_data: ForwardBackwardData,
+        config: Config,
         prog_bar: ProgressBar,
         reset_bar: bool = False,
         thread_count: int = 0
@@ -514,8 +515,7 @@ class FixFrame(FramePass):
                 "Clustering must be done before frame fixing!"
             )
 
-        outlier_threshold = cls.get_config_options()["outlier_threshold"][0]
-
+        outlier_threshold = config.outlier_threshold
         scores = np.zeros((fb_data.num_frames, 2))
 
         num_outputs = fb_data.metadata.num_outputs
@@ -609,7 +609,7 @@ class FixFrame(FramePass):
         if(reset_bar and prog_bar is not None):
             prog_bar.reset(fb_data.num_frames * 2)
 
-        self._scores, fallback_scores = self.compute_scores(fb_data, prog_bar, False)
+        self._scores, fallback_scores = self.compute_scores(fb_data, self.config, prog_bar, False)
 
         self._max_frame_idx = int(np.argmax(self._scores))
         self._max_frame_score = self._scores[self._max_frame_idx]

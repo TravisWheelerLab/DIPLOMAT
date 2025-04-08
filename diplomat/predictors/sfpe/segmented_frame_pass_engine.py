@@ -807,6 +807,7 @@ class SegmentedFramePassEngine(Predictor):
 
         scores, fallback_scores = FixFrame.compute_scores(
             self._frame_holder,
+            self.settings,
             progress_bar,
             thread_count=self._get_thread_count()
         )
@@ -1594,6 +1595,11 @@ class SegmentedFramePassEngine(Predictor):
                 100,
                 type_casters.RangedInteger(1, np.inf),
                 "Size of lifo cache used to temporarily store frames loaded from disk if running in disk storage_mode."
+            ),
+            "outlier_threshold": (
+                1.0,
+                float,
+                "The threshold z-score used to detect when a pose is an outlier in the skeletal distance distribution."
             ),
             "dipui_file": (
                 None,
