@@ -93,7 +93,6 @@ class DiplomatFPEState:
         frame_count: int = 0,
         compression_level: int = 6,
         float_type: str = "<f4",
-        int_type: str = "<i4",
         immediate_mode: bool = False,
         lock: Optional[multiprocessing.RLock] = None,
         memory_backing: Optional[Union[SharedMemory, Callable[[int], SharedMemory]]] = None
@@ -102,7 +101,6 @@ class DiplomatFPEState:
         self._compression_level = compression_level
         self._file_start = 0
         self._float_type = float_type
-        self._int_type = int_type
         self._immediate_mode = immediate_mode
         self._lock = lock if(lock is not None) else DummyLock()
         self._from_pickle = False
@@ -377,12 +375,12 @@ class DiplomatFPEState:
         return reconstruct_from_json(json.loads(zlib.decompress(data).decode()))
 
     def _encode_frame(self, frame: ForwardBackwardFrame) -> bytes:
-        return zlib.compress(frame.to_bytes(self._float_type, self._int_type), self._compression_level)
+        return zlib.compress(frame.to_bytes(self._float_type), self._compression_level)
 
     def _decode_frame(self, data: bytes) -> ForwardBackwardFrame:
         if(len(data) == 0):
             return ForwardBackwardFrame()
-        return ForwardBackwardFrame().from_bytes(self._float_type, self._int_type, zlib.decompress(data))
+        return ForwardBackwardFrame().from_bytes(self._float_type, zlib.decompress(data))
 
     def _write_end(self):
         with self._lock:

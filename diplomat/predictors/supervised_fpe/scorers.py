@@ -41,7 +41,10 @@ class EntropyOfTransitions(ScoreEngine):
 
         self._gaussian_table = None
         self._std = self._get_std(self._frame_engine.frame_data.metadata)
-        self._init_gaussian_table(frame_engine.width, frame_engine.height)
+        self._init_gaussian_table(
+            int(frame_engine.width) + 1,
+            int(frame_engine.height) + 1
+        )
 
         self._settings = labeler_lib.SettingCollection(
             threshold=labeler_lib.FloatSpin(0, 1, 0.8, 0.05, 4)
@@ -51,7 +54,7 @@ class EntropyOfTransitions(ScoreEngine):
         if("optimal_std" in metadata):
             return metadata.optimal_std[2]
         else:
-            return 1 / metadata.down_scaling
+            return 1
 
     def _init_gaussian_table(self, width, height):
         if(self._gaussian_table is None):
@@ -76,21 +79,17 @@ class EntropyOfTransitions(ScoreEngine):
             num_groups = poses.get_bodypart_count() // num_in_group
 
             for f_i in sub_section:
-                f_list_p = frames.frames[f_i - 1]
-                f_list_c = frames.frames[f_i]
-
                 for b_g_i in range(num_groups):
-                    matrix = np.zeros((num_in_group, num_in_group), dtype=np.float32)
+                    cxs = poses.get_x_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
+                    cys = poses.get_y_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
+                    cprobs = poses.get_prob_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
+                    pxs = poses.get_x_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
+                    pys = poses.get_y_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
+                    pprobs = poses.get_prob_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
 
-                    for b_off_i in range(num_in_group):
-                        bp_i = b_g_i * num_in_group + b_off_i
-                        for b_off_j in range(num_in_group):
-                            bp_j = b_g_i * num_in_group + b_off_j
-                            matrix[b_off_i, b_off_j] = self._compute_transition_score(
-                                f_list_p[bp_j],
-                                f_list_c[bp_i],
-                                self._gaussian_table
-                            )
+                    matrix = np.expand_dims(cprobs, 1) * fpe_math.table_transition_interpolate(
+                        (pxs, pys), 1, (cxs, cys), 1, self._gaussian_table, 1
+                    ) * np.expand_dims(pprobs, 0)
 
                     k = np.nanmax(normalized_shanon_entropy(matrix))
                     scores[f_i - sub_section.start + 1] = max(scores[f_i - sub_section.start + 1], k)
@@ -102,24 +101,6 @@ class EntropyOfTransitions(ScoreEngine):
             scores = (scores[:-1] + scores[1:]) / 2
 
             return scores
-
-    @staticmethod
-    def _compute_transition_score(
-        prior_frame: ForwardBackwardFrame,
-        current_frame: ForwardBackwardFrame,
-        trans_matrix: np.ndarray
-    ) -> float:
-        py, px, __, __, __ = prior_frame.src_data.unpack()
-        cy, cx, __, __, __ = current_frame.src_data.unpack()
-
-        if(py is None or cy is None):
-            return 0
-
-        return float(np.sum(
-            np.expand_dims(current_frame.frame_probs, 1)
-            * fpe_math.table_transition((px, py), (cx, cy), trans_matrix)
-            * np.expand_dims(prior_frame.frame_probs, 0)
-        ))
 
     def compute_bad_indexes(self, scores: np.ndarray) -> np.ndarray:
         threshold = self._settings.get_values().threshold
@@ -144,7 +125,7 @@ class MaximumJumpInStandardDeviations(ScoreEngine):
 
     def _get_std(self, metadata):
         if ("optimal_std" in metadata):
-            return metadata.optimal_std[2] * metadata.down_scaling
+            return metadata.optimal_std[2]
         else:
             return 1
 

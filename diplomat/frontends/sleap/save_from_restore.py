@@ -11,9 +11,8 @@ def _save_from_restore(
     video_metadata: Dict[str, Any],
     num_outputs: int,
     parts: List[str],
-    frame_width: int,
-    frame_height: int,
-    downscaling: float,
+    frame_width_pixels: float,
+    frame_height_pixels: float,
     start_time: float,
     end_time: float
 ):

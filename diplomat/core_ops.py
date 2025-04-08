@@ -584,9 +584,8 @@ def interact(
             video_metadata=pred.video_metadata,
             num_outputs=pred.num_outputs,
             parts=pred.bodyparts,
-            frame_width=pred.width,
-            frame_height=pred.height,
-            downscaling=meta["down_scaling"],
+            frame_width_pixels=pred.width,
+            frame_height_pixels=pred.height,
             start_time=start_time,
             end_time=end_time
         )

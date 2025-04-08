@@ -4,7 +4,7 @@ to user saved tracking data.
 """
 
 import os
-from typing import List, Any, Dict, Optional, Tuple, MutableMapping, Sequence, Union, Callable, Mapping, Iterable, NamedTuple, Literal
+from typing import List, Any, Dict, Optional, Tuple, MutableMapping, Sequence, Union, Callable, Mapping
 import cv2
 import numpy as np
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine
@@ -46,13 +46,12 @@ class _DummySubPoseList(Sequence[ForwardBackwardFrame]):
         if(np.isnan(x) or np.isnan(y)):
             x, y, p = 0, 0, 0
 
-        sx, sy, sp, sox, soy = _DummyFramePassEngine.video_to_scmap_coord((x, y, p))
-
-        res = SparseTrackingData().pack([sy], [sx], [sp], [sox], [soy])
+        # noinspection INSPECTION_NAME
+        res = SparseTrackingData(1).pack(np.array([x]), np.array([y]), np.array([p]))
         return ForwardBackwardFrame(
             orig_data=res,
             src_data=res,
-            frame_probs=np.array([sp])
+            frame_probs=np.array([p])
         )
 
     def __len__(self) -> int:
@@ -78,7 +77,6 @@ class _DummyForwardBackwardData(ForwardBackwardData):
         super().__init__(0, 0)
         self._frames = _DummyPoseList(poses)
         self._num_bps = poses.get_bodypart_count()
-        self.metadata.down_scaling = 1
         self.metadata.num_outputs = num_outputs
 
     @property
@@ -131,31 +129,7 @@ class _DummyFramePassEngine:
         return self._changed_frames
 
     @staticmethod
-    def video_to_scmap_coord(coord: Tuple[float, float, float]) -> Tuple[int, int, float, float, float]:
-        vid_x, vid_y, prob = coord
-        x, off_x = divmod(vid_x, 1)
-        y, off_y = divmod(vid_y, 1)
-        # Correct offsets to be relative to the center of the stride block...
-        off_x = off_x - 0.5
-        off_y = off_y - 0.5
-
-        return (int(x), int(y), off_x, off_y, prob)
-
-    @staticmethod
-    def scmap_to_video_coord(
-        x_scmap: float,
-        y_scmap: float,
-        prob: float,
-        x_off: float,
-        y_off: float,
-        down_scaling: int
-    ) -> Tuple[float, float, float]:
-        x_video = (x_scmap + 0.5) * down_scaling + x_off
-        y_video = (y_scmap + 0.5) * down_scaling + y_off
-        return (x_video, y_video, prob)
-
-    @staticmethod
-    def get_maximum_with_defaults(frame: ForwardBackwardFrame) -> Tuple[int, int, float, float, float]:
+    def get_maximum_with_defaults(frame: ForwardBackwardFrame) -> Tuple[float, float, float]:
         return SegmentedFramePassEngine.get_maximum(frame, 0)
 
 
