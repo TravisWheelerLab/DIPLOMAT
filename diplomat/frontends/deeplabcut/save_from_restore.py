@@ -10,9 +10,8 @@ def _save_from_restore(
     video_metadata: Dict[str, Any],
     num_outputs: int,
     parts: List[str],
-    frame_width: int,
-    frame_height: int,
-    downscaling: float,
+    frame_width_pixels: float,
+    frame_height_pixels: float,
     start_time: float,
     end_time: float
 ):
@@ -21,9 +20,9 @@ def _save_from_restore(
     if(video_metadata["cropping-offset"] is not None):
         coords = [
             video_metadata["cropping-offset"][1],
-            int(frame_width * downscaling),
+            int(frame_width_pixels),
             video_metadata["cropping-offset"][0],
-            int(frame_height * downscaling)
+            int(frame_height_pixels)
         ]
     else:
         coords = [0, video_metadata["size"][1], 0, video_metadata["size"][1]]

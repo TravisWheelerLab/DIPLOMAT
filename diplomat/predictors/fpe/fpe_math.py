@@ -160,7 +160,7 @@ def normalize_all(arrays: Iterable[np.ndarray]) -> Tuple[np.ndarray, ...]:
 # Type for a transition function....
 Probs = np.ndarray
 Coords = Tuple[np.ndarray, np.ndarray]
-TransitionFunction = Callable[[Probs, Coords, Probs, Coords], np.ndarray]
+TransitionFunction = Callable[[Probs, Coords, float, Probs, Coords, float], np.ndarray]
 
 
 def table_transition(prior_coords: Coords, current_coords: Coords, lookup_table: np.ndarray) -> np.ndarray:
@@ -177,7 +177,57 @@ def table_transition(prior_coords: Coords, current_coords: Coords, lookup_table:
     px, py = prior_coords
     cx, cy = current_coords
 
+    cx, cy, px, py = [v.astype(np.int64) if not np.issubdtype(cx.dtype, np.integer) else v for v in (cx, cy, px, py)]
+
     delta_x = np.abs(np.expand_dims(cx, 1) - np.expand_dims(px, 0))
     delta_y = np.abs(np.expand_dims(cy, 1) - np.expand_dims(py, 0))
 
     return lookup_table[delta_y.flatten(), delta_x.flatten()].reshape(delta_y.shape)
+
+
+def __trans(tbl, x, y):
+    return tbl[y.flatten(), x.flatten()].reshape(y.shape)
+
+
+def __rescale(coords, input_scale, dest_scale):
+    mult = input_scale / dest_scale
+    return [v * mult for v in coords]
+
+
+def table_transition_interpolate(
+    prior_coords: Coords,
+    prior_scale: float,
+    current_coords: Coords,
+    current_scale: float,
+    lookup_table: np.ndarray,
+    lookup_scale: float
+):
+    """
+    Compute transition probabilities from a transition probability table. Unlike table_transition, this method
+    supports floats (in-between) coordinated, which it resolves using bi-linear interpolation.
+
+    :param prior_coords: The prior frame coordinates, 2xN numpy array (x, y).
+    :param prior_scale: Downscaling factor for the prior data coordinates.
+    :param current_coords: The current frame coordinates, 2xN numpy array (x, y).
+    :param current_scale: Downscaling factor for the current data coordinates.
+    :param lookup_table: The 2D probability lookup table ([delta x, delta y] -> prob). A numpy array.
+    :param lookup_scale: Size of each cell in the lookup table...
+
+    :return: A 2D array containing all the transition probabilities for going from any pixel in prior to
+             any pixel in current, indexed by current first, prior second...
+    """
+
+    px, py = __rescale(prior_coords, prior_scale, lookup_scale)
+    cx, cy = __rescale(current_coords, current_scale, lookup_scale)
+
+    delta_x = np.abs(np.expand_dims(cx, 1) - np.expand_dims(px, 0))
+    delta_y = np.abs(np.expand_dims(cy, 1) - np.expand_dims(py, 0))
+
+    lx = delta_x.astype(np.int64)
+    ly = delta_y.astype(np.int64)
+    rx = delta_x - lx
+    ry = delta_y - ly
+
+    top_interp = __trans(lookup_table, lx, ly) * (1 - rx) + __trans(lookup_table, lx + 1, ly) * rx
+    bottom_interp = __trans(lookup_table, lx, ly + 1) * (1 - rx) + __trans(lookup_table, lx + 1, ly + 1) * rx
+    return top_interp * (1 - ry) + bottom_interp * ry

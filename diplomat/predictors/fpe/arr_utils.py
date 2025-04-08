@@ -71,24 +71,34 @@ def pad_coordinates_and_probs(
             arr_idxs[(frm_arr & intersect_locs).astype(bool)]
         )
 
-    all_coords = np.unique(np.concatenate(coord_list), axis=0)
+    all_coords_float = np.concatenate(coord_list)
+    all_coords, coord_index = np.unique(all_coords_float.astype(np.int64), return_index=True, axis=0)
+    all_coords_float = all_coords_float[coord_index]
+
     max_row2_val = np.max(all_coords[:, 1])
     all_coords_flat = flattify(all_coords, max_row2_val)
 
     new_probs = []
+    new_coords = []
     resolve_idxs = []
 
     for c, prob in zip(coord_list, probs):
-        c = flattify(c, max_row2_val)
-        idx_c, idx_all = intersect_idx(c, all_coords_flat)
+        c_flat = flattify(c.astype(np.int64), max_row2_val)
+        idx_c, idx_all = intersect_idx(c_flat, all_coords_flat)
+
         res = np.full(len(all_coords_flat), fill_value)
+        res_c = all_coords_float.copy()
+
         res[idx_all] = prob[idx_c]
+        res_c[idx_all] = c[idx_c]
+
         resolve_idxs.append(idx_all[np.argsort(idx_c)])
         new_probs.append(res)
+        new_coords.append(res_c)
 
     return (
         new_probs,
-        [all_coords for __ in range(len(coord_list))],
+        new_coords,
         resolve_idxs
     )
 
@@ -110,7 +120,7 @@ class _NumpyDict:
         return vals
 
 
-def find_peaks(x: np.ndarray, y: np.ndarray, prob: np.ndarray, width: int, fill_value: float = 0):
+def find_peaks(x: np.ndarray, y: np.ndarray, prob: np.ndarray, fill_value: float = 0):
     """
     Finds the peaks of a sparse frame, or locations where all neighboring values are less than the value at this
     location (including diagonals).
@@ -123,10 +133,16 @@ def find_peaks(x: np.ndarray, y: np.ndarray, prob: np.ndarray, width: int, fill_
 
     :returns: An array of indexes, being the locations of peaks.
     """
+    if(not np.issubdtype(x.dtype, np.integer)):
+        x = x.astype(np.int64)
+    if(not np.issubdtype(y.dtype, np.integer)):
+        y = y.astype(np.int64)
+
     keep_arr = np.ones(prob.shape, dtype=np.uint8)
+    x_max = np.max(x)
 
     def to_keys(_x, _y):
-        return _y * width + _x
+        return _y * (x_max + 1) + _x
 
     lookup_table = _NumpyDict(to_keys(x, y), prob, fill_value)
 

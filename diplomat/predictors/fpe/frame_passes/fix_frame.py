@@ -25,29 +25,10 @@ class FixFrame(FramePass):
         self._fixed_frame = None
 
     @classmethod
-    def merge_tracks(cls, track_data: List[SparseTrackingData]) -> SparseTrackingData:
-        if(len(track_data) == 0):
-            raise ValueError("No arguments passed!")
-
-        new_merged_data = SparseTrackingData()
-
-        if(all([data.probs is None for data in track_data])):
-            return new_merged_data
-
-        new_merged_data.pack(
-            *(
-                np.concatenate([data.unpack()[i] for data in track_data if(data.probs is not None)])
-                for i in range(len(track_data[0].unpack()))
-            )
-        )
-
-        return new_merged_data
-
-    @classmethod
     def get_max_location(
         cls,
         frame: ForwardBackwardFrame,
-        down_scaling: float
+        down_scaled: bool = False
     ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
         """
         Determines the maximum location within a frame after downscaling.
@@ -58,23 +39,22 @@ class FixFrame(FramePass):
 
         Parameters:
         - frame: ForwardBackwardFrame, the frame to analyze.
-        - down_scaling: float, the factor by which the frame's coordinates are downscaled.
 
         Returns:
         - Tuple[Optional[float], Optional[float], Optional[float]]: The adjusted x and y coordinates of the maximum
           location and its probability. Returns None for each value if the probability data is not available.
         """
-        y, x, prob, x_off, y_off = frame.src_data.unpack()
+        x, y, prob = frame.src_data.unpack() if down_scaled else frame.src_data.unpack_unscaled()
 
         if(prob is None):
-            return (None, None, None)
+            return None, None, None
 
         max_idx = np.argmax(prob)
 
         return (
-            x[max_idx] + 0.5 + (x_off[max_idx] / down_scaling),
-            y[max_idx] + 0.5 + (y_off[max_idx] / down_scaling),
-            prob[max_idx]
+            float(x[max_idx]),
+            float(y[max_idx]),
+            float(prob[max_idx])
         )
 
     @classmethod
@@ -87,11 +67,10 @@ class FixFrame(FramePass):
         avg: float,
         frame1: ForwardBackwardFrame,
         frame2: ForwardBackwardFrame,
-        down_scaling: float
     ) -> float:
         return np.abs((avg - cls.dist(
-            cls.get_max_location(frame1, down_scaling),
-            cls.get_max_location(frame2, down_scaling)
+            cls.get_max_location(frame1),
+            cls.get_max_location(frame2)
         )) ** 2)
 
     @classmethod
@@ -100,7 +79,6 @@ class FixFrame(FramePass):
         storage_graph: StorageGraph,
         frame_list: List[ForwardBackwardFrame],
         num_outputs: int,
-        down_scaling: float,
         fixed_group: int = 0
     ) -> List[List[Dict[int, float]]]:
         # Construct a graph...
@@ -125,7 +103,7 @@ class FixFrame(FramePass):
                             idx2 = node_group2 * num_outputs + node_off2
 
                             graph[idx1][idx2] = cls.skel_score(
-                                avg, frame_list[idx1], frame_list[idx2], down_scaling
+                                avg, frame_list[idx1], frame_list[idx2]
                             )
 
             graphs.append(graph)
@@ -138,7 +116,6 @@ class FixFrame(FramePass):
         storage_graph: StorageGraph,
         frame_list: List[ForwardBackwardFrame],
         num_outputs: int,
-        down_scaling: float
     ) -> int:
         degrees = [len(storage_graph[i]) for i in range(len(storage_graph))]
 
@@ -148,8 +125,8 @@ class FixFrame(FramePass):
         for g_i in range(num_groups):
             for i_out in range(num_outputs):
                 for j_out in range(i_out + 1, num_outputs):
-                    m1 = cls.get_max_location(frame_list[g_i * num_outputs + i_out], down_scaling)
-                    m2 = cls.get_max_location(frame_list[g_i * num_outputs + j_out], down_scaling)
+                    m1 = cls.get_max_location(frame_list[g_i * num_outputs + i_out])
+                    m2 = cls.get_max_location(frame_list[g_i * num_outputs + j_out])
                     if(m1[0] is None or m2[0] is None):
                         group_dist_scores[g_i] = -np.inf
                     else:
@@ -245,30 +222,30 @@ class FixFrame(FramePass):
 
         fixed_frame = [None] * fb_data.num_bodyparts
         num_outputs = fb_data.metadata.num_outputs
-        down_scaling = fb_data.metadata.down_scaling
 
         # Copy over data to start, ignoring skeleton...
         for bp_i in range(fb_data.num_bodyparts):
             fixed_frame[bp_i] = fb_data.frames[frame_idx][bp_i].copy()
 
-            __, __, prob, __, __ = fixed_frame[bp_i].src_data.unpack()
+            __, __, prob = fixed_frame[bp_i].src_data.unpack()
             if(prob is None):
                 # Fallback fix frame: We just create a single cell with 0 probability, forcing viterbi to use entry
                 # states...
-                src_data = SparseTrackingData().pack([0], [0], [0], [0], [0])
+                src_data = SparseTrackingData(
+                    fixed_frame[bp_i].src_data.downscaling
+                ).pack([0], [0], [0])
                 fixed_frame[bp_i].src_data = src_data
                 fb_data.frames[frame_idx][bp_i].src_data = src_data
 
             fixed_frame[bp_i].disable_occluded = True
 
         if(skeleton is not None):
-            fixed_group = cls.get_fixed_group(skeleton, fb_data.frames[frame_idx], num_outputs, down_scaling)
+            fixed_group = cls.get_fixed_group(skeleton, fb_data.frames[frame_idx], num_outputs)
 
             score_graphs = cls.get_bidirectional_score_graphs(
                 skeleton,
                 fb_data.frames[frame_idx],
                 num_outputs,
-                down_scaling,
                 fixed_group
             )
 
@@ -359,7 +336,6 @@ class FixFrame(FramePass):
         cls,
         frames: List[ForwardBackwardFrame],
         num_outputs: int,
-        down_scaling: float,
         skeleton: Optional[StorageGraph],
         max_dist: float,
         progress_bar: Optional[ProgressBar] = None
@@ -399,19 +375,14 @@ class FixFrame(FramePass):
             # For body part groupings...
             for i in range(num_outputs - 1):
                 #get the maximum probability location for the body part
-                f1_loc = cls.get_max_location(
-                    frames[bp_group_off * num_outputs + i],
-                    down_scaling
-                )
+                f1_loc = cls.get_max_location(frames[bp_group_off * num_outputs + i])
 
                 if (f1_loc[0] is None):
                     geometric_component = -np.inf
                     continue
 
                 for j in range(i + 1, num_outputs):
-                    f2_loc = cls.get_max_location(
-                        frames[bp_group_off * num_outputs + j], down_scaling
-                    )
+                    f2_loc = cls.get_max_location(frames[bp_group_off * num_outputs + j])
 
                     if (f2_loc[0] is None):
                         geometric_component = -np.inf
@@ -448,9 +419,7 @@ class FixFrame(FramePass):
                 bp_group_off, bp_off = divmod(bp, num_outputs)
 
                 num_pairs = num_outputs * len(skel[bp_group_off])
-                f1_loc = cls.get_max_location(
-                    frames[bp_group_off * num_outputs + bp_off], down_scaling
-                )
+                f1_loc = cls.get_max_location(frames[bp_group_off * num_outputs + bp_off])
 
                 if (f1_loc[0] is None):
                     skeletal_component = -np.inf
@@ -461,10 +430,7 @@ class FixFrame(FramePass):
                     min_score = np.inf
 
                     for bp2_off in range(num_outputs):
-                        f2_loc = cls.get_max_location(
-                            frames[bp2_group_off * num_outputs + bp2_off],
-                            down_scaling
-                        )
+                        f2_loc = cls.get_max_location(frames[bp2_group_off * num_outputs + bp2_off])
 
                         if(f2_loc[0] is None):
                             skeletal_component = -np.inf
@@ -489,7 +455,6 @@ class FixFrame(FramePass):
         cls,
         frames: List[List[ForwardBackwardFrame]],
         num_outputs: int,
-        down_scaling: float,
         skeleton: Optional[StorageGraph],
         max_dist: float,
         progress_bar: Optional[ProgressBar] = None
@@ -501,7 +466,7 @@ class FixFrame(FramePass):
 
         for i, frame in enumerate(frames):
             #this will be a tuple of scores per frame 
-            final_scores[i] = cls.compute_single_score(frame, num_outputs, down_scaling, skeleton, max_dist)
+            final_scores[i] = cls.compute_single_score(frame, num_outputs, skeleton, max_dist)
 
             if(progress_bar is not None):
                 progress_bar.update()
@@ -542,7 +507,6 @@ class FixFrame(FramePass):
 
         num_outputs = fb_data.metadata.num_outputs
         num_frames = fb_data.num_frames
-        down_scaling = fb_data.metadata.down_scaling
         skeleton = fb_data.metadata.get("skeleton", None)
 
         if(reset_bar and prog_bar is not None):
@@ -556,14 +520,14 @@ class FixFrame(FramePass):
             with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
                 pool.fast_map(
                     cls.compute_list_of_scores,
-                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, down_scaling, skeleton, max_dist),
+                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, skeleton, max_dist),
                     lambda i, val: scores.__setitem__(to_index(i), val),
                     (fb_data.num_frames + (cls.SCORES_PER_CHUNK - 1)) // cls.SCORES_PER_CHUNK
                 )
         else:
             for f_idx in range(num_frames):
                 scores[f_idx] = cls.compute_single_score(
-                    fb_data.frames[f_idx], num_outputs, down_scaling, skeleton, max_dist
+                    fb_data.frames[f_idx], num_outputs, skeleton, max_dist
                 )
                 if (prog_bar is not None):
                     prog_bar.update(1)
