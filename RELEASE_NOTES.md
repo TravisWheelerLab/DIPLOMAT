@@ -1,5 +1,8 @@
 Changes for this version of DIPLOMAT:
-- "track" and "track_with" will now output .dipui files again
-- removed boilerplate implementation of --dipui_file in lieu of dynamic system that reconciles command line arguments with plugin and frontend arguments
-- removed debugging statements
-- patched a bug that caused a crash when a specified .dipui file name already exists
+ - Added improved clustering algorithms.
+ - New offset aware viterbi.
+ - Refined frame filtering.
+ - Improved UI startup times. 
+ - New up scaling frame mode supported, currently behind a CLI flag.
+ - Fixes to offset domination checks.
+ - Many additional minor tweaks and bug fixes.
