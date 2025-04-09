@@ -101,8 +101,8 @@ class OptimizeStandardDeviation(FramePass):
 
         self._max_locations[bodypart_index] = (
             probs[max_loc],
-            x[max_loc],
-            y[max_loc]
+            np.average(x, weights=probs),
+            np.average(y, weights=probs)
         )
 
         return None

@@ -52,8 +52,8 @@ class FixFrame(FramePass):
         max_idx = np.argmax(prob)
 
         return (
-            float(x[max_idx]),
-            float(y[max_idx]),
+            float(np.average(x, weights=prob)),
+            float(np.average(y, weights=prob)),
             float(prob[max_idx])
         )
 
@@ -368,6 +368,8 @@ class FixFrame(FramePass):
         geometric_component = 0.0
         geometric_component2 = 0.0
 
+        outlier_threshold = np.inf
+
         if skeleton is None:
             # disable body part overlap detection
             optimal_std = -np.inf
@@ -401,7 +403,7 @@ class FixFrame(FramePass):
 
             if(np.isinf(min_dist)):
                 min_dist = 0
-            if(min_dist < optimal_std or count == 0):
+            if(np.isclose(min_dist, 0) or count == 0):
                 # BAD! We found a frame that failed to cluster properly...
                 geometric_component = -np.inf
 
@@ -419,7 +421,6 @@ class FixFrame(FramePass):
 
             for bp in range(len(frames)):
 
-                #what is this  ?
                 bp_group_off, bp_off = divmod(bp, num_outputs)
 
                 num_pairs = num_outputs * len(skel[bp_group_off])
@@ -448,7 +449,7 @@ class FixFrame(FramePass):
                     if min_score / relative_std > outlier_threshold:
                         # if the best score for this pose is still an outlier, the frame will be filtered out.
                         skeletal_component = -np.inf
-                        skeletal_component2 -= (max_dist / num_pairs)
+                        skeletal_component2 -= (min_score / num_pairs)
                     else:
                         # otherwise, this frame can be used.
                         skeletal_component -= (min_score / num_pairs)
