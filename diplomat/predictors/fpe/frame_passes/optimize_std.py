@@ -35,12 +35,11 @@ class OptimizeStandardDeviation(FramePass):
         in_place: bool = True,
         reset_bar: bool = True
     ) -> ForwardBackwardData:
-        d_scale = fb_data.metadata.down_scaling
-        bin_off = self.config.ignore_bins_below / d_scale
+        bin_off = self.config.ignore_bins_below
         self._ignore_below = bin_off
 
         self._histogram = Histogram(
-            self.config.bin_size / d_scale,
+            self.config.bin_size,
             bin_off
         )
         self._current_frame = 0
@@ -92,7 +91,7 @@ class OptimizeStandardDeviation(FramePass):
             self._max_locations = [None] * self.fb_data.num_bodyparts
             self._current_frame = frame_index
 
-        y, x, probs, ox, oy = current.src_data.unpack()
+        x, y, probs = current.src_data.unpack_unscaled()
 
         if(y is None):
             self._max_locations[bodypart_index] = (None, 0, 0)
@@ -102,8 +101,8 @@ class OptimizeStandardDeviation(FramePass):
 
         self._max_locations[bodypart_index] = (
             probs[max_loc],
-            x[max_loc] + 0.5 + ox[max_loc] / metadata.down_scaling,
-            y[max_loc] + 0.5 + oy[max_loc] / metadata.down_scaling
+            np.average(x, weights=probs),
+            np.average(y, weights=probs)
         )
 
         return None

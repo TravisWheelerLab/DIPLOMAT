@@ -11,7 +11,7 @@ from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, Max
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
 from diplomat.wx_gui.fpe_editor import FPEEditor
-from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData
+from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData, sparse_tracking_data_to_video_point
 from diplomat.processing import *
 
 import cv2
@@ -159,12 +159,10 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         PRIVATE: Get the cropping box of the passed video, uses internally stored _vid_meta dictionary.
         """
         offset = self.video_metadata["cropping-offset"]
-        down_scaling = self._frame_holder.metadata.down_scaling
 
         if(offset is not None):
             y, x = offset
             w, h = self._frame_holder.metadata.width, self._frame_holder.metadata.height
-            w, h = w * down_scaling, h * down_scaling
             return (int(x), int(y), int(w), int(h))
 
         return None
@@ -207,7 +205,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._segment_bp_order
         )
 
-    def get_maximum_with_defaults(self, frame) -> Tuple[int, int, float, float, float]:
+    def get_maximum_with_defaults(self, frame) -> Tuple[float, float, float]:
         return self.get_maximum(frame, self.settings.relaxed_maximum_radius)
 
     @property
@@ -218,45 +216,12 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
     def height(self) -> int:
         return self._height
 
-    @classmethod
-    def scmap_to_video_coord(
-        cls,
-        x_scmap: float,
-        y_scmap: float,
-        prob: float,
-        x_off: float,
-        y_off: float,
-        down_scaling: float
-    ) -> Tuple[float, float, float]:
-        x_video = (x_scmap + 0.5) * down_scaling + x_off
-        y_video = (y_scmap + 0.5) * down_scaling + y_off
-        return (x_video, y_video, prob)
-
-    def video_to_scmap_coord(self, coord: Tuple[float, float, float]) -> Tuple[int, int, float, float, float]:
-        """
-        PRIVATE: Convert a coordinate in video space to a coordinate in source map space.
-
-        :param coord: A tuple of (x, y, probability), the x and y being represented as floating point numbers in video
-                      pixel space.
-        :returns: A tuple of (x index, y index, x offset, y offset, probability) being the coordinate stored in source
-                  map space.
-        """
-        down_scaling = self._frame_holder.metadata.down_scaling
-
-        vid_x, vid_y, prob = coord
-        x, off_x = divmod(vid_x, down_scaling)
-        y, off_y = divmod(vid_y, down_scaling)
-        # Correct offsets to be relative to the center of the stride block...
-        off_x = off_x - (down_scaling * 0.5)
-        off_y = off_y - (down_scaling * 0.5)
-
-        return (int(x), int(y), off_x, off_y, prob)
-
     def _make_plot_of(
         self,
         figsize: Tuple[float, float],
         dpi: int, title: str,
-        track_data: SparseTrackingData
+        track_data: SparseTrackingData,
+        **kwargs
     ) -> wx.Bitmap:
         # Get the frame...
         import matplotlib
@@ -268,10 +233,9 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         axes.set_title(title)
 
         h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
-        down_scaling = self.frame_data.metadata.down_scaling
-        track_data = track_data.desparsify(w, h, down_scaling)
+        track_data = track_data.desparsify(int(w / track_data.downscaling), int(h / track_data.downscaling))
 
-        axes.imshow(track_data.get_prob_table(0, 0))
+        axes.imshow(track_data.get_prob_table(0, 0), **kwargs)
         figure.tight_layout()
         figure.canvas.draw()
 
@@ -304,7 +268,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         axes.set_title(title)
 
         h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
-        down_scaling = self.frame_data.metadata.down_scaling
 
         counts = 0
         img = 0
@@ -313,7 +276,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             cmap = plt.get_cmap(cmap).copy()
             cmap.set_extremes(bad=(0, 0, 0, 0), under=(0, 0, 0, 0), over=(0, 0, 0, 0))
 
-            track_data = track_data.desparsify(w, h, down_scaling).get_prob_table(0, 0)
+            track_data = track_data.desparsify(int(w / track_data.downscaling), int(h / track_data.downscaling)).get_prob_table(0, 0)
 
             track_data /= np.nanmax(track_data)
             track_data *= 0.75
@@ -360,17 +323,24 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
             if ((frame_idx, bp_idx) in self.changed_frames):
                 f = self.changed_frames[frame_idx, bp_idx]
-                frames, occluded, orig_data = f.frame_probs, f.occluded_probs, f.orig_data
+                frames, occluded, occ_coords, orig_data = f.frame_probs, f.occluded_probs, f.occluded_coords, f.orig_data
             else:
-                frames, occluded, orig_data = all_data.frame_probs, all_data.occluded_probs, all_data.orig_data
+                frames, occluded, occ_coords, orig_data = all_data.frame_probs, all_data.occluded_probs, all_data.occluded_coords, all_data.orig_data
 
             if(frames is not None):
                 # Plot post MIT-Viterbi frame data if it exists...
                 data = orig_data.unpack()
-                track_data = SparseTrackingData()
-                track_data.pack(*data[:2], frames, *data[3:])
+                track_data = SparseTrackingData(orig_data.downscaling)
+                track_data.pack(*data[:2], frames)
 
-                new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Post Passes", track_data))
+                new_bitmap_list.append(self._make_plot_of(
+                    figsize, dpi, bp_name + " Post Passes", track_data, vmin=0, vmax=1
+                ))
+
+                occ_data = SparseTrackingData(orig_data.downscaling).pack(*occ_coords.T, occluded)
+                new_bitmap_list.append(self._make_plot_of(
+                    figsize, dpi, bp_name + " Post Passes Occluded", occ_data, vmin=0, vmax=1
+                ))
 
             # Plot Pre-MIT-Viterbi frame data, or the original suggested probability frame...
             new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Original Source Frame", orig_data))
@@ -480,7 +450,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         # Vital: If _frame_holder got updated when FB was run.
         frames = self._frame_holder.frames
-        d_scale = self._frame_holder.metadata.down_scaling
 
         # Restore old user edits...
         for score in self._fb_editor.score_displays:
@@ -495,11 +464,10 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._reverse_segment_bp_order,
             self._segment_bp_order
         ).items():
-            x, y, prob = self.scmap_to_video_coord(
+            x, y, prob = sparse_tracking_data_to_video_point(
                 *self.get_maximum_with_defaults(
                     sparse_frame
-                ),
-                d_scale
+                ), sparse_frame.src_data.downscaling
             )
 
             for score in self._fb_editor.score_displays:
