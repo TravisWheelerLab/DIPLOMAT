@@ -368,11 +368,12 @@ class FixFrame(FramePass):
         geometric_component = 0.0
         geometric_component2 = 0.0
 
-        outlier_threshold = np.inf
-
+        # outlier_threshold = np.inf
         if skeleton is None:
             # disable body part overlap detection
             optimal_std = -np.inf
+
+        farthest_component = 0
 
         for bp_group_off in range(num_bp):
 
@@ -407,10 +408,17 @@ class FixFrame(FramePass):
                 # BAD! We found a frame that failed to cluster properly...
                 geometric_component = -np.inf
 
+            if(min_dist > farthest_component):
+                farthest_component = min_dist
+
             # Minimum distance, weighted by average skeleton-pair confidence...
             if(count > 0):
                 geometric_component += min_dist * (total_conf / count)
                 geometric_component2 += min_dist * (total_conf / count)
+
+        if(farthest_component < optimal_std):
+            # Indicates the bodies are overlapping...
+            geometric_component = -np.inf
 
         skeletal_component = 0.0
         skeletal_component2 = 0.0

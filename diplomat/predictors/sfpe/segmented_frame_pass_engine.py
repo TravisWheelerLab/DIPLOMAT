@@ -1023,7 +1023,7 @@ class SegmentedFramePassEngine(Predictor):
                         new_p = repl_p_occ.copy()
                     else:
                         def _to_keys(_x, _y):
-                            return _y.astype(np.int64) * self._width + _x.astype(np.int64)
+                            return _y.astype(np.int64) * int(self._width) + _x.astype(np.int64)
 
                         lookup = _NumpyDict(_to_keys(repl_c_occ[:, 0], repl_c_occ[:, 1]), np.arange(len(repl_p_occ)), -1)
                         indexes = lookup[_to_keys(sx, sy)]
@@ -1597,7 +1597,7 @@ class SegmentedFramePassEngine(Predictor):
                 "Size of lifo cache used to temporarily store frames loaded from disk if running in disk storage_mode."
             ),
             "outlier_threshold": (
-                1.0,
+                3.0,
                 float,
                 "The threshold z-score used to detect when a pose is an outlier in the skeletal distance distribution."
             ),
