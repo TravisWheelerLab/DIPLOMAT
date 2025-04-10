@@ -126,7 +126,7 @@ class SparseTrackingData:
             x_coords,
             y_coords,
             probs
-        ], dtype=self.mem_type, axis=0)
+        ], axis=0).astype(self.mem_type)
         return self
 
     def unpack_unscaled(self):
