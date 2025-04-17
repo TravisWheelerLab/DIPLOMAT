@@ -131,6 +131,8 @@ class SparseTrackingData:
 
     def unpack_unscaled(self):
         x, y, p = self.unpack()
+        if(x is None):
+            return None, None, None
         return x * self._downscaling, y * self._downscaling, p
 
     def pack_unscaled(
@@ -152,7 +154,7 @@ class SparseTrackingData:
         :return: A tuple of 1 dimensional numpy arrays, being: (x_coord, y_coord, probs)
         """
         if (self._data is None):
-            return (None, None, None)
+            return None, None, None
 
         return self._data
 
