@@ -1,2 +1,2 @@
 Changes for this version of DIPLOMAT:
- - Fix crash that occurs with no data frames.
+ - Fix crash that occurs with no data frames and saving.
