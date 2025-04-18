@@ -394,9 +394,15 @@ class SparseTrackingData:
         if(float_dtype.lstrip("<>") not in ["f2", "f4", "f8"]):
             raise ValueError("Invalid float datatype!")
 
-        length = self._data.shape[-1]
+        length = self._data.shape[-1] if(self._data is not None) else 0
         enc_length = np.asarray(length, dtype="<u4").tobytes()
         enc_ds = np.asarray(self._downscaling, dtype=float_dtype).tobytes()
+
+        if(length == 0):
+            return b"".join([
+                enc_length,
+                enc_ds
+            ])
 
         return b"".join([
             enc_length,
