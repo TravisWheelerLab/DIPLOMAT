@@ -424,6 +424,7 @@ class SparseTrackingData:
         down_scaling = np.frombuffer(data, float_dtype, 1, 4)[0]
         if(length == 0):
             self._data = None
+            self._downscaling = down_scaling
             return self, 4 + float_data_size
 
         expected_data_size = 4 + float_data_size + length * float_data_size * 3
