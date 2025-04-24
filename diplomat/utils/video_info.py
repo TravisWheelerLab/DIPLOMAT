@@ -30,7 +30,6 @@ def get_frame_count_robust(video: PathLike) -> int:
     """
     vid = cv2.VideoCapture(str(video))
     output = 0
-
     while (vid.isOpened() and vid.grab()):
         output += 1
 

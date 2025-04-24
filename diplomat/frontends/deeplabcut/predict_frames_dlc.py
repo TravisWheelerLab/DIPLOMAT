@@ -204,6 +204,7 @@ def _analyze_frame_store(
             off_y,
             off_x,
             bp_lst,
+            skeleton
         ) = frame_reader.get_header().to_list()
 
         pd_index = _get_pandas_header(

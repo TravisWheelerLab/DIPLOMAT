@@ -68,6 +68,7 @@ class FrameExporter(Predictor):
     def _on_frames(self, scmap: TrackingData) -> Optional[Pose]:
         # If we are just starting, write the header, body part names chunk, and magic for frame data chunk...
         s = self.settings
+        skeleton = self.video_metadata["skeleton"]
 
         if self._current_frame == 0:
             header = DLFSHeader(
@@ -78,7 +79,8 @@ class FrameExporter(Predictor):
                 scmap.get_down_scaling(),
                 *self.video_metadata["size"],
                 *self._crop_off,
-                self.bodyparts if(self._bp_to_idx is None) else list(self._bp_to_idx.keys())
+                self.bodyparts if(self._bp_to_idx is None) else list(self._bp_to_idx.keys()),
+                skeleton if(skeleton is not None) else []
             )
 
             self._frame_writer = DLFSWriter(

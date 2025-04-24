@@ -12,14 +12,14 @@ from diplomat.utils.colormaps import iter_colormap
 
 import cv2
 
-from .csv_utils import _fix_paths
+from .utils import _fix_path_pairs
 
 
 @extra_cli_args(FULL_VISUAL_SETTINGS, auto_cast=False)
 @tc.typecaster_function
 def label_videos(
-    config: tc.Union[tc.List[tc.PathLike], tc.PathLike],
     videos: tc.Union[tc.List[tc.PathLike], tc.PathLike],
+    csvs: tc.Union[tc.List[tc.PathLike], tc.PathLike],
     body_parts_to_plot: tc.Optional[tc.List[str]] = None,
     video_extension: str = "mp4",
     **kwargs
@@ -27,8 +27,8 @@ def label_videos(
     """
     Labeled videos with arbitrary csv files in diplomat's csv format.
 
-    :param config: The path (or list of paths) to the csv file(s) to label the videos with.
     :param videos: Paths to video file(s) corresponding to the provided csv files.
+    :param csvs: The path (or list of paths) to the csv file(s) to label the videos with.
     :param body_parts_to_plot: A set or list of body part names to label, or None, indicating to label all parts.
     :param video_extension: The file extension to use on the created labeled video, excluding the dot.
                             Defaults to 'mp4'.
@@ -36,10 +36,10 @@ def label_videos(
 
                    {extra_cli_args}
     """
-    config, videos = _fix_paths(config, videos)
+    csvs, videos = _fix_path_pairs(csvs, videos)
     visual_settings = Config(kwargs, FULL_VISUAL_SETTINGS)
 
-    for c, v in zip(config, videos):
+    for c, v in zip(csvs, videos):
         _label_videos_single(str(c), str(v), body_parts_to_plot, video_extension, visual_settings)
 
 

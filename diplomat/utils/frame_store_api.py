@@ -55,6 +55,18 @@ def string_list(lister: list):
     return lister
 
 
+def edge_list(lister: list):
+    lister_new = set()
+
+    for item in lister:
+        if not isinstance(item, (list, tuple)) or len(item) != 2 or all(isinstance(v, int) for v in item):
+            raise ValueError("Must be a list of 2 integer tuples!")
+        a, b = item
+        lister_new.add(tuple(sorted([int(a), int(b)])))
+
+    return list(lister_new).sort()
+
+
 def non_max_int32(val: luint32) -> Optional[int]:
     """
     Casts an object to a non-max integer, being None if it is the maximum value.
@@ -100,6 +112,7 @@ class DLFSHeader(MutableMapping):
         ("crop_offset_y", non_max_int32, None),
         ("crop_offset_x", non_max_int32, None),
         ("bodypart_names", string_list, []),
+        ("skeleton", edge_list, [])
     ]
 
     GET_VAR_CAST = {name: var_cast for name, var_cast, __ in SUPPORTED_FIELDS}

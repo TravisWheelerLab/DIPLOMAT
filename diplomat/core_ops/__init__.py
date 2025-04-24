@@ -1,5 +1,12 @@
 import os
 import sys
+
+from diplomat.core_ops.shared_commands.annotate import _label_videos_single
+from diplomat.core_ops.shared_commands.save_from_restore import _save_from_restore
+from diplomat.core_ops.shared_commands.utils import _fix_path_pairs
+from diplomat.core_ops.shared_commands.tweak import _tweak_video_single
+from diplomat.core_ops.shared_commands.visual_settings import VISUAL_SETTINGS, FULL_VISUAL_SETTINGS
+from diplomat.processing import Config
 from diplomat.processing.type_casters import (
     typecaster_function,
     PathLike,
@@ -14,7 +21,8 @@ from diplomat.processing.type_casters import (
 )
 from diplomat.predictor_ops import _get_predictor_settings
 from diplomat.utils.pretty_printer import printer as print
-from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags, Flag, positional_argument_count, CLIError
+from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags, Flag, positional_argument_count, CLIError, \
+    extra_cli_args
 from argparse import ArgumentParser
 import typing
 from types import ModuleType
@@ -40,29 +48,35 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
     new_args = {}
 
     for k, v in extra_args.items():
-        if(k in def_tcs):
+        if (k in def_tcs):
             new_args[k] = def_tcs[k](v)
-        elif(k in extra):
-            new_args[k] = extra[k][1](v) if(autocast) else v
+        elif (k in extra):
+            new_args[k] = extra[k][1](v) if (autocast) else v
         else:
-            if(allow_arb):
+            if (allow_arb):
                 new_args[k] = v
                 continue
             msg = (
                 f"Warning: command '{tc_func.__name__}' does not have "
                 f"an argument called '{k}'!"
             )
-            if(not error_on_miss):
+            if (not error_on_miss):
                 print(f"{msg} Ignoring the argument...")
             else:
                 raise ArgumentError(msg)
 
     return new_args
 
-def _reconcile_arguments_with_predictor_settings(predictor_name, extra_args, passed_predictor_settings, precasted_args):
+
+def _reconcile_arguments_with_predictor_settings(
+    predictor_name: str,
+    extra_args: dict,
+    passed_predictor_settings: dict,
+    precasted_args: dict
+) -> typing.Tuple[dict, dict]:
     """
-    PRIVATE: Compare items in extra_args to the predictor's ConfigSpec. 
-    If a key/value pair in the argument matches a pair of setting name/type in the predictor ConfigSpec, 
+    PRIVATE: Compare items in extra_args to the predictor's ConfigSpec.
+    If a key/value pair in the argument matches a pair of setting name/type in the predictor ConfigSpec,
     add it to passed_predictor_settings and remove it from extra_args. If the setting has already been set,
     either in passed_predictor_settings or in precasted_args, then it will be ignored.
     """
@@ -72,11 +86,11 @@ def _reconcile_arguments_with_predictor_settings(predictor_name, extra_args, pas
     for plugin_name, config_spec in _get_predictor_settings(predictor_name):
         for k, v in extra_args.items():
             arg_type = type(v)
-            if((k in precasted_args) or (k in passed_predictor_settings)):
+            if ((k in precasted_args) or (k in passed_predictor_settings)):
                 print(f"Warning: {k} is already set; skipping")
                 new_extra_args[k] = v
-            elif(k in config_spec):
-                print(f"Info: converted command line argument {(k,v)} to a {plugin_name} setting.")
+            elif (k in config_spec):
+                print(f"Info: converted command line argument {(k, v)} to a {plugin_name} setting.")
                 passed_predictor_settings[k] = v
     return new_extra_args, passed_predictor_settings
 
@@ -88,13 +102,11 @@ def _find_frontend(
 ) -> typing.Tuple[str, ModuleType]:
     from diplomat import _LOADED_FRONTENDS
 
-    contracts = [contracts] if(isinstance(contracts, DIPLOMATContract)) else contracts
+    contracts = [contracts] if (isinstance(contracts, DIPLOMATContract)) else contracts
 
     print(f"Loaded frontends: {_LOADED_FRONTENDS}")
 
     print(f"Config: {config}")
-
-
 
     for name, funcs in _LOADED_FRONTENDS.items():
         print(f"Checking frontend '{name}'...")
@@ -103,11 +115,11 @@ def _find_frontend(
             print(f"Verifying contract '{contract}'...")
             verified = funcs.verify(contract=contract, config=config, **kwargs)
             print(f"Verified: {verified}")
-        
-        if(all(funcs.verify(
-            contract=c,
-            config=config,
-            **kwargs
+
+        if (all(funcs.verify(
+                contract=c,
+                config=config,
+                **kwargs
         ) for c in contracts)):
             print(f"Frontend '{name}' selected.")
             return (name, funcs)
@@ -124,7 +136,7 @@ def _display_help(
     command_func: typing.Callable,
     is_cli: bool
 ):
-    if(is_cli):
+    if (is_cli):
         print(f"\n\nHelp for {frontend_name}'s {method_type} command:\n")
         func_to_command(command_func, ArgumentParser(prog=calling_command_name)).print_help()
     else:
@@ -157,7 +169,7 @@ def yaml(
     """
     import yaml
 
-    if(run_config is None):
+    if (run_config is None):
         data = yaml.load(sys.stdin, yaml.SafeLoader)
     else:
         with open(str(run_config), "r") as f:
@@ -166,9 +178,9 @@ def yaml(
     command_name = data.get("command", None)
     arguments = data.get("arguments", {})
 
-    if(not isinstance(command_name, str)):
+    if (not isinstance(command_name, str)):
         raise ArgumentError(f"Yaml file 'command' attribute does not have a value that is a string.")
-    if(not isinstance(arguments, dict)):
+    if (not isinstance(arguments, dict)):
         raise ArgumentError(f"Yaml file 'arguments' attribute not a list of key-value pairs, or mapping.")
 
     # Load the command...
@@ -190,7 +202,7 @@ def yaml(
     arguments.update(extra_args)
 
     for arg in get_typecaster_required_arguments(sub_tree):
-        if(arg not in arguments):
+        if (arg not in arguments):
             raise ArgumentError(
                 f"Command '{command_name}' requires '{arg}' to be passed, include it in the yaml file or pass it as a "
                 f"flag to this command."
@@ -231,7 +243,7 @@ def track_with(
                        To see valid values, run track with extra_help flag set to true.
     """
     from diplomat import CLI_RUN
-    
+
     selected_frontend_name, selected_frontend = _find_frontend(
         contracts=[DIPLOMATCommands.analyze_videos, DIPLOMATCommands.analyze_videos],
         config=config,
@@ -243,24 +255,28 @@ def track_with(
         **extra_args
     )
 
-    if(help_extra):
-        _display_help(selected_frontend_name, "video analysis", "diplomat track", selected_frontend.analyze_videos, CLI_RUN)
-        _display_help(selected_frontend_name, "frame analysis", "diplomat track", selected_frontend.analyze_frames, CLI_RUN)
+    if (help_extra):
+        _display_help(selected_frontend_name, "video analysis", "diplomat track", selected_frontend.analyze_videos,
+                      CLI_RUN)
+        _display_help(selected_frontend_name, "frame analysis", "diplomat track", selected_frontend.analyze_frames,
+                      CLI_RUN)
         return
 
-    if(videos is None and frame_stores is None):
+    if (videos is None and frame_stores is None):
         print("No frame stores or videos passed, terminating.")
         return
 
-    ## TODO: compare extra_args to predictor.get_settings 
+    ## TODO: compare extra_args to predictor.get_settings
 
     # If some videos are supplied, run the frontends video analysis function.
-    if(videos is not None):
+    if (videos is not None):
         print("Running on videos...")
-        
-        precasted_args = _get_casted_args(selected_frontend.analyze_videos, extra_args, error_on_miss = False)
-        extra_args, predictor_settings = _reconcile_arguments_with_predictor_settings(predictor, extra_args, predictor_settings, precasted_args)
-        
+
+        precasted_args = _get_casted_args(selected_frontend.analyze_videos, extra_args, error_on_miss=False)
+        extra_args, predictor_settings = _reconcile_arguments_with_predictor_settings(predictor, extra_args,
+                                                                                      predictor_settings,
+                                                                                      precasted_args)
+
         selected_frontend.analyze_videos(
             config=config,
             videos=videos,
@@ -271,12 +287,14 @@ def track_with(
         )
 
     # If some frame stores are supplied, run the frontends frame analysis function.
-    if(frame_stores is not None):
+    if (frame_stores is not None):
         print("Running on frame stores...")
 
-        precasted_args = _get_casted_args(selected_frontend.analyze_frames, extra_args, error_on_miss = False)
-        extra_args, predictor_settings = _reconcile_arguments_with_predictor_settings(predictor, extra_args, predictor_settings, precasted_args)
-        
+        precasted_args = _get_casted_args(selected_frontend.analyze_frames, extra_args, error_on_miss=False)
+        extra_args, predictor_settings = _reconcile_arguments_with_predictor_settings(predictor, extra_args,
+                                                                                      predictor_settings,
+                                                                                      precasted_args)
+
         selected_frontend.analyze_frames(
             config=config,
             frame_stores=frame_stores,
@@ -373,93 +391,62 @@ def track_and_interact(
     )
 
 
-@allow_arbitrary_flags
+@extra_cli_args(FULL_VISUAL_SETTINGS, auto_cast=False)
 @typecaster_function
 def annotate(
-    config: Union[List[PathLike], PathLike],
-    videos: Optional[Union[List[PathLike], PathLike]] = None,
-    help_extra: Flag = False,
-    **extra_args
+    videos: Union[List[PathLike], PathLike],
+    csvs: Union[List[PathLike], PathLike],
+    body_parts_to_plot: Optional[List[str]] = None,
+    video_extension: str = "mp4",
+    **kwargs
 ):
     """
-    Have diplomat annotate, or label a video given it has already been tracked. Automatically searches for the
-    correct frontend to do labeling based on the passed config argument.
+    Have diplomat annotate, or label a video given it has already been tracked.
 
-    :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
-    :param videos: A single path or list of paths to video files run annotation on.
-    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running video annotation.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run annotate with extra_help flag set to true.
+    :param videos: Paths to video file(s) corresponding to the provided csv files.
+    :param csvs: The path (or list of paths) to the csv file(s) to label the videos with.
+    :param body_parts_to_plot: A set or list of body part names to label, or None, indicating to label all parts.
+    :param video_extension: The file extension to use on the created labeled video, excluding the dot.
+                            Defaults to 'mp4'.
+    :param kwargs: The following additional arguments are supported:
+
+                   {extra_cli_args}
     """
-    from diplomat import CLI_RUN
+    csvs, videos = _fix_path_pairs(csvs, videos)
+    visual_settings = Config(kwargs, FULL_VISUAL_SETTINGS)
 
-    # Iterate the frontends, looking for one that actually matches our request...
-    selected_frontend_name, selected_frontend = _find_frontend(
-        contracts=DIPLOMATCommands.label_videos,
-        config=config,
-        videos=videos,
-        **extra_args
-    )
-
-    if(help_extra):
-        _display_help(selected_frontend_name, "video labeling", "diplomat annotate", selected_frontend.label_videos, CLI_RUN)
-        return
-
-    if(videos is None):
+    if len(videos) == 0:
         print("No videos passed, terminating.")
         return
 
-    selected_frontend.label_videos(
-        config=config,
-        videos=videos,
-        **_get_casted_args(selected_frontend.label_videos, extra_args)
-    )
+    for c, v in zip(csvs, videos):
+        _label_videos_single(str(c), str(v), body_parts_to_plot, video_extension, visual_settings)
 
 
-@allow_arbitrary_flags
+@extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
 @typecaster_function
 def tweak(
-    config: Union[List[PathLike], PathLike],
-    videos: Optional[Union[List[PathLike], PathLike]] = None,
-    help_extra: Flag = False,
-    **extra_args
+    videos: Union[List[PathLike], PathLike],
+    csvs: Union[List[PathLike], PathLike],
+    **kwargs
 ):
     """
     Make modifications to DIPLOMAT produced tracking results created for a video using a limited version of the
     interactive labeling UI. Allows for touching up and fixing any minor issues that may arise after tracking and
     saving results.
 
-    :param config: The path to the configuration file for the project. The format of this argument will depend on the
-                   frontend.
-    :param videos: A single path or list of paths to video files to tweak the tracks of.
-    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of
-                       showing the UI.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically
-                       selected frontend. To see valid values, run tweak with extra_help flag set to true.
+    :param videos: Paths to video file(s) corresponding to the provided csv files.
+    :param csvs: The path (or list of paths) to the csv file(s) to edit.
+    :param kwargs: The following additional arguments are supported:
+
+                   {extra_cli_args}
     """
-    from diplomat import CLI_RUN
-
-    selected_frontend_name, selected_frontend = _find_frontend(
-        contracts=DIPLOMATCommands.tweak_videos,
-        config=config,
-        videos=videos,
-        **extra_args
-    )
-
-    if(help_extra):
-        _display_help(selected_frontend_name, "label tweaking", "diplomat tweak", selected_frontend.tweak_videos, CLI_RUN)
-        return
-
-    if(videos is None):
-        print("No videos passed, terminating.")
-        return
+    csvs, videos = _fix_path_pairs(csvs, videos)
+    visual_cfg = Config(kwargs, VISUAL_SETTINGS)
 
     try:
-        selected_frontend.tweak_videos(
-            config=config,
-            videos=videos,
-            **_get_casted_args(selected_frontend.tweak_videos, extra_args)
-        )
+        for c, v in zip(csvs, videos):
+            _tweak_video_single(str(c), str(v), visual_cfg)
     except UIImportError as e:
         print(e)
 
@@ -494,7 +481,7 @@ def convert(
         **extra_args
     )
 
-    if(help_extra):
+    if (help_extra):
         _display_help(
             selected_frontend_name,
             "result conversion",
@@ -503,7 +490,7 @@ def convert(
         )
         return
 
-    if(videos is None):
+    if (videos is None):
         print("No videos passed, terminating.")
         return
 
@@ -526,17 +513,16 @@ def interact(
     :param state: A path or list of paths to the ui states to restore. Files should be of ".dipui" format.
     """
     from diplomat.predictors.sfpe.file_io import DiplomatFPEState
-    from diplomat import _LOADED_FRONTENDS
     from diplomat.processing import TQDMProgressBar, Config
     import time
 
     try:
-        from diplomat.predictors.supervised_sfpe.supervised_segmented_frame_pass_engine\
+        from diplomat.predictors.supervised_sfpe.supervised_segmented_frame_pass_engine \
             import SupervisedSegmentedFramePassEngine
     except ImportError:
         raise UIImportError("Unable to load diplomat UI. Make sure diplomat ui packages are installed")
 
-    if(not isinstance(state, (list, tuple))):
+    if (not isinstance(state, (list, tuple))):
         state = [state]
 
     for state_file_path in state:
@@ -544,21 +530,6 @@ def interact(
             with DiplomatFPEState(f) as dip_st:
                 meta = dip_st.get_metadata()
                 num_frames = len(dip_st) // (len(meta["bodyparts"]) * meta["num_outputs"])
-
-        # Check if the backend supports restoring...
-        frontend_str = meta.get("video_metadata", {}).get("frontend", None)
-        if(frontend_str is None):
-            raise ValueError("Unable to find the frontend used!")
-        if(frontend_str not in _LOADED_FRONTENDS):
-            raise ValueError(
-                f"Selected frontend '{frontend_str}' not loaded! Make sure frontend specific "
-                f"dependencies are installed."
-            )
-
-        commands = _LOADED_FRONTENDS[frontend_str]
-
-        if(not commands.verify_contract(DIPLOMATCommands._save_from_restore)):
-            raise ValueError(f"Frontend '{frontend_str}' doesn't support restoring the ui state.")
 
         # Create the UI...
         pred = SupervisedSegmentedFramePassEngine(
@@ -576,10 +547,10 @@ def interact(
                 poses = p.on_end(prog_bar)
             end_time = time.time()
 
-        if(poses is None):
+        if (poses is None):
             raise ValueError("Pass didn't return any data!")
 
-        commands._save_from_restore(
+        _save_from_restore(
             pose=poses,
             video_metadata=pred.video_metadata,
             num_outputs=pred.num_outputs,

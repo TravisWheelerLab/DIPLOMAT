@@ -107,6 +107,7 @@ class DLFSConstants:
     # The header length, including the 'DLFH' magic
     HEADER_LENGTH = 56
     BP_NAME_CHUNK_MAGIC = b"DBPN"
+    SKELETON_CHUNK_MAGIC = b"DSKL"
     FRAME_LOOKUP_MAGIC = b"FLUP"
     FRAME_DATA_CHUNK_MAGIC = b"FDAT"
     FRAME_END_CHUNK_MAGIC = b"DLFE"
@@ -227,9 +228,18 @@ class DLFSReader(FrameReader):
         self._flup_offset = file.tell()
         file.read(8 * self._header.number_of_frames)
 
+        next = file.read(4)
+        if(next == DLFSConstants.SKELETON_CHUNK_MAGIC):
+            edge_count = from_bytes(file.read(4), luint32)
+            edges = [None] * len(edge_count)
+            for i in range(len(edges)):
+                edges[i] = (from_bytes(file.read(4), luint32), from_bytes(file.read(4), luint32))
+            next = file.read(4)
+            self._header.skeleton = edges
+
         # Now we assert that we have reached the frame data chunk
         self._assert_true(
-            file.read(4) == DLFSConstants.FRAME_DATA_CHUNK_MAGIC,
+            next == DLFSConstants.FRAME_DATA_CHUNK_MAGIC,
             f"Frame data chunk not found!",
         )
         self._fdat_offset = file.tell()
@@ -491,6 +501,12 @@ class DLFSWriter(FrameWriter):
             body_bytes = bodypart.encode("utf-8")
             self._out_file.write(to_bytes(len(body_bytes), luint16))
             self._out_file.write(body_bytes)
+
+        self._out_file.write(DLFSConstants.SKELETON_CHUNK_MAGIC)
+        self._out_file.write(to_bytes(len(header.skeleton) / 2, luint32))
+        for edge in header.skeleton:
+            self._out_file.write(to_bytes(edge[0], luint32))
+            self._out_file.write(to_bytes(edge[1], luint32))
 
         # The frame lookup chunk...
         self._out_file.write(DLFSConstants.FRAME_LOOKUP_MAGIC)

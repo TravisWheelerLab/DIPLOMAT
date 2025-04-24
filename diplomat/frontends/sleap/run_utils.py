@@ -1,9 +1,12 @@
+import json
+import zipfile
+
+from six import BytesIO
+
 from .sleap_importer import tf
 import platform
-import time
-from datetime import datetime
 from inspect import signature
-from pathlib import Path
+from pathlib import Path, PosixPath, PurePosixPath
 from typing import Optional, Type, List, Tuple, Iterable, Dict
 from .sleap_importer import sleap
 import numpy as np
@@ -49,16 +52,81 @@ def _paths_to_str(paths):
         return str(paths)
 
 
-def _load_config(paths):
-    try:
-        paths = [paths] if(isinstance(paths, str)) else paths
+def _resolve_model_path(files):
+    models = [f for f in files if "model" in f.stem and f.suffix == ".h5"]
 
-        if(len(paths) < 1):
-            raise ValueError(f"No configuration files passed to open!")
+    for model_option in ["best_model", "final_model", "latest_model"]:
+        full_name = f"{model_option}.h5"
+        for model in models:
+            if(model.name == full_name):
+                return model
 
-        return [sleap.load_config(p) for p in paths]
-    except IOError as e:
-        raise type(e)(f"Unable to load provided sleap config: '{repr(e)}'")
+    max_model = None
+    max_val = 0
+    for model in models:
+        val = int(model.split("_")[-1])
+        if(max_val < val):
+            max_model = model
+            max_val = val
+
+    if(max_model is None):
+        raise ValueError("Unable to find a model to load in the configuration directory!")
+
+    return max_model
+
+
+def _load_config_and_model(path, include_model = True):
+    import h5py
+    path = Path(path)
+    if(zipfile.is_zipfile(path)):
+        with zipfile.ZipFile(path, "r") as zip:
+            for file in zip.infolist():
+                if(file.filename.split("/")[-1].endswith("training_config.yaml")):
+                    inner_path = PurePosixPath(file.filename)
+                    config_dir = inner_path.parent
+                    break
+            else:
+                raise IOError("Sleap model zip file does not contain a training configuration file!")
+
+            cfg = json.loads(zip.read(str(inner_path)))
+            model_path = _resolve_model_path(
+                PurePosixPath(name) for name in zip.namelist() if(PurePosixPath(name).parent == config_dir)
+            )
+            if(include_model):
+                model = tf.keras.models.load_model(
+                    h5py.File(BytesIO(zip.read(str(model_path))), "r"),
+                    compile=False
+                )
+                return cfg, model
+            else:
+                return cfg
+
+    if(path.is_dir()):
+        path = path / "training_config.py"
+    path = path.resolve()
+
+    with path.open("rb") as f:
+        cfg = json.load(f)
+    model_path = _resolve_model_path(path.parent.iterdir())
+    if(include_model):
+        model = tf.keras.models.load_model(model_path, compile=False)
+        return cfg, model
+    else:
+        return cfg
+
+
+def _load_configs(paths, include_models: bool = True):
+    paths = [paths] if(isinstance(paths, (str, Path))) else paths
+
+    if(len(paths) < 1):
+        raise ValueError(f"No configuration files passed to open!")
+
+    configs = []
+
+    for p in paths:
+        configs.append(_load_config_and_model(p, include_models))
+
+    return configs
 
 
 def _get_default_value(func, attr, fallback):
@@ -231,37 +299,7 @@ class PoseLabels:
         return sleap.Labels(labeled_frames=self._frame_list)
 
 
-class Timer:
-    def __init__(self, start_time: Optional[float] = None, end_time: Optional[float] = None):
-        self._start_time = start_time
-        self._end_time = end_time
 
-    def __enter__(self):
-        self._start_time = time.time()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._end_time = time.time()
-
-    @property
-    def start(self) -> float:
-        return self._start_time
-
-    @property
-    def end(self) -> float:
-        return self._end_time
-
-    @property
-    def start_date(self) -> datetime:
-        return datetime.fromtimestamp(self._start_time)
-
-    @property
-    def end_date(self) -> datetime:
-        return datetime.fromtimestamp(self._end_time)
-
-    @property
-    def duration(self) -> float:
-        return self._end_time - self._start_time
 
 
 def _attach_run_info(

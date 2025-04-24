@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable, NamedTuple, Literal, Union
 
-from diplomat.utils.colormaps import iter_colormap
+from diplomat.utils.colormaps import iter_colormap, to_colormap
 from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table
 from diplomat.wx_gui.id_swap_dialog import IdSwapDialog
 from diplomat.wx_gui.labeler_lib import SettingCollection
@@ -770,7 +770,7 @@ class FPEEditor(wx.Frame):
         sorted_colormaps = sorted(colormaps)
 
         with SettingsDialog(self, title="Visual Settings", settings=SettingCollection(
-            colormap=DropDown([point_video_viewer.get_colormap()] + sorted_colormaps, ["CURRENT"] + sorted_colormaps),
+            colormap=DropDown([to_colormap(point_video_viewer.get_colormap())] + sorted_colormaps, ["CURRENT"] + sorted_colormaps),
             point_radius=FloatSpin(1, 1000, point_video_viewer.get_point_radius(), increment=1, digits=0),
             point_alpha=FloatSpin(0, 1, point_video_viewer.get_point_alpha(), increment=0.01, digits=2),
             plot_threshold=FloatSpin(0, 1, point_video_viewer.get_plot_threshold(), increment=0.001, digits=3),

@@ -1283,6 +1283,7 @@ class SegmentedFramePassEngine(Predictor):
 
         w = int(frame_metadata.width / down_scaling)
         h = int(frame_metadata.height / down_scaling)
+        skelly = video_metadata["skeleton"]
 
         header = frame_store_fmt.DLFSHeader(
             num_frames,
@@ -1292,7 +1293,8 @@ class SegmentedFramePassEngine(Predictor):
             down_scaling,
             *video_metadata["size"],
             *((None, None) if (video_metadata["cropping-offset"] is None) else video_metadata["cropping-offset"]),
-            bp_list
+            bp_list,
+            skelly if(skelly is not None) else []
         )
 
         return exporters.get(file_format, frame_store_fmt.DLFSWriter)(file, header)

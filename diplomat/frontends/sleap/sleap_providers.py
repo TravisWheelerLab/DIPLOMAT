@@ -24,11 +24,30 @@ class SleapMetadata(TypedDict):
     orig_skeleton: SleapSkeleton
 
 
-def sleap_metadata_from_config(config: SleapDataConfig) -> SleapMetadata:
-    skel_list = config.labels.skeletons
+ConfigAndModels = List[Tuple[dict, tf.Module]]
 
-    if (len(skel_list) < 1):
-        raise ValueError("No part information for this SLEAP project, can't run diplomat!")
+
+def _find_key_nested(data: dict, key: str):
+    for k, v in data.items():
+        if(k == key):
+            return v
+        if(isinstance(v, dict)):
+            guess = _find_key_nested(v)
+            if(guess is not None):
+                return guess
+
+    return None
+
+
+def sleap_metadata_from_config(configs: ConfigAndModels) -> SleapMetadata:
+    for cfg, mdl in configs:
+        model = _find_key_nested(cfg, "part_names")
+        if(model is not None):
+            break
+    else:
+        raise ValueError("Unable to find a list of parts in the config files passed!")
+
+    skel_list = configs[""]
 
     skeleton1 = skel_list[0]
     edge_name_list = skeleton1.edge_names
@@ -45,15 +64,15 @@ class SleapModelExtractor(ABC):
     Takes a SLEAP Predictor, and modifies it so that it outputs TrackingData instead of SLEAP predictions.
     """
     @classmethod
-    def supported_models(cls) -> Set[SleapPredictor]:
-        return set()
+    def can_build(cls, models: ConfigAndModels) -> bool:
+        return False
 
     @abstractmethod
-    def __init__(self, model: SleapPredictor):
-        self.__p = model
+    def __init__(self, models: ConfigAndModels):
+        self.__p = models
 
     def get_metadata(self) -> SleapMetadata:
-        return sleap_metadata_from_config(self.__p.data_config)
+        return sleap_metadata_from_config(self.__p)
 
     @abstractmethod
     def extract(self, data: Union[Provider]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:

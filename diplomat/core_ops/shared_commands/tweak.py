@@ -8,29 +8,29 @@ from diplomat.utils.track_formats import load_diplomat_table, to_diplomat_pose, 
 from diplomat.utils.video_io import ContextVideoCapture
 from diplomat.utils.shapes import shape_iterator
 
-from .csv_utils import _fix_paths
+from .utils import _fix_path_pairs
 
 
 @extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
 @tc.typecaster_function
 def tweak_videos(
-    config: tc.PathLike,
     videos: tc.Union[tc.List[tc.PathLike], tc.PathLike],
+    csvs: tc.PathLike,
     **kwargs
 ):
     """
     Make minor modifications and tweaks to arbitrary csv files using DIPLOMAT's light interactive UI.
 
-    :param config: The path (or list of paths) to the csv file(s) to edit.
     :param videos: Paths to video file(s) corresponding to the provided csv files.
+    :param csvs: The path (or list of paths) to the csv file(s) to edit.
     :param kwargs: The following additional arguments are supported:
 
                    {extra_cli_args}
     """
-    config, videos = _fix_paths(config, videos)
+    csvs, videos = _fix_path_pairs(csvs, videos)
     visual_cfg = Config(kwargs, VISUAL_SETTINGS)
 
-    for c, v in zip(config, videos):
+    for c, v in zip(csvs, videos):
         _tweak_video_single(str(c), str(v), visual_cfg)
 
 

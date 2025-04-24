@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from collections import OrderedDict
-from diplomat.processing import Pose
+
+import numpy as np
+
+from diplomat.processing import Pose, TrackingData
 from diplomat.processing.type_casters import (
     StrictCallable,
     PathLike,
@@ -11,7 +14,8 @@ from diplomat.processing.type_casters import (
     Any,
     Optional,
     TypeCaster,
-    NoneType
+    NoneType,
+    Tuple
 )
 import typing
 
@@ -97,6 +101,24 @@ ConvertResultsFunction = lambda ret: StrictCallable(
     _return=ret
 )
 
+ModelLike = StrictCallable(
+    frames=np.ndarray,
+    _return=TrackingData
+)
+ModelInfo = Tuple(
+    int,
+    int,
+    Dict[str, Any],
+    ModelLike
+)
+
+ModelLoaderFunction = StrictCallable(
+    config=ConfigPathLikeArgument,
+    num_outputs=Optional[int],
+    batch_size=int,
+    _return=ModelInfo
+)
+
 
 @dataclass(frozen=True)
 class DIPLOMATContract:
@@ -138,11 +160,7 @@ class DIPLOMATCommands(metaclass=CommandManager):
     by passing the methods to this classes constructor.
     """
     _verifier: required(VerifierFunction)
-    _save_from_restore: SaveRestoredStateFunction
-    analyze_videos: AnalyzeVideosFunction(NoneType)
-    analyze_frames: AnalyzeFramesFunction(NoneType)
-    label_videos: LabelVideosFunction(NoneType)
-    tweak_videos: LabelVideosFunction(NoneType)
+    _load_model: required(ModelLoaderFunction)
     convert_results: ConvertResultsFunction(NoneType)
 
     def __init__(self, **kwargs):
