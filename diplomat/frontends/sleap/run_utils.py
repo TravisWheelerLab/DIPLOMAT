@@ -1,14 +1,11 @@
+from .sleap_importer import tf
 import json
 import zipfile
-
-from six import BytesIO
-
-from .sleap_importer import tf
+from io import BytesIO
 import platform
 from inspect import signature
-from pathlib import Path, PosixPath, PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Optional, Type, List, Tuple, Iterable, Dict
-from .sleap_importer import sleap
 import numpy as np
 from diplomat.processing import Predictor, Config, Pose
 from diplomat.utils.shapes import shape_iterator
@@ -52,6 +49,40 @@ def _paths_to_str(paths):
         return str(paths)
 
 
+_INT_TO_EDGE_TYPE = {
+    1: "BODY",
+    2: "SYMMETRY"
+}
+
+
+def _decode_skeleton(skeleton_dict, obj_memory = None):
+    if(obj_memory is None):
+        obj_memory = []
+    new_skeleton = {}
+
+    if("py/object" in skeleton_dict):
+        # Extract the data
+        data = skeleton_dict["py/state"]["py/tuple"]
+        obj_memory.append(data)
+        return data
+    if("py/reduce" in skeleton_dict):
+        data = _INT_TO_EDGE_TYPE[skeleton_dict["py/reduce"][1]["py/tuple"][0]]
+        obj_memory.append(data)
+        return data
+    if("py/id" in skeleton_dict):
+        return obj_memory[skeleton_dict["py/id"] - 1]
+
+    for k, sub_item in skeleton_dict.items():
+        if(isinstance(sub_item, dict)):
+            new_skeleton[k] = _decode_skeleton(sub_item, obj_memory)
+        elif(isinstance(sub_item, list)):
+            new_skeleton[k] = [_decode_skeleton(v, obj_memory) if(isinstance(v, dict)) else v for v in sub_item]
+        else:
+            new_skeleton[k] = sub_item
+
+    return new_skeleton
+
+
 def _resolve_model_path(files):
     models = [f for f in files if "model" in f.stem and f.suffix == ".h5"]
 
@@ -75,31 +106,63 @@ def _resolve_model_path(files):
     return max_model
 
 
-def _load_config_and_model(path, include_model = True):
-    import h5py
-    path = Path(path)
-    if(zipfile.is_zipfile(path)):
-        with zipfile.ZipFile(path, "r") as zip:
-            for file in zip.infolist():
-                if(file.filename.split("/")[-1].endswith("training_config.yaml")):
-                    inner_path = PurePosixPath(file.filename)
-                    config_dir = inner_path.parent
-                    break
-            else:
-                raise IOError("Sleap model zip file does not contain a training configuration file!")
+def _dict_has_path(dict_obj, key):
+    for k_p in key:
+        if(k_p not in dict_obj):
+            return False
+        dict_obj = dict_obj[k_p]
+    return True
 
-            cfg = json.loads(zip.read(str(inner_path)))
+
+def _dict_get_path(dict_obj, key, default = None):
+    for k_p in key:
+        if(k_p not in dict_obj):
+            return default
+        dict_obj = dict_obj[k_p]
+    return dict_obj
+
+
+def _correct_skeletons_in_config(cfg):
+    if _dict_has_path(cfg, ("data", "labels", "skeletons")):
+        cfg["data"]["labels"]["skeletons"] = [
+            _decode_skeleton(s) for s in cfg["data"]["labels"]["skeletons"]
+        ]
+
+
+def _load_configs_from_zip(z: zipfile.ZipFile, include_model = True):
+    import h5py
+    cfg_lst = []
+
+    for file in z.infolist():
+        if (file.filename.split("/")[-1].endswith("training_config.yaml")):
+            inner_path = PurePosixPath(file.filename)
+            config_dir = inner_path.parent
+
+            cfg = json.loads(z.read(str(inner_path)))
+            _correct_skeletons_in_config(cfg)
             model_path = _resolve_model_path(
-                PurePosixPath(name) for name in zip.namelist() if(PurePosixPath(name).parent == config_dir)
+                PurePosixPath(name) for name in z.namelist() if (PurePosixPath(name).parent == config_dir)
             )
-            if(include_model):
+            if (include_model):
                 model = tf.keras.models.load_model(
-                    h5py.File(BytesIO(zip.read(str(model_path))), "r"),
+                    h5py.File(BytesIO(z.read(str(model_path))), "r"),
                     compile=False
                 )
-                return cfg, model
+                return cfg_lst.append((cfg, model))
             else:
-                return cfg
+                return cfg_lst.append(cfg)
+
+    if len(cfg_lst) == 0:
+        raise IOError("Sleap model zip file does not contain a training configuration file!")
+
+    return cfg_lst
+
+
+def _load_config_and_model(path, include_model = True):
+    path = Path(path)
+    if(zipfile.is_zipfile(path)):
+        with zipfile.ZipFile(path, "r") as z:
+            return _load_configs_from_zip(z, include_model)
 
     if(path.is_dir()):
         path = path / "training_config.py"
@@ -107,12 +170,13 @@ def _load_config_and_model(path, include_model = True):
 
     with path.open("rb") as f:
         cfg = json.load(f)
+        _correct_skeletons_in_config(cfg)
     model_path = _resolve_model_path(path.parent.iterdir())
     if(include_model):
         model = tf.keras.models.load_model(model_path, compile=False)
-        return cfg, model
+        return [(cfg, model)]
     else:
-        return cfg
+        return [cfg]
 
 
 def _load_configs(paths, include_models: bool = True):
@@ -124,7 +188,7 @@ def _load_configs(paths, include_models: bool = True):
     configs = []
 
     for p in paths:
-        configs.append(_load_config_and_model(p, include_models))
+        configs.extend(_load_config_and_model(p, include_models))
 
     return configs
 

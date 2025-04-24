@@ -1,33 +1,34 @@
 from abc import ABC, abstractmethod
+from io import BytesIO
 from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
 
+import onnx
+import tf2onnx
 from typing_extensions import TypedDict
 import numpy as np
 
-from .sleap_importer import (
-    tf,
-    SleapDataConfig,
-    SleapVideo,
-    Provider,
-    SleapVideoReader,
-    SleapPredictor,
-    SleapInferenceLayer,
-    SleapSkeleton
+from .run_utils import _dict_get_path
+from .sleap_importer import tf
+from onnx import TensorProto
+from onnx.helper import (
+    make_model, make_node, make_graph,
+    make_tensor_value_info
 )
-
+import onnx.numpy_helper as onnx_np_helper
+from onnx.checker import check_model
 from diplomat.processing import TrackingData
+import onnxruntime as ort
 
 
 class SleapMetadata(TypedDict):
     bp_names: List[str]
     skeleton: Optional[List[Tuple[str, str]]]
-    orig_skeleton: SleapSkeleton
 
 
 ConfigAndModels = List[Tuple[dict, tf.Module]]
 
 
-def _find_key_nested(data: dict, key: str):
+def _find_key_nested(data: dict, key: str, default = None):
     for k, v in data.items():
         if(k == key):
             return v
@@ -36,26 +37,43 @@ def _find_key_nested(data: dict, key: str):
             if(guess is not None):
                 return guess
 
-    return None
+    return default
+
+
+def _normalize_edges(edge_list) -> List[Tuple[str, str]]:
+    return sorted(set(tuple(sorted([str(a), str(b)])) for a, b in edge_list))
 
 
 def sleap_metadata_from_config(configs: ConfigAndModels) -> SleapMetadata:
+    parts = None
+    edge_list = None
+
     for cfg, mdl in configs:
-        model = _find_key_nested(cfg, "part_names")
-        if(model is not None):
+        skeletons = _dict_get_path(cfg, ("data", "labels", "skeletons"), None)
+        if(skeletons is not None):
+            if(len(skeletons) == 0):
+                continue
+            skel = skeletons[0]
+            parts = [n["id"][0] for n in skel["nodes"]]
+            edge_list = _normalize_edges((e["source"][0], e["target"][0]) for e in skel["links"] if(e["type"] == "BODY"))
             break
     else:
+        # Scenario 2...
+        for cfg, mdl in configs:
+            parts = _find_key_nested(cfg["model"]["heads"], "part_names")
+            if(parts is None):
+                continue
+            edge_list = _normalize_edges(
+                _find_key_nested(cfg["model"]["heads"], "pafs", {"edges": []})["edges"]
+            )
+            break
+
+    if parts is None or edge_list is None:
         raise ValueError("Unable to find a list of parts in the config files passed!")
 
-    skel_list = configs[""]
-
-    skeleton1 = skel_list[0]
-    edge_name_list = skeleton1.edge_names
-
     return SleapMetadata(
-        bp_names=skeleton1.node_names,
-        skeleton=edge_name_list if (len(edge_name_list) > 0) else None,
-        orig_skeleton=skeleton1
+        bp_names=parts,
+        skeleton=edge_list
     )
 
 
@@ -68,46 +86,195 @@ class SleapModelExtractor(ABC):
         return False
 
     @abstractmethod
-    def __init__(self, models: ConfigAndModels):
+    def __init__(self, models: ConfigAndModels, **kwargs):
+        if(not self.can_build(models)):
+            raise ValueError("Unable to build with passed model configuration!")
         self.__p = models
 
     def get_metadata(self) -> SleapMetadata:
         return sleap_metadata_from_config(self.__p)
 
     @abstractmethod
-    def extract(self, data: Union[Provider]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
+    def extract(self, data: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
         pass
 
 
-def _fix_conf_map(conf_map: tf.Tensor) -> tf.Tensor:
-    return tf.clip_by_value(conf_map, 0, 1)
+def _fix_conf_map(conf_map: np.ndarray) -> np.ndarray:
+    return np.clip(conf_map, 0, 1)
 
 
-class BottomUpModelExtractor(SleapModelExtractor):
-    @classmethod
-    def supported_models(cls) -> Set[SleapPredictor]:
-        from sleap.nn.inference import BottomUpPredictor, BottomUpMultiClassPredictor
-        return {BottomUpPredictor, BottomUpMultiClassPredictor}
+def _get_config_paths(cfg, paths, default = None):
+    return [
+        _dict_get_path(cfg, path, default) for path in paths
+    ]
 
-    def __init__(self, model: SleapPredictor):
-        super().__init__(model)
-        self._predictor = model
 
-    def extract(self, data: Union[Dict, np.ndarray]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
-        inf_layer = self._predictor.inference_model.inference_layer
-        conf_map, __, offsets = inf_layer.forward_pass(data)
+class PreProcessingLayer:
+    def __init__(self, config: dict, **kwargs):
+        self._config = config
+        self._preprocess_config = _dict_get_path(self._config, ("data", "preprocessing"), {})
+        p_c = self._preprocess_config
 
-        first_scale_val = float(tf.reshape(data["scale"], -1)[0])
-        if(not tf.experimental.numpy.allclose(data["scale"], first_scale_val)):
-            raise ValueError("Scaling is not consistent!")
+        input = make_tensor_value_info("INPUT", TensorProto.FLOAT, [None, None, None, 3])
+        nodes = []
 
-        return (
-            _fix_conf_map(conf_map),
-            offsets if(offsets is None) else offsets,
-            (1 / first_scale_val) * (1 / inf_layer.input_scale) * inf_layer.cm_output_stride
+        def _prior_node_output():
+            return nodes[-1].output[0] if(len(nodes) > 0) else input.name
+
+        if(p_c.get("ensure_grayscale", False)):
+            n1 = make_node(
+                "Constant", [], ["RGB_TO_GRAY"],
+                value_float=onnx_np_helper.from_array(np.array([0.2989, 0.5870, 0.1140]))
+            )
+            n2 = make_node("Mul", [_prior_node_output(), "RGB_TO_GRAY"], ["GRAYSCALE"])
+            nodes.extend([n1, n2])
+            nodes.append(make_node("ReduceSum", [_prior_node_output()], ["GRAYSCALE_REDUCED"], axes=[-1], keepdims=1))
+        else:
+            n1 = make_node("Constant", [], ["RGB_TO_GRAY"],
+                           value=onnx_np_helper.from_array(np.array([1.0, 1.0, 1.0])))
+            n2 = make_node("Mul", [_prior_node_output(), "GRAY_TO_RGB"], ["RGB"])
+            nodes.extend([n1, n2])
+
+        if(p_c.get("resize_and_pad_to_target", False)):
+            self._t_width = p_c.get("target_width", None)
+            self._t_height = p_c.get("target_height", None)
+            if(self._t_width is not None and self._t_height is not None):
+                desired_size = make_node(
+                    "Constant", [], ["IMG_SIZE"],
+                    value=onnx_np_helper.from_array(np.array([self._t_height, self._t_width], dtype=np.int64))
+                )
+                resizer = make_node(
+                    "Resize",
+                    [_prior_node_output(), "", "", "IMG_SIZE"],
+                    ["IMG_RESIZED"],
+                    coordinate_transformation_mode="asymmetric",
+                    keep_aspect_ratio_policy="not_larger"
+                )
+                nodes.extend([desired_size, resizer])
+
+        self._post_input_scale = p_c.get("input_scaling", 1.0)
+        if(self._post_input_scale != 1.0):
+            desired_scale = make_node(
+                "Constant", [], ["IMG_SCALE"],
+                value=onnx_np_helper.from_array(np.array([self._post_input_scale, self._post_input_scale], dtype=np.float32))
+            )
+            resizer2 = make_node(
+                "Resize",
+                [_prior_node_output(), "", "", "IMG_SCALE"],
+                ["IMG_RESIZED2"],
+                coordinate_transformation_mode="asymmetric",
+                keep_aspect_ratio_policy="not_larger"
+            )
+            nodes.extend([desired_scale, resizer2])
+
+        output = make_tensor_value_info(_prior_node_output(), TensorProto.FLOAT, [None, None, None, None])
+        graph = make_graph(
+            nodes,
+            "ImagePreprocessor",
+            [input],
+            [output]
         )
+        self._preprocess_model = make_model(graph)
+        check_model(self._preprocess_model)
+        self._preprocess_runner = _onnx_model_to_inference_session(self._preprocess_model, **kwargs)
+
+        for backbone in self._config["model"]["backbone"].values():
+            if(backbone is not None):
+                # TODO: Calculate this properly from actual model...
+                self._pad_to_stride = int(backbone.get("max_stride", backbone.get("output_stride", 1)))
 
 
+    def __call__(self, img: np.ndarray) -> Tuple[np.ndarray, int]:
+        if(not isinstance(img, np.floating)):
+            img = img.astype(np.float32) / np.iinfo(img.dtype).max
+        img = np.clip(img, 0, 1, dtype=np.float32)
+        downscaling = 1
+
+        if(self._t_width is not None and self._t_height is not None):
+            downscaling /= min(self._t_height / img.shape[1], self._t_width / img.shape[2])
+
+        downscaling /= self._post_input_scale
+
+        img = self._preprocess_runner.run(None, {"INPUT": img})[0]
+
+        if(self._pad_to_stride > 1):
+            pts = self._pad_to_stride
+            new_w = ((img.shape[2] // pts) + (img.shape[2] % pts == 0)) * pts
+            new_h = ((img.shape[1] // pts) + (img.shape[1] % pts == 0)) * pts
+            img = np.pad(
+                img,
+                [(0, 0), (0, new_h - img.shape[1]), (0, new_w - img.shape[2]), (0, 0)],
+                mode="constant",
+                constant_values=0.0
+            )
+
+        return img, downscaling
+
+
+def _onnx_model_to_inference_session(onnx_model, **kwargs) -> ort.InferenceSession:
+    b = BytesIO()
+    onnx.save(onnx_model, b)
+    return ort.InferenceSession(b.getvalue(), **kwargs)
+
+
+def _reset_input_layer(
+    keras_model: tf.keras.Model,
+    new_shape: Optional[Tuple[Optional[int], Optional[int], Optional[int], int]] = None,
+):
+    """Returns a copy of `keras_model` with input shape reset to `new_shape`.
+
+    This method was modified from https://stackoverflow.com/a/58485055.
+
+    Args:
+        keras_model: `tf.keras.Model` to return a copy of (with input shape reset).
+        new_shape: Shape of the returned model's input layer.
+
+    Returns:
+        A copy of `keras_model` with input shape `new_shape`.
+    """
+
+    if new_shape is None:
+        new_shape = (None, None, None, keras_model.input_shape[-1])
+
+    model_config = keras_model.get_config()
+    model_config["layers"][0]["config"]["batch_input_shape"] = new_shape
+    new_model: tf.keras.Model = tf.keras.Model.from_config(
+        model_config, custom_objects={}
+    )  # Change custom objects if necessary
+
+    # Iterate over all the layers that we want to get weights from
+    weights = [layer.get_weights() for layer in keras_model.layers]
+    for layer, weight in zip(new_model.layers, weights):
+        if len(weight) > 0:
+            layer.set_weights(weight)
+
+    return new_model
+
+
+def _keras_to_onnx_model(keras_model) -> onnx.ModelProto:
+    input_signature = [
+        tf.TensorSpec(keras_model.input_shape, tf.float32, name="image")
+    ]
+    return tf2onnx.convert.from_keras(keras_model, input_signature)
+
+
+def _find_model_output(model: ort.InferenceSession, name: str, required: bool = True):
+    for i, out in enumerate(model.get_outputs()):
+        if(out.name == name):
+            return i
+
+    if(required):
+        raise RuntimeError(f"Unable to find required model output layer {name}.")
+    return None
+
+
+def _resolve_heads(outputs, heads):
+    return [
+        outputs[h_idx] if(h_idx is not None) else None
+        for h_idx in heads
+    ]
+
+"""
 def _extract_model_outputs(inf_layer: SleapInferenceLayer, images: tf.Tensor) -> Tuple[tf.Tensor, Optional[tf.Tensor]]:
     images = inf_layer.keras_model(images)
 
@@ -120,26 +287,95 @@ def _extract_model_outputs(inf_layer: SleapInferenceLayer, images: tf.Tensor) ->
             offset_map = images[inf_layer.offsets_ind]
 
     return (conf_map, offset_map)
+"""
+
+class BottomUpModelExtractor(SleapModelExtractor):
+    MODEL_CONFIGS = [
+        ("model", "heads", "multi_instance"),
+        ("model", "heads", "multi_class_bottomup")
+    ]
+
+    @classmethod
+    def can_build(cls, models: ConfigAndModels) -> bool:
+        return len(models) == 1 and any(_get_config_paths(models[0][0], cls.MODEL_CONFIGS))
+
+    def __init__(self, models: ConfigAndModels, **kwargs):
+        super().__init__(models)
+        self._config, self._model = models[0]
+        self._preprocessor = PreProcessingLayer(self._config, **kwargs)
+        self._model = _onnx_model_to_inference_session(_keras_to_onnx_model(_reset_input_layer(self._model)), **kwargs)
+        self._heads = [
+            _find_model_output(self._model, "MultiInstanceConfmapsHead"),
+            _find_model_output(self._model, "PartAffinityFieldsHead"),
+            _find_model_output(self._model, "OffsetRefinementHead", False)
+        ]
+
+    def extract(self, data: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
+        data, first_scale_val = self._preprocessor(data)
+        conf_map, __, offsets = _resolve_heads(
+            self._model.run(None, {self._model.get_inputs()[0].name: data}),
+            self._heads
+        )
+        cmap_dscale = data.shape[1] / conf_map.shape[1]
+
+        return (
+            _fix_conf_map(conf_map),
+            offsets,
+            first_scale_val * cmap_dscale
+        )
 
 
 class TopDownModelExtractor(SleapModelExtractor):
-    @classmethod
-    def supported_models(cls) -> Set[SleapPredictor]:
-        from sleap.nn.inference import TopDownPredictor, TopDownMultiClassPredictor
-        return {TopDownPredictor, TopDownMultiClassPredictor}
+    CENTROID_MODELS = [
+        ("model", "heads", "centroid"),
+    ]
+    CENTERED_INST_MODELS = [
+        ("model", "heads", "centered_instance"),
+        ("model", "heads", "multi_class_topdown")
+    ]
 
-    def __init__(self, model: SleapPredictor):
-        super().__init__(model)
-        self._predictor = model
+
+    @classmethod
+    def can_build(cls, config: ConfigAndModels) -> bool:
+        return (
+            len(config) == 2 and
+            any(c for cfg, mdl in config for c in _get_config_paths(cfg, cls.CENTROID_MODELS)) and
+            any(c for cfg, mdl in config for c in _get_config_paths(cfg, cls.CENTERED_INST_MODELS))
+        )
+
+    def __init__(self, models: ConfigAndModels, **kwargs):
+        super().__init__(models, **kwargs)
+        self._preprocessor = PreProcessingLayer(self._config, **kwargs)
+        for cfg, mdl in models:
+            if any(_get_config_paths(cfg, self.CENTROID_MODELS)):
+                self._centroid_model = _onnx_model_to_inference_session(
+                    _keras_to_onnx_model(_reset_input_layer(mdl)), **kwargs
+                )
+                self._centroid_cfg = cfg
+            if any(_get_config_paths(cfg, self.CENTERED_INST_MODELS)):
+                self._cent_inst_model = _onnx_model_to_inference_session(
+                    _keras_to_onnx_model(_reset_input_layer(mdl)), **kwargs
+                )
+                self._cent_inst_cfg = cfg
+
+
+        self._config, self._model = models[0]
+
+        self._model = _onnx_model_to_inference_session(_keras_to_onnx_model(_reset_input_layer(self._model)), **kwargs)
+        self._heads = [
+            _find_model_output(self._model, "MultiInstanceConfmapsHead"),
+            _find_model_output(self._model, "PartAffinityFieldsHead"),
+            _find_model_output(self._model, "OffsetRefinementHead", False)
+        ]
 
     @staticmethod
     def _merge_tiles(
-        result: Optional[tf.Tensor],
+        result: Optional[np.ndarray],
         batch_sz: int,
         tile_counts: tuple,
         orig_im_sz: tuple,
         d_scale: int,
-    ) -> Union[np.ndarray, tf.Tensor, None]:
+    ) -> Union[np.ndarray, np.ndarray, None]:
         if(result is None):
             return None
 
@@ -149,16 +385,16 @@ class TopDownModelExtractor(SleapModelExtractor):
 
         __, out_h, out_w, out_d = result.shape
 
-        result = tf.reshape(result, [batch_sz, tiles_high, tiles_wide, out_h, out_w, out_d])
-        result = tf.reshape(tf.transpose(result, [0, 1, 3, 2, 4, 5]), [batch_sz, tiles_high * out_h, tiles_wide * out_w, out_d])
+        result = np.reshape(result, [batch_sz, tiles_high, tiles_wide, out_h, out_w, out_d])
+        result = np.reshape(np.transpose(result, [0, 1, 3, 2, 4, 5]), [batch_sz, tiles_high * out_h, tiles_wide * out_w, out_d])
         result = result[:, :ceil(og_h / d_scale), :ceil(og_w / d_scale)]
 
         return result
 
     @classmethod
-    def _interpolate_crop(cls, x: tf.Tensor, y: tf.Tensor, crops: tf.Tensor) -> tf.Tensor:
-        x = tf.reshape(x % 1, [-1, 1, 1, 1])
-        y = tf.reshape(y % 1, [-1, 1, 1, 1])
+    def _interpolate_crop(cls, x: np.ndarray, y: np.ndarray, crops: np.ndarray) -> np.ndarray:
+        x = np.reshape(x % 1, [-1, 1, 1, 1])
+        y = np.reshape(y % 1, [-1, 1, 1, 1])
 
         return (
             x * y * crops[:, :-1, :-1]
@@ -167,7 +403,7 @@ class TopDownModelExtractor(SleapModelExtractor):
             + (1 - x) * (1 - y) * crops[:, 1:, 1:]
         )
 
-    def extract(self, data: Union[Dict, np.ndarray]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
+    def extract(self, data: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
         import tensorflow as tf
 
         inf_layer = self._predictor.inference_model.instance_peaks
@@ -236,29 +472,36 @@ class TopDownModelExtractor(SleapModelExtractor):
 
 
 class SingleInstanceModelExtractor(SleapModelExtractor):
+    MODEL_CONFIGS = [
+        ("model", "heads", "single_instance"),
+    ]
+
     @classmethod
-    def supported_models(cls) -> Set[SleapPredictor]:
-        from sleap.nn.inference import SingleInstancePredictor
-        return {SingleInstancePredictor}
+    def can_build(cls, models: ConfigAndModels) -> bool:
+        return len(models) == 1 and any(_get_config_paths(models[0][0], cls.MODEL_CONFIGS))
 
-    def __init__(self, model: SleapPredictor):
-        super().__init__(model)
-        self._predictor = model
+    def __init__(self, models: ConfigAndModels, **kwargs):
+        super().__init__(models)
+        self._config, self._model = models[0]
+        self._preprocessor = PreProcessingLayer(self._config, **kwargs)
+        self._model = _onnx_model_to_inference_session(_keras_to_onnx_model(_reset_input_layer(self._model)), **kwargs)
+        self._heads = [
+            _find_model_output(self._model, "SingleInstanceConfmapsHead"),
+            _find_model_output(self._model, "OffsetRefinementHead", False)
+        ]
 
-    def extract(self, data: Union[Dict, np.ndarray]) -> Tuple[tf.Tensor, Optional[tf.Tensor], float]:
-        inf_layer = self._predictor.inference_model.single_instance_layer
-
-        imgs = data["image"] if(isinstance(data, dict)) else data
-        conf_map, offset_map = _extract_model_outputs(inf_layer, inf_layer.preprocess(imgs))
-
-        first_scale_val = float(tf.reshape(data["scale"], -1)[0])
-        if (not tf.experimental.numpy.allclose(data["scale"], first_scale_val)):
-            raise ValueError("Scaling is not consistent!")
+    def extract(self, data: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
+        data, first_scale_val = self._preprocessor(data)
+        conf_map, offsets = _resolve_heads(
+            self._model.run(None, {self._model.get_inputs()[0].name: data}),
+            self._heads
+        )
+        cmap_dscale = data.shape[1] / conf_map.shape[1]
 
         return (
             _fix_conf_map(conf_map),
-            offset_map,
-            (1 / first_scale_val) * (1 / inf_layer.input_scale) * inf_layer.output_stride
+            offsets,
+            first_scale_val * cmap_dscale
         )
 
 
