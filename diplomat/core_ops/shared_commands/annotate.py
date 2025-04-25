@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Tuple
 
 from diplomat.utils.cli_tools import extra_cli_args
-from diplomat.frontends.sleap.visual_settings import FULL_VISUAL_SETTINGS
+from diplomat.core_ops.shared_commands.visual_settings import FULL_VISUAL_SETTINGS
 import diplomat.processing.type_casters as tc
 from diplomat.utils.track_formats import load_diplomat_table, to_diplomat_pose
 from diplomat.utils.video_io import ContextVideoWriter, ContextVideoCapture

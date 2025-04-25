@@ -4,6 +4,7 @@ from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
 
 import onnx
 import tf2onnx
+from numpy.lib.stride_tricks import sliding_window_view
 from typing_extensions import TypedDict
 import numpy as np
 
@@ -455,6 +456,8 @@ class TopDownModelExtractor(SleapModelExtractor):
             lookup_coords
         ], axis=-1)
 
+        np.scatter
+
         img_buffer = tf.tensor_scatter_nd_update(
             img_buffer,
             index_vectors,
@@ -508,29 +511,22 @@ class SingleInstanceModelExtractor(SleapModelExtractor):
 EXTRACTORS = [BottomUpModelExtractor, SingleInstanceModelExtractor, TopDownModelExtractor]
 
 
-def _convolve_2d(img: tf.Tensor, kernel: tf.Tensor):
+def _convolve_2d(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     """
-    Fast-ish manual 2D convolution written using tensorflow's extract_patches, because tf's convolution function gives
-    errors when attempting to use directly.
+    Fast-ish manual 2D convolution written using numpy's sliding windows implementation.
     """
-    orig_img_shape = tuple(img.shape)
-    img = tf.reshape(tf.transpose(img, perm=[0, 3, 1, 2]), [-1, orig_img_shape[1], orig_img_shape[2]])
-
-    conv_view = tf.image.extract_patches(
-        tf.expand_dims(img, -1),
-        sizes=[1, kernel.shape[0], kernel.shape[1], 1],
-        strides=[1, 1, 1, 1],
-        rates=[1, 1, 1, 1],
-        padding="SAME"
+    pad_h = kernel.shape[1] - 1
+    pad_w = kernel.shape[2] - 1
+    img = np.pad(
+        img,
+        [(0, 0), (pad_h // 2, pad_h - pad_h // 2), (pad_w // 2, pad_w - pad_w // 2), (0, 0)]
     )
-
-    return tf.transpose(
-        tf.reshape(tf.reduce_sum(
-            tf.expand_dims(conv_view, -1) * tf.reshape(kernel, [-1, kernel.shape[-1]]),
-            -2
-        ), [-1, orig_img_shape[3], orig_img_shape[1], orig_img_shape[2], kernel.shape[-1]]),
-        perm=[0, 2, 3, 1, 4]
+    conv_view = sliding_window_view(
+        img,
+        [kernel.shape[0], kernel.shape[1]],
+        [1, 2]
     )
+    return np.einsum("...ij,...ijk->...k", conv_view, kernel)
 
 
 def _create_integral_offsets(probs: tf.Tensor, stride: float, kernel_size: int) -> tf.Tensor:
@@ -544,64 +540,57 @@ def _create_integral_offsets(probs: tf.Tensor, stride: float, kernel_size: int) 
         kernel_size += 1
 
     # Construct kernels for computing centers of mass computed around a point...
-    y_kernel = tf.reshape(
-        tf.repeat((tf.range(kernel_size, dtype=probs.dtype) - (kernel_size // 2)) * stride, kernel_size),
+    y_kernel = np.reshape(
+        np.repeat((np.arange(kernel_size, dtype=probs.dtype) - (kernel_size // 2)) * stride, kernel_size),
         (kernel_size, kernel_size)
     )
-    x_kernel = tf.transpose(y_kernel)
+    x_kernel = np.transpose(y_kernel)
     # Simple summation kernel, adds all values in an area...
-    ones_kernel = tf.ones((kernel_size, kernel_size), dtype=probs.dtype)
-
-    filters = tf.stack([x_kernel, y_kernel, ones_kernel], axis=-1)
+    ones_kernel = np.ones((kernel_size, kernel_size), dtype=probs.dtype)
+    filters = np.stack([x_kernel, y_kernel, ones_kernel], axis=-1)
 
     results = _convolve_2d(probs, filters)
 
-    return tf.math.divide_no_nan(results[:, :, :, :, :2], results[:, :, :, :, 2:])
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.nan_to_num(results[:, :, :, :, :2] / results[:, :, :, :, 2:])
 
 
 class PredictorExtractor:
-    def __init__(self, predictor: SleapPredictor, refinement_kernel_size: int):
+    def __init__(
+        self,
+        configs: ConfigAndModels,
+        refinement_kernel_size: int,
+        **kwargs
+    ):
         super().__init__()
-        self._predictor = predictor
+        self._configs = configs
         self._refinement_kernel_size = refinement_kernel_size
 
         for model_extractor in EXTRACTORS:
-            if(type(predictor) in model_extractor.supported_models()):
-                self._model_extractor = model_extractor(self._predictor)
+            if(model_extractor.can_build(configs)):
+                self._model_extractor = model_extractor(self._configs, **kwargs)
                 break
         else:
-            raise NotImplementedError(f"The provided predictor, '{type(predictor).__name__}', is not supported yet!")
+            raise NotImplementedError(f"Could not find model handler for provided model type.")
 
     def get_metadata(self) -> SleapMetadata:
         return self._model_extractor.get_metadata()
 
-    def extract(self, data: Union[Provider, SleapVideo]) -> Iterator[TrackingData]:
-        from sleap import Video as SleapVideo
-        if(isinstance(data, SleapVideo)):
-            data = SleapVideoReader(data)
+    def extract(self, frames: np.ndarray) -> TrackingData:
+        probs, offsets, downscale = self._model_extractor.extract(frames)
 
-        pred = self._predictor
+        if(offsets is None and self._refinement_kernel_size > 0):
+            offsets = _create_integral_offsets(probs, downscale, self._refinement_kernel_size)
 
-        pred.make_pipeline(data)
-        if(pred.inference_model is None):
-            pred._initialize_inference_model()
+        # Trim the resulting outputs so the match expected area for poses from the original video.
+        h, w = frames.shape[1:3]
+        trim_h, trim_w = int(np.ceil(h / downscale)), int(np.ceil(w / downscale))
+        probs = probs[:, :trim_h, :trim_w]
+        offsets = offsets[:, :trim_h, :trim_w]
 
-        for ex in pred.pipeline.make_dataset():
-            probs, offsets, downscale = self._model_extractor.extract(ex)
-
-            if(offsets is None and self._refinement_kernel_size > 0):
-                offsets = _create_integral_offsets(probs, downscale, self._refinement_kernel_size)
-
-            # Trim the resulting outputs so the match expected area for poses from the original video.
-            h, w = data.video.shape[1:3]
-            trim_h, trim_w = int(np.ceil(h / downscale)), int(np.ceil(w / downscale))
-            probs = probs[:, :trim_h, :trim_w]
-
-            offsets = offsets[:, :trim_h, :trim_w]
-
-            yield TrackingData(
-                probs.cpu().numpy(),
-                None if(offsets is None) else offsets.cpu().numpy(),
-                downscale
-            )
+        return TrackingData(
+            probs,
+            None if(offsets is None) else offsets,
+            downscale
+        )
 

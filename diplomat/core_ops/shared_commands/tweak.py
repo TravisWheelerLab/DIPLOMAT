@@ -1,5 +1,5 @@
 import cv2
-from diplomat.frontends.sleap.visual_settings import VISUAL_SETTINGS
+from diplomat.core_ops.shared_commands.visual_settings import VISUAL_SETTINGS
 from diplomat.processing import Config, Pose
 from diplomat.utils.cli_tools import extra_cli_args
 from diplomat.utils.tweak_ui import TweakUI
