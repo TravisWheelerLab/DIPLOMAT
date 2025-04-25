@@ -134,7 +134,7 @@ def _load_config_and_model(path, include_model = True):
             return _load_configs_from_zip(z, include_model)
 
     if(path.is_dir()):
-        path = path / "training_config.py"
+        path = path / "training_config.json"
     path = path.resolve()
 
     with path.open("rb") as f:

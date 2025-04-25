@@ -4,6 +4,7 @@ from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
 
 import onnx
 import tf2onnx
+from numpy.array_api import nonzero
 from numpy.lib.stride_tricks import sliding_window_view
 from typing_extensions import TypedDict
 import numpy as np
@@ -352,22 +353,22 @@ class TopDownModelExtractor(SleapModelExtractor):
                 self._centroid_model = _onnx_model_to_inference_session(
                     _keras_to_onnx_model(_reset_input_layer(mdl)), **kwargs
                 )
+                self._centroid_pre = PreProcessingLayer(cfg, **kwargs)
                 self._centroid_cfg = cfg
+                self._centroid_heads = [
+                    _find_model_output(self._centroid_model, "CentroidConfmapsHead"),
+                    _find_model_output(self._centroid_model, "OffsetRefinementHead")
+                ]
             if any(_get_config_paths(cfg, self.CENTERED_INST_MODELS)):
                 self._cent_inst_model = _onnx_model_to_inference_session(
                     _keras_to_onnx_model(_reset_input_layer(mdl)), **kwargs
                 )
+                self._cent_inst_pre = PreProcessingLayer(cfg, **kwargs)
                 self._cent_inst_cfg = cfg
-
-
-        self._config, self._model = models[0]
-
-        self._model = _onnx_model_to_inference_session(_keras_to_onnx_model(_reset_input_layer(self._model)), **kwargs)
-        self._heads = [
-            _find_model_output(self._model, "MultiInstanceConfmapsHead"),
-            _find_model_output(self._model, "PartAffinityFieldsHead"),
-            _find_model_output(self._model, "OffsetRefinementHead", False)
-        ]
+                self._cent_inst_heads = [
+                    _find_model_output(self._centroid_model, "CenteredInstanceConfmapsHead"),
+                    _find_model_output(self._centroid_model, "OffsetRefinementHead")
+                ]
 
     @staticmethod
     def _merge_tiles(
@@ -515,11 +516,11 @@ def _convolve_2d(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     """
     Fast-ish manual 2D convolution written using numpy's sliding windows implementation.
     """
-    pad_h = kernel.shape[1] - 1
-    pad_w = kernel.shape[2] - 1
+    pad_h = kernel.shape[0] - 1
+    pad_w = kernel.shape[1] - 1
     img = np.pad(
         img,
-        [(0, 0), (pad_h // 2, pad_h - pad_h // 2), (pad_w // 2, pad_w - pad_w // 2), (0, 0)]
+        ((0, 0), (pad_h // 2, pad_h - pad_h // 2), (pad_w // 2, pad_w - pad_w // 2), (0, 0))
     )
     conv_view = sliding_window_view(
         img,
@@ -529,7 +530,89 @@ def _convolve_2d(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     return np.einsum("...ij,...ijk->...k", conv_view, kernel)
 
 
-def _create_integral_offsets(probs: tf.Tensor, stride: float, kernel_size: int) -> tf.Tensor:
+def _local_peak_estimation(
+    img: np.ndarray,
+    offsets: Optional[np.ndarray],
+    stride: float,
+    local_search_area: int,
+    threshold: float,
+    integral_refinement: int = 0
+):
+    pad = local_search_area - 1
+    h_pad = pad // 2
+    img = np.pad(
+        img,
+        ((0, 0), (h_pad, pad - h_pad), (h_pad, pad - h_pad), (0, 0))
+    )
+    conv_view = sliding_window_view(
+        img,
+        (local_search_area, local_search_area),
+        (1, 2)
+    )
+    peaks = (img >= np.max(conv_view, axis=(-2, -1), keepdims=False)) & (img > threshold)
+    rb, rx, ry, rp = np.nonzero(peaks)
+
+    if (offsets is not None):
+        offsets_per_crop = offsets[rb, rx, ry, rp]
+    elif(integral_refinement > 1):
+        if(integral_refinement % 2 == 0):
+            integral_refinement += 1
+        kernel = _get_integral_offset_kernels(integral_refinement, stride, img.dtype)
+        neighborhoods = _extract_crops(img, [rb, rx, ry, rp], integral_refinement)
+        offsets_per_crop = np.sum(np.expand_dims(neighborhoods, -1) * kernel, axis=[-3, -2])
+    else:
+        offsets_per_crop = np.zeros((len(rx), 2), dtype=np.float32)
+
+    true_x = (rx + 0.5) * stride + offsets_per_crop[:, 0]
+    true_y = (ry + 0.5) * stride + offsets_per_crop[:, 1]
+
+    return (rb, true_y, true_x, rp)
+
+
+def _extract_crops(img: np.ndarray, crop_centers: np.ndarray, crop_size: int):
+    batch, y, x, part = crop_centers
+    y = np.clip(y, 0, img.shape[1])
+    x = np.clip(x, 0, img.shape[2])
+    crop_start_x = np.floor(x - crop_size / 2).astype(int)
+    crop_end_x = crop_start_x + crop_size
+    crop_start_y = np.floor(y - crop_size / 2).astype(int)
+    crop_end_y = crop_start_y + crop_size
+
+    pad_x = (-min(0, np.min(crop_start_x)), max(img.shape[2], np.max(crop_end_x)) - img.shape[2])
+    pad_y = (-min(0, np.min(crop_start_y)), max(img.shape[1], np.max(crop_end_y)) - img.shape[1])
+    print(crop_start_x, crop_start_y, pad_x, pad_y)
+
+    if(any(v != 0 for pad in [pad_x, pad_y] for v in pad)):
+        img = np.pad(img, ((0, 0), pad_y, pad_x, (0, 0)))
+
+    crop_shift_x = np.reshape(crop_start_x + pad_x[0], (-1, 1, 1))
+    crop_shift_y = np.reshape(crop_start_y + pad_y[0], (-1, 1, 1))
+    gy, gx = np.ogrid[0:crop_size, 0:crop_size]
+
+    # Indexing magic...
+    crops = img[
+        np.reshape(batch, (-1, 1, 1)),
+        crop_shift_y + gy,
+        crop_shift_x + gx,
+        np.reshape(part, (-1, 1, 1))
+    ]
+    return crops
+
+
+def _resolve_crop_boxes(img: np.ndarray, centers: np.ndarray, sizes: np.ndarray):
+    return img
+
+
+def _get_integral_offset_kernels(kernel_size: int, stride: float, dtype: np.dtype = np.float32):
+    # Construct kernels for computing centers of mass computed around a point...
+    kernel_half = (kernel_size - 1) // 2
+    y_kernel, x_kernel = [v * stride for v in np.mgrid[-kernel_half:kernel_half, -kernel_half:kernel_half]]
+    # Simple summation kernel, adds all values in an area...
+    ones_kernel = np.ones((kernel_size, kernel_size), dtype=dtype)
+    return np.stack([x_kernel, y_kernel, ones_kernel], axis=-1).astype(dtype)
+
+
+def _create_integral_offsets(probs: np.ndarray, stride: float, kernel_size: int) -> np.ndarray:
     """
     Compute estimated offsets for parts based on confidence values in source map. Does this via a
     center-of-mass style calculation locally for each pixel.
@@ -540,15 +623,7 @@ def _create_integral_offsets(probs: tf.Tensor, stride: float, kernel_size: int) 
         kernel_size += 1
 
     # Construct kernels for computing centers of mass computed around a point...
-    y_kernel = np.reshape(
-        np.repeat((np.arange(kernel_size, dtype=probs.dtype) - (kernel_size // 2)) * stride, kernel_size),
-        (kernel_size, kernel_size)
-    )
-    x_kernel = np.transpose(y_kernel)
-    # Simple summation kernel, adds all values in an area...
-    ones_kernel = np.ones((kernel_size, kernel_size), dtype=probs.dtype)
-    filters = np.stack([x_kernel, y_kernel, ones_kernel], axis=-1)
-
+    filters = _get_integral_offset_kernels(kernel_size, stride, probs.dtype)
     results = _convolve_2d(probs, filters)
 
     with np.errstate(divide='ignore', invalid='ignore'):
