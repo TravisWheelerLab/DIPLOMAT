@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
 from io import BytesIO
-from typing import Optional, Dict, Union, Iterator, Set, Type, List, Tuple
+from typing import Optional, Union, List, Tuple
 
 import onnx
 import tf2onnx
-from numpy.array_api import nonzero
 from numpy.lib.stride_tricks import sliding_window_view
 from typing_extensions import TypedDict
 import numpy as np
@@ -205,7 +204,7 @@ class PreProcessingLayer:
             new_h = ((img.shape[1] // pts) + (img.shape[1] % pts == 0)) * pts
             img = np.pad(
                 img,
-                [(0, 0), (0, new_h - img.shape[1]), (0, new_w - img.shape[2]), (0, 0)],
+                ((0, 0), (0, new_h - img.shape[1]), (0, new_w - img.shape[2]), (0, 0)),
                 mode="constant",
                 constant_values=0.0
             )
@@ -276,21 +275,6 @@ def _resolve_heads(outputs, heads):
         for h_idx in heads
     ]
 
-"""
-def _extract_model_outputs(inf_layer: SleapInferenceLayer, images: tf.Tensor) -> Tuple[tf.Tensor, Optional[tf.Tensor]]:
-    images = inf_layer.keras_model(images)
-
-    conf_map = images
-    offset_map = None
-
-    if(isinstance(images, list)):
-        conf_map = images[inf_layer.confmaps_ind]
-        if(inf_layer.offsets_ind is not None):
-            offset_map = images[inf_layer.offsets_ind]
-
-    return (conf_map, offset_map)
-"""
-
 class BottomUpModelExtractor(SleapModelExtractor):
     MODEL_CONFIGS = [
         ("model", "heads", "multi_instance"),
@@ -347,7 +331,6 @@ class TopDownModelExtractor(SleapModelExtractor):
 
     def __init__(self, models: ConfigAndModels, **kwargs):
         super().__init__(models, **kwargs)
-        self._preprocessor = PreProcessingLayer(self._config, **kwargs)
         for cfg, mdl in models:
             if any(_get_config_paths(cfg, self.CENTROID_MODELS)):
                 self._centroid_model = _onnx_model_to_inference_session(
@@ -357,17 +340,19 @@ class TopDownModelExtractor(SleapModelExtractor):
                 self._centroid_cfg = cfg
                 self._centroid_heads = [
                     _find_model_output(self._centroid_model, "CentroidConfmapsHead"),
-                    _find_model_output(self._centroid_model, "OffsetRefinementHead")
+                    _find_model_output(self._centroid_model, "OffsetRefinementHead", False)
                 ]
             if any(_get_config_paths(cfg, self.CENTERED_INST_MODELS)):
+                self._crop_size = _dict_get_path(cfg, ("data", "instance_cropping", "crop_size"))
+                if(self._crop_size is None):
+                    raise ValueError("Provided top-down model doesn't have crop size!")
                 self._cent_inst_model = _onnx_model_to_inference_session(
                     _keras_to_onnx_model(_reset_input_layer(mdl)), **kwargs
                 )
                 self._cent_inst_pre = PreProcessingLayer(cfg, **kwargs)
                 self._cent_inst_cfg = cfg
                 self._cent_inst_heads = [
-                    _find_model_output(self._centroid_model, "CenteredInstanceConfmapsHead"),
-                    _find_model_output(self._centroid_model, "OffsetRefinementHead")
+                    _find_model_output(self._centroid_model, "CenteredInstanceConfmapsHead")
                 ]
 
     @staticmethod
@@ -393,85 +378,40 @@ class TopDownModelExtractor(SleapModelExtractor):
 
         return result
 
-    @classmethod
-    def _interpolate_crop(cls, x: np.ndarray, y: np.ndarray, crops: np.ndarray) -> np.ndarray:
-        x = np.reshape(x % 1, [-1, 1, 1, 1])
-        y = np.reshape(y % 1, [-1, 1, 1, 1])
-
-        return (
-            x * y * crops[:, :-1, :-1]
-            + (1 - x) * y * crops[:, :-1, 1:]
-            + x * (1 - y) * crops[:, 1:, :-1]
-            + (1 - x) * (1 - y) * crops[:, 1:, 1:]
+    def extract(self, orig_img: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
+        # Run the centroid model to find individuals...
+        centroid_img, centroid_dscale = self._centroid_pre(orig_img)
+        confs, offsets = _resolve_heads(
+            self._centroid_model.run(None, {self._centroid_model.get_inputs()[0].name: centroid_img}),
+            self._centroid_heads
         )
+        centroid_dscale *= centroid_img.shape[1] / confs.shape[1]
+        crop_centers = _local_peak_estimation(confs, offsets, centroid_dscale, local_search_area=5, threshold=0.1, integral_refinement=5)
 
-    def extract(self, data: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
-        import tensorflow as tf
+        crops = _extract_crops(orig_img, crop_centers, self._crop_size)
+        crops, inst_dscale = self._cent_inst_pre(crops)
+        crops_conf = _resolve_heads(
+            self._cent_inst_model.run(None, {self._cent_inst_model.get_inputs()[0].name: crops_conf}),
+            self._cent_inst_heads
+        )[0]
+        inst_dscale *= crops.shape[1] / crops_conf.shape[1]
 
-        inf_layer = self._predictor.inference_model.instance_peaks
-
-        imgs = data["image"] if(isinstance(data, dict)) else data
-
-        # Compute centroid confidence map...
-        centroid_model = self._predictor.inference_model.centroid_crop
-        centroid_model.return_crops = True
-        centroid_results = centroid_model.call(imgs)
-
-        first_scale_val = float(tf.reshape(data["scale"], -1)[0])
-        if(not tf.experimental.numpy.allclose(data["scale"], first_scale_val)):
-            raise ValueError("Scaling is not consistent!")
-
-        crops, crop_offsets = centroid_results["crops"], centroid_results["crop_offsets"]
-
-        batch_indexes = crops.value_rowids()
-        batch_size = crops.nrows()
-
-        crops = crops.merge_dims(0, 1)
-        crop_offsets = crop_offsets.merge_dims(0, 1)
-
-        crops = inf_layer.preprocess(crops)
-        sub_conf_maps, __ = _extract_model_outputs(inf_layer, crops)
-
-        model_downscaling = (1 / inf_layer.input_scale) * inf_layer.output_stride
-
-        conf_h = int(np.ceil(imgs.shape[1] / model_downscaling) + 1)
-        conf_w = int(np.ceil(imgs.shape[2] / model_downscaling) + 1)
-        img_buffer = tf.zeros([batch_size, conf_h, conf_w, sub_conf_maps.shape[-1]], dtype=tf.float32)
+        conf_h = int(np.ceil(orig_img.shape[1] / inst_dscale) + 1)
+        conf_w = int(np.ceil(orig_img.shape[2] / inst_dscale) + 1)
 
         if(len(crops) == 0):
-            return (img_buffer, None,  (1 / first_scale_val) * model_downscaling)
-
-        sub_conf_maps = tf.pad(sub_conf_maps, tf.constant([[0, 0], [1, 1], [1, 1], [0, 0]]))
-        crop_coords = tf.stack([
-            tf.repeat(tf.range(sub_conf_maps.shape[1] - 1), sub_conf_maps.shape[2] - 1),
-            tf.tile(tf.range(sub_conf_maps.shape[2] - 1), [sub_conf_maps.shape[1] - 1])
-        ], axis=-1)
-
-        crop_offsets = crop_offsets / model_downscaling
-        lookup_coords = (
-            tf.expand_dims(tf.cast(crop_offsets[..., ::-1], dtype=tf.int32), 1) + crop_coords
-        )
-
-        index_vectors = tf.concat([
-            tf.broadcast_to(tf.reshape(batch_indexes, [-1, 1, 1]), [*lookup_coords.shape[:-1], 1]),
-            lookup_coords
-        ], axis=-1)
-
-        np.scatter
-
-        img_buffer = tf.tensor_scatter_nd_update(
-            img_buffer,
-            index_vectors,
-            tf.reshape(
-                self._interpolate_crop(crop_offsets[..., 0], crop_offsets[..., 1], sub_conf_maps),
-                [sub_conf_maps.shape[0], -1, sub_conf_maps.shape[-1]]
+            img = np.zeros((orig_img.shape[0], conf_h, conf_w, orig_img.shape[-1]), dtype=np.float32)
+        else:
+            img = _restore_crops(
+                (orig_img.shape[0], conf_h, conf_w, orig_img.shape[-1]),
+                (crop_centers[0], crop_centers[1] / inst_dscale, crop_centers[2] / inst_dscale, crop_centers[3]),
+                crops_conf
             )
-        )
 
         return (
-            img_buffer,
+            img,
             None,
-            (1 / first_scale_val) * model_downscaling
+            inst_dscale
         )
 
 
@@ -549,7 +489,10 @@ def _local_peak_estimation(
         (local_search_area, local_search_area),
         (1, 2)
     )
-    peaks = (img >= np.max(conv_view, axis=(-2, -1), keepdims=False)) & (img > threshold)
+    center_idx = (local_search_area * local_search_area - 1) // 2
+    conv_view = conv_view.reshape(conv_view.shape[:-2] + (local_search_area * local_search_area,))
+
+    peaks = (center_idx != np.argmax(conv_view, axis=-1, keepdims=False)) & (img > threshold)
     rb, rx, ry, rp = np.nonzero(peaks)
 
     if (offsets is not None):
@@ -569,7 +512,49 @@ def _local_peak_estimation(
     return (rb, true_y, true_x, rp)
 
 
-def _extract_crops(img: np.ndarray, crop_centers: np.ndarray, crop_size: int):
+def _interpolate_crop(x: np.ndarray, y: np.ndarray, crops: np.ndarray) -> np.ndarray:
+    crops = np.pad(crops, ((0, 0), (1, 1), (1, 1)))
+    x = np.reshape(x % 1, [-1, 1, 1])
+    y = np.reshape(y % 1, [-1, 1, 1])
+
+    return (
+        x * y * crops[:, 1:, 1:]
+        + (1 - x) * y * crops[:, 1:, :-1]
+        + x * (1 - y) * crops[:, :-1, 1:]
+        + (1 - x) * (1 - y) * crops[:, :-1, :-1]
+    )
+
+
+def _restore_crops(img_shape: tuple, crop_centers: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray], crops: np.ndarray):
+    batch, y, x, part = crop_centers
+    crop_h, crop_w = crops.shape[-2:]
+    y = np.clip(y, 0, img_shape[1])
+    x = np.clip(x, 0, img_shape[2])
+    crop_start_x = np.floor().astype(int)
+    crop_end_x = crop_start_x + crop_w
+    crop_start_y = np.floor(y - crop_h / 2).astype(int)
+    crop_end_y = crop_start_y + crop_h
+
+    pad_x = (-min(0, np.min(crop_start_x)), max(img_shape[2], np.max(crop_end_x)) - img_shape[2])
+    pad_y = (-min(0, np.min(crop_start_y)), max(img_shape[1], np.max(crop_end_y)) - img_shape[1])
+
+    img = np.zeros((img_shape[0], img_shape[1] + sum(pad_y), img_shape[2] + sum(pad_x), img_shape[3]), dtype=np.float32)
+
+    crop_shift_x = np.reshape(crop_start_x + pad_x[0], (-1, 1, 1))
+    crop_shift_y = np.reshape(crop_start_y + pad_y[0], (-1, 1, 1))
+    gy, gx = np.ogrid[0:crop_h, 0:crop_w]
+
+    img[
+        np.reshape(batch, (-1, 1, 1)),
+        crop_shift_y + gy,
+        crop_shift_x + gx,
+        np.reshape(part, (-1, 1, 1))
+    ] = _interpolate_crop(x - crop_w / 2, y - crop_h / 2, crops)
+
+    return img[:, pad_y[0]:img.shape[1] - pad_y[1], pad_x[0]:img.shape[2] - pad_x[1], :]
+
+
+def _extract_crops(img: np.ndarray, crop_centers: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray], crop_size: int):
     batch, y, x, part = crop_centers
     y = np.clip(y, 0, img.shape[1])
     x = np.clip(x, 0, img.shape[2])
@@ -580,7 +565,6 @@ def _extract_crops(img: np.ndarray, crop_centers: np.ndarray, crop_size: int):
 
     pad_x = (-min(0, np.min(crop_start_x)), max(img.shape[2], np.max(crop_end_x)) - img.shape[2])
     pad_y = (-min(0, np.min(crop_start_y)), max(img.shape[1], np.max(crop_end_y)) - img.shape[1])
-    print(crop_start_x, crop_start_y, pad_x, pad_y)
 
     if(any(v != 0 for pad in [pad_x, pad_y] for v in pad)):
         img = np.pad(img, ((0, 0), pad_y, pad_x, (0, 0)))

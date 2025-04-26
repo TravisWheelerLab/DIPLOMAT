@@ -10,7 +10,7 @@ def _verify_sleap_like(
     try:
         # Config for sleap is always a sleap model, so try to load it...
         config = _paths_to_str(config)
-        _load_configs(config, include_models=False)
-        return True
+        cfgs = _load_configs(config, include_models=False)
+        return len(cfgs) >= 1
     except (IOError, ValueError):
         return False
