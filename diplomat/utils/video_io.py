@@ -1,13 +1,13 @@
 import functools
 import cv2
-from typing import TypeVar, Type
+from typing import TypeVar, Type, ContextManager
 
 
 T = TypeVar("T")
 
 
 @functools.lru_cache(None)
-def _create_cv2_manager(clazz: Type[T]) -> Type[T]:
+def _create_cv2_manager(clazz: Type[T]) -> Type[ContextManager[T]]:
     """
     Create a context manager for a CV2 io writing class. Requires the class implements release for closing a
     file resource.

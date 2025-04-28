@@ -69,7 +69,7 @@ def _get_video_metadata(
     skeleton: List[Tuple[int, int]] = None,
     crop_loc: Optional[Tuple[int, int]] = None,
     frame_store_header: Optional[DLFSHeader] = None
-) -> Config:
+) -> Tuple[Config, int]:
     if(skeleton is None):
         skeleton = []
 
@@ -102,7 +102,7 @@ def _get_video_metadata(
         "line_thickness": visual_settings.get("line_thickness", 1),
         "skeleton": skeleton,
         "frontend": frontend
-    })
+    }), frame_count
 
 
 class Timer:

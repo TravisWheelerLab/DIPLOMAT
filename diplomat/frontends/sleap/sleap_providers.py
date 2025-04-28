@@ -24,6 +24,9 @@ import onnxruntime as ort
 class SleapMetadata(TypedDict):
     bp_names: List[str]
     skeleton: Optional[List[Tuple[str, str]]]
+    input_scaling: float
+    sigma: float
+    batch_size: int
 
 
 ConfigAndModels = List[Tuple[dict, tf.Module]]
@@ -69,12 +72,30 @@ def sleap_metadata_from_config(configs: ConfigAndModels) -> SleapMetadata:
             )
             break
 
+    batch_size = 4
+
+    for cfg, mdl in configs:
+        input_scaling = _dict_get_path(cfg, ("data", "preprocessing", "input_scaling"), 1.0)
+        for sigma_model_type in ["multi_instance", "multi_class_bottomup", "single_instance", "centered_instance", "multi_class_topdown"]:
+            sigma = _dict_get_path(cfg, ("model", "heads", sigma_model_type, "sigma"), None)
+            if(sigma is not None):
+                batch_size = int(_dict_get_path(cfg, ("optimization", "batch_size"), 4))
+                break
+        if(sigma is not None):
+            break
+    else:
+        raise ValueError("Unable to find needed model info!")
+
     if parts is None or edge_list is None:
         raise ValueError("Unable to find a list of parts in the config files passed!")
 
     return SleapMetadata(
         bp_names=parts,
-        skeleton=edge_list
+        skeleton=edge_list,
+        input_scaling=input_scaling,
+        sigma=sigma,
+        batch_size=batch_size,
+
     )
 
 
@@ -391,7 +412,7 @@ class TopDownModelExtractor(SleapModelExtractor):
         crops = _extract_crops(orig_img, crop_centers, self._crop_size)
         crops, inst_dscale = self._cent_inst_pre(crops)
         crops_conf = _resolve_heads(
-            self._cent_inst_model.run(None, {self._cent_inst_model.get_inputs()[0].name: crops_conf}),
+            self._cent_inst_model.run(None, {self._cent_inst_model.get_inputs()[0].name: crops}),
             self._cent_inst_heads
         )[0]
         inst_dscale *= crops.shape[1] / crops_conf.shape[1]

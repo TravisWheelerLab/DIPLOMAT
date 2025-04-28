@@ -21,8 +21,8 @@ from diplomat.processing.type_casters import (
 )
 from diplomat.predictor_ops import _get_predictor_settings
 from diplomat.utils.pretty_printer import printer as print
-from diplomat.utils.cli_tools import func_to_command, allow_arbitrary_flags, Flag, positional_argument_count, CLIError, \
-    extra_cli_args
+from diplomat.utils.cli_tools import (func_to_command, allow_arbitrary_flags, Flag, positional_argument_count, CLIError,
+    extra_cli_args)
 from argparse import ArgumentParser
 import typing
 from types import ModuleType
@@ -218,6 +218,7 @@ def track_with(
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
+    batch_size: Optional[int] = None,
     predictor: Optional[str] = None,
     predictor_settings: Optional[Dict[str, Any]] = None,
     help_extra: Flag = False,
@@ -230,7 +231,8 @@ def track_with(
     :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
     :param videos: A single path or list of paths to video files to run analysis on.
     :param frame_stores: A single path or list of paths to frame store files to run analysis on.
-    :param num_outputs: An integer, the number of bodies to track in the video. Defaults to 1.
+    :param num_outputs: An integer, the number of bodies to track in the video. If not set the frontend will try to pull it from the project configuration.
+    :param batch_size: An integer, the number of frame to process at a single time. If not set the frontend will try to pull it from the project configuration.
     :param predictor: An optional string, specifying the predictor plugin to make predictions with. You can get a list of all available predictors
                       and descriptions using the "diplomat predictors list" command or "diplomat.list_predictor_plugins" function.
     :param predictor_settings: An optional dictionary, listing the settings to use for the specified predictor plugin instead of the defaults.
@@ -245,10 +247,8 @@ def track_with(
     from diplomat import CLI_RUN
 
     selected_frontend_name, selected_frontend = _find_frontend(
-        contracts=[DIPLOMATCommands.analyze_videos, DIPLOMATCommands.analyze_videos],
+        contracts=[DIPLOMATCommands._load_model],
         config=config,
-        videos=videos,
-        frame_stores=frame_stores,
         num_outputs=num_outputs,
         predictor=predictor,
         predictor_settings=predictor_settings,

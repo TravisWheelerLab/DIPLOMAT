@@ -9,8 +9,6 @@ import matplotlib.colors as mpl_colors
 from typing import Union, Tuple, Sequence, Optional
 import itertools
 
-from typing_extensions import Self
-
 
 class DiplomatColormap:
     def __init__(
@@ -22,7 +20,8 @@ class DiplomatColormap:
         under: Optional[Sequence[float]] = None,
         over: Optional[Sequence[float]] = None,
         bad: Optional[Sequence[float]] = None,
-        gamma: float = 1
+        gamma: float = 1,
+        count_hint: Optional[int] = None
     ):
         self._r = self._normalize_mapper(r_values, gamma)
         self._g = self._normalize_mapper(g_values, gamma)
@@ -31,7 +30,18 @@ class DiplomatColormap:
         self._over = over if over is None else np.asarray(over)
         self._bad = bad if bad is None else np.asarray(bad)
         self._name = name
+        self._count_hint = count_hint
 
+    @property
+    def is_listed(self) -> bool:
+        return self._count_hint is not None
+
+    def get_colors(self, alpha: Optional[float] = None, bytes: bool = False) -> np.ndarray:
+        if(not self.is_listed):
+            raise ValueError("This colormap is not a listed colormap, so it does not have a fixed list of colors.")
+
+        offsets = (np.arange(self._count_hint) + 0.5) / self._count_hint
+        return self(offsets, alpha, bytes)
 
     @classmethod
     def to_rgba_optional(cls, color):
@@ -60,10 +70,14 @@ class DiplomatColormap:
 
         return cls(
             name,
-            *colors,
+            colors[0],
+            colors[1],
+            colors[2],
             cls.to_rgba_optional(under),
             cls.to_rgba_optional(over),
-            cls.to_rgba_optional(bad)
+            cls.to_rgba_optional(bad),
+            1,
+            n
         )
 
     @classmethod
@@ -110,20 +124,20 @@ class DiplomatColormap:
         v[:, 0] = np.clip(v[:, 0] ** gamma, 0.0, 1.0)
         return v
 
-
-    def __call__(self, data: np.ndarray, alpha=None, bytes=False):
+    def __call__(self, data: np.ndarray, alpha: Optional[float] = None, bytes: bool = False):
         if(alpha is None):
             alpha = 1.0
 
+        alpha = max(0.0, min(1.0, alpha))
+        mult = 255 if bytes else 1.0
         colors = np.zeros(data.shape + (4,), dtype=np.uint8 if bytes else np.float32)
-        colors[..., -1] = alpha
+        colors[..., -1] = alpha * mult
 
         for i, mapper in enumerate([self._r, self._g, self._b]):
             xs, ys = mapper.T
             under = None if self._under is None else self._under[i]
             over = None if self._over is None else self._over[i]
             bad = 0 if self._bad is None else self._bad[i]
-            mult = 255 if bytes else 1.0
             colors[..., i] = np.clip(np.nan_to_num(np.interp(data, xs, ys, under, over), nan=bad), 0, 1) * mult
 
         return colors
@@ -139,6 +153,7 @@ class DiplomatColormap:
             "under": to_string(self._under),
             "over": to_string(self._over),
             "bad": to_string(self._bad),
+            "count_hint": self._count_hint
         }
 
     @classmethod
@@ -152,7 +167,8 @@ class DiplomatColormap:
             from_string(data["b_values"]).reshape((-1, 2)),
             from_string(data["under"]),
             from_string(data["over"]),
-            from_string(data["bad"])
+            from_string(data["bad"]),
+            data["count_hint"]
         )
 
     def __str__(self):
@@ -201,13 +217,13 @@ def iter_colormap(cmap: DiplomatColormap, count: int, bytes: bool = False) -> Se
 
     :return: A list of colors. Each color is a tuple of 4 numbers, representing the red, green, blue, and alpha channels of the color.
     """
-    if(isinstance(cmap, ListedColormap)):
-        colors = np.asarray(cmap.colors)
+    # If listed colormap with actual unique colors, cycle colors instead of just uniformly sampling colors
+    # across the colormap...
+    if(cmap.is_listed):
+        colors = cmap.get_colors()
         # If the colormap's largest jump in color difference is small, this is likely not a qualitative map, skip treating it like one...
         if(_MAX_LISTED_THRESHOLD < np.max(np.sqrt(np.sum((colors[1:] - colors[:-1]) ** 2, axis=-1)))):
-            return [
-                to_rgba(c) if(not bytes) else tuple((np.asarray(to_rgba(c)) * 255).astype(int))
-                for i, c in zip(range(count), itertools.cycle(cmap.colors))
-            ]
+            reps = int(np.ceil(count / len(colors)))
+            return np.tile(colors, [reps, 1])[:count]
 
     return cmap(np.linspace(0, 1, count), bytes=bytes)

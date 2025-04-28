@@ -78,6 +78,7 @@ ModelInfo = TypedDict(
     alphavalue=RangedFloat(0, 1),
     pcutoff=RangedFloat(0, 1),
     line_thickness=RangedInteger(1, np.inf),
+    bp_names=List(str),
     skeleton=Union(NoneType, List(Tuple(str, str))),
     frontend=str
 )
