@@ -15,9 +15,12 @@ from diplomat.processing.type_casters import (
     Optional,
     TypeCaster,
     NoneType,
-    Tuple
+    Tuple, TypedDict, RangedInteger, RangedFloat
 )
 import typing
+
+from diplomat.utils.colormaps import to_colormap
+from diplomat.utils.shapes import shape_iterator
 
 
 class Select(Union):
@@ -59,64 +62,35 @@ VerifierFunction = StrictCallable(
     _return=bool
 )
 
-SaveRestoredStateFunction = StrictCallable(
-    pose=Pose,
-    video_metadata=Dict[str, Any],
-    num_outputs=int,
-    parts=List[str],
-    frame_width_pixels=float,
-    frame_height_pixels=float,
-    start_time=float,
-    end_time=float,
-    _return=NoneType
-)
-
-AnalyzeVideosFunction = lambda ret: StrictCallable(
-    config=ConfigPathLikeArgument,
-    videos=Union[List[PathLike], PathLike],
-    predictor=Optional[str],
-    predictor_settings=Optional[Dict[str, Any]],
-    num_outputs=Optional[int],
-    _return=ret
-)
-
-AnalyzeFramesFunction = lambda ret: StrictCallable(
-    config=ConfigPathLikeArgument,
-    frame_stores=Union[List[PathLike], PathLike],
-    predictor=Optional[str],
-    predictor_settings=Optional[Dict[str, Any]],
-    num_outputs=Optional[int],
-    _return=ret
-)
-
-LabelVideosFunction = lambda ret: StrictCallable(
-    config=ConfigPathLikeArgument,
-    videos=Union[List[PathLike], PathLike],
-    _return=ret
-)
-
 ConvertResultsFunction = lambda ret: StrictCallable(
     config=ConfigPathLikeArgument,
     videos=Union[List[PathLike], PathLike],
     _return=ret
 )
 
+ModelInfo = TypedDict(
+    "ModelInfo",
+    num_outputs=RangedInteger(1, np.inf),
+    batch_size=RangedInteger(1, np.inf),
+    dotsize=RangedInteger(1, np.inf),
+    colormap=to_colormap,
+    shape_list=shape_iterator,
+    alphavalue=RangedFloat(0, 1),
+    pcutoff=RangedFloat(0, 1),
+    line_thickness=RangedInteger(1, np.inf),
+    skeleton=Union(NoneType, List(Tuple(str, str))),
+    frontend=str
+)
+
 ModelLike = StrictCallable(
     frames=np.ndarray,
     _return=TrackingData
 )
-ModelInfo = Tuple(
-    int,
-    int,
-    Dict[str, Any],
-    ModelLike
-)
-
 ModelLoaderFunction = StrictCallable(
     config=ConfigPathLikeArgument,
     num_outputs=Optional[int],
     batch_size=int,
-    _return=ModelInfo
+    _return=Tuple(ModelInfo, ModelLike)
 )
 
 

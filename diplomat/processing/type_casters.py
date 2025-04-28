@@ -605,6 +605,55 @@ class Dict(ConvertibleTypeCaster):
         return f"{type(self).__name__}[{get_type_name(self._key)}, {get_type_name(self._value)}]"
 
 
+class TypedDict(ConvertibleTypeCaster):
+    """
+    Represents typing.Dict as a type caster
+    """
+    def __init__(self, _name: str, /, **entries: TypeCaster):
+        self._name = _name
+        self._entires = entries
+
+    def __call__(self, _param: typing.Any = None, /,  **kwargs: typing.Any) -> dict:
+        if(_param is None):
+            _param = kwargs
+        else:
+            if(kwargs is not None):
+                raise ValueError("Can't pass dict and map arguments to construct a dict!")
+
+        param = dict(_param)
+        new_dict = {}
+
+        for k in param.keys():
+            if(k not in self._entires):
+                raise ValueError(f"Passed dictionary has invalid key {k}, for {self}.")
+
+        for k, v in self._entires:
+            if(k not in param):
+                raise ValueError(f"Passed dictionary {param} missing key {k}, for {self}.")
+            new_dict[k] = v(param[k])
+
+        return new_dict
+
+    def to_type_hint(self) -> typing.Type:
+        return typing.TypedDict(self._name, {k: to_hint(v) for k, v in self._entires.items()})
+
+    def to_metavar(self) -> str:
+        content = ', '.join(f'{k}: {to_metavar(v)}' for k, v in self._entires.items())
+        return f"{{{content}}}"
+
+    def __eq__(self, other):
+        if(isinstance(other, TypedDict)):
+            return all(k in other._entires and v == other._entires[k] for k, v in self._entires.items())
+        return super().__eq__(other)
+
+    def __hash__(self):
+        return hash(tuple(sorted(self._entires.items())))
+
+    def __repr__(self) -> str:
+        content = ', '.join(f'{k}={v}' for k, v in self._entires.items())
+        return f"{type(self).__name__}{self._name}[{content}]"
+
+
 class StrictCallable(ConvertibleTypeCaster):
     """
     A type caster that can be used to run strict argument name and type checking on type casting functions. Useful for API conformance checks.
