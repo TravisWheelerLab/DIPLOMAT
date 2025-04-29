@@ -4,10 +4,10 @@ import numpy as np
 
 import diplomat.processing.type_casters as tc
 from diplomat.frontends import ModelInfo, ModelLike
-from diplomat.frontends.sleap.run_utils import _load_configs, _dict_get_path
+from diplomat.frontends.sleap.run_utils import _load_configs
 from diplomat.frontends.sleap.sleap_providers import PredictorExtractor
 from diplomat.utils.cli_tools import Flag
-import onnxruntime as ort
+from .sleap_importer import ort
 
 
 def _build_provider_ordering(device_index: Optional[int], use_cpu: bool):
@@ -33,7 +33,6 @@ def load_models(
     batch_size: tc.Optional[int] = None,
     num_outputs: tc.Optional[int] = None,
     gpu_index: tc.Optional[int] = None,
-    output_suffix: str = "",
     refinement_kernel_size: int = 5,
     use_cpu: Flag = False,
 ) -> tc.Tuple[ModelInfo, ModelLike]:

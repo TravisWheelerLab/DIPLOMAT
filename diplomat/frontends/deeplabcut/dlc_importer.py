@@ -11,3 +11,6 @@ predict = LazyImporter("deeplabcut.pose_estimation_tensorflow.core.predict")
 checkcropping = LazyImporter("deeplabcut.pose_estimation_tensorflow.predict_videos.checkcropping")
 load_config = LazyImporter("deeplabcut.pose_estimation_tensorflow.config.load_config")
 auxiliaryfunctions = LazyImporter("deeplabcut.utils.auxiliaryfunctions")
+
+from deeplabcut.pose_estimation_tensorflow.config import load_config
+from deeplabcut.pose_estimation_tensorflow.training

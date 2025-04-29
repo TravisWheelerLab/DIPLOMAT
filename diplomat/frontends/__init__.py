@@ -65,6 +65,7 @@ VerifierFunction = StrictCallable(
 ConvertResultsFunction = lambda ret: StrictCallable(
     config=ConfigPathLikeArgument,
     videos=Union[List[PathLike], PathLike],
+    csvs=Union[List[PathLike], PathLike],
     _return=ret
 )
 

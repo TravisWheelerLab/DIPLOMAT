@@ -1,24 +1,17 @@
 from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import Optional, Union, List, Tuple
-
-import onnx
-import tf2onnx
+from .sleap_importer import onnx, tf2onnx, tf, ort
 from numpy.lib.stride_tricks import sliding_window_view
 from typing_extensions import TypedDict
 import numpy as np
-
 from .run_utils import _dict_get_path
-from .sleap_importer import tf
-from onnx import TensorProto
-from onnx.helper import (
-    make_model, make_node, make_graph,
-    make_tensor_value_info
-)
-import onnx.numpy_helper as onnx_np_helper
-from onnx.checker import check_model
 from diplomat.processing import TrackingData
-import onnxruntime as ort
+
+TensorProto = onnx.TensorProto
+onnx_helper = onnx.helper
+onnx_np_helper = onnx.numpy_helper
+check_model = onnx.checker.check_model
 
 
 class SleapMetadata(TypedDict):
@@ -95,7 +88,6 @@ def sleap_metadata_from_config(configs: ConfigAndModels) -> SleapMetadata:
         input_scaling=input_scaling,
         sigma=sigma,
         batch_size=batch_size,
-
     )
 
 
@@ -136,36 +128,37 @@ class PreProcessingLayer:
         self._config = config
         self._preprocess_config = _dict_get_path(self._config, ("data", "preprocessing"), {})
         p_c = self._preprocess_config
+        oh = onnx_helper
 
-        input = make_tensor_value_info("INPUT", TensorProto.FLOAT, [None, None, None, 3])
+        input = oh.make_tensor_value_info("INPUT", TensorProto.FLOAT, [None, None, None, 3])
         nodes = []
 
         def _prior_node_output():
             return nodes[-1].output[0] if(len(nodes) > 0) else input.name
 
         if(p_c.get("ensure_grayscale", False)):
-            n1 = make_node(
+            n1 = oh.make_node(
                 "Constant", [], ["RGB_TO_GRAY"],
                 value_float=onnx_np_helper.from_array(np.array([0.2989, 0.5870, 0.1140]))
             )
-            n2 = make_node("Mul", [_prior_node_output(), "RGB_TO_GRAY"], ["GRAYSCALE"])
+            n2 = oh.make_node("Mul", [_prior_node_output(), "RGB_TO_GRAY"], ["GRAYSCALE"])
             nodes.extend([n1, n2])
-            nodes.append(make_node("ReduceSum", [_prior_node_output()], ["GRAYSCALE_REDUCED"], axes=[-1], keepdims=1))
+            nodes.append(oh.make_node("ReduceSum", [_prior_node_output()], ["GRAYSCALE_REDUCED"], axes=[-1], keepdims=1))
         else:
-            n1 = make_node("Constant", [], ["RGB_TO_GRAY"],
+            n1 = oh.make_node("Constant", [], ["RGB_TO_GRAY"],
                            value=onnx_np_helper.from_array(np.array([1.0, 1.0, 1.0])))
-            n2 = make_node("Mul", [_prior_node_output(), "GRAY_TO_RGB"], ["RGB"])
+            n2 = oh.make_node("Mul", [_prior_node_output(), "GRAY_TO_RGB"], ["RGB"])
             nodes.extend([n1, n2])
 
         if(p_c.get("resize_and_pad_to_target", False)):
             self._t_width = p_c.get("target_width", None)
             self._t_height = p_c.get("target_height", None)
             if(self._t_width is not None and self._t_height is not None):
-                desired_size = make_node(
+                desired_size = oh.make_node(
                     "Constant", [], ["IMG_SIZE"],
                     value=onnx_np_helper.from_array(np.array([self._t_height, self._t_width], dtype=np.int64))
                 )
-                resizer = make_node(
+                resizer = oh.make_node(
                     "Resize",
                     [_prior_node_output(), "", "", "IMG_SIZE"],
                     ["IMG_RESIZED"],
@@ -176,11 +169,11 @@ class PreProcessingLayer:
 
         self._post_input_scale = p_c.get("input_scaling", 1.0)
         if(self._post_input_scale != 1.0):
-            desired_scale = make_node(
+            desired_scale = oh.make_node(
                 "Constant", [], ["IMG_SCALE"],
                 value=onnx_np_helper.from_array(np.array([self._post_input_scale, self._post_input_scale], dtype=np.float32))
             )
-            resizer2 = make_node(
+            resizer2 = oh.make_node(
                 "Resize",
                 [_prior_node_output(), "", "", "IMG_SCALE"],
                 ["IMG_RESIZED2"],
@@ -189,14 +182,14 @@ class PreProcessingLayer:
             )
             nodes.extend([desired_scale, resizer2])
 
-        output = make_tensor_value_info(_prior_node_output(), TensorProto.FLOAT, [None, None, None, None])
-        graph = make_graph(
+        output = oh.make_tensor_value_info(_prior_node_output(), TensorProto.FLOAT, [None, None, None, None])
+        graph = oh.make_graph(
             nodes,
             "ImagePreprocessor",
             [input],
             [output]
         )
-        self._preprocess_model = make_model(graph)
+        self._preprocess_model = oh.make_model(graph)
         check_model(self._preprocess_model)
         self._preprocess_runner = _onnx_model_to_inference_session(self._preprocess_model, **kwargs)
 

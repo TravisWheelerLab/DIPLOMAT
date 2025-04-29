@@ -2,13 +2,10 @@ from .sleap_importer import tf
 import json
 import zipfile
 from io import BytesIO
-import platform
 from inspect import signature
 from pathlib import Path, PurePosixPath
-from typing import Optional, Type, List, Tuple, Iterable, Dict
-import numpy as np
-from diplomat.processing import Predictor, Config, Pose
-from diplomat.utils.shapes import shape_iterator
+from typing import Optional, Type
+from diplomat.processing import Predictor, Config
 
 
 def _paths_to_str(paths):

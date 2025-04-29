@@ -143,6 +143,7 @@ def analyze_videos(
     )
 
     sess, inputs, outputs = predict.setup_pose_prediction(model_config)
+    from deeplabcut.pose_estimation_tensorflow import setup_pose_prediction
 
     table_header = _get_pandas_header(
         model_config["all_joints_names"],
@@ -413,6 +414,7 @@ def _get_poses(
     predictor: Predictor,
     cnn_extractor_method: Callable[[tuple, dict], Tuple[np.ndarray, np.ndarray]] = predict.extract_cnn_outputmulti
 ) -> Tuple[np.ndarray, int]:
+    from deeplabcut.pose_estimation_tensorflow.core.predict import extract_cnn_outputmulti
     """ Gets the poses for any batch size, including batch size of only 1 """
     # Create a numpy array to hold all pose prediction data...
     pose_prediction_data = np.zeros(
