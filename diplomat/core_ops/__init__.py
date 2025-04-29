@@ -3,10 +3,11 @@ import sys
 
 from diplomat.core_ops.shared_commands.annotate import _label_videos_single
 from diplomat.core_ops.shared_commands.save_from_restore import _save_from_restore
+from diplomat.core_ops.shared_commands.tracking import analyze_frames, analyze_videos
 from diplomat.core_ops.shared_commands.utils import _fix_path_pairs
 from diplomat.core_ops.shared_commands.tweak import _tweak_video_single
 from diplomat.core_ops.shared_commands.visual_settings import VISUAL_SETTINGS, FULL_VISUAL_SETTINGS
-from diplomat.processing import Config
+from diplomat.processing import Config, Predictor
 from diplomat.processing.type_casters import (
     typecaster_function,
     PathLike,
@@ -19,7 +20,6 @@ from diplomat.processing.type_casters import (
     NoneType,
     get_typecaster_required_arguments
 )
-from diplomat.predictor_ops import _get_predictor_settings
 from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import (func_to_command, allow_arbitrary_flags, Flag, positional_argument_count, CLIError,
     extra_cli_args)
@@ -40,12 +40,18 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
     PRIVATE: Get correctly casted extra arguments for the provided typecasting function. Any arguments that don't
     match those in the function raise an ArgumentError, unless error_on_miss is set to false.
     """
-    def_tcs = get_typecaster_annotations(tc_func)
+    if(isinstance(tc_func, Predictor)):
+        def_tcs = tc_func.get_settings()
+        def_tcs = def_tcs if(def_tcs is not None) else {}
+        def_tcs = {k: v[1] for k, v in def_tcs.items()}
+    else:
+        def_tcs = get_typecaster_annotations(tc_func)
     extra = getattr(tc_func, "__extra_args", {})
     autocast = getattr(tc_func, "__auto_cast", True)
     allow_arb = getattr(tc_func, "__allow_arbitrary_flags", False)
 
     new_args = {}
+    leftover = {}
 
     for k, v in extra_args.items():
         if (k in def_tcs):
@@ -62,37 +68,11 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
             )
             if (not error_on_miss):
                 print(f"{msg} Ignoring the argument...")
+                leftover[k] = v
             else:
                 raise ArgumentError(msg)
 
-    return new_args
-
-
-def _reconcile_arguments_with_predictor_settings(
-    predictor_name: str,
-    extra_args: dict,
-    passed_predictor_settings: dict,
-    precasted_args: dict
-) -> typing.Tuple[dict, dict]:
-    """
-    PRIVATE: Compare items in extra_args to the predictor's ConfigSpec.
-    If a key/value pair in the argument matches a pair of setting name/type in the predictor ConfigSpec,
-    add it to passed_predictor_settings and remove it from extra_args. If the setting has already been set,
-    either in passed_predictor_settings or in precasted_args, then it will be ignored.
-    """
-    if passed_predictor_settings == None:
-        passed_predictor_settings = {}
-    new_extra_args = {}
-    for plugin_name, config_spec in _get_predictor_settings(predictor_name):
-        for k, v in extra_args.items():
-            arg_type = type(v)
-            if ((k in precasted_args) or (k in passed_predictor_settings)):
-                print(f"Warning: {k} is already set; skipping")
-                new_extra_args[k] = v
-            elif (k in config_spec):
-                print(f"Info: converted command line argument {(k, v)} to a {plugin_name} setting.")
-                passed_predictor_settings[k] = v
-    return new_extra_args, passed_predictor_settings
+    return new_args, leftover
 
 
 def _find_frontend(
@@ -208,10 +188,11 @@ def yaml(
                 f"flag to this command."
             )
 
-    return sub_tree(**_get_casted_args(sub_tree, arguments))
+    return sub_tree(**(_get_casted_args(sub_tree, arguments)[0]))
 
 
 @allow_arbitrary_flags
+@extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
 @typecaster_function
 def track_with(
     config: Union[List[PathLike], PathLike],
@@ -221,6 +202,7 @@ def track_with(
     batch_size: Optional[int] = None,
     predictor: Optional[str] = None,
     predictor_settings: Optional[Dict[str, Any]] = None,
+    output_suffix: str = "",
     help_extra: Flag = False,
     **extra_args
 ):
@@ -240,79 +222,97 @@ def track_with(
                                predictor plugin supports, use the "diplomat predictors list_settings" command or "diplomat.get_predictor_settings"
                                function. To get more information about how a frontend gets settings if not passed, set the help_extra parameter
                                to True to print additional settings for the selected frontend instead of running tracking.
+    :param output_suffix: String, a suffix to append to name of the output file. Defaults to no suffix...
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with extra_help flag set to true.
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed frontend, visual settings, or predictor, in that order
+                       To see valid frontend arguments, run track with extra_help flag set to true. The following visual settings are supported:
+
+                       {extra_cli_args}
     """
     from diplomat import CLI_RUN
 
-    selected_frontend_name, selected_frontend = _find_frontend(
-        contracts=[DIPLOMATCommands._load_model],
-        config=config,
-        num_outputs=num_outputs,
-        predictor=predictor,
-        predictor_settings=predictor_settings,
-        **extra_args
-    )
-
     if (help_extra):
-        _display_help(selected_frontend_name, "video analysis", "diplomat track", selected_frontend.analyze_videos,
-                      CLI_RUN)
-        _display_help(selected_frontend_name, "frame analysis", "diplomat track", selected_frontend.analyze_frames,
-                      CLI_RUN)
+        selected_frontend_name, selected_frontend = _find_frontend(
+            contracts=[DIPLOMATCommands._load_model],
+            config=config,
+            num_outputs=num_outputs,
+            batch_size=batch_size,
+            **extra_args
+        )
+        _display_help(
+            selected_frontend_name, "model loading", "diplomat track_with",
+            selected_frontend._load_model, CLI_RUN
+        )
         return
 
     if (videos is None and frame_stores is None):
         print("No frame stores or videos passed, terminating.")
         return
 
-    ## TODO: compare extra_args to predictor.get_settings
-
     # If some videos are supplied, run the frontends video analysis function.
     if (videos is not None):
         print("Running on videos...")
-
-        precasted_args = _get_casted_args(selected_frontend.analyze_videos, extra_args, error_on_miss=False)
-        extra_args, predictor_settings = _reconcile_arguments_with_predictor_settings(predictor, extra_args,
-                                                                                      predictor_settings,
-                                                                                      precasted_args)
-
-        selected_frontend.analyze_videos(
+        selected_frontend_name, selected_frontend = _find_frontend(
+            contracts=[DIPLOMATCommands._load_model],
             config=config,
+            num_outputs=num_outputs,
+            batch_size=batch_size,
+            **extra_args
+        )
+
+        model_args, additional_args = _get_casted_args(selected_frontend._load_model, extra_args, error_on_miss=False)
+        visual_args, additional_args = _get_casted_args(analyze_videos, additional_args, error_on_miss=False)
+        ps_video = {}
+        ps_video.update(predictor_settings if(predictor_settings is not None) else {})
+        ps_video.update(additional_args)
+
+        model_info, model = selected_frontend._load_model(
+            config=config,
+            batch_size=batch_size,
+            num_outputs=num_outputs,
+            **model_args
+        )
+
+        analyze_videos(
+            model=model,
+            model_info=model_info,
             videos=videos,
             num_outputs=num_outputs,
             predictor=predictor,
             predictor_settings=predictor_settings,
-            **_get_casted_args(selected_frontend.analyze_videos, extra_args)
+            output_suffix=output_suffix,
+            **visual_args
         )
 
     # If some frame stores are supplied, run the frontends frame analysis function.
     if (frame_stores is not None):
         print("Running on frame stores...")
+        visual_args, additional_args = _get_casted_args(analyze_videos, extra_args, error_on_miss=False)
+        ps_frames = {}
+        ps_frames.update(predictor_settings if(predictor_settings is not None) else {})
+        ps_frames.update(additional_args)
 
-        precasted_args = _get_casted_args(selected_frontend.analyze_frames, extra_args, error_on_miss=False)
-        extra_args, predictor_settings = _reconcile_arguments_with_predictor_settings(predictor, extra_args,
-                                                                                      predictor_settings,
-                                                                                      precasted_args)
-
-        selected_frontend.analyze_frames(
+        analyze_frames(
             config=config,
             frame_stores=frame_stores,
             num_outputs=num_outputs,
             predictor=predictor,
-            predictor_settings=predictor_settings,
-            **_get_casted_args(selected_frontend.analyze_frames, extra_args)
+            predictor_settings=ps_frames,
+            **visual_args
         )
 
 
 @allow_arbitrary_flags
+@extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
 @typecaster_function
 def track(
     config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
+    batch_size: Optional[int] = None,
     settings: Optional[Dict[str, Any]] = None,
+    output_suffix: str = None,
     help_extra: Flag = False,
     **extra_args
 ):
@@ -321,43 +321,48 @@ def track(
     DIPLOMAT track_with with the SegmentedFramePassEngine predictor. The interactive UI can be restored later using
     diplomat interact function or cli command.
 
-    :param config: The path to the configuration file for the project. The format of this argument will depend on the
-                   frontend.
+    :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
     :param videos: A single path or list of paths to video files to run analysis on.
     :param frame_stores: A single path or list of paths to frame store files to run analysis on.
-    :param num_outputs: An integer, the number of bodies to track in the video. Defaults to 1.
-    :param settings: An optional dictionary, listing the settings to use for the SegmentedFramePassEngine predictor
-                     plugin. If not specified, the frontend will determine the settings in a frontend specific manner.
-                     To see the settings the SegmentedFramePassEngine supports, use the
-                     "diplomat predictors list_settings -p SegmentedFramePassEngine" command
-                     or "diplomat.get_predictor_settings('SegmentedFramePassEngine')". To get more information about
-                     how a frontend gets settings if not passed, set the help_extra parameter to True to print
-                     additional settings for the selected frontend instead of running tracking.
-    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of
-                       running tracking.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically
-                       selected frontend. To see valid values, run track with extra_help flag set to true.
+    :param num_outputs: An integer, the number of bodies to track in the video. If not set the frontend will try to pull it from the project configuration.
+    :param batch_size: An integer, the number of frame to process at a single time. If not set the frontend will try to pull it from the project configuration.
+    :param settings: An optional dictionary, listing the settings to use for the specified predictor plugin instead of the defaults.
+                     If not specified, the frontend will determine the settings in a frontend specific manner. To see the settings a
+                     predictor plugin supports, use the "diplomat predictors list_settings" command or "diplomat.get_predictor_settings"
+                     function. To get more information about how a frontend gets settings if not passed, set the help_extra parameter
+                     to True to print additional settings for the selected frontend instead of running tracking.
+    :param output_suffix: String, a suffix to append to name of the output file. Defaults to no suffix...
+    :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed frontend, visual settings, or predictor, in that order
+                       To see valid frontend arguments, run track with extra_help flag set to true. The following visual settings are supported:
+
+                       {extra_cli_args}
     """
     track_with(
         config=config,
         videos=videos,
         frame_stores=frame_stores,
         num_outputs=num_outputs,
+        batch_size=batch_size,
         predictor="SegmentedFramePassEngine",
         predictor_settings=settings,
+        output_suffix=output_suffix,
         help_extra=help_extra,
         **extra_args
     )
 
 
 @allow_arbitrary_flags
+@extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
 @typecaster_function
 def track_and_interact(
     config: Union[List[PathLike], PathLike],
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
+    batch_size: Optional[int] = None,
     settings: Optional[Dict[str, Any]] = None,
+    output_suffix: str = None,
     help_extra: Flag = False,
     **extra_args
 ):
@@ -368,24 +373,29 @@ def track_and_interact(
     :param config: The path to the configuration file for the project. The format of this argument will depend on the frontend.
     :param videos: A single path or list of paths to video files to run analysis on.
     :param frame_stores: A single path or list of paths to frame store files to run analysis on.
-    :param num_outputs: An integer, the number of bodies to track in the video. Defaults to 1.
-    :param settings: An optional dictionary, listing the settings to use for the SupervisedSegmentedFramePassEngine predictor plugin.
-                     If not specified, the frontend will determine the settings in a frontend specific manner. To see the settings the
-                     SupervisedSegmentedFramePassEngine supports, use the "diplomat predictors list_settings -p SupervisedSegmentedFramePassEngine"
-                     command or "diplomat.get_predictor_settings('SupervisedSegmentedFramePassEngine')". To get more information about how a
-                     frontend gets settings if not passed, set the help_extra parameter to True to print additional settings for the selected
-                     frontend instead of running tracking.
+    :param num_outputs: An integer, the number of bodies to track in the video. If not set the frontend will try to pull it from the project configuration.
+    :param batch_size: An integer, the number of frame to process at a single time. If not set the frontend will try to pull it from the project configuration.
+    :param settings: An optional dictionary, listing the settings to use for the specified predictor plugin instead of the defaults.
+                     If not specified, the frontend will determine the settings in a frontend specific manner. To see the settings a
+                     predictor plugin supports, use the "diplomat predictors list_settings" command or "diplomat.get_predictor_settings"
+                     function. To get more information about how a frontend gets settings if not passed, set the help_extra parameter
+                     to True to print additional settings for the selected frontend instead of running tracking.
+    :param output_suffix: String, a suffix to append to name of the output file. Defaults to no suffix...
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the automatically selected frontend.
-                       To see valid values, run track with extra_help flag set to true.
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed frontend, visual settings, or predictor, in that order
+                       To see valid frontend arguments, run track with extra_help flag set to true. The following visual settings are supported:
+
+                       {extra_cli_args}
     """
     track_with(
         config=config,
         videos=videos,
         frame_stores=frame_stores,
         num_outputs=num_outputs,
+        batch_size=batch_size,
         predictor="SupervisedSegmentedFramePassEngine",
         predictor_settings=settings,
+        output_suffix=output_suffix,
         help_extra=help_extra,
         **extra_args
     )

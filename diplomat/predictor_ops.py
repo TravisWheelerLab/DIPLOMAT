@@ -21,7 +21,7 @@ def list_predictor_plugins():
         print("\t", predictor.get_description())
         print()
 
-def _get_predictor_settings(predictor_name: Optional[Union[List[str], str]] = None):
+def _get_predictor_settings(predictor_name: Union[List[str], str, None] = None):
     """
     Returns the available/modifiable settings for a specified predictor plugin.
 
@@ -39,7 +39,7 @@ def _get_predictor_settings(predictor_name: Optional[Union[List[str], str]] = No
     elif isinstance(predictor_name, str):
         predictors = [processing.get_predictor(predictor_name)]
     elif isinstance(predictor_name, Iterable):
-        predictor_name = [processing.get_predictor(name) for name in predictor]
+        predictors = [processing.get_predictor(name) for name in predictor_name]
     else:
         raise ValueError(
             "Argument 'predictor_name' not of type Iterable[str], string, or None!!!"

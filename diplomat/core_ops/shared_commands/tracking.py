@@ -16,16 +16,10 @@ from diplomat.core_ops.shared_commands.utils import (
     _get_predictor_settings, Timer
 )
 from .visual_settings import VISUAL_SETTINGS
-from diplomat.frontends import ModelInfo
+from diplomat.frontends import ModelInfo, ModelLike
 from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table
 from diplomat.utils.video_io import ContextVideoCapture
 
-
-@dataclass
-class _DummyVideo:
-    fps: float
-    num_frames: float
-    shape: Tuple[int, int, int, int]
 
 @extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
 @tc.typecaster_function
@@ -190,17 +184,49 @@ def _analyze_frame_store(
             print()
 
 
+@extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
 @tc.typecaster_function
 def analyze_videos(
-    config: tc.PathLike,
+    model: ModelLike,
+    model_info: ModelInfo,
     videos: tc.Union[tc.List[tc.PathLike], tc.PathLike],
-    gpu_index: tc.Optional[int] = None,
-    batch_size: tc.Optional[int] = None,
-    num_outputs: tc.Optional[int] = None,
     predictor: tc.Optional[str] = None,
     predictor_settings: tc.Optional[tc.Dict[str, tc.Any]] = None,
+    output_suffix: str = "",
+    **kwargs
 ):
-    pass
+    batch_size = model_info["batch_size"]
+    num_outputs = model_info["num_outputs"]
+    if(batch_size is None):
+        batch_size = 4
+    if(num_outputs is None):
+        raise ValueError("'num_outputs' is not set! Please set it to the number of bodies you are tracking.")
+
+    predictor_cls = get_predictor("SegmentedFramePassEngine" if (predictor is None) else predictor)
+    print(f"Using predictor: '{predictor_cls.get_name()}'")
+
+    if (not predictor_cls.supports_multi_output() and num_outputs > 1):
+        raise ValueError(f"Predictor '{predictor_cls.get_name()}' doesn't support multiple outputs!")
+
+    visual_settings = Config(kwargs, VISUAL_SETTINGS)
+
+    videos = _paths_to_str(videos)
+    if(isinstance(videos, str)):
+        videos = [videos]
+
+    for video in _paths_to_str(videos):
+        _analyze_single_video(
+            video,
+            model_info,
+            model,
+            predictor_cls,
+            num_outputs,
+            visual_settings,
+            predictor_settings,
+            batch_size,
+            output_suffix
+        )
+
 
 
 def _analyze_single_video(
