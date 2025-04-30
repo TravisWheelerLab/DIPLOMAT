@@ -16,7 +16,7 @@ class SLEAPFrontend(DIPLOMATFrontend):
 
         return DIPLOMATCommands(
             _verifier=_verify_sleap_like,
-            _load_model=load_model
+            _load_model=load_models
         )
 
     @classmethod

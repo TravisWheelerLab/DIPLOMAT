@@ -134,7 +134,7 @@ def get_summary_from_doc_str(doc_str: str) -> str:
     return "".join(re.split(":param |:return|:throw", doc_str)[:1])
 
 
-def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> ArgumentParser:
+def func_to_command(func: TypeCasterFunction, parser: ArgumentParser, allow_short_form: bool = True) -> ArgumentParser:
     parser.formatter_class = YAMLArgHelpFormatter
     parser.allow_abbrev = False
     signature = inspect.signature(func)
@@ -180,7 +180,7 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser) -> Argumen
                     args["nargs"] = "+" if(no_default) else "*"
             parser.add_argument(name, **args)
             pos_arg_count -= 1
-        elif(abbr_cmd in abbr_set):
+        elif(abbr_cmd in abbr_set or not allow_short_form):
             parser.add_argument("--" + name, **args)
         else:
             parser.add_argument("--" + name, abbr_cmd, **args)

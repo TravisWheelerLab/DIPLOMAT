@@ -5,7 +5,12 @@ verify_existence_of("onnx")
 verify_existence_of("onnxruntime")
 verify_existence_of("tf2onnx")
 
-tf = LazyImporter("tensorflow")
-ort = LazyImporter("onnxruntime")
-onnx = LazyImporter("onnx")
-tf2onnx = LazyImporter("tf2onnx")
+#tf = LazyImporter("tensorflow")
+#ort = LazyImporter("onnxruntime")
+#onnx = LazyImporter("onnx")
+#tf2onnx = LazyImporter("tf2onnx")
+
+import tensorflow as tf
+import onnxruntime as ort
+import onnx
+import tf2onnx

@@ -6,7 +6,8 @@ import base64
 import matplotlib as mpl
 import numpy as np
 import matplotlib.colors as mpl_colors
-from typing import Union, Tuple, Sequence, Optional
+from typing import Union, Tuple, Sequence, Optional, List
+import diplomat.processing.type_casters as tc
 import itertools
 
 
@@ -175,6 +176,7 @@ class DiplomatColormap:
         return f"{type(self).__name__}(name={self._name})"
 
 
+@tc.attach_hint(Union[None, str, List[Union[str, Tuple[float, float, float], Tuple[float, float, float, float]]]])
 def to_colormap(cmap: Union[None, str, list, mpl_colors.Colormap, DiplomatColormap] = None) -> DiplomatColormap:
     """
     Convert any colormap like object to a matplotlib Colormap.

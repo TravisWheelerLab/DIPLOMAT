@@ -145,7 +145,7 @@ class PreProcessingLayer:
             nodes.extend([n1, n2])
             nodes.append(oh.make_node("ReduceSum", [_prior_node_output()], ["GRAYSCALE_REDUCED"], axes=[-1], keepdims=1))
         else:
-            n1 = oh.make_node("Constant", [], ["RGB_TO_GRAY"],
+            n1 = oh.make_node("Constant", [], ["GRAY_TO_RGB"],
                            value=onnx_np_helper.from_array(np.array([1.0, 1.0, 1.0])))
             n2 = oh.make_node("Mul", [_prior_node_output(), "GRAY_TO_RGB"], ["RGB"])
             nodes.extend([n1, n2])
@@ -270,7 +270,7 @@ def _keras_to_onnx_model(keras_model) -> onnx.ModelProto:
     input_signature = [
         tf.TensorSpec(keras_model.input_shape, tf.float32, name="image")
     ]
-    return tf2onnx.convert.from_keras(keras_model, input_signature)
+    return tf2onnx.convert.from_keras(keras_model, input_signature, opset=17)
 
 
 def _find_model_output(model: ort.InferenceSession, name: str, required: bool = True):

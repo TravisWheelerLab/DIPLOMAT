@@ -9,7 +9,7 @@ CLI_RUN = False
 from diplomat.predictor_ops import list_predictor_plugins, get_predictor_settings, test_predictor_plugin
 from diplomat.frontend_ops import list_all_frontends, list_loaded_frontends
 from diplomat.utils.video_splitter import split_videos
-from diplomat.core_ops import track_with, track, track_and_interact, annotate, tweak, yaml, convert, interact
+from diplomat.core_ops import track_with, track, track_and_interact, annotate, tweak, yaml, interact
 
 __all__ = [
     "list_predictor_plugins",
@@ -24,7 +24,6 @@ __all__ = [
     "annotate",
     "tweak",
     "yaml",
-    "convert",
     "interact"
 ]
 

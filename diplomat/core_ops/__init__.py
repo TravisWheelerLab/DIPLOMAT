@@ -118,7 +118,7 @@ def _display_help(
 ):
     if (is_cli):
         print(f"\n\nHelp for {frontend_name}'s {method_type} command:\n")
-        func_to_command(command_func, ArgumentParser(prog=calling_command_name)).print_help()
+        func_to_command(command_func, ArgumentParser(prog=calling_command_name), allow_short_form=False).print_help()
     else:
         import pydoc
         help_dumper = pydoc.Helper(output=sys.stdout, input=sys.stdin)
@@ -225,7 +225,7 @@ def track_with(
     :param output_suffix: String, a suffix to append to name of the output file. Defaults to no suffix...
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed frontend, visual settings, or predictor, in that order
-                       To see valid frontend arguments, run track with extra_help flag set to true. The following visual settings are supported:
+                       To see valid frontend arguments, run track with extra_help flag set to true.
 
                        {extra_cli_args}
     """
@@ -334,7 +334,7 @@ def track(
     :param output_suffix: String, a suffix to append to name of the output file. Defaults to no suffix...
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed frontend, visual settings, or predictor, in that order
-                       To see valid frontend arguments, run track with extra_help flag set to true. The following visual settings are supported:
+                       To see valid frontend arguments, run track with extra_help flag set to true.
 
                        {extra_cli_args}
     """
@@ -383,7 +383,7 @@ def track_and_interact(
     :param output_suffix: String, a suffix to append to name of the output file. Defaults to no suffix...
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
     :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed frontend, visual settings, or predictor, in that order
-                       To see valid frontend arguments, run track with extra_help flag set to true. The following visual settings are supported:
+                       To see valid frontend arguments, run track with extra_help flag set to true.
 
                        {extra_cli_args}
     """
@@ -418,9 +418,7 @@ def annotate(
     :param body_parts_to_plot: A set or list of body part names to label, or None, indicating to label all parts.
     :param video_extension: The file extension to use on the created labeled video, excluding the dot.
                             Defaults to 'mp4'.
-    :param kwargs: The following additional arguments are supported:
-
-                   {extra_cli_args}
+    :param kwargs: {extra_cli_args}
     """
     csvs, videos = _fix_path_pairs(csvs, videos)
     visual_settings = Config(kwargs, FULL_VISUAL_SETTINGS)

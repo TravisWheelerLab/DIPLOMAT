@@ -2,7 +2,6 @@ import sys
 import diplomat
 from diplomat.utils.cli_tools import build_full_parser
 from argparse import ArgumentParser
-from dataclasses import asdict
 
 
 def get_static_cli_tree() -> dict:
@@ -23,7 +22,6 @@ def get_static_cli_tree() -> dict:
         "split_videos": diplomat.split_videos,
         "tweak": diplomat.tweak,
         "yaml": diplomat.yaml,
-        "convert": diplomat.convert,
         "interact": diplomat.interact,
         "frontends": {
             "__description": "Contains subcommands for listing available frontends and inspecting the functions "

@@ -91,7 +91,7 @@ ModelLike = StrictCallable(
 ModelLoaderFunction = StrictCallable(
     config=ConfigPathLikeArgument,
     num_outputs=Optional[int],
-    batch_size=int,
+    batch_size=Optional[int],
     _return=Tuple(ModelInfo, ModelLike)
 )
 

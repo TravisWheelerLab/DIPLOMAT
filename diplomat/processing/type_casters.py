@@ -213,6 +213,13 @@ def get_typecaster_kwd_arg_name(func: TypeCasterFunction) -> typing.Optional[str
     return getattr(func, "_type_caster_kwd_name", None)
 
 
+def attach_hint(hint: typing.Type):
+    def _attach_hint(f):
+        f.to_type_hint = lambda: hint
+        return f
+    return _attach_hint
+
+
 def to_hint(t: TypeCaster) -> typing.Type:
     """
     Convert a type caster to a python type hint.
@@ -665,7 +672,7 @@ class StrictCallable(ConvertibleTypeCaster):
 
     def __call__(self, arg: typing.Any) -> typing.Callable:
         if(not callable(arg)):
-            raise TypeError("Passed argument a callable!")
+            raise TypeError("Passed argument not a callable!")
         # Check for the argument values....
         annots = get_typecaster_annotations(arg)
 
