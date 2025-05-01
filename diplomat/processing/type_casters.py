@@ -634,10 +634,13 @@ class TypedDict(ConvertibleTypeCaster):
             if(k not in self._entires):
                 raise ValueError(f"Passed dictionary has invalid key {k}, for {self}.")
 
-        for k, v in self._entires:
+        for k, v in self._entires.items():
             if(k not in param):
                 raise ValueError(f"Passed dictionary {param} missing key {k}, for {self}.")
-            new_dict[k] = v(param[k])
+            try:
+                new_dict[k] = v(param[k])
+            except Exception as e:
+                raise TypeError(f"Unable to cast property '{k}' to {v}, with value {param[k]}.") from e
 
         return new_dict
 

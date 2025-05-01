@@ -66,7 +66,7 @@ class DiplomatColormap:
         offsets[-1] = 1.0
 
         colors = [
-            np.stack([offsets, np.repeat(channel, 2)], -1) for channel in colors
+            np.stack([offsets, np.repeat(channel, 2)], -1) for channel in colors.T
         ]
 
         return cls(
@@ -169,6 +169,7 @@ class DiplomatColormap:
             from_string(data["under"]),
             from_string(data["over"]),
             from_string(data["bad"]),
+            1,
             data["count_hint"]
         )
 

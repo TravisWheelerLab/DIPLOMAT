@@ -74,7 +74,7 @@ def _get_video_metadata(
         skeleton = []
 
     if(frame_store_header is None):
-        with ContextVideoCapture(video_path) as vid:
+        with ContextVideoCapture(str(video_path)) as vid:
             fps = vid.get(cv2.CAP_PROP_FPS)
             w = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
             h = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))

@@ -277,7 +277,6 @@ def track_with(
             model=model,
             model_info=model_info,
             videos=videos,
-            num_outputs=num_outputs,
             predictor=predictor,
             predictor_settings=predictor_settings,
             output_suffix=output_suffix,
@@ -312,7 +311,7 @@ def track(
     num_outputs: Optional[int] = None,
     batch_size: Optional[int] = None,
     settings: Optional[Dict[str, Any]] = None,
-    output_suffix: str = None,
+    output_suffix: str = "",
     help_extra: Flag = False,
     **extra_args
 ):
@@ -362,7 +361,7 @@ def track_and_interact(
     num_outputs: Optional[int] = None,
     batch_size: Optional[int] = None,
     settings: Optional[Dict[str, Any]] = None,
-    output_suffix: str = None,
+    output_suffix: str = "",
     help_extra: Flag = False,
     **extra_args
 ):

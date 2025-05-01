@@ -166,11 +166,15 @@ class CreateSkeleton(FramePass):
             return
 
         max_loc = np.argmax(probs)
+        if(probs[max_loc] == 0):
+            w = np.ones(probs.shape, dtype=probs.dtype)
+        else:
+            w = probs
 
         self._max_locations[bodypart_index] = (
             probs[max_loc],
-            np.average(x, weights=probs),
-            np.average(y, weights=probs)
+            np.average(x, weights=w),
+            np.average(y, weights=w)
         )
 
         return None

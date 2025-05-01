@@ -71,6 +71,8 @@ def sleap_metadata_from_config(configs: ConfigAndModels) -> SleapMetadata:
         input_scaling = _dict_get_path(cfg, ("data", "preprocessing", "input_scaling"), 1.0)
         for sigma_model_type in ["multi_instance", "multi_class_bottomup", "single_instance", "centered_instance", "multi_class_topdown"]:
             sigma = _dict_get_path(cfg, ("model", "heads", sigma_model_type, "sigma"), None)
+            if(sigma is None):
+                sigma = _dict_get_path(cfg, ("model", "heads", sigma_model_type, "confmaps", "sigma"), None)
             if(sigma is not None):
                 batch_size = int(_dict_get_path(cfg, ("optimization", "batch_size"), 4))
                 break
@@ -139,14 +141,14 @@ class PreProcessingLayer:
         if(p_c.get("ensure_grayscale", False)):
             n1 = oh.make_node(
                 "Constant", [], ["RGB_TO_GRAY"],
-                value_float=onnx_np_helper.from_array(np.array([0.2989, 0.5870, 0.1140]))
+                value=onnx_np_helper.from_array(np.array([0.2989, 0.5870, 0.1140], dtype=np.float32))
             )
             n2 = oh.make_node("Mul", [_prior_node_output(), "RGB_TO_GRAY"], ["GRAYSCALE"])
             nodes.extend([n1, n2])
             nodes.append(oh.make_node("ReduceSum", [_prior_node_output()], ["GRAYSCALE_REDUCED"], axes=[-1], keepdims=1))
         else:
             n1 = oh.make_node("Constant", [], ["GRAY_TO_RGB"],
-                           value=onnx_np_helper.from_array(np.array([1.0, 1.0, 1.0])))
+                           value=onnx_np_helper.from_array(np.array([1.0, 1.0, 1.0], dtype=np.float32)))
             n2 = oh.make_node("Mul", [_prior_node_output(), "GRAY_TO_RGB"], ["RGB"])
             nodes.extend([n1, n2])
 
@@ -162,6 +164,7 @@ class PreProcessingLayer:
                     "Resize",
                     [_prior_node_output(), "", "", "IMG_SIZE"],
                     ["IMG_RESIZED"],
+                    axes=[1, 2],
                     coordinate_transformation_mode="asymmetric",
                     keep_aspect_ratio_policy="not_larger"
                 )
@@ -189,7 +192,7 @@ class PreProcessingLayer:
             [input],
             [output]
         )
-        self._preprocess_model = oh.make_model(graph)
+        self._preprocess_model = oh.make_model(graph, opset_imports=[onnx.OperatorSetIdProto(version=19)])
         check_model(self._preprocess_model)
         self._preprocess_runner = _onnx_model_to_inference_session(self._preprocess_model, **kwargs)
 
@@ -214,8 +217,8 @@ class PreProcessingLayer:
 
         if(self._pad_to_stride > 1):
             pts = self._pad_to_stride
-            new_w = ((img.shape[2] // pts) + (img.shape[2] % pts == 0)) * pts
-            new_h = ((img.shape[1] // pts) + (img.shape[1] % pts == 0)) * pts
+            new_w = ((img.shape[2] // pts) + (img.shape[2] % pts != 0)) * pts
+            new_h = ((img.shape[1] // pts) + (img.shape[1] % pts != 0)) * pts
             img = np.pad(
                 img,
                 ((0, 0), (0, new_h - img.shape[1]), (0, new_w - img.shape[2]), (0, 0)),
@@ -270,7 +273,7 @@ def _keras_to_onnx_model(keras_model) -> onnx.ModelProto:
     input_signature = [
         tf.TensorSpec(keras_model.input_shape, tf.float32, name="image")
     ]
-    return tf2onnx.convert.from_keras(keras_model, input_signature, opset=17)
+    return tf2onnx.convert.from_keras(keras_model, input_signature, opset=17)[0]
 
 
 def _find_model_output(model: ort.InferenceSession, name: str, required: bool = True):
@@ -604,7 +607,7 @@ def _resolve_crop_boxes(img: np.ndarray, centers: np.ndarray, sizes: np.ndarray)
 def _get_integral_offset_kernels(kernel_size: int, stride: float, dtype: np.dtype = np.float32):
     # Construct kernels for computing centers of mass computed around a point...
     kernel_half = (kernel_size - 1) // 2
-    y_kernel, x_kernel = [v * stride for v in np.mgrid[-kernel_half:kernel_half, -kernel_half:kernel_half]]
+    y_kernel, x_kernel = [v * stride for v in np.mgrid[-kernel_half:kernel_half + 1, -kernel_half:kernel_half + 1]]
     # Simple summation kernel, adds all values in an area...
     ones_kernel = np.ones((kernel_size, kernel_size), dtype=dtype)
     return np.stack([x_kernel, y_kernel, ones_kernel], axis=-1).astype(dtype)

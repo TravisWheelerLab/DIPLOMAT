@@ -1,5 +1,7 @@
 from typing import Optional
 import numpy as np
+from wx.lib.agw.speedmeter import weights
+
 from diplomat.predictors.fpe.frame_pass import FramePass
 from diplomat.predictors.fpe.skeleton_structures import Histogram
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardData, ForwardBackwardFrame, AttributeDict
@@ -98,11 +100,15 @@ class OptimizeStandardDeviation(FramePass):
             return None
 
         max_loc = np.argmax(probs)
+        if(probs[max_loc] == 0):
+            w = np.ones(probs.shape, dtype=probs.dtype)
+        else:
+            w = probs
 
         self._max_locations[bodypart_index] = (
             probs[max_loc],
-            np.average(x, weights=probs),
-            np.average(y, weights=probs)
+            np.average(x, weights=w),
+            np.average(y, weights=w)
         )
 
         return None

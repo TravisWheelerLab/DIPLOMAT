@@ -50,10 +50,14 @@ class FixFrame(FramePass):
             return None, None, None
 
         max_idx = np.argmax(prob)
+        if(prob[max_idx] == 0):
+            w = np.ones(prob.shape, dtype=prob.dtype)
+        else:
+            w = prob
 
         return (
-            float(np.average(x, weights=prob)),
-            float(np.average(y, weights=prob)),
+            float(np.average(x, weights=w)),
+            float(np.average(y, weights=w)),
             float(prob[max_idx])
         )
 

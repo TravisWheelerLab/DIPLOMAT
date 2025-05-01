@@ -71,8 +71,8 @@ ConvertResultsFunction = lambda ret: StrictCallable(
 
 ModelInfo = TypedDict(
     "ModelInfo",
-    num_outputs=RangedInteger(1, np.inf),
-    batch_size=RangedInteger(1, np.inf),
+    num_outputs=Optional(RangedInteger(1, np.inf)),
+    batch_size=Optional(RangedInteger(1, np.inf)),
     dotsize=RangedInteger(1, np.inf),
     colormap=to_colormap,
     shape_list=shape_iterator,

@@ -74,7 +74,7 @@ def _resolve_model_path(files):
 
 def _dict_has_path(dict_obj, key):
     for k_p in key:
-        if(k_p not in dict_obj):
+        if(not isinstance(dict_obj, dict) or k_p not in dict_obj):
             return False
         dict_obj = dict_obj[k_p]
     return True
@@ -82,7 +82,7 @@ def _dict_has_path(dict_obj, key):
 
 def _dict_get_path(dict_obj, key, default = None):
     for k_p in key:
-        if(k_p not in dict_obj):
+        if(not isinstance(dict_obj, dict) or k_p not in dict_obj):
             return default
         dict_obj = dict_obj[k_p]
     return dict_obj

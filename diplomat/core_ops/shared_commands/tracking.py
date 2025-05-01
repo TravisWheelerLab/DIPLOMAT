@@ -257,7 +257,7 @@ def _analyze_single_video(
     )
 
     # LOAD the frame store file...
-    with ContextVideoCapture(video_path) as video:
+    with ContextVideoCapture(str(video_path)) as video:
         predictor = predictor_cls(
             bp_lst,
             num_outputs,
@@ -307,8 +307,8 @@ def _analyze_single_video(
                     print(f"Running post-processing algorithms...")
                     poses = pred.on_end(post_pbar)
                     if (poses is not None):
-                        labels[frames_done:frames_done + pose.get_frame_count()] = pose.get_all()
-                        frames_done += pose.get_frame_count()
+                        labels[frames_done:frames_done + poses.get_frame_count()] = poses.get_all()
+                        frames_done += poses.get_frame_count()
 
         if (frames_done != len(labels)):
             raise ValueError(
@@ -329,13 +329,14 @@ def _analyze_single_video(
 def _read_frames(video: cv2.VideoCapture, batch_size: int, buffer: np.ndarray = None):
     i = 0
 
-    for i in range(batch_size):
-        got, frm = video.read(video)
+    while(i < batch_size):
+        got, frm = video.read()
         if(not got):
             break
         if(buffer is None):
             buffer = np.zeros((batch_size, *frm.shape), dtype=frm.dtype)
         # BGR to RGB...
         buffer[i] = frm[..., ::-1]
+        i += 1
 
     return i, buffer
