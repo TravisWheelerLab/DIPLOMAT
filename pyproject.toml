@@ -43,7 +43,47 @@ diplomat = "diplomat._cli_runner:main"
 [project.optional-dependencies]
 # Latest version has build issues...
 gui = ["wxpython"]
-dlc = ["deeplabcut[tf]"]
-sleap = ["sleap[pypi]"]
-all = ["wxpython", "deeplabcut==2.3.8", "sleap[pypi]==1.3.3"]
+dlc = ["tensorflow", "tf2onnx", "onnx", "onnxruntime"]
+dlc-nvidia = [
+    "tensorflow",
+    "tf2onnx",
+    "onnx",
+    "onnxruntime-gpu>=1.19",
+    "nvidia-cuda-nvrtc-cu12~=12.0",
+    "nvidia-cuda-runtime-cu12~=12.0",
+    "nvidia-cufft-cu12~=11.0",
+    "nvidia-curand-cu12~=10.0",
+    "nvidia-cudnn-cu12~=9.0"
+]
+sleap = ["tensorflow", "tf2onnx", "onnx", "onnxruntime"]
+sleap-nvidia = [
+    "tensorflow",
+    "tf2onnx",
+    "onnx",
+    "onnxruntime-gpu>=1.19",
+    "nvidia-cuda-nvrtc-cu12~=12.0",
+    "nvidia-cuda-runtime-cu12~=12.0",
+    "nvidia-cufft-cu12~=11.0",
+    "nvidia-curand-cu12~=10.0",
+    "nvidia-cudnn-cu12~=9.0"
+]
+all = [
+    "wxpython",
+    "tensorflow",
+    "tf2onnx",
+    "onnx",
+    "onnxruntime"
+]
+all-gpu = [
+    "wxpython",
+    "tensorflow",
+    "tf2onnx",
+    "onnx",
+    "onnxruntime-gpu>=1.19",
+    "nvidia-cuda-nvrtc-cu12~=12.0",
+    "nvidia-cuda-runtime-cu12~=12.0",
+    "nvidia-cufft-cu12~=11.0",
+    "nvidia-curand-cu12~=10.0",
+    "nvidia-cudnn-cu12~=9.0"
+]
 test = ["pytest", "scipy"]

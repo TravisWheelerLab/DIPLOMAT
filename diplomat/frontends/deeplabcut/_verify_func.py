@@ -35,7 +35,7 @@ def _verify_dlc_like(
 
         if(is_zipfile(config)):
             with ZipFile(config, "r") as z:
-                __, cfg = _verify_dlc_like_zip_file(z)
+                __, cfg = _load_dlc_like_zip_file(z)
         else:
             with open(str(config)) as f:
                 cfg = yaml.load(f, yaml.SafeLoader)

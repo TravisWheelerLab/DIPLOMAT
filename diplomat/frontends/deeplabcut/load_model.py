@@ -1,6 +1,6 @@
 import tempfile
 from io import BytesIO
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Optional
 from zipfile import is_zipfile, ZipFile
 
@@ -9,8 +9,8 @@ import yaml
 
 import diplomat.processing.type_casters as tc
 from diplomat.frontends import ModelInfo, ModelLike
-from diplomat.frontends.deeplabcut._verify_func import _load_dlc_like_zip_file
-from diplomat.frontends.deeplabcut.dlc_importer import ort, tf, tf2onnx, onnx
+from ._verify_func import _load_dlc_like_zip_file
+from .dlc_importer import ort, tf, tf2onnx, onnx
 from diplomat.processing import TrackingData
 from diplomat.utils.cli_tools import Flag
 
@@ -53,38 +53,57 @@ def load_tf_model():
 
 
 def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cpu: bool):
-    tf.compat.v1.reset_default_graph()
+    import tensorflow as tf
     tf.compat.v1.disable_eager_execution()
+    tf.compat.v1.disable_v2_behavior()
+    tf.compat.v1.reset_default_graph()
 
-    meta_files = [file for file in model_dir.iterdir() if file.stem.startswith("snapshot-") and file.suffix == "meta"]
+    meta_files = [file for file in model_dir.iterdir() if file.stem.startswith("snapshot-") and file.suffix == ".meta"]
+    if(len(meta_files) == 0):
+        raise ValueError("No checkpoint files, make sure you've trained a DLC model first!")
     latest_meta_file = max(meta_files, key=lambda k: int(k.stem.split("-")[-1]))
     checkpoint_file = model_dir / latest_meta_file.stem
 
+    saver = tf.compat.v1.train.import_meta_graph(str(latest_meta_file), clear_devices=True)
+
     with tf.compat.v1.Session() as sess:
-        saver = tf.compat.v1.train.import_meta_graph(str(latest_meta_file), clear_devices=True)
-        saver.restore(sess, str(checkpoint_file))
+        with sess.as_default():
+            with sess.graph.as_default():
+                saver.restore(sess, str(checkpoint_file))
 
-        node_set = set(node.name for node in sess.graph.get_operations()[0])
-        output_names = ["pose/part_pred/block4/BiasAdd"]
-        locref_name = "pose/locref_pred/block4/BiasAdd"
-        if(locref_name in node_set):
-            output_names.append(locref_name)
+                from tensorflow.python.training import py_checkpoint_reader
+                reader = py_checkpoint_reader.NewCheckpointReader(str(checkpoint_file))
+                print(sorted({
+                    v for v in reader.get_variable_to_shape_map()
+                }))
+                print(tf.compat.v1.trainable_variables())
+                sess.run(tf.compat.v1.global_variables_initializer())
+                print("\n\n\n\n")
+                print([v.name for v in tf.compat.v1.trainable_variables()])
 
-        model, __ = tf2onnx.convert.from_graph_def(
-            sess.graph.as_graph_def(),
-            "DLCModel",
-            ["Placeholder"],
-            output_names,
+                node_set = set(node.name for node in sess.graph.get_operations())
+                probs_name = "pose/part_pred/block4/BiasAdd"
+                if(probs_name not in node_set):
+                    raise ValueError("Unable to find confidence maps in DLC model!")
+                output_names = [probs_name]
+                locref_name = "pose/locref_pred/block4/BiasAdd"
+                if(locref_name in node_set):
+                    output_names.append(locref_name)
 
-        )
+                model, __ = tf2onnx.convert.from_graph_def(
+                    sess.graph.as_graph_def(),
+                    "DLCModel",
+                    ["Placeholder:0"],
+                    output_names,
+                )
 
-        b = BytesIO()
-        onnx.save(model, b)
+                b = BytesIO()
+                onnx.save(model, b)
 
-    return ort.InferenceSession(
-        b.getvalue(),
-        providers=_build_provider_ordering(device_index, use_cpu)
-    )
+                return ort.InferenceSession(
+                    b.getvalue(),
+                    providers=_build_provider_ordering(device_index, use_cpu)
+                )
 
 
 class FakeTempDir:
@@ -153,13 +172,12 @@ def load_model(
                 z.extractall(tmp_dir.name)
                 project_dir = (Path(tmp_dir.name) / sub_path).resolve().parent
         else:
+            project_dir = Path(config).resolve().parent
             with open(config, "rb") as f:
                 config = yaml.load(f, yaml.SafeLoader)
-            project_dir = Path(config).resolve().parent
 
     iteration = config["iteration"]
     train_frac = config["TrainingFraction"][training_set_index]
-    config["project_path"] = project_dir
 
     model_directory = _get_model_folder(config, project_dir, shuffle, train_frac, model_prefix)
     model_directory = model_directory.resolve()

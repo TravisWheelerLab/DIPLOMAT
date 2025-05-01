@@ -1,17 +1,13 @@
 from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import Optional, Union, List, Tuple
-from .sleap_importer import onnx, tf2onnx, tf, ort
+from .sleap_imports import onnx, tf2onnx, tf, ort
 from numpy.lib.stride_tricks import sliding_window_view
 from typing_extensions import TypedDict
 import numpy as np
 from .run_utils import _dict_get_path
 from diplomat.processing import TrackingData
-
-TensorProto = onnx.TensorProto
-onnx_helper = onnx.helper
-onnx_np_helper = onnx.numpy_helper
-check_model = onnx.checker.check_model
+from diplomat.utils.lazy_import import resolve_lazy_imports
 
 
 class SleapMetadata(TypedDict):
@@ -126,11 +122,16 @@ def _get_config_paths(cfg, paths, default = None):
 
 
 class PreProcessingLayer:
+    @resolve_lazy_imports
     def __init__(self, config: dict, **kwargs):
         self._config = config
         self._preprocess_config = _dict_get_path(self._config, ("data", "preprocessing"), {})
         p_c = self._preprocess_config
-        oh = onnx_helper
+
+        # Make variables for onnx stuff were using a bunch...
+        TensorProto = onnx.TensorProto
+        oh = onnx.helper
+        onnx_np_helper = onnx.numpy_helper
 
         input = oh.make_tensor_value_info("INPUT", TensorProto.FLOAT, [None, None, None, 3])
         nodes = []
@@ -193,7 +194,7 @@ class PreProcessingLayer:
             [output]
         )
         self._preprocess_model = oh.make_model(graph, opset_imports=[onnx.OperatorSetIdProto(version=19)])
-        check_model(self._preprocess_model)
+        onnx.checker.check_model(self._preprocess_model)
         self._preprocess_runner = _onnx_model_to_inference_session(self._preprocess_model, **kwargs)
 
         for backbone in self._config["model"]["backbone"].values():
@@ -229,12 +230,14 @@ class PreProcessingLayer:
         return img, downscaling
 
 
+@resolve_lazy_imports
 def _onnx_model_to_inference_session(onnx_model, **kwargs) -> ort.InferenceSession:
     b = BytesIO()
     onnx.save(onnx_model, b)
     return ort.InferenceSession(b.getvalue(), **kwargs)
 
 
+@resolve_lazy_imports
 def _reset_input_layer(
     keras_model: tf.keras.Model,
     new_shape: Optional[Tuple[Optional[int], Optional[int], Optional[int], int]] = None,
@@ -256,7 +259,7 @@ def _reset_input_layer(
 
     model_config = keras_model.get_config()
     model_config["layers"][0]["config"]["batch_input_shape"] = new_shape
-    new_model: tf.keras.Model = tf.keras.Model.from_config(
+    new_model = tf.keras.Model.from_config(
         model_config, custom_objects={}
     )  # Change custom objects if necessary
 
@@ -269,6 +272,7 @@ def _reset_input_layer(
     return new_model
 
 
+@resolve_lazy_imports
 def _keras_to_onnx_model(keras_model) -> onnx.ModelProto:
     input_signature = [
         tf.TensorSpec(keras_model.input_shape, tf.float32, name="image")
@@ -481,8 +485,8 @@ def _convolve_2d(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     )
     conv_view = sliding_window_view(
         img,
-        [kernel.shape[0], kernel.shape[1]],
-        [1, 2]
+        (kernel.shape[0], kernel.shape[1]),
+        (1, 2)
     )
     return np.einsum("...ij,...ijk->...k", conv_view, kernel)
 

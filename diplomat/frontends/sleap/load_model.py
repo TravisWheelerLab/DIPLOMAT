@@ -7,7 +7,7 @@ from diplomat.frontends import ModelInfo, ModelLike
 from diplomat.frontends.sleap.run_utils import _load_configs
 from diplomat.frontends.sleap.sleap_providers import PredictorExtractor
 from diplomat.utils.cli_tools import Flag
-from .sleap_importer import ort
+from .sleap_imports import ort
 
 
 def _build_provider_ordering(device_index: Optional[int], use_cpu: bool):

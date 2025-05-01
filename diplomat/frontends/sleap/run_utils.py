@@ -1,4 +1,4 @@
-from .sleap_importer import tf
+from .sleap_imports import tf, h5py
 import json
 import zipfile
 from io import BytesIO
@@ -6,6 +6,7 @@ from inspect import signature
 from pathlib import Path, PurePosixPath
 from typing import Optional, Type
 from diplomat.processing import Predictor, Config
+from ...utils.lazy_import import resolve_lazy_imports
 
 
 def _paths_to_str(paths):
@@ -95,8 +96,8 @@ def _correct_skeletons_in_config(cfg):
         ]
 
 
+@resolve_lazy_imports
 def _load_configs_from_zip(z: zipfile.ZipFile, include_model = True):
-    import h5py
     cfg_lst = []
 
     for file in z.infolist():
@@ -124,6 +125,7 @@ def _load_configs_from_zip(z: zipfile.ZipFile, include_model = True):
     return cfg_lst
 
 
+@resolve_lazy_imports
 def _load_config_and_model(path, include_model = True):
     path = Path(path)
     if(zipfile.is_zipfile(path)):

@@ -1,4 +1,5 @@
 import builtins
+import functools
 from importlib import import_module
 from importlib.util import find_spec
 from types import ModuleType
@@ -57,7 +58,6 @@ class SilentImports:
             del os.environ["TF_CPP_MIN_LOG_LEVEL"]
 
 
-
 class ImportFunctions:
     """
     A set of import functions that can be used by the lazy importer object. Includes the following import functions:
@@ -87,14 +87,33 @@ def verify_existence_of(name: str):
         raise ImportError(str(e))
 
 
+def resolve_lazy_imports(func: Callable) -> Callable:
+    # Optimization: Lookup lazy imports for this module ahead of time...
+    func_module = func.__globals__
+    if(not "__lazy_imports" in func_module):
+        func_module["__lazy_imports"] = [k for k, v in func_module.items() if(isinstance(v, LazyImporter))]
+
+    @functools.wraps(func)
+    def do_resolution(*args, **kwargs):
+        func_globals = func.__globals__
+        lazy_imports = func_globals.get("__lazy_imports", None)
+        lazy_imports = [] if lazy_imports is None else lazy_imports
+        while(len(lazy_imports) > 0):
+            imp_key = lazy_imports.pop()
+            v = func_globals.get(imp_key, None)
+            if isinstance(v, LazyImporter):
+                func_globals[imp_key] = v.force_import()
+
+        return func(*args, **kwargs)
+
+    return do_resolution
+
+
 class LazyImporter:
     """
     Represents a Lazily Imported Object. It waits until the user requests functionality before actually importing
     a module.
     """
-    class ImporterMode:
-        ON_ATTR = 0
-        ON_CALL = 1
 
     NOTHING = object()
 
@@ -102,8 +121,7 @@ class LazyImporter:
         self,
         name: str,
         pkg: Optional[str] = None,
-        import_function: ImportFunction = ImportFunctions.SILENT,
-        mode: ImporterMode = ImporterMode.ON_CALL
+        import_function: ImportFunction = ImportFunctions.SIMPLE,
     ):
         """
         Create a new lazily import module, object, or function.
@@ -117,18 +135,12 @@ class LazyImporter:
         self._pkg = pkg
         self._mod = self.NOTHING
         self._imp = import_function
-        self._mode = mode
 
-    def __getattr__(self, item: str):
+    def __getattr__(self, item: str) -> "LazyImporter":
         """
         For lazy importers, getting an attribute simply returns another lazy importer.
         """
-        if(self._mode == self.ImporterMode.ON_ATTR):
-            if(self._mod is self.NOTHING):
-                self._mod = self._imp(self._name, self._pkg)
-            return getattr(self._mod, item)
-        else:
-            return type(self)(f"{self._name}.{item}")
+        return type(self)(f"{self._name}.{item}")
 
     def __call__(self, *args, **kwargs):
         """
@@ -138,6 +150,11 @@ class LazyImporter:
             self._mod = self._imp(self._name, self._pkg)
 
         return self._mod(*args, **kwargs)
+
+    def force_import(self):
+        if(self._mod is self.NOTHING):
+            self._mod = self._imp(self._name, self._pkg)
+        return self._mod
 
     def __str__(self) -> str:
         return repr(self)
