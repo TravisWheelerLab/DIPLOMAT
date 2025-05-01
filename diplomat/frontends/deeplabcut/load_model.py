@@ -74,7 +74,8 @@ def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cp
             sess.graph.as_graph_def(),
             "DLCModel",
             ["Placeholder"],
-            output_names
+            output_names,
+
         )
 
         b = BytesIO()

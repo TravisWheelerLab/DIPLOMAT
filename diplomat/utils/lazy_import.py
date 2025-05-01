@@ -30,23 +30,32 @@ def _dummy_print(*args, **kwargs):
 
 def _silent_import(name: str, pkg: Optional[str] = None) -> ModuleType:
     with warnings.catch_warnings():
-        # Keep deeplabcut from flooding diplomat with warning messages and print statements...
-        debug_mode = os.environ.get("DIPLOMAT_DEBUG", False)
+        with SilentImports():
+            return _simple_import(name, pkg)
 
-        if(not debug_mode):
+
+class SilentImports:
+    def __init__(self):
+        self._true_print = None
+        self._debug_mode = os.environ.get("DIPLOMAT_DEBUG", False)
+
+    def __enter__(self):
+        if(not self._debug_mode):
             os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
             import tensorflow as tf
             tf.get_logger().setLevel('ERROR')
 
             warnings.filterwarnings("ignore")
-            true_print = builtins.print
+            self._true_print = builtins.print
             builtins.print = _dummy_print
-        try:
-            return _simple_import(name, pkg)
-        finally:
-            if(not debug_mode):
-                builtins.print = true_print
-                del os.environ["TF_CPP_MIN_LOG_LEVEL"]
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if (not self._debug_mode):
+            builtins.print = self._true_print
+            del os.environ["TF_CPP_MIN_LOG_LEVEL"]
+
 
 
 class ImportFunctions:
@@ -83,9 +92,19 @@ class LazyImporter:
     Represents a Lazily Imported Object. It waits until the user requests functionality before actually importing
     a module.
     """
+    class ImporterMode:
+        ON_ATTR = 0
+        ON_CALL = 1
+
     NOTHING = object()
 
-    def __init__(self, name: str, pkg: Optional[str] = None, import_function: ImportFunction = ImportFunctions.SILENT):
+    def __init__(
+        self,
+        name: str,
+        pkg: Optional[str] = None,
+        import_function: ImportFunction = ImportFunctions.SILENT,
+        mode: ImporterMode = ImporterMode.ON_CALL
+    ):
         """
         Create a new lazily import module, object, or function.
 
@@ -98,12 +117,18 @@ class LazyImporter:
         self._pkg = pkg
         self._mod = self.NOTHING
         self._imp = import_function
+        self._mode = mode
 
-    def __getattr__(self, item: str) -> "LazyImporter":
+    def __getattr__(self, item: str):
         """
         For lazy importers, getting an attribute simply returns another lazy importer.
         """
-        return type(self)(f"{self._name}.{item}")
+        if(self._mode == self.ImporterMode.ON_ATTR):
+            if(self._mod is self.NOTHING):
+                self._mod = self._imp(self._name, self._pkg)
+            return getattr(self._mod, item)
+        else:
+            return type(self)(f"{self._name}.{item}")
 
     def __call__(self, *args, **kwargs):
         """
