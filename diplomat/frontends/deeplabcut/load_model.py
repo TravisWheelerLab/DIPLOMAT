@@ -1,7 +1,8 @@
+import functools
 import tempfile
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from zipfile import is_zipfile, ZipFile
 
 import numpy as np
@@ -45,15 +46,77 @@ def _build_provider_ordering(device_index: Optional[int], use_cpu: bool):
     device_config.append("CPUExecutionProvider")
     return device_config
 
-# TODO: DLC model loading...
-# part_pred no grad or Adam in it.
-# locref_pred no grad or Adam in it (pose/pairwise_pred/block4/BiasAdd)...
-def load_tf_model():
-    pass
+
+def _prune_tf_model(graph_def, outputs: List[str]):
+    name_to_idx = {n.name: i for i, n in enumerate(graph_def.node)}
+    visited = [False] * len(name_to_idx)
+
+    if not all(o in name_to_idx for o in outputs):
+        raise ValueError("Not all output nodes exist in the model!")
+
+    stack = []
+    stack.extend(outputs)
+
+    while len(stack) > 0:
+        node_name = stack.pop()
+        idx = name_to_idx[node_name]
+        visited[idx] = True
+        for input_node_name in graph_def.node[idx].input:
+            if not visited[name_to_idx[input_node_name]]:
+                stack.append(input_node_name)
+
+    temp_stack = []
+    for i in range(len(visited) - 1, -1, -1):
+        node = graph_def.node.pop()
+        if(node.op == "AssignVariableOp"):
+            print(node)
+        if visited[i]:
+            temp_stack.append(node)
+    graph_def.node.extend(temp_stack[::-1])
+
+    print(f"Total nodes: {len(visited)}")
+    print(f"Removed nodes: {len(visited) - sum(visited)}")
+
+    return graph_def
+
+
+def _load_meta_graph_def(meta_file):
+    meta_graph_def = tf.compat.v1.MetaGraphDef()
+    with open(meta_file, 'rb') as f:
+        meta_graph_def.MergeFromString(f.read())
+    return meta_graph_def
+
+
+def from_checkpoint(model_path, input_names, output_names):
+    """Load tensorflow graph from checkpoint."""
+    import tensorflow as tf
+    import tf2onnx
+    tf_v1 = tf.compat.v1
+    # make sure we start with clean default graph
+    tf_v1.reset_default_graph()
+    # model_path = checkpoint/checkpoint.meta
+    with tf.device("/cpu:0"):
+        with tf_v1.Session() as sess:
+            meta_graph_def = _load_meta_graph_def(model_path)
+            _prune_tf_model(meta_graph_def.graph_def, output_names)
+            saver = tf_v1.train.import_meta_graph(meta_graph_def, clear_devices=True)
+            # restore from model_path minus the ".meta"
+            saver.restore(sess, model_path[:-5])
+            input_names = tf2onnx.tf_loader.inputs_without_resource(sess, input_names)
+            frozen_graph = tf2onnx.tf_loader.freeze_session(sess, input_names=input_names, output_names=output_names)
+            input_names = tf2onnx.tf_loader.remove_redundant_inputs(frozen_graph, input_names)
+
+        tf_v1.reset_default_graph()
+        with tf_v1.Session() as sess:
+            frozen_graph = tf2onnx.tf_loader.tf_optimize(input_names, output_names, frozen_graph)
+    tf_v1.reset_default_graph()
+    return frozen_graph, input_names, output_names
 
 
 def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cpu: bool):
     import tensorflow as tf
+    from tensorflow.python.training import py_checkpoint_reader
+    import tf2onnx
     tf.compat.v1.disable_eager_execution()
     tf.compat.v1.disable_v2_behavior()
     tf.compat.v1.reset_default_graph()
@@ -64,46 +127,47 @@ def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cp
     latest_meta_file = max(meta_files, key=lambda k: int(k.stem.split("-")[-1]))
     checkpoint_file = model_dir / latest_meta_file.stem
 
-    saver = tf.compat.v1.train.import_meta_graph(str(latest_meta_file), clear_devices=True)
+    # Check which heads exist in the DLC model from the weights file...
+    ckpt_reader = py_checkpoint_reader.NewCheckpointReader(str(checkpoint_file))
+    var_set = {var for var in ckpt_reader.get_variable_to_shape_map()}
+    print(var_set)
 
-    with tf.compat.v1.Session() as sess:
-        with sess.as_default():
-            with sess.graph.as_default():
-                saver.restore(sess, str(checkpoint_file))
+    desired_outputs = [
+        ("pose/part_pred/block4/biases", "pose/part_pred/block4/BiasAdd", True),
+        ("pose/locref_pred/block4/biases", "pose/locref_pred/block4/BiasAdd", False)
+    ]
+    output_names = []
 
-                from tensorflow.python.training import py_checkpoint_reader
-                reader = py_checkpoint_reader.NewCheckpointReader(str(checkpoint_file))
-                print(sorted({
-                    v for v in reader.get_variable_to_shape_map()
-                }))
-                print(tf.compat.v1.trainable_variables())
-                sess.run(tf.compat.v1.global_variables_initializer())
-                print("\n\n\n\n")
-                print([v.name for v in tf.compat.v1.trainable_variables()])
+    for var_name, op_name, is_required in desired_outputs:
+        if(var_name in var_set):
+            output_names.append(op_name)
+        elif(is_required):
+            raise ValueError(f"Unable to find weights for layer: {op_name} in DLC model, which is required.")
 
-                node_set = set(node.name for node in sess.graph.get_operations())
-                probs_name = "pose/part_pred/block4/BiasAdd"
-                if(probs_name not in node_set):
-                    raise ValueError("Unable to find confidence maps in DLC model!")
-                output_names = [probs_name]
-                locref_name = "pose/locref_pred/block4/BiasAdd"
-                if(locref_name in node_set):
-                    output_names.append(locref_name)
 
-                model, __ = tf2onnx.convert.from_graph_def(
-                    sess.graph.as_graph_def(),
-                    "DLCModel",
-                    ["Placeholder:0"],
-                    output_names,
-                )
+    graph_def, inputs, outputs = from_checkpoint(
+        str(latest_meta_file), ["Placeholder"], output_names
+    )
 
-                b = BytesIO()
-                onnx.save(model, b)
+    print(inputs, outputs)
 
-                return ort.InferenceSession(
-                    b.getvalue(),
-                    providers=_build_provider_ordering(device_index, use_cpu)
-                )
+    _prune_tf_model(graph_def, outputs)
+
+    model, __ = tf2onnx.convert.from_graph_def(
+        graph_def,
+        name=str(latest_meta_file.name),
+        input_names=inputs,
+        output_names=outputs,
+        opset=19
+    )
+
+    b = BytesIO()
+    onnx.save(model, b)
+
+    return ort.InferenceSession(
+        b.getvalue(),
+        providers=_build_provider_ordering(device_index, use_cpu)
+    )
 
 
 class FakeTempDir:
