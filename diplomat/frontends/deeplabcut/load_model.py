@@ -48,6 +48,8 @@ def _build_provider_ordering(device_index: Optional[int], use_cpu: bool):
 
 
 def _prune_tf_model(graph_def, outputs: List[str]):
+    import tensorflow.compat.v1 as tf_v1
+
     name_to_idx = {n.name: i for i, n in enumerate(graph_def.node)}
     visited = [False] * len(name_to_idx)
 
@@ -62,14 +64,12 @@ def _prune_tf_model(graph_def, outputs: List[str]):
         idx = name_to_idx[node_name]
         visited[idx] = True
         for input_node_name in graph_def.node[idx].input:
-            if not visited[name_to_idx[input_node_name]]:
+            if input_node_name in name_to_idx and not visited[name_to_idx[input_node_name]]:
                 stack.append(input_node_name)
 
     temp_stack = []
     for i in range(len(visited) - 1, -1, -1):
         node = graph_def.node.pop()
-        if(node.op == "AssignVariableOp"):
-            print(node)
         if visited[i]:
             temp_stack.append(node)
     graph_def.node.extend(temp_stack[::-1])
@@ -97,11 +97,13 @@ def from_checkpoint(model_path, input_names, output_names):
     # model_path = checkpoint/checkpoint.meta
     with tf.device("/cpu:0"):
         with tf_v1.Session() as sess:
-            meta_graph_def = _load_meta_graph_def(model_path)
-            _prune_tf_model(meta_graph_def.graph_def, output_names)
-            saver = tf_v1.train.import_meta_graph(meta_graph_def, clear_devices=True)
+            saver = tf_v1.train.import_meta_graph(model_path, clear_devices=True)
             # restore from model_path minus the ".meta"
+            sess.run(tf_v1.global_variables_initializer())
             saver.restore(sess, model_path[:-5])
+            for node in sess.graph_def.node:
+                if(node.op == "Placeholder"):
+                    print(node)
             input_names = tf2onnx.tf_loader.inputs_without_resource(sess, input_names)
             frozen_graph = tf2onnx.tf_loader.freeze_session(sess, input_names=input_names, output_names=output_names)
             input_names = tf2onnx.tf_loader.remove_redundant_inputs(frozen_graph, input_names)
@@ -116,6 +118,7 @@ def from_checkpoint(model_path, input_names, output_names):
 def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cpu: bool):
     import tensorflow as tf
     from tensorflow.python.training import py_checkpoint_reader
+    import tensorflow.compat.v1 as tf_v1
     import tf2onnx
     tf.compat.v1.disable_eager_execution()
     tf.compat.v1.disable_v2_behavior()
@@ -130,11 +133,10 @@ def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cp
     # Check which heads exist in the DLC model from the weights file...
     ckpt_reader = py_checkpoint_reader.NewCheckpointReader(str(checkpoint_file))
     var_set = {var for var in ckpt_reader.get_variable_to_shape_map()}
-    print(var_set)
 
     desired_outputs = [
-        ("pose/part_pred/block4/biases", "pose/part_pred/block4/BiasAdd", True),
-        ("pose/locref_pred/block4/biases", "pose/locref_pred/block4/BiasAdd", False)
+        ("pose/part_pred/block4/biases", "pose/part_pred/block4/BiasAdd:0", True),
+        ("pose/locref_pred/block4/biases", "pose/locref_pred/block4/BiasAdd:0", False)
     ]
     output_names = []
 
@@ -146,19 +148,17 @@ def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cp
 
 
     graph_def, inputs, outputs = from_checkpoint(
-        str(latest_meta_file), ["Placeholder"], output_names
+        str(latest_meta_file), ["Placeholder:0"], output_names
     )
 
-    print(inputs, outputs)
-
-    _prune_tf_model(graph_def, outputs)
+    print([n.name for n in graph_def.node])
 
     model, __ = tf2onnx.convert.from_graph_def(
         graph_def,
         name=str(latest_meta_file.name),
         input_names=inputs,
         output_names=outputs,
-        opset=19
+        opset=17
     )
 
     b = BytesIO()
