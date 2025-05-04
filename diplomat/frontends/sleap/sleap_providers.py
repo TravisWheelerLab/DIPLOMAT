@@ -660,13 +660,17 @@ class PredictorExtractor:
         probs, offsets, downscale = self._model_extractor.extract(frames)
 
         if(offsets is None and self._refinement_kernel_size > 0):
+            # TODO: Reimplement this using onnx model to allow GPU accel, as this is currently degrading
+            #       sleap performance significantly...
             offsets = _create_integral_offsets(probs, downscale, self._refinement_kernel_size)
+
 
         # Trim the resulting outputs so the match expected area for poses from the original video.
         h, w = frames.shape[1:3]
         trim_h, trim_w = int(np.ceil(h / downscale)), int(np.ceil(w / downscale))
         probs = probs[:, :trim_h, :trim_w]
-        offsets = offsets[:, :trim_h, :trim_w]
+        if(offsets is not None):
+            offsets = offsets[:, :trim_h, :trim_w]
 
         return TrackingData(
             probs,

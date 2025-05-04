@@ -34,11 +34,18 @@ def _build_provider_ordering(device_index: Optional[int], use_cpu: bool):
     supported_devices = ort.get_available_providers()
     device_config = []
 
+    def _add(val, extra=None):
+        if(extra is None):
+            extra = {}
+        if(device_index is not None):
+            extra["device_id"] = device_index
+        return (val, extra)
+
     if(not use_cpu):
         if("CUDAExecutionProvider" in supported_devices):
-            device_config.append(("CUDAExecutionProvider", {"device_id": device_index}))
+            device_config.append(_add("CUDAExecutionProvider"))
         if("ROCMExecutionProvider" in supported_devices):
-            device_config.append(("ROCMExecutionProvider", {"device_id": device_index}))
+            device_config.append(_add("ROCMExecutionProvider"))
         if("CoreMLExecutionProvider" in supported_devices):
             device_config.append("CoreMLExecutionProvider")
 
