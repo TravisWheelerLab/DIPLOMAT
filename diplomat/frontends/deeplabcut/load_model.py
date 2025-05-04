@@ -48,8 +48,6 @@ def _build_provider_ordering(device_index: Optional[int], use_cpu: bool):
 
 
 def _prune_tf_model(graph_def, outputs: List[str]):
-    import tensorflow.compat.v1 as tf_v1
-
     name_to_idx = {n.name: i for i, n in enumerate(graph_def.node)}
     visited = [False] * len(name_to_idx)
 
@@ -101,9 +99,6 @@ def from_checkpoint(model_path, input_names, output_names):
             # restore from model_path minus the ".meta"
             sess.run(tf_v1.global_variables_initializer())
             saver.restore(sess, model_path[:-5])
-            for node in sess.graph_def.node:
-                if(node.op == "Placeholder"):
-                    print(node)
             input_names = tf2onnx.tf_loader.inputs_without_resource(sess, input_names)
             frozen_graph = tf2onnx.tf_loader.freeze_session(sess, input_names=input_names, output_names=output_names)
             input_names = tf2onnx.tf_loader.remove_redundant_inputs(frozen_graph, input_names)
@@ -113,6 +108,40 @@ def from_checkpoint(model_path, input_names, output_names):
             frozen_graph = tf2onnx.tf_loader.tf_optimize(input_names, output_names, frozen_graph)
     tf_v1.reset_default_graph()
     return frozen_graph, input_names, output_names
+
+
+def _find_direct_consumers(graph_def, node):
+    consumers = []
+    for n in graph_def.node:
+        for i, ins in enumerate(n.input):
+            if(ins == node):
+                consumers.append(f"{n.name}:{i}")
+
+    return consumers
+
+
+def _get_dlc_inputs_and_outputs(meta_path):
+    meta_graph_def = _load_meta_graph_def(meta_path)
+
+    desired_outputs = [
+        ("pose/part_pred/block4/BiasAdd:0", True),
+        ("pose/locref_pred/block4/BiasAdd:0", False)
+    ]
+    output_names = []
+    op_names = {n.name for n in meta_graph_def.graph_def.node}
+
+    for op_name, is_required in desired_outputs:
+        op_only = op_name.split(":")[0]
+        if(op_only in op_names):
+            output_names.append(op_name)
+        elif(is_required):
+            raise ValueError(f"Unable to find weights for layer: {op_name} in DLC model, which is required.")
+
+    input_names = ["fifo_queue_Dequeue:0"]
+    for input_name in input_names:
+        if(input_name.split(":")[0] not in op_names):
+            raise ValueError("Can't find input node!")
+    return input_names, output_names
 
 
 def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cpu: bool):
@@ -128,36 +157,22 @@ def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cp
     if(len(meta_files) == 0):
         raise ValueError("No checkpoint files, make sure you've trained a DLC model first!")
     latest_meta_file = max(meta_files, key=lambda k: int(k.stem.split("-")[-1]))
-    checkpoint_file = model_dir / latest_meta_file.stem
 
-    # Check which heads exist in the DLC model from the weights file...
-    ckpt_reader = py_checkpoint_reader.NewCheckpointReader(str(checkpoint_file))
-    var_set = {var for var in ckpt_reader.get_variable_to_shape_map()}
-
-    desired_outputs = [
-        ("pose/part_pred/block4/biases", "pose/part_pred/block4/BiasAdd:0", True),
-        ("pose/locref_pred/block4/biases", "pose/locref_pred/block4/BiasAdd:0", False)
-    ]
-    output_names = []
-
-    for var_name, op_name, is_required in desired_outputs:
-        if(var_name in var_set):
-            output_names.append(op_name)
-        elif(is_required):
-            raise ValueError(f"Unable to find weights for layer: {op_name} in DLC model, which is required.")
-
+    inputs, outputs = _get_dlc_inputs_and_outputs(str(latest_meta_file))
+    print(inputs, outputs)
 
     graph_def, inputs, outputs = from_checkpoint(
-        str(latest_meta_file), ["Placeholder:0"], output_names
+        str(latest_meta_file), inputs, outputs
     )
-
-    print([n.name for n in graph_def.node])
 
     model, __ = tf2onnx.convert.from_graph_def(
         graph_def,
         name=str(latest_meta_file.name),
         input_names=inputs,
         output_names=outputs,
+        shape_override={
+            inputs[0]: [None, None, None, 3]
+        },
         opset=17
     )
 
@@ -182,11 +197,25 @@ class FakeTempDir:
 
 
 class FrameExtractor:
-    def __init__(self, onnx_model: ort.InferenceSession):
+    def __init__(self, onnx_model: ort.InferenceSession, model_config: dict):
         self._model = onnx_model
+        self._image_input_name = self._model.get_inputs()[0].name
+        self._config = model_config
 
     def __call__(self, frames: np.ndarray) -> TrackingData:
-        raise ValueError()
+        outputs = self._model.run(None, {self._image_input_name: frames.astype(np.float32)})
+
+        locref = outputs[1] if(len(outputs) > 1) else None
+
+        if(locref is not None):
+            locref = locref.reshape((*locref.shape[:-1], -1, 2))
+            locref *= self._config["locref_stdev"]
+
+        return TrackingData(
+            1 / (1 + np.exp(-outputs[0])),
+            locref,
+            float(np.ceil(max(frames.shape[1] / outputs[0].shape[1], frames.shape[2] / outputs[0].shape[2])))
+        )
 
 
 @tc.typecaster_function
@@ -278,5 +307,8 @@ def load_model(
             skeleton=skeleton,
             frontend="deeplabcut"
         ),
-        FrameExtractor(_load_and_convert_model(model_directory / "train", gpu_index, bool(use_cpu)))
+        FrameExtractor(
+            _load_and_convert_model(model_directory / "train", gpu_index, bool(use_cpu)),
+            model_config
+        )
     )
