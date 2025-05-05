@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import Optional, Union, List, Tuple
+
+from .onnx_graph_builder import OnnxVar, OnnxOp, to_onnx_graph_def
 from .sleap_imports import onnx, tf2onnx, tf, ort
 from numpy.lib.stride_tricks import sliding_window_view
 from typing_extensions import TypedDict
@@ -98,7 +100,7 @@ class SleapModelExtractor(ABC):
         return False
 
     @abstractmethod
-    def __init__(self, models: ConfigAndModels, **kwargs):
+    def __init__(self, models: ConfigAndModels, refinement_kernel_size: int, **kwargs):
         if(not self.can_build(models)):
             raise ValueError("Unable to build with passed model configuration!")
         self.__p = models
@@ -133,65 +135,48 @@ class PreProcessingLayer:
         oh = onnx.helper
         onnx_np_helper = onnx.numpy_helper
 
-        input = oh.make_tensor_value_info("INPUT", TensorProto.FLOAT, [None, None, None, 3])
-        nodes = []
+        input = OnnxVar("INPUT", TensorProto.FLOAT, [None, None, None, 3])
 
-        def _prior_node_output():
-            return nodes[-1].output[0] if(len(nodes) > 0) else input.name
-
-        if(p_c.get("ensure_grayscale", False)):
-            n1 = oh.make_node(
-                "Constant", [], ["RGB_TO_GRAY"],
-                value=onnx_np_helper.from_array(np.array([0.2989, 0.5870, 0.1140], dtype=np.float32))
-            )
-            n2 = oh.make_node("Mul", [_prior_node_output(), "RGB_TO_GRAY"], ["GRAYSCALE"])
-            nodes.extend([n1, n2])
-            nodes.append(oh.make_node("ReduceSum", [_prior_node_output()], ["GRAYSCALE_REDUCED"], axes=[-1], keepdims=1))
+        is_grayscale = p_c.get("ensure_grayscale", False)
+        if is_grayscale:
+            rgb_to_gray = OnnxOp("Constant", value=onnx_np_helper.from_array(np.array([0.2989, 0.5870, 0.1140], dtype=np.float32)))
+            mdl = OnnxOp("Mul", input, rgb_to_gray)
+            mdl = OnnxOp("ReduceSum", mdl, axes=[-1], keepdims=1)
         else:
-            n1 = oh.make_node("Constant", [], ["GRAY_TO_RGB"],
-                           value=onnx_np_helper.from_array(np.array([1.0, 1.0, 1.0], dtype=np.float32)))
-            n2 = oh.make_node("Mul", [_prior_node_output(), "GRAY_TO_RGB"], ["RGB"])
-            nodes.extend([n1, n2])
+            gray_to_rgb = OnnxOp("Constant", value=onnx_np_helper.from_array(np.array([1.0, 1.0, 1.0], dtype=np.float32)))
+            mdl = OnnxOp("Mul", input, gray_to_rgb)
 
         if(p_c.get("resize_and_pad_to_target", False)):
             self._t_width = p_c.get("target_width", None)
             self._t_height = p_c.get("target_height", None)
             if(self._t_width is not None and self._t_height is not None):
-                desired_size = oh.make_node(
-                    "Constant", [], ["IMG_SIZE"],
+                desired_size = OnnxOp(
+                    "Constant",
                     value=onnx_np_helper.from_array(np.array([self._t_height, self._t_width], dtype=np.int64))
                 )
-                resizer = oh.make_node(
+                mdl = OnnxOp(
                     "Resize",
-                    [_prior_node_output(), "", "", "IMG_SIZE"],
-                    ["IMG_RESIZED"],
+                    mdl, None, None, desired_size,
                     axes=[1, 2],
                     coordinate_transformation_mode="asymmetric",
                     keep_aspect_ratio_policy="not_larger"
                 )
-                nodes.extend([desired_size, resizer])
 
         self._post_input_scale = p_c.get("input_scaling", 1.0)
         if(self._post_input_scale != 1.0):
-            desired_scale = oh.make_node(
-                "Constant", [], ["IMG_SCALE"],
-                value=onnx_np_helper.from_array(np.array([self._post_input_scale, self._post_input_scale], dtype=np.float32))
+            desired_scale = OnnxOp(
+                "Constant", value=onnx_np_helper.from_array(np.array([self._post_input_scale, self._post_input_scale], dtype=np.float32))
             )
-            resizer2 = oh.make_node(
+            mdl = OnnxOp(
                 "Resize",
-                [_prior_node_output(), "", "", "IMG_SCALE"],
-                ["IMG_RESIZED2"],
+                mdl, None, desired_scale,
                 coordinate_transformation_mode="asymmetric",
                 keep_aspect_ratio_policy="not_larger"
             )
-            nodes.extend([desired_scale, resizer2])
 
-        output = oh.make_tensor_value_info(_prior_node_output(), TensorProto.FLOAT, [None, None, None, None])
-        graph = oh.make_graph(
-            nodes,
+        graph = to_onnx_graph_def(
             "ImagePreprocessor",
-            [input],
-            [output]
+            [mdl.to_var("OUTPUT", TensorProto.FLOAT, (None, None, None, 1 if is_grayscale else 3))]
         )
         self._preprocess_model = oh.make_model(graph, opset_imports=[onnx.OperatorSetIdProto(version=19)])
         onnx.checker.check_model(self._preprocess_model)
@@ -306,16 +291,20 @@ class BottomUpModelExtractor(SleapModelExtractor):
     def can_build(cls, models: ConfigAndModels) -> bool:
         return len(models) == 1 and any(_get_config_paths(models[0][0], cls.MODEL_CONFIGS))
 
-    def __init__(self, models: ConfigAndModels, **kwargs):
-        super().__init__(models)
+    def __init__(self, models: ConfigAndModels, refinement_kernel_size: int, **kwargs):
+        super().__init__(models, refinement_kernel_size)
         self._config, self._model = models[0]
         self._preprocessor = PreProcessingLayer(self._config, **kwargs)
         self._model = _onnx_model_to_inference_session(_keras_to_onnx_model(_reset_input_layer(self._model)), **kwargs)
+
         self._heads = [
             _find_model_output(self._model, "MultiInstanceConfmapsHead"),
             _find_model_output(self._model, "PartAffinityFieldsHead"),
             _find_model_output(self._model, "OffsetRefinementHead", False)
         ]
+
+        if(refinement_kernel_size > 1):
+            _create_integral_offsets()
 
     def extract(self, data: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
         data, first_scale_val = self._preprocessor(data)
@@ -614,7 +603,44 @@ def _get_integral_offset_kernels(kernel_size: int, stride: float, dtype: np.dtyp
     y_kernel, x_kernel = [v * stride for v in np.mgrid[-kernel_half:kernel_half + 1, -kernel_half:kernel_half + 1]]
     # Simple summation kernel, adds all values in an area...
     ones_kernel = np.ones((kernel_size, kernel_size), dtype=dtype)
-    return np.stack([x_kernel, y_kernel, ones_kernel], axis=-1).astype(dtype)
+    return np.stack([x_kernel, y_kernel, ones_kernel], axis=0).reshape((3, 1, *x_kernel.shape)).astype(dtype)
+
+
+@resolve_lazy_imports
+def _get_integral_offsets_model(kernel_size: int, stride: float):
+    import onnx.numpy_helper as onh
+    FLOAT = onnx.TensorProto
+    input = OnnxVar("conf_maps", FLOAT, (None, None, None, None))
+
+    # Reshape to (B, C, 1, H, W)
+    mdl = OnnxOp("Unsqueeze", input, OnnxOp("Constant", value_ints=[-1]))
+    mdl = OnnxOp("Transpose", mdl, perm=[0, 3, 4, 1, 2])
+    # Merge batch and channels dimensions.
+    full_shape = OnnxOp("Shape", mdl)
+    split_shape = OnnxOp("Split", full_shape, OnnxOp("Constant", value_ints=[2, 3]))
+    bc_comb_shape = OnnxOp("Concat", OnnxOp("ReduceProd", split_shape[0], keepdims=1), split_shape[1], axis=1)
+    mdl = OnnxOp("Reshape", mdl, bc_comb_shape)
+    # Run the convolution...
+    mdl = OnnxOp(
+        "Conv",
+        mdl,
+        OnnxOp(
+            "Constant",
+            value=onnx.numpy_helper.from_array(_get_integral_offset_kernels(kernel_size, stride, np.float32))
+        ),
+        auto_pad="SAME_UPPER",
+    )
+
+    full_shape_new = OnnxOp("Shape", mdl)
+    split_shape_new = OnnxOp("Split", full_shape_new, OnnxOp("Constant", value_ints=[2, 3]))
+    shape_new = OnnxOp("Concat", split_shape[0], split_shape_new[1], axis=1)
+    mdl = OnnxOp("Reshape", mdl, shape_new)
+    mdl = OnnxOp("Transpose", mdl, perm=[0, 3, 4, 1, 2])
+    mdl = OnnxOp("Split", mdl, OnnxOp("Constant", value_ints=[2, 1]), axis=-1)
+    mdl = OnnxOp("Div", mdl[0], mdl[1])
+    mdl = OnnxOp("Mul", mdl, OnnxOp("Constant", value_floats=[stride]))
+
+    return to_onnx_graph_def("IntegralOffsets", [mdl.to_var("offsets", FLOAT, (None, None, None, None, 2))])
 
 
 def _create_integral_offsets(probs: np.ndarray, stride: float, kernel_size: int) -> np.ndarray:
@@ -648,7 +674,11 @@ class PredictorExtractor:
 
         for model_extractor in EXTRACTORS:
             if(model_extractor.can_build(configs)):
-                self._model_extractor = model_extractor(self._configs, **kwargs)
+                self._model_extractor = model_extractor(
+                    self._configs,
+                    refinement_kernel_size=refinement_kernel_size,
+                    **kwargs
+                )
                 break
         else:
             raise NotImplementedError(f"Could not find model handler for provided model type.")
@@ -659,12 +689,6 @@ class PredictorExtractor:
     def extract(self, frames: np.ndarray) -> TrackingData:
         probs, offsets, downscale = self._model_extractor.extract(frames)
 
-        if(offsets is None and self._refinement_kernel_size > 0):
-            # TODO: Reimplement this using onnx model to allow GPU accel, as this is currently degrading
-            #       sleap performance significantly...
-            offsets = _create_integral_offsets(probs, downscale, self._refinement_kernel_size)
-
-
         # Trim the resulting outputs so the match expected area for poses from the original video.
         h, w = frames.shape[1:3]
         trim_h, trim_w = int(np.ceil(h / downscale)), int(np.ceil(w / downscale))
@@ -674,7 +698,7 @@ class PredictorExtractor:
 
         return TrackingData(
             probs,
-            None if(offsets is None) else offsets,
+            offsets,
             downscale
         )
 
