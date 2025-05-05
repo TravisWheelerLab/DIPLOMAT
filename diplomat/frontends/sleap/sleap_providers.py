@@ -295,24 +295,46 @@ class BottomUpModelExtractor(SleapModelExtractor):
         super().__init__(models, refinement_kernel_size)
         self._config, self._model = models[0]
         self._preprocessor = PreProcessingLayer(self._config, **kwargs)
-        self._model = _onnx_model_to_inference_session(_keras_to_onnx_model(_reset_input_layer(self._model)), **kwargs)
+        import onnx
+        self._model = _keras_to_onnx_model(_reset_input_layer(self._model))
+
+        offset_ref_name = "OffsetRefinementHead"
+        if offset_ref_name not in map(lambda x: x.name, self._model.graph.output) and refinement_kernel_size > 1:
+            self._refinement_kernel_size = refinement_kernel_size
+            post_model = onnx.helper.make_model(
+                _get_integral_offsets_model(refinement_kernel_size, 1.0, "conf_maps", offset_ref_name),
+                ir_version=self._model.ir_version,
+                opset_imports=[onnx.OperatorSetIdProto(version=self._model.opset_import[0].version)]
+            )
+            self._model = onnx.compose.merge_models(
+                self._model,
+                post_model,
+                [("MultiInstanceConfmapsHead", "conf_maps")],
+                outputs=["MultiInstanceConfmapsHead", offset_ref_name]
+            )
+        else:
+            self._refinement_kernel_size = 0
+            for out in self._model.graph.output:
+                if out.name == "PartAffinityFieldsHead":
+                    self._model.graph.output.remove(out)
+
+        self._model = _onnx_model_to_inference_session(self._model, **kwargs)
 
         self._heads = [
             _find_model_output(self._model, "MultiInstanceConfmapsHead"),
-            _find_model_output(self._model, "PartAffinityFieldsHead"),
-            _find_model_output(self._model, "OffsetRefinementHead", False)
+            _find_model_output(self._model, offset_ref_name, False)
         ]
-
-        if(refinement_kernel_size > 1):
-            _create_integral_offsets()
 
     def extract(self, data: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
         data, first_scale_val = self._preprocessor(data)
-        conf_map, __, offsets = _resolve_heads(
+        conf_map, offsets = _resolve_heads(
             self._model.run(None, {self._model.get_inputs()[0].name: data}),
             self._heads
         )
         cmap_dscale = data.shape[1] / conf_map.shape[1]
+
+        if(offsets is not None and self._refinement_kernel_size > 0):
+            offsets *= first_scale_val * cmap_dscale
 
         return (
             _fix_conf_map(conf_map),
@@ -434,11 +456,31 @@ class SingleInstanceModelExtractor(SleapModelExtractor):
     def can_build(cls, models: ConfigAndModels) -> bool:
         return len(models) == 1 and any(_get_config_paths(models[0][0], cls.MODEL_CONFIGS))
 
-    def __init__(self, models: ConfigAndModels, **kwargs):
-        super().__init__(models)
+    def __init__(self, models: ConfigAndModels, refinement_kernel_size: int, **kwargs):
+        super().__init__(models, refinement_kernel_size)
         self._config, self._model = models[0]
         self._preprocessor = PreProcessingLayer(self._config, **kwargs)
-        self._model = _onnx_model_to_inference_session(_keras_to_onnx_model(_reset_input_layer(self._model)), **kwargs)
+        self._model = _keras_to_onnx_model(_reset_input_layer(self._model))
+
+        offset_ref_name = "OffsetRefinementHead"
+        if offset_ref_name not in map(lambda x: x.name, self._model.graph.output) and refinement_kernel_size > 1:
+            self._refinement_kernel_size = refinement_kernel_size
+            post_model = onnx.helper.make_model(
+                _get_integral_offsets_model(self._refinement_kernel_size, 1.0, "conf_maps", offset_ref_name),
+                ir_version=self._model.ir_version,
+                opset_imports=[onnx.OperatorSetIdProto(version=self._model.opset_import[0].version)]
+            )
+            self._model = onnx.compose.merge_models(
+                self._model,
+                post_model,
+                [("SingleInstanceConfmapsHead", "conf_maps")],
+                outputs=["SingleInstanceConfmapsHead", offset_ref_name]
+            )
+        else:
+            self._refinement_kernel_size = 0
+
+        self._model = _onnx_model_to_inference_session(self._model, **kwargs)
+
         self._heads = [
             _find_model_output(self._model, "SingleInstanceConfmapsHead"),
             _find_model_output(self._model, "OffsetRefinementHead", False)
@@ -451,6 +493,9 @@ class SingleInstanceModelExtractor(SleapModelExtractor):
             self._heads
         )
         cmap_dscale = data.shape[1] / conf_map.shape[1]
+
+        if(offsets is not None and self._refinement_kernel_size > 0):
+            offsets *= first_scale_val * cmap_dscale
 
         return (
             _fix_conf_map(conf_map),
@@ -466,8 +511,8 @@ def _convolve_2d(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     """
     Fast-ish manual 2D convolution written using numpy's sliding windows implementation.
     """
-    pad_h = kernel.shape[0] - 1
-    pad_w = kernel.shape[1] - 1
+    pad_h = kernel.shape[-2] - 1
+    pad_w = kernel.shape[-1] - 1
     img = np.pad(
         img,
         ((0, 0), (pad_h // 2, pad_h - pad_h // 2), (pad_w // 2, pad_w - pad_w // 2), (0, 0))
@@ -477,7 +522,7 @@ def _convolve_2d(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
         (kernel.shape[0], kernel.shape[1]),
         (1, 2)
     )
-    return np.einsum("...ij,...ijk->...k", conv_view, kernel)
+    return np.einsum("...ij,...kij->...k", conv_view, kernel)
 
 
 def _local_peak_estimation(
@@ -607,10 +652,9 @@ def _get_integral_offset_kernels(kernel_size: int, stride: float, dtype: np.dtyp
 
 
 @resolve_lazy_imports
-def _get_integral_offsets_model(kernel_size: int, stride: float):
-    import onnx.numpy_helper as onh
-    FLOAT = onnx.TensorProto
-    input = OnnxVar("conf_maps", FLOAT, (None, None, None, None))
+def _get_integral_offsets_model(kernel_size: int, stride: float, input_name: str = "conf_maps", output_name: str = "offsets"):
+    FLOAT = onnx.TensorProto.FLOAT
+    input = OnnxVar(input_name, FLOAT, (None, None, None, None))
 
     # Reshape to (B, C, 1, H, W)
     mdl = OnnxOp("Unsqueeze", input, OnnxOp("Constant", value_ints=[-1]))
@@ -618,7 +662,7 @@ def _get_integral_offsets_model(kernel_size: int, stride: float):
     # Merge batch and channels dimensions.
     full_shape = OnnxOp("Shape", mdl)
     split_shape = OnnxOp("Split", full_shape, OnnxOp("Constant", value_ints=[2, 3]))
-    bc_comb_shape = OnnxOp("Concat", OnnxOp("ReduceProd", split_shape[0], keepdims=1), split_shape[1], axis=1)
+    bc_comb_shape = OnnxOp("Concat", OnnxOp("ReduceProd", split_shape[0], keepdims=1), split_shape[1], axis=0)
     mdl = OnnxOp("Reshape", mdl, bc_comb_shape)
     # Run the convolution...
     mdl = OnnxOp(
@@ -630,17 +674,21 @@ def _get_integral_offsets_model(kernel_size: int, stride: float):
         ),
         auto_pad="SAME_UPPER",
     )
-
+    # Reshape to original shape and 2 for x and y coordinates...
     full_shape_new = OnnxOp("Shape", mdl)
-    split_shape_new = OnnxOp("Split", full_shape_new, OnnxOp("Constant", value_ints=[2, 3]))
-    shape_new = OnnxOp("Concat", split_shape[0], split_shape_new[1], axis=1)
+    split_shape_new = OnnxOp("Split", full_shape_new, OnnxOp("Constant", value_ints=[1, 3]))
+    shape_new = OnnxOp("Concat", split_shape[0], split_shape_new[1], axis=0)
     mdl = OnnxOp("Reshape", mdl, shape_new)
     mdl = OnnxOp("Transpose", mdl, perm=[0, 3, 4, 1, 2])
+
+    # Split out coordinate and Center of Mass kernel to divide by it.
     mdl = OnnxOp("Split", mdl, OnnxOp("Constant", value_ints=[2, 1]), axis=-1)
     mdl = OnnxOp("Div", mdl[0], mdl[1])
+    # Nan to zero...
+    mdl = OnnxOp("Where", OnnxOp("Equal", mdl, mdl), mdl, OnnxOp("Constant", value_floats=[0.0]))
     mdl = OnnxOp("Mul", mdl, OnnxOp("Constant", value_floats=[stride]))
 
-    return to_onnx_graph_def("IntegralOffsets", [mdl.to_var("offsets", FLOAT, (None, None, None, None, 2))])
+    return to_onnx_graph_def("IntegralOffsets", [mdl.to_var(output_name, FLOAT, (None, None, None, None, 2))])
 
 
 def _create_integral_offsets(probs: np.ndarray, stride: float, kernel_size: int) -> np.ndarray:

@@ -109,8 +109,6 @@ def to_onnx_graph_def(
     onnx_nodes = []
     implicit_inputs = []
 
-    print(visit_list)
-
     # Traverse the nodes in order now...
     for node in visit_list:
         if isinstance(node, OnnxVar) and node.producing_op is None:
