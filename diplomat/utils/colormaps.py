@@ -7,6 +7,9 @@ import matplotlib as mpl
 import numpy as np
 import matplotlib.colors as mpl_colors
 from typing import Union, Tuple, Sequence, Optional, List
+
+from PIL.ImageChops import offset
+
 import diplomat.processing.type_casters as tc
 import itertools
 
@@ -21,12 +24,11 @@ class DiplomatColormap:
         under: Optional[Sequence[float]] = None,
         over: Optional[Sequence[float]] = None,
         bad: Optional[Sequence[float]] = None,
-        gamma: float = 1,
         count_hint: Optional[int] = None
     ):
-        self._r = self._normalize_mapper(r_values, gamma)
-        self._g = self._normalize_mapper(g_values, gamma)
-        self._b = self._normalize_mapper(b_values, gamma)
+        self._r = self._normalize_mapper(r_values)
+        self._g = self._normalize_mapper(g_values)
+        self._b = self._normalize_mapper(b_values)
         self._under = under if under is None else np.asarray(under)
         self._over = over if over is None else np.asarray(over)
         self._bad = bad if bad is None else np.asarray(bad)
@@ -77,7 +79,6 @@ class DiplomatColormap:
             cls.to_rgba_optional(under),
             cls.to_rgba_optional(over),
             cls.to_rgba_optional(bad),
-            1,
             n
         )
 
@@ -92,12 +93,23 @@ class DiplomatColormap:
         bad=None
     ) -> "DiplomatColormap":
         def _from_segments(d):
-            offsets = np.stack([np.nextafter(d[:, 0], -np.inf), d[:, 0]], -1).reshape(-1)
-            return np.stack([offsets, d[:, 1:].reshape(-1)], -1)[1:-1]
+            if(callable(d)):
+                xs = np.linspace(0, 1, 255)
+                return np.stack(
+                    [xs, np.clip(d(xs ** gamma), 0.0, 1.0)], -1
+                )
+            else:
+                d = np.asarray(d)
+                if(d.shape[0] == 1):
+                    d[:, 1] = d[:, 2]
+                    d = np.repeat(d, 2, 0)
+                xs = d[:, 0] ** gamma
+                offsets = np.stack([np.nextafter(xs, -np.inf), xs], -1).reshape(-1)
+                return np.stack([offsets, d[:, 1:].reshape(-1)], -1)[1:-1]
 
-        red = np.asarray(segmentdata["red"])
-        green = np.asarray(segmentdata["green"])
-        blue = np.asarray(segmentdata["blue"])
+        red = segmentdata["red"]
+        green = segmentdata["green"]
+        blue = segmentdata["blue"]
 
         return cls(
             name,
@@ -107,7 +119,6 @@ class DiplomatColormap:
             under,
             over,
             bad,
-            gamma
         )
 
     @classmethod
@@ -120,9 +131,9 @@ class DiplomatColormap:
         raise ValueError(f"Unsupported matplotlib colormap type: {type(colormap)}")
 
     @staticmethod
-    def _normalize_mapper(v, gamma):
+    def _normalize_mapper(v):
         v = v[np.argsort(v[:, 0])]
-        v[:, 0] = np.clip(v[:, 0] ** gamma, 0.0, 1.0)
+        v[:, 0] = np.clip(v[:, 0], 0.0, 1.0)
         return v
 
     def __call__(self, data: np.ndarray, alpha: Optional[float] = None, bytes: bool = False):
@@ -169,7 +180,6 @@ class DiplomatColormap:
             from_string(data["under"]),
             from_string(data["over"]),
             from_string(data["bad"]),
-            1,
             data["count_hint"]
         )
 

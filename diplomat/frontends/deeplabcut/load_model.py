@@ -290,9 +290,9 @@ def load_model(
         raise FileNotFoundError(f"Invalid model selection: (Iteration {iteration}, Training Fraction {train_frac}, Shuffle: {shuffle})")
 
     # Set the number of outputs...
-    num_outputs = int(
-        config.get("num_outputs", model_config.get("num_outputs", None)) if(num_outputs is None) else num_outputs
-    )
+    num_outputs = config.get("num_outputs", model_config.get("num_outputs", None)) if(num_outputs is None) else num_outputs
+    if(num_outputs is not None):
+        num_outputs = int(num_outputs)
     batch_size = batch_size if(batch_size is not None) else config["batch_size"]
     body_parts = list(model_config["all_joints_names"])
     if("partaffinityfield_graph" in model_config):
