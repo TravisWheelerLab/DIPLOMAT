@@ -8,8 +8,6 @@ import numpy as np
 import matplotlib.colors as mpl_colors
 from typing import Union, Tuple, Sequence, Optional, List
 
-from PIL.ImageChops import offset
-
 import diplomat.processing.type_casters as tc
 import itertools
 
