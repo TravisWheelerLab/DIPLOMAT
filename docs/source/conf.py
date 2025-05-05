@@ -42,7 +42,7 @@ imgmath_image_format = "svg"
 templates_path = ['_templates']
 exclude_patterns = []
 
-autodoc_mock_imports = ["sleap", "tensorflow", "pandas", "numba", "deeplabcut", "wx"]
+autodoc_mock_imports = ["sleap", "tensorflow", "pandas", "numba", "deeplabcut", "wx", "tf2onnx", "onnxruntime", "onnx"]
 
 autosummary_generate = True
 autosummary_imported_members = True

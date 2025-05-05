@@ -8,6 +8,9 @@ _numeric = Union[np.ndarray, int]
 
 
 class ClusteringMethod(IntEnum):
+    """
+    The set of agglomerate clustering methods supported by this module.
+    """
     SINGLE = 0
     COMPLETE = 1
     AVERAGE = 2
