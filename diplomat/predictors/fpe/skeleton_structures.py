@@ -302,7 +302,7 @@ class Histogram:
     def get_bin_for_value(self, value: float) -> Tuple[float, int, float]:
         val_bin = int((value - self._bin_offset) / self._bin_size)
         freq, avg = self._bins.get(val_bin, (0, value))
-        return (val_bin * self._bin_size + self._bin_offset, freq, avg)
+        return (float(val_bin * self._bin_size + self._bin_offset), int(freq), float(avg))
 
     def __iter__(self) -> Iterable[float]:
         return (b * self._bin_size + self._bin_offset for b in self._bins)

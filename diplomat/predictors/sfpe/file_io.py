@@ -366,8 +366,10 @@ class DiplomatFPEState:
     def _encode_meta_chunk(self, data: dict = None) -> bytes:
         if(data is None):
             data = {}
-
-        return zlib.compress(json.dumps(data, cls=FPEMetadataEncoder).encode(), self._compression_level)
+        try:
+            return zlib.compress(json.dumps(data, cls=FPEMetadataEncoder).encode(), self._compression_level)
+        except TypeError as e:
+            raise ValueError(f"Bad metadata object: {data}") from e
 
     def _decode_meta_chunk(self, data: bytes) -> dict:
         if(len(data) == 0):
