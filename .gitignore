@@ -21,3 +21,4 @@ docs/ENV/
 .DS_Store
 
 *.zip
+*.egg-info/

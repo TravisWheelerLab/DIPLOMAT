@@ -29,12 +29,6 @@ def _dummy_print(*args, **kwargs):
     pass
 
 
-def _silent_import(name: str, pkg: Optional[str] = None) -> ModuleType:
-    with warnings.catch_warnings():
-        with SilentImports():
-            return _simple_import(name, pkg)
-
-
 class SilentImports:
     def __init__(self):
         self._true_print = None
@@ -56,6 +50,30 @@ class SilentImports:
         if (not self._debug_mode):
             builtins.print = self._true_print
             del os.environ["TF_CPP_MIN_LOG_LEVEL"]
+
+
+def _silent_import(name: str, pkg: Optional[str] = None) -> ModuleType:
+    with warnings.catch_warnings():
+        with SilentImports():
+            return _simple_import(name, pkg)
+
+
+class _OnnxPreloadImport:
+    def __init__(self):
+        self._onnx_preload = True
+
+    def __call__(self, name: str, pkg: Optional[str] = None) -> ModuleType:
+        mod = _simple_import(name, pkg)
+        # If first import of onnx and it's the most recent gpu versions, preload needed nvidia dlls...
+        if self._onnx_preload and mod.__name__.startswith("onnxruntime"):
+            self._onnx_preload = False
+            import onnxruntime as ort
+            if hasattr(ort, "preload_dlls"):
+                ort.preload_dlls()
+        return mod
+
+
+onnx_preload_import = _OnnxPreloadImport()
 
 
 class ImportFunctions:

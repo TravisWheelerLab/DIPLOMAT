@@ -1,3 +1,4 @@
+import functools
 from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import Optional, Union, List, Tuple

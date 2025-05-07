@@ -10,12 +10,18 @@ _numeric = Union[np.ndarray, int]
 class ClusteringMethod(IntEnum):
     """
     The set of agglomerate clustering methods supported by this module.
+    Determines how weights are adjusted after a merge.
     """
     SINGLE = 0
+    """ Single linkage clustering, the distance between two clusters is the distance between the two closest nodes to each. """
     COMPLETE = 1
+    """ Complete linkage clustering, the distance between two clusters is the distance between the two farthest points in each. """
     AVERAGE = 2
+    """ Average clustering. The distance between two clusters is the distance between their points averaged. """
     WEIGHTED = 3
+    """ Weighted average clustering. Like average, but ignores cluster size when determining the average point for a new cluster. """
     WARD = 4
+    """ Ward clustering. Minimizes the total within-cluster variance. """
 
 
 _CLUSTERING_METHOD_MAX = max(ClusteringMethod)
@@ -64,6 +70,9 @@ def dist_index(node1: _numeric, node2: _numeric):
 
 @numba.njit("types.Tuple((i8[:, :], f8[:]))(f8[:, :], i8)")
 def nn_chain(dists: np.ndarray, linkage_mode: int):
+    """
+    Use the nearest neighbor chain algorithm to perform hierarchical clustering.
+    """
     assert dists.ndim == 2
     assert dists.shape[0] == dists.shape[1]
     assert _CLUSTERING_METHOD_MIN <= linkage_mode <= _CLUSTERING_METHOD_MAX
@@ -207,6 +216,10 @@ def _uf_union(uf: UnionFindType, n1: int, n2: int) -> int:
 
 @numba.njit("types.Tuple((i8[:], i8))(i8[:, :], f8[:], i8)")
 def get_components(merge_list: np.ndarray, distances: np.ndarray, num_components: int):
+    """
+    Get the components or clusters of set of nodes after performing hierarchical clustering, given a specific number
+    of desired components to be returned. Returns clustering solution at that level.
+    """
     assert merge_list.ndim == 2
     assert distances.ndim == 1
     assert merge_list.shape[1] == 3
