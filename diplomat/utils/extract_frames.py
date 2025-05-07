@@ -255,10 +255,8 @@ def unpack_frame_string(
                             0 or less, this function returns a single TrackingData object storing all frames instead of
                             returning a generator.
 
-    :returns: A tuple containing:
-               - A list of strings (body parts) and,
-               - A single TrackingData object if frames_per_iter <= 0,
-                 or a Generator of TrackingData objects if frames_per_iter > 0.
+    :returns: A tuple containing a list of strings (body parts) and, a single TrackingData object if
+              frames_per_iter <= 0, or a Generator of TrackingData objects if frames_per_iter > 0.
     """
     f = BytesIO(base64.decodebytes(frame_string))
 

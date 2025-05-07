@@ -10,6 +10,14 @@ class FPEString:
             f"{self._prefix} See :ref:`Frame Passes` to see the list of currently supported frame passes and options."
         )
 
+    def __typecaster_str__(self):
+        from diplomat import CLI_RUN
+        if CLI_RUN:
+            ref_info = "Run the command 'diplomat predictors list_settings' to see the full set of options for this parameter."
+        else:
+            ref_info = "Run the function 'diplomat.get_predictor_settings' to see the full set of options for this parameter."
+        return f"{self._prefix} {ref_info}"
+
     def __repr__(self):
         return self.__str__()
 

@@ -30,22 +30,19 @@ Development Commands
 
 {entries.dev_commands}
 
-Frontend Specific Commands (Advanced)
-=====================================
+..
+    Will Add this back in later when we have actual frontend commands.
+    Frontend Specific Commands (Advanced)
+    =====================================
 
-These are the frontend specific implementations of DIPLOMAT's core functionalities.
-When you run :cli:`diplomat track`, :cli:`diplomat tweak`, :cli:`diplomat annotate`,
-:cli:`diplomat supervised`, or :cli:`diplomat unsupervised`, you are calling these functions,
-as those commands determine the correct implementation based on the config file you pass.
-Therefore, you will likely almost never call these functions directly, but they are included as
-they list all settings that a backend supports.
+    These are custom frontend specific commands available in DIPLOMAT.
 
-.. toctree::
-    :hidden:
+    .. toctree::
+        :hidden:
 
-{entries.files.frontend_commands}
+    {entries.files.frontend_commands}
 
-.. list-table::
-    :widths: auto
+    .. list-table::
+        :widths: auto
 
-{entries.frontend_commands}
+    {entries.frontend_commands}

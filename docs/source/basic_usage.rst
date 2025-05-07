@@ -34,65 +34,25 @@ with actual paths to the project config file and the video):
 .. code-block:: sh
 
     # Run diplomat with UI intervention...
-    diplomat track_and_interact -c path/to/dlc/project/config.yaml -v path/to/video/to/run/on.mp4
+    diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -v path/to/video/to/run/on.mp4
     # Run without the UI...
-    diplomat track -c path/to/dlc/project/config.yaml -v path/to/video/to/run/on.mp4
+    diplomat track -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -v path/to/video/to/run/on.mp4
 
-Both of these commands support running on a list videos by simply passing paths using a comma
-separated list encased in square brackets:
+These commands will produce a .csv and .dipui file after tracking is done. Both of these commands support running
+on a list videos by simply passing paths using a comma separated list encased in square brackets:
 
 .. code-block:: sh
 
-    diplomat track_and_interact -c path/to/dlc/project/config.yaml -v [path/to/video1.mp4, path/to/video2.webm, path/to/video3.mkv]
+    diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -v [path/to/video1.mp4, path/to/video2.webm, path/to/video3.mkv]
 
 They also support working on more or less individuals by specifying the ``--num_outputs`` or ``-no`` flag:
 
 .. code-block:: sh
 
     # Video has 2 individuals.
-    diplomat track_and_interact -c path/to/dlc/project/config.yaml -no 2 -v path/to/video1.mp4
+    diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -no 2 -v path/to/video1.mp4
     # Video has 5 individuals.
-    diplomat track_and_interact -c path/to/dlc/project/config.yaml -no 5 -v path/to/video2.mp4
-
-
-Producing a Labeled Video
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Once tracking is done, one can produce a labeled video using the :py:cli:`diplomat annotate`
-command and passing a video to it, as shown below:
-
-.. code-block:: sh
-
-    diplomat annotate -c path/to/dlc/project/config.yaml -v path/to/video.mp4
-
-This will cause DIPLOMAT to produce another video placed next to the original video with
-``_labeled`` tacked on to the end of its name. Solid markers indicate a tracked and detected part,
-hollow markers indicate the part is occluded or hidden.
-
-Restoring UI to Make Major Adjustments
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-DIPLOMAT, when run in interactive or non-interactive mode with the `"storage_mode"` set to `"disk"` (this is
-the default setting), will save the video, all run session info, and frame data to a `.dipui`
-file. If the DIPLOMAT UI either crashes or you would like to edit your saved results in the
-feature complete version of the UI, you can restore the UI state using the :py:cli:`diplomat interact`
-command, as shown below:
-
-.. code-block:: sh
-
-    diplomat interact -s path/to/ui/state/file.dipui
-
-
-Making Minor Tweaks to Results
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-DIPLOMAT provides a stripped down version of the UI editor, which allows you to make minor
-modifications to results and also view results after tracking has already been done.
-This can be done using the :py:cli:`diplomat tweak` command.
-
-.. code-block:: sh
-
-    diplomat tweak -c path/to/dlc/project/config.yaml -v path/to/video.mp4
+    diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -no 5 -v path/to/video2.mp4
 
 
 Using DIPLOMAT with SLEAP Projects
@@ -101,11 +61,11 @@ Using DIPLOMAT with SLEAP Projects
 Setting up a Project
 ^^^^^^^^^^^^^^^^^^^^
 
-DIPLOMAT works with all of SLEAP's models, with the exception of SLEAP's top-down based
-models. To setup a SLEAP project, one can simply use SLEAP's UI to create a project
+DIPLOMAT works with all of SLEAP's models, but it's recommended to use their bottom-up models with diplomat.
+To setup a SLEAP project, one can simply use SLEAP's UI to create a project
 and label frames. To setup a SLEAP project, you can follow the SLEAP tutorial at
 `https://sleap.ai/tutorials/tutorial.html <https://sleap.ai/tutorials/tutorial.html>`_
-all the way through the "Start Training" section.
+all the way through and including the "Start Training" section.
 
 Tracking a Video
 ^^^^^^^^^^^^^^^^
@@ -122,7 +82,7 @@ with actual paths to the SLEAP model folder or zip file and the video):
     diplomat track -c path/to/sleap/model/folder/or/zip -v path/to/video/to/run/on.mp4
 
 Models are typically placed in a folder called "models" placed next to the .slp file for your SLEAP project. Both of the above commands will
-produce a ".slp" file with a prefix matching the name video. Both of these commands support running on a list videos by simply passing paths
+produce a .csv and .dipui file once tracking is done. Both of these commands support running on a list videos by simply passing paths
 using a comma separated list:
 
 .. code-block:: sh
@@ -140,25 +100,23 @@ The above commands also support working on more or less individuals by specifyin
 
 
 Producing a Labeled Video
-^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------
 
 Once tracking is done, one can produce a labeled video using the :py:cli:`diplomat annotate`
-command and passing a video to it, as shown below:
+command and passing video/csv pairs to it, as shown below:
 
 .. code-block:: sh
 
-    diplomat annotate -c path/to/sleap/model/folder/or/zip -v path/to/final/labels.slp
+    diplomat annotate -v path/to/video.mp4 -c path/to/video-track-results.csv
 
-Notice that the video parameter (-v flag) does not accept a list of videos, but rather a list of
-SLEAP files generated by one of DIPLOMAT's tracking commands (:py:cli:`diplomat track`,
-:py:cli:`diplomat track_and_interact`, or :py:cli:`diplomat track`).
-This will cause DIPLOMAT to produce video placed next to the labels with the same name. Solid markers indicate a tracked and detected part,
+This will cause DIPLOMAT to produce another video placed next to the original video with
+``_labeled`` tacked on to the end of its name. Solid markers indicate a tracked and detected part,
 hollow markers indicate the part is occluded or hidden.
 
 Restoring UI to Make Major Adjustments
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------
 
-DIPLOMAT, when run in interactive or non-interactive mode with the `"storage_mode"` set to `"disk"` (this is
+DIPLOMAT, when run in interactive or non-interactive mode with the `"storage_mode"` set to `"disk"` or `"hybrid"` (`"hybrid"` is
 the default setting), will save the video, all run session info, and frame data to a `.dipui`
 file. If the DIPLOMAT UI either crashes or you would like to edit your saved results in the
 feature complete version of the UI, you can restore the UI state using the :py:cli:`diplomat interact`
@@ -168,17 +126,17 @@ command, as shown below:
 
     diplomat interact -s path/to/ui/state/file.dipui
 
+
 Making Minor Tweaks to Results
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------
 
 DIPLOMAT provides a stripped down version of the UI editor, which allows you to make minor
 modifications to results and also view results after tracking has already been done.
-This can be done using the :py:cli:`diplomat tweak` command.
+This can be done passing video/csv pairs :py:cli:`diplomat tweak` command.
 
 .. code-block:: sh
 
-    # NOTICE: Does not take videos, but paths to output labels for SLEAP...
-    diplomat tweak -c path/to/dlc/project/config.yaml -v path/to/final/labels.slp
+    diplomat tweak -v path/to/video.mp4 -c path/to/video-track-results.csv
 
 
 Saving Model Outputs for Later Analysis (All Frontends)
@@ -195,15 +153,16 @@ a frame store for later analysis, run tracking with the frame store exporting pr
 
 The above command will generate a .dlfs file next to the video. To run tracking on it, run one of
 DIPLOMAT's tracking methods, but with the ``-fs`` flag passing in the frame store(s) instead of the video.
+Also, the project config is not needed when running on frame stores.
 
 .. code-block:: sh
 
     # Run DIPLOMAT with no UI...
-    diplomat track -c path/to/config -fs path/to/fstore.dlfs
+    diplomat track -fs path/to/fstore.dlfs
     # Run DIPLOMAT with UI...
-    diplomat track_and_interact -c path/to/config -fs path/to/fstore.dlfs
+    diplomat track_and_interact -fs path/to/fstore.dlfs
     # Run DIPLOMAT with some other prediction algorithm
-    diplomat track_with -c path/to/config -fs path/to/fstore.dlfs -p NameOfPredictorPlugin
+    diplomat track_with -fs path/to/fstore.dlfs -p NameOfPredictorPlugin
 
 Video Utilities
 ---------------

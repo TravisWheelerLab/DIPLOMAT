@@ -906,7 +906,7 @@ class MultiScoreDisplay(wx.Panel):
         :param bp_names: A list of strings, being the names of the body parts.
         :param data: A list of 1D numpy arrays, being the probabilities for each body part.
         :param w_id: The WX window ID, defaults to wx.ID_ANY.
-        :param **kwargs: All other arguments are passed to the wx.Panel parent class constructor....
+        :param kwargs: All other arguments are passed to the wx.Panel parent class constructor....
         """
         super().__init__(parent, w_id, **kwargs)
 

@@ -1,0 +1,11 @@
+# Environment for using diplomat.
+name: diplomat
+channels:
+  - conda-forge
+  - anaconda
+  - defaults
+dependencies:
+  - python=3.10
+  - wxpython
+  - pip:
+    - diplomat-track[all]

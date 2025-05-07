@@ -1,6 +1,7 @@
 sphinx
 sphinx-rtd-theme
 sphinx-toolbox
+sphinx-tabs
 typing_extensions>=3.8
 matplotlib
 opencv-python
@@ -10,3 +11,4 @@ h5py
 pandas
 numpy
 numba
+enum-tools[sphinx]

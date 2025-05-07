@@ -8,6 +8,7 @@ import inspect
 import re
 import yaml
 from io import StringIO
+
 from diplomat.processing import ConfigSpec
 from diplomat.processing.type_casters import (
     TypeCaster,
@@ -134,6 +135,37 @@ def get_summary_from_doc_str(doc_str: str) -> str:
     return "".join(re.split(":param |:return|:throw", doc_str)[:1])
 
 
+def func_args_to_config_spec(func: TypeCasterFunction, caller_func: TypeCasterFunction) -> ConfigSpec:
+    config_spec = {}
+
+    signature = inspect.signature(func)
+    cmd_args = get_typecaster_annotations(func)
+    caller_args = get_typecaster_annotations(caller_func)
+
+    # Extract params from the doc string...
+    if(hasattr(func, "__clean_doc__")):
+        doc_str = inspect.cleandoc(func.__clean_doc__)
+    else:
+        doc_str = inspect.getdoc(func)
+
+    if(doc_str is None):
+        help_messages = {}
+    else:
+        help_messages = {name: info for name, info in re.findall(":param +([a-zA-Z0-9_]+):([^:]*)", doc_str)}
+
+    for name, caster in cmd_args.items():
+        if(name == "return" or name in caller_args):
+            continue
+
+        config_spec[name] = (
+            signature.parameters[name].default,
+            caster,
+            help_messages.get(name, "").strip()
+        )
+
+    return config_spec
+
+
 def func_to_command(func: TypeCasterFunction, parser: ArgumentParser, allow_short_form: bool = True) -> ArgumentParser:
     parser.formatter_class = YAMLArgHelpFormatter
     parser.allow_abbrev = False
@@ -143,7 +175,10 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser, allow_shor
     arg_correctors = {}
 
     # Extract params from the doc string...
-    doc_str = inspect.getdoc(func)
+    if(hasattr(func, "__clean_doc__")):
+        doc_str = inspect.cleandoc(func.__clean_doc__)
+    else:
+        doc_str = inspect.getdoc(func)
 
     if(doc_str is None):
         help_messages = {}
@@ -194,7 +229,7 @@ def func_to_command(func: TypeCasterFunction, parser: ArgumentParser, allow_shor
 
     for name, (default, caster, desc) in extra_args.items():
         args, corrector = _func_arg_to_cmd_arg(caster, ComplexParsingWrapper.DELETE, auto_cast=auto_cast)
-        args["help"] = desc
+        args["help"] = str(desc) if not callable(getattr(desc, "__typecaster_str__", None)) else str(desc.__typecaster_str__())
 
         parser.add_argument("--" + name, **args)
         if(corrector is not None):
@@ -279,13 +314,29 @@ def build_full_parser(function_tree: dict, parent_parser: ArgumentParser, name: 
     return CLIEngine(parent_parser)
 
 
-def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True) -> Callable[[Callable], Callable]:
+def clear_extra_cli_args_and_copy(func: Callable):
+    import copy
+    func = copy.copy(func)
+    if(hasattr(func, "__extra_args")):
+        del func.__extra_args
+    if (hasattr(func, "__auto_cast")):
+        del func.__auto_cast
+    if (hasattr(func, "__orig_doc__")):
+        func.__doc__ = func.__orig_doc__
+        del func.__orig_doc__
+    if (hasattr(func, "__clean_doc__")):
+        del func.__clean_doc__
+    return func
+
+
+def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True, doc_header: str = "Additional arguments:") -> Callable[[Callable], Callable]:
     """
     A decorator for attaching additional CLI arguments to an auto-cli function...
 
     :param config_spec: The additional arguments to attach to the function, using config-spec format.
     :param auto_cast: Boolean flag, if true don't automatically convert extra cli args to their correct types.
                       This means the method needs to do the conversion itself.
+    :param doc_header: String, the header to use for the extra arguments section in the doc string.
 
     :return: A decorator which attaches these arguments to the function, so they are included when turning it into a
              CLI function...
@@ -295,6 +346,9 @@ def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True) -> Callable[
         func.__auto_cast = auto_cast
 
         if(hasattr(func, "__doc__") and (func.__doc__ is not None)):
+            func.__clean_doc__ = func.__doc__.format(extra_cli_args="")
+            func.__orig_doc__ = func.__doc__
+
             doc_str_lst = func.__doc__.split("\n")
             magic_str = "{extra_cli_args}"
 
@@ -304,10 +358,20 @@ def extra_cli_args(config_spec: ConfigSpec, auto_cast: bool = True) -> Callable[
                 if(index == -1):
                     continue
 
-                extra_doc = ("\n" + (" " * index)).join(
-                    f" - {name} (Type: {get_type_name(caster)}, Default: {default}): {desc}"
-                    for name, (default, caster, desc) in config_spec.items()
-                )
+                desc_list = [
+                    doc_header,
+                    "",
+                ]
+
+                for name, (default, caster, desc) in config_spec.items():
+                    desc = str(desc) if not callable(getattr(desc, "__typecaster_str__", None)) else str(desc.__typecaster_str__())
+                    desc_list.append(
+                        f"* {name} (Type: {get_type_name(caster)}, Default: {default}): {desc}"
+                    )
+
+                desc_list.append("")
+
+                extra_doc = ("\n" + (" " * index)).join(desc_list)
                 doc_str_lst[i] = line.format(extra_cli_args=extra_doc)
 
             func.__doc__ = "\n".join(doc_str_lst)

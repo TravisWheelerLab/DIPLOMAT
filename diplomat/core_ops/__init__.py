@@ -1,3 +1,4 @@
+import functools
 import os
 import sys
 
@@ -7,7 +8,7 @@ from diplomat.core_ops.shared_commands.tracking import analyze_frames, analyze_v
 from diplomat.core_ops.shared_commands.utils import _fix_path_pairs
 from diplomat.core_ops.shared_commands.tweak import _tweak_video_single
 from diplomat.core_ops.shared_commands.visual_settings import VISUAL_SETTINGS, FULL_VISUAL_SETTINGS
-from diplomat.processing import Config, Predictor
+from diplomat.processing import Config, Predictor, get_predictor
 from diplomat.processing.type_casters import (
     typecaster_function,
     PathLike,
@@ -22,7 +23,7 @@ from diplomat.processing.type_casters import (
 )
 from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import (func_to_command, allow_arbitrary_flags, Flag, positional_argument_count, CLIError,
-    extra_cli_args)
+                                      extra_cli_args, func_args_to_config_spec, clear_extra_cli_args_and_copy)
 from argparse import ArgumentParser
 import typing
 from types import ModuleType
@@ -192,7 +193,7 @@ def yaml(
 
 
 @allow_arbitrary_flags
-@extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
+@extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
 @typecaster_function
 def track_with(
     config: Union[List[PathLike], PathLike],
@@ -224,9 +225,8 @@ def track_with(
                                to True to print additional settings for the selected frontend instead of running tracking.
     :param output_suffix: String, a suffix to append to name of the output file. Defaults to no suffix...
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed frontend, visual settings, or predictor, in that order
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the frontend, visual settings, or predictor, in that order.
                        To see valid frontend arguments, run track with extra_help flag set to true.
-
                        {extra_cli_args}
     """
     from diplomat import CLI_RUN
@@ -239,9 +239,25 @@ def track_with(
             batch_size=batch_size,
             **extra_args
         )
+        if predictor is None:
+            predictor = "SegmentedFramePassEngine"
+        predictor_settings = get_predictor(predictor).get_settings()
+        if(predictor_settings is None):
+            predictor_settings = {}
+
+        predictor_settings.update(VISUAL_SETTINGS)
+        predictor_settings.update(
+            func_args_to_config_spec(selected_frontend._load_model, track_with)
+        )
+
+        _track_with_help = extra_cli_args(predictor_settings, doc_header="Additional frontend, visual, and predictor settings:")(clear_extra_cli_args_and_copy(track_with))
+
         _display_help(
-            selected_frontend_name, "model loading", "diplomat track_with",
-            selected_frontend._load_model, CLI_RUN
+            selected_frontend_name,
+            f"track_with with the {predictor} predictor",
+            "diplomat track_with",
+            _track_with_help,
+            CLI_RUN
         )
         return
 
@@ -302,7 +318,7 @@ def track_with(
 
 
 @allow_arbitrary_flags
-@extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
+@extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
 @typecaster_function
 def track(
     config: Union[List[PathLike], PathLike],
@@ -332,9 +348,8 @@ def track(
                      to True to print additional settings for the selected frontend instead of running tracking.
     :param output_suffix: String, a suffix to append to name of the output file. Defaults to no suffix...
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed frontend, visual settings, or predictor, in that order
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the frontend, visual settings, or predictor, in that order.
                        To see valid frontend arguments, run track with extra_help flag set to true.
-
                        {extra_cli_args}
     """
     track_with(
@@ -352,7 +367,7 @@ def track(
 
 
 @allow_arbitrary_flags
-@extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
+@extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
 @typecaster_function
 def track_and_interact(
     config: Union[List[PathLike], PathLike],
@@ -381,9 +396,8 @@ def track_and_interact(
                      to True to print additional settings for the selected frontend instead of running tracking.
     :param output_suffix: String, a suffix to append to name of the output file. Defaults to no suffix...
     :param help_extra: Boolean, if set to true print extra settings for the automatically selected frontend instead of running tracking.
-    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed frontend, visual settings, or predictor, in that order
+    :param extra_args: Any additional arguments (if the CLI, flags starting with '--') are passed to the frontend, visual settings, or predictor, in that order.
                        To see valid frontend arguments, run track with extra_help flag set to true.
-
                        {extra_cli_args}
     """
     track_with(
@@ -400,7 +414,7 @@ def track_and_interact(
     )
 
 
-@extra_cli_args(FULL_VISUAL_SETTINGS, auto_cast=False)
+@extra_cli_args(FULL_VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
 @typecaster_function
 def annotate(
     videos: Union[List[PathLike], PathLike],
@@ -430,7 +444,7 @@ def annotate(
         _label_videos_single(str(c), str(v), body_parts_to_plot, video_extension, visual_settings)
 
 
-@extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
+@extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
 @typecaster_function
 def tweak(
     videos: Union[List[PathLike], PathLike],
@@ -444,9 +458,7 @@ def tweak(
 
     :param videos: Paths to video file(s) corresponding to the provided csv files.
     :param csvs: The path (or list of paths) to the csv file(s) to edit.
-    :param kwargs: The following additional arguments are supported:
-
-                   {extra_cli_args}
+    :param kwargs: {extra_cli_args}
     """
     csvs, videos = _fix_path_pairs(csvs, videos)
     visual_cfg = Config(kwargs, VISUAL_SETTINGS)

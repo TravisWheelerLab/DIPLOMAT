@@ -39,8 +39,8 @@ Frame Passes
 
 A list of the ``FramePass`` plugins included by default
 with DIPLOMAT. Some :class:`~diplomat.processing.Predictor` plugins use frame passes to perform
-pose prediction, including the :plugin:`~diplomat.predictors.FramePassEngine` and
-:plugin:`~diplomat.predictors.SegmentedFramePassEngine` based predictors.
+pose prediction, including the :plugin:`~diplomat.predictors.SegmentedFramePassEngine` and
+:plugin:`~diplomat.predictors.SupervisedSegmentedFramePassEngine` based predictors.
 
 .. toctree::
     :hidden:

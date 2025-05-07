@@ -1,6 +1,9 @@
 from pathlib import Path
 import sys
 from sphinx.ext.autodoc.mock import mock
+import os
+
+os.environ['NUMBA_DISABLE_JIT'] = '1'
 
 # Add project root directory to python path...
 sys.path.insert(0, str(Path(__file__).resolve().parent / "ext"))
@@ -34,7 +37,9 @@ extensions = [
     "sphinx.ext.imgmath",
     "sphinx.ext.viewcode",
     "sphinx_toolbox.collapse",
-    "plugin_docgen"
+    "sphinx_tabs.tabs",
+    "plugin_docgen",
+    "enum_tools.autoenum"
 ]
 
 imgmath_image_format = "svg"

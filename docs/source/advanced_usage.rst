@@ -46,13 +46,16 @@ pull down this repository and create an environment for it using the commands sh
     # On windows use the command: venv/Scripts/activate.bat
     source venv/bin/activate
 
+    # Run one of the two below...
     # Install DIPLOMAT dependencies with all extras (sleap, dlc, and gui) You may want to change this to only install some extras.
-    pip install -e .[all]
+    pip install -e .[all, test]
+    # Same command for systems with NVIDIA GPUs...
+    pip install -e .[all-nvidia, test]
 
 For most development, you'll most likely want to add additional predictor plugins.
 Predictors can be found in the ``diplomat/predictors`` directory. Classes that extend Predictor are automatically
-loaded from this directory. To test predictors, you can use the :py:cli:`diplomat predictors test` command:
+loaded from this directory. To test diplomat, you can use pytest as shown below:
 
 .. code-block:: sh
 
-    diplomat predictors test PredictorName
+    pytest
