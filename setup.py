@@ -1,4 +1,5 @@
 import setuptools
+from setuptools import find_packages
 
 
 def _load_version():
@@ -83,7 +84,7 @@ setuptools.setup(
     long_description=_get_readme(),
     long_description_content_type="text/markdown",
     url="https://diplomattrack.org",
-    packages=["diplomat"],
+    packages=find_packages(include="diplomat.*"),
     python_requires=">=3.8",
     platforms="any",
     entry_points={
