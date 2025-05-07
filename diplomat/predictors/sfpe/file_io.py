@@ -44,8 +44,12 @@ class FPEMetadataEncoder(json.JSONEncoder):
         if(isinstance(o, Path)):
             return str(o)
 
+        if(isinstance(o, np.generic)):
+            return o.tolist()
+
         to_json = getattr(o, "__tojson__", None)
         if(to_json is None):
+            print(o)
             return super().default(o)
         d = to_json()
 
