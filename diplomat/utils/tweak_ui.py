@@ -10,6 +10,7 @@ import numpy as np
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardData, ForwardBackwardFrame, SparseTrackingData
 from diplomat.processing import Pose, Config, ProgressBar
+from diplomat.utils.video_io import ContextVideoCapture
 
 
 class UIImportError(ImportError):
@@ -277,7 +278,7 @@ class TweakUI:
         editor = self._editor_class(
             on_end,
             parent,
-            cv2.VideoCapture(str(video_path)),
+            ContextVideoCapture(str(video_path)),
             poses,
             bodypart_names,
             video_metadata,

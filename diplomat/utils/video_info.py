@@ -1,8 +1,8 @@
 """
 Provides functions for extracting certain metadata from videos.
 """
-import cv2
 from os import PathLike
+from diplomat.utils.video_io import ContextVideoCapture
 
 
 def is_video(video_path: PathLike) -> bool:
@@ -13,9 +13,8 @@ def is_video(video_path: PathLike) -> bool:
 
     :return: True if the passed path is a video, otherwise False.
     """
-    cap = cv2.VideoCapture(str(video_path))
-    is_vid = cap.isOpened()
-    cap.release()
+    with ContextVideoCapture(str(video_path), throw_on_unopened=False) as cap:
+        is_vid = cap.isOpened()
     return is_vid
 
 
@@ -28,11 +27,9 @@ def get_frame_count_robust(video: PathLike) -> int:
     :return: An accurate frame count. Accuracy is better as this method opens the video and runs through all the
              frames in the file.
     """
-    vid = cv2.VideoCapture(str(video))
-    output = 0
-    while (vid.isOpened() and vid.grab()):
-        output += 1
-
-    vid.release()
+    with ContextVideoCapture(str(video)) as vid:
+        output = 0
+        while (vid.isOpened() and vid.grab()):
+            output += 1
 
     return int(output)

@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 from diplomat.processing import *
+from diplomat.utils.video_io import ContextVideoWriter
 
 
 def optional_dict(val: Optional[dict]) -> dict:
@@ -137,7 +138,7 @@ class FastPlotterArgMax(Predictor):
 
         self._canvas = np.zeros((self._vid_height, self._vid_width, 3), dtype=np.uint8)
 
-        self._vid_writer = cv2.VideoWriter(
+        self._vid_writer = ContextVideoWriter(
             self.VIDEO_PATH,
             self.settings.codec,
             self.video_metadata.fps,
