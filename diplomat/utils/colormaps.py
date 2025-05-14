@@ -6,7 +6,7 @@ import base64
 import matplotlib as mpl
 import numpy as np
 import matplotlib.colors as mpl_colors
-from typing import Union, Tuple, Sequence, Optional, List
+from typing import Union, Tuple, Sequence, Optional, List, Dict
 
 import diplomat.processing.type_casters as tc
 import itertools
@@ -84,7 +84,7 @@ class DiplomatColormap:
     def from_linear_segments(
         cls,
         name: str,
-        segmentdata: dict[str, Sequence[Tuple[float, float, float]]],
+        segmentdata: Dict[str, Sequence[Tuple[float, float, float]]],
         gamma: float = 1.0,
         under=None,
         over=None,
