@@ -3,7 +3,7 @@ from setuptools import find_packages
 
 
 def _load_version():
-    with open("diplomat/__init__.py", "r") as f:
+    with open("diplomat/__init__.py", "r", encoding="utf-8") as f:
         for line in f.readlines():
             line = line.strip()
             if(line.startswith("__version__")):
@@ -106,7 +106,7 @@ setuptools.setup(
         "Typing :: Typed"
     ],
     install_requires=[
-        "opencv-python",
+        "opencv-python-headless",
         "matplotlib",
         "typing_extensions>=3.8",
         "tqdm",
