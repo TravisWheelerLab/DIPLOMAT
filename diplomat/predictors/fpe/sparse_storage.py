@@ -81,13 +81,19 @@ class SparseTrackingData:
         """
         The coordinates of this SparceTrackingData in [x, y] order.
         """
-        return self._data[:2]
+        if(self._data is None):
+            return None, None
+
+        return tuple(self._data[:2])
 
     @property
     def probs(self):
         """
         The probabilities of this SparceTrackingData.
         """
+        if(self._data is None):
+            return None
+
         return self._data[2]
 
     @property
@@ -240,18 +246,20 @@ class SparseTrackingData:
                                limiting is done. If the number of cells is larger than this value, the top-k cells
                                will be pulls so k matches this value.
         :param mode: The mode to utilize when making the data sparse. The following modes currently exist:
-            - SparseModes.IGNORE_OFFSETS: Ignores offsets, placing values based on the grid cell the value is stored in.
+            * SparseModes.IGNORE_OFFSETS: Ignores offsets, placing values based on the grid cell the value is stored in.
                                           This is the default mode.
-            - SparseModes.OFFSET_DOMINATION: Add on offsets to the initial grid cell to determine what cell the data
+            * SparseModes.OFFSET_DOMINATION: Add on offsets to the initial grid cell to determine what cell the data
                                              actually landed in. If multiple cells point to the same location, select
                                              the maximum of them.
-            - SparseModes.OFFSET_COMBINATION: Add on offsets to the initial grid cell to determine what cell the data
+            * SparseModes.OFFSET_COMBINATION: Add on offsets to the initial grid cell to determine what cell the data
                                               actually landed in. If multiple cells point to the same location, use the
                                               average of their values.
-            - SparseModes.OFFSET_SUMMATION: Same as OFFSET_DOMINATION, except cell probabilities are determined by
+            * SparseModes.OFFSET_SUMMATION: Same as OFFSET_DOMINATION, except cell probabilities are determined by
                                             adding all the cells that point to a cell and then normalizing this sum
                                             array.
-            - SparseModes.UPSCALE:
+            * SparseModes.UPSCALE: Perform up-scaling of frames to original video resolution using gaussian smoothing.
+        :param upscale_std: The standard deviation of the gaussian to use for up-scaling frames, in model cell units.
+        :param truncate_std: The number of standard deviations to compute the gaussian out to when up-scaling frames.
 
         :return: A new SparseTrackingData object containing the data of the TrackingData object.
         """

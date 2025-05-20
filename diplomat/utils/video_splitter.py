@@ -11,6 +11,8 @@ from os import PathLike
 import tqdm
 import math
 
+from diplomat.utils.video_io import ContextVideoCapture, ContextVideoWriter
+
 FALLBACK_CODEC = "mp4v"
 FALLBACK_EXT = ".mp4"
 
@@ -65,74 +67,72 @@ def _split_single_video(
     :returns: The paths of the newly split videos, as a list of "Path"s...
     """
     printer(f"Processing video: {video_path}")
-    vid = cv2.VideoCapture(str(video_path))
+    with ContextVideoCapture(str(video_path)) as vid:
+        width, height = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)), int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = vid.get(cv2.CAP_PROP_FPS)
+        total_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    width, height = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)), int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = vid.get(cv2.CAP_PROP_FPS)
-    total_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
+        four_cc = int(vid.get(cv2.CAP_PROP_FOURCC))
+        if(four_cc == 0):
+            four_cc = -1
+        else:
+            four_cc = "".join([chr((four_cc >> i) & 255) for i in range(0, 32, 8)])
+            four_cc = cv2.VideoWriter_fourcc(*four_cc)
 
-    four_cc = int(vid.get(cv2.CAP_PROP_FOURCC))
-    if(four_cc == 0):
-        four_cc = -1
-    else:
-        four_cc = "".join([chr((four_cc >> i) & 255) for i in range(0, 32, 8)])
-        four_cc = cv2.VideoWriter_fourcc(*four_cc)
+        if(output_fourcc_string is not None):
+            four_cc = cv2.VideoWriter_fourcc(*output_fourcc_string)
 
-    if(output_fourcc_string is not None):
-        four_cc = cv2.VideoWriter_fourcc(*output_fourcc_string)
+        extension = video_path.suffix if(output_extension is None) else output_extension
 
-    extension = video_path.suffix if(output_extension is None) else output_extension
+        writer = None
+        segment = 0
+        frame = 0
 
-    writer = None
-    segment = 0
-    frame = 0
+        if(isinstance(seconds_per_segment, int)):
+            # Yes, a range can be indexed just like an array... :)
+            split_loc = range(0, total_frames, int(seconds_per_segment * fps))
+        else:
+            split_loc = sorted(set([0] + [int(seg * fps) for seg in seconds_per_segment]))
 
-    if(isinstance(seconds_per_segment, int)):
-        # Yes, a range can be indexed just like an array... :)
-        split_loc = range(0, total_frames, int(seconds_per_segment * fps))
-    else:
-        split_loc = sorted(set([0] + [int(seg * fps) for seg in seconds_per_segment]))
+        bar = tqdm.tqdm(total=total_frames)
 
-    bar = tqdm.tqdm(total=total_frames)
+        zero_pad_amt = int(math.ceil(math.log10(total_frames + 1)))
+        paths = []
 
-    zero_pad_amt = int(math.ceil(math.log10(total_frames + 1)))
-    paths = []
+        while(vid.isOpened()):
+            if(writer is None):
+                try:
+                    start = _list_access(split_loc, [total_frames], segment)
+                    end = _list_access(split_loc, [total_frames], segment + 1) - 1
+                    writer, p = _new_video_writer(video_path, (start, end), zero_pad_amt, four_cc, fps, (width, height), extension)
+                    paths.append(p)
+                except OSError:
+                    vid.release()
+                    bar.close()
+                    raise
+                segment += 1
 
-    while(vid.isOpened()):
-        if(writer is None):
-            try:
-                start = _list_access(split_loc, [total_frames], segment)
-                end = _list_access(split_loc, [total_frames], segment + 1) - 1
-                writer, p = _new_video_writer(video_path, (start, end), zero_pad_amt, four_cc, fps, (width, height), extension)
-                paths.append(p)
-            except OSError:
-                vid.release()
-                bar.close()
-                raise
-            segment += 1
+            res, frm = vid.read()
 
-        res, frm = vid.read()
+            if(not res):
+                break
 
-        if(not res):
-            break
+            if(writer.isOpened()):
+                writer.write(frm)
 
-        if(writer.isOpened()):
-            writer.write(frm)
+            if((segment < len(split_loc)) and (frame >= split_loc[segment])):
+                writer.release()
+                writer = None
 
-        if((segment < len(split_loc)) and (frame >= split_loc[segment])):
+            frame += 1
+            bar.update(1)
+
+        if(writer is not None):
             writer.release()
-            writer = None
 
-        frame += 1
-        bar.update(1)
+        bar.close()
 
-    if(writer is not None):
-        writer.release()
-
-    bar.close()
-    vid.release()
-
-    return paths
+        return paths
 
 
 def _list_access(list1, list2, index):
@@ -173,13 +173,13 @@ def _new_video_writer(
     """
     suffix = f"_part{segment[0]:0{padding}d}-{segment[1]:0{padding}d}"
     preferred_path = video_path.parent / f"{video_path.stem}{suffix}{ext}"
-    writer = cv2.VideoWriter(str(preferred_path), four_cc, fps, size)
+    writer = ContextVideoWriter(str(preferred_path), four_cc, fps, size, throw_on_unopened=False)
     if(writer.isOpened()):
         return (writer, preferred_path)
 
     writer.release()
     fallback_path = video_path.parent / f"{video_path.stem}{suffix}{FALLBACK_EXT}"
-    writer = cv2.VideoWriter(str(fallback_path), cv2.VideoWriter_fourcc(*FALLBACK_CODEC), fps, size)
+    writer = ContextVideoWriter(str(fallback_path), cv2.VideoWriter_fourcc(*FALLBACK_CODEC), fps, size, throw_on_unopened=False)
     if(writer.isOpened()):
         return (writer, fallback_path)
 

@@ -11,6 +11,8 @@ from diplomat.utils.colormaps import to_colormap
 from pathlib import Path
 import cv2
 
+from diplomat.utils.video_io import ContextVideoWriter
+
 
 def optional_dict(val: Optional[dict]) -> dict:
     return {} if(val is None) else dict(val)
@@ -212,7 +214,7 @@ class PlotterArgMax(Predictor):
 
             if self._vid_writer is None:
                 height, width, colors = img.shape
-                self._vid_writer = cv2.VideoWriter(
+                self._vid_writer = ContextVideoWriter(
                     self.VIDEO_PATH, settings.codec, vid_meta.fps, (width, height)
                 )
 

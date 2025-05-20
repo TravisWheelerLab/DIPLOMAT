@@ -11,6 +11,7 @@ from multiprocessing import Pipe
 from multiprocessing.connection import Connection
 from collections import deque
 import numpy as np
+from diplomat.utils.video_io import ContextVideoCapture
 
 
 class ControlDeque:
@@ -902,7 +903,7 @@ def _main_test():
     # We test the video player by playing a video with it.
     vid_path = input("Enter a video path: ")
 
-    print(get_frame_count(cv2.VideoCapture(vid_path)))
+    print(get_frame_count(ContextVideoCapture(vid_path)))
 
     app = wx.App()
     wid_frame = wx.Frame(None, title="Test...")
@@ -910,7 +911,7 @@ def _main_test():
 
     sizer = wx.BoxSizer(wx.VERTICAL)
 
-    wid = VideoPlayer(panel, video_hdl=cv2.VideoCapture(vid_path))
+    wid = VideoPlayer(panel, video_hdl=ContextVideoCapture(vid_path))
     obj3 = ProbabilityDisplayer(panel, data=np.random.randint(0, 10, (wid.get_total_frames())), bad_locations=np.array([], np.uint64))
     obj2 = VideoController(panel, video_player=wid)
 

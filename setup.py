@@ -3,7 +3,7 @@ from setuptools import find_packages
 
 
 def _load_version():
-    with open("diplomat/__init__.py", "r") as f:
+    with open("diplomat/__init__.py", "r", encoding="utf-8") as f:
         for line in f.readlines():
             line = line.strip()
             if(line.startswith("__version__")):
@@ -20,7 +20,7 @@ def _get_readme():
 ONNX_TF_DEPS = [
     "h5py",
     "tensorflow",
-    "tf2onnx",
+    "tf2onnx>=1.16.1",
     "onnx",
     "onnxruntime"
 ]
@@ -43,7 +43,7 @@ VARIANTS = {
 
 DEVICE_VARIANTS = {
     "onnxruntime": {
-        "": ["onnxruntime"],
+        "": ["onnxruntime>=1.19"],
         "-nvidia": [
             "onnxruntime-gpu>=1.19",
             "nvidia-cuda-nvrtc-cu12~=12.0",
@@ -106,7 +106,7 @@ setuptools.setup(
         "Typing :: Typed"
     ],
     install_requires=[
-        "opencv-python",
+        "opencv-python-headless",
         "matplotlib",
         "typing_extensions>=3.8",
         "tqdm",

@@ -5,6 +5,7 @@ from collections import UserList
 from pathlib import Path
 
 from diplomat.predictors.sfpe.disk_sparse_storage import DiskBackedForwardBackwardData
+from diplomat.utils.video_io import ContextVideoCapture
 from diplomat.wx_gui.progress_dialog import FBProgressDialog
 from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, NearestPeakInSource, ApproximateSourceOnly
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
@@ -633,7 +634,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._frame_holder = new_frame_holder
             self._frame_holder._frames.flush()
 
-        self._video_hdl = cv2.VideoCapture(self._video_path)
+        self._video_hdl = ContextVideoCapture(str(self._video_path))
 
         app = wx.App()
 
