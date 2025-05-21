@@ -11,12 +11,14 @@ class DEEPLABCUTFrontend(DIPLOMATFrontend):
         try:
             from diplomat.frontends.deeplabcut._verify_func import _verify_dlc_like
             from diplomat.frontends.deeplabcut.load_model import load_model
+            from diplomat.frontends.deeplabcut.convert_tracks import _dlc_hdf_to_diplomat_table
         except ImportError:
             return None
 
         return DIPLOMATCommands(
             _verifier=_verify_dlc_like,
-            _load_model=load_model
+            _load_model=load_model,
+            _load_tracks=_dlc_hdf_to_diplomat_table,
         )
 
     @classmethod

@@ -23,6 +23,7 @@ def get_static_cli_tree() -> dict:
         "tweak": diplomat.tweak,
         "yaml": diplomat.yaml,
         "interact": diplomat.interact,
+        "convert_tracks": diplomat.convert_tracks,
         "frontends": {
             "__description": "Contains subcommands for listing available frontends and inspecting the functions "
                              "each frontend supports.",

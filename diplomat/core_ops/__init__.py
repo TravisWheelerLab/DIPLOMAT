@@ -1,6 +1,6 @@
-import functools
 import os
 import sys
+from pathlib import Path
 
 from diplomat.core_ops.shared_commands.annotate import _label_videos_single
 from diplomat.core_ops.shared_commands.save_from_restore import _save_from_restore
@@ -27,6 +27,8 @@ from diplomat.utils.cli_tools import (func_to_command, allow_arbitrary_flags, Fl
 from argparse import ArgumentParser
 import typing
 from types import ModuleType
+
+from diplomat.utils.track_formats import save_diplomat_table, load_diplomat_table
 from diplomat.utils.tweak_ui import UIImportError
 from diplomat.frontends import DIPLOMATContract, DIPLOMATCommands
 
@@ -530,3 +532,76 @@ def interact(
             end_time=end_time
         )
 
+
+def _get_track_loaders(include_native: bool = False):
+    from diplomat import _LOADED_FRONTENDS
+    from diplomat.frontends import DIPLOMATContract, TracksLoaderFunction
+
+    loaders = []
+
+    if(include_native):
+        loaders.append(
+            lambda path: load_diplomat_table(str(path))
+        )
+
+    for frontend_name, funcs in _LOADED_FRONTENDS.items():
+        if(funcs.verify_contract(DIPLOMATContract("_load_tracks", TracksLoaderFunction))):
+            loaders.append(funcs._load_tracks)
+
+    return loaders
+
+
+def _load_tracks_from_loaders(loaders, input_path):
+    old_exp = None
+    input_path = Path(str(input_path)).resolve()
+
+    for loader in loaders:
+        try:
+            return loader(path=input_path)
+        except (ValueError, IOError) as exp:
+            try:
+                raise exp from old_exp
+            except type(exp):
+                old_exp = exp
+    else:
+        raise NotImplementedError(f"Unable to find frontend that could load the file: {input_path}") from old_exp
+
+
+@typecaster_function
+def convert_tracks(
+    inputs: Union[List[PathLike], PathLike],
+    outputs: Union[NoneType, List[PathLike], PathLike] = None
+):
+    """
+    Convert files storing final tracking results for a video from other software to diplomat csv's format that can be
+    used with diplomat's tweak and annotate commands.
+
+    :param inputs: A single or list of paths to files to convert to diplomat csvs.
+    :param outputs: An optional single path or list of paths, the location to write converted files to. If not
+                    specified, places the converted files at same locations as inputs with an extension of .csv
+                    instead of the original extension.
+    """
+    from pathlib import Path
+
+    loaders = _get_track_loaders()
+    if(len(loaders) == 0):
+        raise ImportError("Unable to find any loaded frontends with csv conversion support.")
+
+    if not isinstance(inputs, (list, tuple)):
+        inputs = [inputs]
+    if outputs is None:
+        outputs = []
+        for p in inputs:
+            p = Path(p).resolve()
+            outputs.append(p.parent / (p.stem + ".csv"))
+    if not isinstance(outputs, (list, tuple)):
+        outputs = [outputs]
+
+    if len(inputs) != len(outputs):
+        raise ValueError("The provided paths and destinations do not have the same length!")
+
+    for inp, out in zip(inputs, outputs):
+        print(f"Converting HDF5 to CSV: {inp}->{out}")
+        out = Path(out).resolve()
+        diplomat_table = _load_tracks_from_loaders(loaders, inp)
+        save_diplomat_table(diplomat_table, str(out))

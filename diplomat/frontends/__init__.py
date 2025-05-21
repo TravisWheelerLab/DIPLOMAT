@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict
 from collections import OrderedDict
 
 import numpy as np
+import pandas as pd
 
 from diplomat.processing import Pose, TrackingData
 from diplomat.processing.type_casters import (
@@ -95,6 +96,11 @@ ModelLoaderFunction = StrictCallable(
     _return=Tuple(ModelInfo, ModelLike)
 )
 
+TracksLoaderFunction = StrictCallable(
+    path=PathLike,
+    _return=pd.DataFrame
+)
+
 
 @dataclass(frozen=True)
 class DIPLOMATContract:
@@ -137,7 +143,7 @@ class DIPLOMATCommands(metaclass=CommandManager):
     """
     _verifier: required(VerifierFunction)
     _load_model: required(ModelLoaderFunction)
-    convert_results: ConvertResultsFunction(NoneType)
+    _load_tracks: TracksLoaderFunction
 
     def __init__(self, **kwargs):
         missing = object()
