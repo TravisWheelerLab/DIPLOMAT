@@ -558,7 +558,7 @@ def _load_tracks_from_loaders(loaders, input_path):
     for loader in loaders:
         try:
             return loader(path=input_path)
-        except (ValueError, IOError) as exp:
+        except (ValueError, KeyError, TypeError, IOError) as exp:
             try:
                 raise exp from old_exp
             except type(exp):
