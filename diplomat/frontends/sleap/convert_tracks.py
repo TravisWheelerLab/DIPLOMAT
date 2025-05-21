@@ -3,8 +3,6 @@ import json
 import numpy as np
 import pandas as pd
 import diplomat.processing.type_casters as tc
-from diplomat.frontends.sleap.run_utils import _decode_skeleton
-from diplomat.processing import Pose
 
 
 @tc.typecaster_function
