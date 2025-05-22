@@ -2,284 +2,42 @@
 Module contains a wx video player widget and a wx video controller widget. Uses multi-threading to load frames to a
 deque while playing them, allowing for smoother playback...
 """
-from typing import Callable, Any, Optional, Tuple, NamedTuple
+from typing import Optional, Tuple
 import wx
 from wx.lib.newevent import NewCommandEvent
 import cv2
-import threading
-from multiprocessing import Pipe
-from multiprocessing.connection import Connection
 from collections import deque
 import numpy as np
 from diplomat.utils.video_io import ContextVideoCapture
 
 
-class ControlDeque:
-    """
-    A control deque. This deque is used to store video frames while they are coming in
-    """
-    def __init__(self, maxsize: int):
-        """
-        Create a new ControlDeque.
+def read_frame(video_hdl: cv2.VideoCapture, frame_idx: Optional[int] = None) -> Tuple[bool, np.ndarray]:
+    valid_frame = False
+    frame = None
 
-        :param maxsize: The maximum allowed size of the deque.
-        """
-        self._deque = deque(maxlen=maxsize)
-        self._lock = threading.Lock()
-        self._not_full = threading.Condition(self._lock)
-        self._not_empty = threading.Condition(self._lock)
+    if(frame_idx is not None):
+        if(tell_frame(video_hdl) != frame_idx):
+            seek_frame(video_hdl, frame_idx)
 
-        self._num_push = 0
-        self._cancel_all_ops = threading.Event()
+    if video_hdl.isOpened():
+        valid_frame, frame = video_hdl.read()
 
-    def clear(self):
-        """
-        Clear the deque. This will also clear any push operations currently waiting.
-        """
-        with self._lock:
-            # Clear all push operations currently waiting
-            self._cancel_all_ops.set()
-            self._not_full.notify()
-            # Clear the deque
-            self._deque.clear()
+    if not valid_frame:
+        frame = np.zeros((
+            int(video_hdl.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+            int(video_hdl.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            3
+        ), dtype=np.uint8)
 
-    def flush(self):
-        """
-        Flush any current push events, not actually adding there results to the deque.
-        """
-        with self._lock:
-            # Set the cancel all ops method, and notify all currently waiting events...
-            self._cancel_all_ops.set()
-            self._not_full.notify()
-
-    @property
-    def maxsize(self):
-        """
-        Get the max size of this deque.
-
-        :return: The max size of this deque.
-        """
-        return self._deque.maxlen
-
-    def __len__(self):
-        """
-        Get the current length of the deque. NOT RELIABLE!
-
-        :return: The current size of this deque.
-        """
-        with self._lock:
-            return len(self._deque)
-
-    def _do_relaxed_op(self, lock: threading.Condition, check: Callable[[], bool], action: Callable[[], Any],
-                       notify: threading.Condition, push_mode: bool = False):
-        """
-        Internal method, perform a relaxed operation.
-
-        :param lock: The lock to acquire during the process.
-        :param check: The condition to check for. We continue to wait while the condition is true, a callable.
-        :param action: The action to perform once the condition is achieved, another callable
-        :param notify: The condition/lock to notify once the action is performed.
-        :param push_mode: A boolean, set to true if this is a push operation. Used to determine if this event can be
-                          canceled. (Push events can be canceled if clear is called)
-        :return: Whatever is returned by action, if anything. Otherwise returns None.
-        """
-        with lock:
-            if (self._num_push == 0):
-                self._cancel_all_ops.clear()
-
-            if(self.maxsize >= 0):
-                if(push_mode):
-                    self._num_push += 1
-                while(check() and ((not push_mode) or (not self._cancel_all_ops.is_set()))):
-                    lock.wait()
-                if(push_mode and self._cancel_all_ops.is_set()):
-                    self._num_push -= 1
-                    if(self._num_push == 0):
-                        self._cancel_all_ops.clear()
-                    lock.notify()
-                    return
-
-                result = action()
-                notify.notify()
-                if(push_mode):
-                    self._num_push -= 1
-                return result
-
-    def push_left_relaxed(self, value):
-        """
-        Push object onto left side of the deque. If there is no space available, we block until there is space.
-
-        :param value: The value to push onto the stack.
-        """
-        check = lambda: len(self._deque) >= self.maxsize
-        action = lambda: self._deque.appendleft(value)
-        self._do_relaxed_op(self._not_full, check, action, self._not_empty, True)
-
-    def push_right_relaxed(self, value):
-        """
-        Push object onto right side of the deque. If there is no space available, we block until there is space.
-
-        :param value: The value to push onto the stack.
-        """
-        check = lambda: len(self._deque) >= self.maxsize
-        action = lambda: self._deque.append(value)
-        self._do_relaxed_op(self._not_full, check, action, self._not_empty, True)
-
-    def pop_left_relaxed(self) -> Any:
-        """
-        Pop an object from the left side of the deque. If there are no items, we block until there is space.
-
-        :return: The item on the left side of the stack.
-        """
-        check = lambda: len(self._deque) == 0
-        action = lambda: self._deque.popleft()
-        return self._do_relaxed_op(self._not_empty, check, action, self._not_full)
-
-    def pop_right_relaxed(self) -> Any:
-        """
-        Pop an object from the right side of the deque. If there are no items, we block until there is space.
-
-        :return: The item on the right side of the stack.
-        """
-        check = lambda: len(self._deque) == 0
-        action = lambda: self._deque.pop()
-        return self._do_relaxed_op(self._not_empty, check, action, self._not_full)
-
-    def push_left_force(self, value):
-        """
-        Push object onto left side of the deque. If there is no space available, we forcefully push the object onto
-        the deque, causing the value on the other side of the deque to be deleted.
-
-        :param value: The value to forcefully push onto the deque.
-        """
-        with self._lock:
-            self._deque.appendleft(value)
-            self._not_empty.notify()
-
-    def push_right_force(self, value):
-        """
-        Push object onto right side of the deque. If there is no space available, we forcefully push the object onto
-        the deque, causing the value on the other side of the deque to be deleted.
-
-        :param value: The value to forcefully push onto the deque.
-        """
-        with self._lock:
-            self._deque.append(value)
-            self._not_empty.notify()
-
-    def pop_left_force(self) -> Any:
-        """
-        Forcefully pop a value from the left side of the deque, throwing an exception if the deque is empty.
-
-        :return: The value left most on the deque.
-        """
-        with self._lock:
-            result = self._deque.popleft()
-            self._not_full.notify()
-            return result
-
-    def pop_right_force(self) -> Any:
-        """
-        Forcefully pop a value from the right side of the deque, throwing an exception if the deque is empty.
-
-        :return: The value right most on the deque.
-        """
-        with self._lock:
-            result = self._deque.pop()
-            self._not_full.notify()
-            return result
+    return valid_frame, frame
 
 
-class VideoControlMessage(NamedTuple):
-    frame: Optional[int] = -1
-    direction: int = 0
-
-    @classmethod
-    def stop(cls):
-        return cls()
-
-    @classmethod
-    def jump(cls, pos: int, run_forward: bool = True):
-        return cls(pos, 1 if(run_forward) else -1)
-
-    @classmethod
-    def destroy(cls):
-        return cls(None)
+def seek_frame(video_hdl: cv2.VideoCapture, new_loc: int):
+    video_hdl.set(cv2.CAP_PROP_POS_FRAMES, new_loc)
 
 
-def time_check(time_controller: Connection) -> VideoControlMessage:
-    """
-    Waits for a new time from the connection.
-
-    :param time_controller: The connection being used for sending updated times.
-    :return: An integer being a new time to move to, or None otherwise.
-    """
-    value = -1
-    direction = True
-
-    while((value is not None) and (value < 0)):
-        value, direction = time_controller.recv()
-
-    return VideoControlMessage(value, direction)
-
-
-def video_loader(
-    video_hdl: cv2.VideoCapture,
-    future_frame_queue: ControlDeque,
-    past_frame_queue: ControlDeque,
-    time_loc: Connection
-):
-    """
-    The core video loading function. Loads the video on a separate thread in the background for smooth performance.
-
-    :param video_hdl: The cv2 VideoCapture object to read frames from.
-    :param future_frame_queue: The ControlDeque to append frames to for the future.
-    :param past_frame_queue: The ControlDeque to append frames to for the past.
-    :param time_loc: A multiprocessing Connection object, used to control this video loader. Sending a -1 through the
-                    pipe pauses the loader, sending a positive integer sets the offset of this video loader to the
-                    passed integer in milliseconds, and sending None closes this video loader and its associated thread.
-    """
-    # Begin by waiting for a simple message to give the go ahead to run
-    video_file = time_loc.recv()
-    if(video_file is None):
-        return
-
-    valid_frame, frame = None, None
-    forward = True
-
-    # In the code below, order of poll() check is CRITICAL!
-    while(video_hdl.isOpened()):
-        # Grab a frame if the current frame has been cleared....
-        if(frame is None):
-            valid_frame, frame = video_hdl.read()
-
-        if(not valid_frame):
-            # If we didn't receive a frame (reached end of video) generate a dummy frame to load into the queue...
-            # This avoids a deadlock if the reported duration of the video is longer then the video actually is...
-            frame = np.zeros((
-                int(video_hdl.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                int(video_hdl.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                3
-            ), dtype=np.uint8)
-
-        # If the video player has sent a command, stop and get
-        # the command, and jump to the spot. Otherwise, immediately push another frame onto the queue.
-        if(time_loc.poll()):
-            new_loc, direction = time_check(time_loc)
-            if(new_loc is None):
-                video_hdl.release()
-                return
-            if(direction != 0):
-                forward = direction > 0
-            video_hdl.set(cv2.CAP_PROP_POS_FRAMES, new_loc)
-            frame = None
-        else:
-            if(forward):
-                future_frame_queue.push_right_relaxed(frame)
-            else:
-                past_frame_queue.push_left_relaxed(frame)
-                video_hdl.set(cv2.CAP_PROP_POS_FRAMES, max(0, int(video_hdl.get(cv2.CAP_PROP_POS_FRAMES)) - 2))
-            frame = None
+def tell_frame(video_hdl: cv2.VideoCapture) -> int:
+    return int(video_hdl.get(cv2.CAP_PROP_POS_FRAMES))
 
 
 # Represents (x, y, width, height)
@@ -291,9 +49,9 @@ class VideoPlayer(wx.Control):
     A video player for wx Widgets, Using cv2 for solid cross-platform video support. Can play video, but no audio.
     """
 
-    # The number of frames to store in the forward and backward buffer.
-    BUFFER_SIZE = 50
-    BACK_LOAD_AMT = 20
+    # The number of frames to store in the backward buffer...
+    BACK_LOAD_AMT = 50
+    MAX_FAST_FORWARD_MODE = 20
 
     # Events for the VideoPlayer class, one triggered for every frame change, and one triggered for every change in
     # play state (starting, stopping, pausing, etc....)
@@ -337,8 +95,7 @@ class VideoPlayer(wx.Control):
         self._current_frame = None
         self._frozen = False
 
-        self._front_queue = ControlDeque(self.BUFFER_SIZE)
-        self._back_queue = ControlDeque(self.BACK_LOAD_AMT)
+        self._prior_frames = deque(maxlen=self.BACK_LOAD_AMT)
         self._current_loc = 0
 
         size = self._compute_min_size()
@@ -348,16 +105,8 @@ class VideoPlayer(wx.Control):
         self._core_timer = wx.Timer(self)
 
         # Create the video loader to start loading frames:
-        receiver, self._sender = Pipe(False)
-        self._video_loader = threading.Thread(
-            target=video_loader, args=(video_hdl, self._front_queue, self._back_queue, receiver)
-        )
-        self._video_loader.daemon = True
-        self._video_loader.start()
-        self._sender.send(0)
-
-        self._current_frame = self._front_queue.pop_left_relaxed()
-        self._running_forward = True
+        self._video_hdl = video_hdl
+        self._current_frame = read_frame(video_hdl)[1]
 
         self.Bind(wx.EVT_TIMER, self._on_timer)
         self.Bind(wx.EVT_PAINT, self.on_paint)
@@ -482,19 +231,11 @@ class VideoPlayer(wx.Control):
             if(self._current_loc >= (self._num_frames - 1)):
                 self.pause()
                 return
-            if(not self._running_forward):
-                self._sender.send(VideoControlMessage.stop())
-                self._front_queue.flush()
-                self._back_queue.flush()
-                self._sender.send(VideoControlMessage.jump(
-                    self._current_loc + len(self._front_queue) + 1, True)
-                )
-                self._running_forward = True
 
             # Get the next frame and set it as the current frame
-            self._back_queue.push_right_force(self._current_frame)
-            self._current_frame = self._front_queue.pop_left_relaxed()
+            self._prior_frames.append(self._current_frame)
             self._current_loc += 1
+            self._current_frame = read_frame(self._video_hdl, self._current_loc)[1]
             # Post a frame change event.
             self._push_time_change_event()
             # Trigger a redraw on the next pass through the loop and start the timer to play the next frame...
@@ -582,23 +323,11 @@ class VideoPlayer(wx.Control):
 
         current_state = self.is_playing()
         self._playing = False
-
-        # Determine how many more frames we can go back.
-        go_back_frames = min(value, self.BACK_LOAD_AMT)
         self._current_loc = value
 
-        self._sender.send(VideoControlMessage.stop())  # Tell the video loader to stop.
-
-        self._front_queue.clear()  # Completely wipe the queue
-        self._back_queue.clear()
-        # Tell the video loader to go to the new track location, and pop the extra frames we load on the back...
-        self._sender.send(VideoControlMessage.jump(int(value - go_back_frames), True))
-        self._running_forward = True
-
-        for i in range(go_back_frames):
-            self._back_queue.push_right_force(self._front_queue.pop_left_relaxed())
-
-        self._current_frame = self._front_queue.pop_left_relaxed()
+        # Completely wipe the prior frames...
+        self._prior_frames.clear()
+        self._current_frame = read_frame(self._video_hdl, self._current_loc)[1]
 
         self._push_time_change_event()
         # Restore play state prior to frame change...
@@ -618,22 +347,9 @@ class VideoPlayer(wx.Control):
         current_state = self.is_playing()
         self._playing = False
 
-        # If loading thread not moving backward, configure it to do so...
-        if(self._running_forward):
-            # Pause the video player, flush any push events it is trying to do.
-            self._sender.send(VideoControlMessage.stop())
-            self._front_queue.flush()
-            self._back_queue.flush()
-            self._sender.send(VideoControlMessage.jump(
-                max(0, self._current_loc - len(self._back_queue) - 1),
-                False
-            ))
-            self._running_forward = False
-
         # Move back the passed amount of frames.
         for i in range(amount):
-            self._front_queue.push_left_force(self._current_frame)
-            self._current_frame = self._back_queue.pop_right_relaxed()
+            self._current_frame = self._prior_frames.pop()
         self._current_loc = self._current_loc - amount
 
         self._push_time_change_event()
@@ -654,20 +370,11 @@ class VideoPlayer(wx.Control):
         current_state = self.is_playing()
         self._playing = False
 
-        if (not self._running_forward):
-            self._sender.send(VideoControlMessage.stop())
-            self._front_queue.flush()
-            self._back_queue.flush()
-            self._sender.send(VideoControlMessage.jump(
-                self._current_loc + len(self._front_queue) + 1, True)
-            )
-            self._running_forward = True
-
         # Move the passed amount of frames forward. Video reader will automatically move forward with us...
         for i in range(amount):
-            self._back_queue.push_right_force(self._current_frame)
-            self._current_frame = self._front_queue.pop_left_relaxed()
-        self._current_loc = self._current_loc + amount
+            self._prior_frames.append(self._current_frame)
+            self._current_loc += 1
+            self._current_frame = read_frame(self._video_hdl, self._current_loc)[1]
 
         self._push_time_change_event()
 
@@ -691,11 +398,10 @@ class VideoPlayer(wx.Control):
             raise ValueError(f"Can't go back {amount} frames when at frame {self._current_loc}.")
         # Check if we can perform a 'fast' backtrack, where we have all of the frames in the queue. If not perform
         # a more computationally expensive full jump.
-        if(amount > self._back_queue.maxsize):
+        if(amount > len(self._prior_frames)):
             self._full_jump(self._current_loc - amount)
         else:
             self._fast_back(amount)
-            # self._full_jump(self._current_loc - amount)
 
     def move_forward(self, amount: int = 1):
         """
@@ -713,7 +419,7 @@ class VideoPlayer(wx.Control):
             raise ValueError(f"Can't go forward {amount} frames when at frame {self._current_loc}.")
         # Check if we can do a fast forward, which is basically the same as moving through frames normally...
         # Otherwise we perform a more expensive full jump.
-        if(amount > self._front_queue.maxsize):
+        if(amount > self.MAX_FAST_FORWARD_MODE):
             self._full_jump(self._current_loc + amount)
         else:
             self._fast_forward(amount)
@@ -737,10 +443,8 @@ class VideoPlayer(wx.Control):
         """
         Delete this video player, deleting its video reading thread.
         """
-        self._sender.send(None)
-        self._front_queue.clear()
-        self._back_queue.clear()
-        self._sender.close()
+        self._prior_frames.clear()
+        self._video_hdl.release()
 
 
 class VideoController(wx.Panel):
@@ -872,6 +576,8 @@ class VideoController(wx.Panel):
         if(self._video_player.is_playing()):
             self._video_player.pause()
         else:
+            if(self._video_player.get_offset_count() + 1 == self._video_player.get_total_frames()):
+                self._video_player.set_offset_frames(0)
             self._video_player.play()
 
     def on_back_press(self, event):
