@@ -12,6 +12,9 @@ class CreateSkeleton(FramePass):
     Computes optimal skeletal link distances and then constructs a skeleton to be used by :py:plugin:`~diplomat.predictors.frame_passes.MITViterbi`.
     The links can be passed directly to this frame pass or are otherwise inferred from the config file.
     """
+
+    MAGIC_CONST = 0.6744897502
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._skeleton = None
@@ -52,14 +55,15 @@ class CreateSkeleton(FramePass):
             # Grab max frequency skeletal distances and store them for later passes...
             new_skeleton_info = StorageGraph(fb_data.metadata.bodyparts)
             for edge, hist in self._skeleton.items():
-                b, freq, avg_val = hist.get_max()
-                relative_std = hist.get_std_using_mean(avg_val)
+                b, freq, avg_val = hist.get_quantile(0.5)
+                relative_std = hist.get_mad_using_median(avg_val) / self.MAGIC_CONST
                 new_skeleton_info[edge] = (b, freq, avg_val, relative_std)
 
         new_frame_data.metadata.skeleton = new_skeleton_info
         new_frame_data.metadata.skeleton_config = {
             "peak_amplitude": self.config.max_amplitude,
-            "trough_amplitude": self.config.min_amplitude
+            "trough_amplitude": self.config.min_amplitude,
+            "std_multiplier": self.config.std_multiplier
         }
 
         if(self.config.DEBUG):
@@ -227,7 +231,10 @@ class CreateSkeleton(FramePass):
                 1, float, "A float, the max amplitude of the skeletal curves."
             ),
             "min_amplitude": (
-                0.8, float, "A float the min amplitude of the skeletal curves."
+                0.2, float, "A float, the min amplitude of the skeletal curves."
+            ),
+            "std_multiplier": (
+                1, float, "The amount to multiply each standard deviation to create skeleton transition curves."
             ),
             "DEBUG": (
                 False, bool, "Set to True to print skeleton information to console while this pass is running."

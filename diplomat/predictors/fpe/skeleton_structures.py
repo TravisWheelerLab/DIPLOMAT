@@ -326,17 +326,20 @@ class Histogram:
         quant: float,
         start_bin: float = None
     ) -> Tuple[float, int, float]:
-        ordered_bins = sorted(self)
-        ordered_indexes = sorted(self._bins)
+        ordered_bins = sorted(self.bins())
 
         start_idx = bisect.bisect_left(ordered_bins, start_bin) if(start_bin is not None) else 0
+        freqs = [f for bs, (f, avg) in ordered_bins]
+        avgs = [avg for bs, (f, avg) in ordered_bins]
+        freqs = freqs[start_idx:]
+        avgs = avgs[start_idx:]
 
-        full_list = [self._bins[int((bin_i - self._bin_offset) / self._bin_size)][0] for bin_i in ordered_bins]
-        sub_list = full_list[start_idx:]
+        cum_density = np.cumsum(freqs) / np.sum(freqs)
+        val = float(np.interp(quant, cum_density, avgs))
 
-        bin_num = ordered_indexes[min(start_idx + bisect.bisect_right(np.cumsum(sub_list) / np.sum(full_list), quant), len(ordered_bins) - 1)]
-        freq, avg = self._bins[bin_num]
-        return (bin_num, freq, avg)
+        bin_num = int((val - self._bin_offset) / self._bin_size)
+        freq, __ = self._bins.get(bin_num, (0, 0.0))
+        return (bin_num * self._bin_size + self._bin_offset, freq, val)
 
     def get_mean_and_std(self) -> Tuple[float, float]:
         # Weighted average of bins...
@@ -348,15 +351,35 @@ class Histogram:
 
         return (mean, std)
 
-    def get_std_using_mean(self, mean: Union[float, float]) -> float:
+    def get_std_using_mean(self, mean: float) -> float:
         # Weighted average of bins...
-        mean = mean
         avgs = np.array([avg for (b, (freq, avg)) in self.bins()])
         freqs = np.array([freq for (b, (freq, avg)) in self.bins()])
 
         std = np.sqrt(np.sum(freqs * (avgs - mean) ** 2) / np.sum(freqs))
 
         return std
+
+    def get_mad_using_median(self, median: Optional[float] = None) -> float:
+        if median is None:
+            median = self.get_quantile(0.5)[2]
+
+        avgs = np.array([avg for (b, (freq, avg)) in self.bins()])
+        freqs = np.array([freq for (b, (freq, avg)) in self.bins()])
+
+        # Compute distances of each multiplier...
+        abs_dists = np.abs(median - avgs)
+        ord = np.argsort(abs_dists)
+        abs_dists = abs_dists[ord]
+        freqs = freqs[ord]
+
+        cdf = np.zeros(len(freqs) + 1, dtype=np.float32)
+        cdf[1:] = np.cumsum(freqs) / np.sum(freqs)
+        ext_abs_dists = np.zeros(len(abs_dists) + 1, dtype=np.float32)
+        ext_abs_dists[1:] = abs_dists
+
+        mad = float(np.interp(0.5, cdf, ext_abs_dists))
+        return mad
 
     def __repr__(self):
         return self.__str__()

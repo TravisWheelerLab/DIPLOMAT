@@ -1,17 +1,19 @@
-from typing import Optional, Callable, Tuple, Iterable
+from typing import Optional, Callable, Tuple, Iterable, Union
 import numpy as np
 
 
+float_like = Union[float, np.ndarray]
+
 def gaussian_formula(
-    prior_x: float,
-    x: float,
-    prior_y: float,
-    y: float,
+    prior_x: float_like,
+    x: float_like,
+    prior_y: float_like,
+    y: float_like,
     std: float,
     amplitude: float,
     lowest_value: float = 0,
     in_log_space: bool = False
-) -> float:
+) -> float_like:
     """
     Compute a value on a 2D Gaussian curve.
 
@@ -26,28 +28,72 @@ def gaussian_formula(
 
     :returns: A float, the 2D gaussian evaluated with the above parameters.
     """
-    inner_x_delta = ((prior_x - x) ** 2) / (2 * std ** 2)
-    inner_y_delta = ((prior_y - y) ** 2) / (2 * std ** 2)
+    inner_x_delta = ((prior_x - x) ** 2) / (2 * std * std)
+    inner_y_delta = ((prior_y - y) ** 2) / (2 * std * std)
     if(not in_log_space):
         return np.maximum(amplitude * np.exp(-(inner_x_delta + inner_y_delta)), lowest_value)
     else:
         return np.maximum(np.log2(amplitude) - (inner_x_delta + inner_y_delta) * np.log(np.e), np.log2(lowest_value))
 
-
 def skeleton_formula(
-    x: float,
-    y: float,
+    x: float_like,
+    y: float_like,
+    peak_dist_out: float,
+    peak_std: float,
+    peak_amplitude: float,
+    trough_amplitude: float,
+    in_log_space: bool = False
+) -> float_like:
+    """
+    Compute a location on the 2D skeletal transition curve with given parameters. The equation takes the form:
+
+    S(x) = {
+        max(trough_amp, peak_amplitude * G(x: peak_dist_out, peak_std))  if x < dist_out
+        peak_amplitude * G(x: dist_out, peak_std)                        otherwise
+    }
+
+    Where G(x: mu, sigma) is a normal distribution without normalization, or a peak of 1 (gaussian curve), centered at
+    mu with a standard deviation of sigma. This is in 1 dimension, to generalize to two dimensions, the Euclidean
+    distance to x, y from 0, 0 is used as the input to the 1D version of the function.
+
+    :param x: The x location to evaluate the skeletal transition function at.
+    :param y: The y location to evaluate the skeletal transition function at.
+    :param peak_dist_out: The location of the peak or max value of the curve on all sides from 0, 0.
+    :param peak_std: The standard deviation of the gaussian centered at the peak.
+    :param peak_amplitude: The amplitude of the peek.
+    :param trough_amplitude: The amplitude of the trough, or the curve value at 0, 0.
+    :param in_log_space: Boolean, if True (defaults to False) return log-probabilities (base 2) instead of regular
+                         probabilities.
+
+    :returns: A float, the skeletal transition function evaluated at the provided location.
+    """
+    d0 = np.sqrt(x * x + y * y)
+    if(not in_log_space):
+        g = peak_amplitude * np.exp(-((d0 - peak_dist_out) ** 2) / (2 * peak_std ** 2))
+        return np.where(
+            d0 < peak_dist_out, np.maximum(g, trough_amplitude), g
+        )
+    else:
+        g = np.log2(peak_amplitude) + np.log2(np.e) * (-((d0 - peak_dist_out) ** 2) / (2 * peak_std ** 2))
+        return np.where(
+            d0 < peak_dist_out, np.maximum(g, np.log2(trough_amplitude)), g
+        )
+
+
+def old_skeleton_formula(
+    x: float_like,
+    y: float_like,
     peak_dist_out: float,
     peak_amplitude: float,
     trough_amplitude: float,
     in_log_space: bool = False
-) -> float:
+) -> float_like:
     """
     Compute a location on the 2D skeletal transition curve with given parameters. The equation takes the form:
 
     S(x) = c * e ^ (ax^2 - bx^4)
 
-    where . In 1 dimension. To generalize to two dimensions, the euclidean distance to x, y from 0, 0 is used as the
+    In 1 dimension. To generalize to two dimensions, the euclidean distance to x, y from 0, 0 is used as the
     input to the 1D version of the function.
 
     :param x: The x location to evaluate the skeletal transition function at.
@@ -77,7 +123,7 @@ def skeleton_formula(
 def get_func_table(
     width: int,
     height: int,
-    fill_func: Callable[[int, int], float],
+    fill_func: Callable[[float_like, float_like], float_like],
     flatten_radius: Optional[float] = None
 ) -> np.ndarray:
     """
@@ -85,30 +131,20 @@ def get_func_table(
 
     :param width: The width of the 2D array or table.
     :param height: The height of the 2D array or table.
-    :param fill_func: A function that accepts two argument (x and y) and returns a values for the given location.
+    :param fill_func: A function that accepts two argument (x and y) and returns a values for the given locations.
     :param flatten_radius: Optional. The radius in which to average the values and then replace all the values with
                            the average. Has the effect of flattening the values within the radius from 0, 0.
 
     :returns: A 2D numpy array of floats, with the function evaluated at each index. (Indexing is x then y).
     """
-    table = np.zeros((width, height), dtype=np.float32)
-    tot_sum = 0
-    count = 0
+    x, y = np.ogrid[0:width, 0:height]
+    table = fill_func(x, y)
 
-    for x in range(width):
-        for y in range(height):
-            table[x, y] = fill_func(x, y)
+    if(flatten_radius is not None):
+        flat_locs = (width * width + height * height) < flatten_radius ** 2
 
-            if((flatten_radius is not None) and ((x ** 2 + y ** 2) < flatten_radius)):
-                tot_sum += table[x, y]
-                count += 1
-
-    if(count != 0):
-        substitute = tot_sum / count
-        for x in range(width):
-            for y in range(height):
-                if((x ** 2 + y ** 2) < flatten_radius):
-                    table[x, y] = substitute
+        if(np.sum(flat_locs) > 0):
+            table[flat_locs] = np.mean(table[flat_locs])
 
     return table
 
