@@ -1,3 +1,4 @@
+import functools
 import time
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,7 @@ import cv2
 from diplomat.processing import Config, Predictor
 from diplomat.utils.frame_store_api import DLFSHeader
 from diplomat.utils.shapes import shape_iterator
+from diplomat.utils.track_formats import load_diplomat_table
 from diplomat.utils.video_io import ContextVideoCapture
 
 
@@ -136,3 +138,38 @@ class Timer:
     @property
     def duration(self) -> float:
         return self._end_time - self._start_time
+
+
+@functools.cache
+def _get_track_loaders(include_native: bool = False):
+    from diplomat import _LOADED_FRONTENDS
+    from diplomat.frontends import DIPLOMATContract, TracksLoaderFunction
+
+    loaders = []
+
+    if(include_native):
+        loaders.append(
+            lambda path: load_diplomat_table(str(path))
+        )
+
+    for frontend_name, funcs in _LOADED_FRONTENDS.items():
+        if(funcs.verify_contract(DIPLOMATContract("_load_tracks", TracksLoaderFunction))):
+            loaders.append(funcs._load_tracks)
+
+    return loaders
+
+
+def _load_tracks_from_loaders(loaders, input_path):
+    old_exp = None
+    input_path = Path(str(input_path)).resolve()
+
+    for loader in loaders:
+        try:
+            return loader(path=input_path)
+        except (ValueError, KeyError, TypeError, IOError) as exp:
+            try:
+                raise exp from old_exp
+            except type(exp):
+                old_exp = exp
+    else:
+        raise NotImplementedError(f"Unable to find frontend that could load the file: {input_path}") from old_exp

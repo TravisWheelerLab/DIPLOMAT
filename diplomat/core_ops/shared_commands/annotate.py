@@ -9,10 +9,8 @@ from diplomat.utils.video_io import ContextVideoWriter, ContextVideoCapture
 from diplomat.utils.shapes import CV2DotShapeDrawer, shape_iterator
 from diplomat.processing import Config, TQDMProgressBar
 from diplomat.utils.colormaps import iter_colormap
-
 import cv2
-
-from .utils import _fix_path_pairs
+from diplomat.core_ops.shared_commands.utils import _fix_path_pairs, _load_tracks_from_loaders, _get_track_loaders
 
 
 @extra_cli_args(FULL_VISUAL_SETTINGS, auto_cast=False)
@@ -28,7 +26,8 @@ def label_videos(
     Labeled videos with arbitrary csv files in diplomat's csv format.
 
     :param videos: Paths to video file(s) corresponding to the provided csv files.
-    :param csvs: The path (or list of paths) to the csv file(s) to label the videos with.
+    :param csvs: The path (or list of paths) to the csv file(s) to label the videos with. If not csv files, will
+                 attempt to detect if file is frontend specific and convert it to a csv.
     :param body_parts_to_plot: A set or list of body part names to label, or None, indicating to label all parts.
     :param video_extension: The file extension to use on the created labeled video, excluding the dot.
                             Defaults to 'mp4'.
@@ -60,7 +59,7 @@ def _label_videos_single(
     video_extension: str,
     visual_settings: Config
 ):
-    pose_data = load_diplomat_table(csv)
+    pose_data = _load_tracks_from_loaders(_get_track_loaders(True), csv)
     poses, bp_names, num_outputs = to_diplomat_pose(pose_data)
     video_extension = video_extension if(video_extension.startswith(".")) else f".{video_extension}"
     video_path = Path(video)

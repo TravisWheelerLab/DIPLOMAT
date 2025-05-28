@@ -1,11 +1,9 @@
 import os
 import sys
-from pathlib import Path
-
 from diplomat.core_ops.shared_commands.annotate import _label_videos_single
 from diplomat.core_ops.shared_commands.save_from_restore import _save_from_restore
 from diplomat.core_ops.shared_commands.tracking import analyze_frames, analyze_videos
-from diplomat.core_ops.shared_commands.utils import _fix_path_pairs
+from diplomat.core_ops.shared_commands.utils import _fix_path_pairs, _get_track_loaders, _load_tracks_from_loaders
 from diplomat.core_ops.shared_commands.tweak import _tweak_video_single
 from diplomat.core_ops.shared_commands.visual_settings import VISUAL_SETTINGS, FULL_VISUAL_SETTINGS
 from diplomat.processing import Config, Predictor, get_predictor
@@ -531,40 +529,6 @@ def interact(
             start_time=start_time,
             end_time=end_time
         )
-
-
-def _get_track_loaders(include_native: bool = False):
-    from diplomat import _LOADED_FRONTENDS
-    from diplomat.frontends import DIPLOMATContract, TracksLoaderFunction
-
-    loaders = []
-
-    if(include_native):
-        loaders.append(
-            lambda path: load_diplomat_table(str(path))
-        )
-
-    for frontend_name, funcs in _LOADED_FRONTENDS.items():
-        if(funcs.verify_contract(DIPLOMATContract("_load_tracks", TracksLoaderFunction))):
-            loaders.append(funcs._load_tracks)
-
-    return loaders
-
-
-def _load_tracks_from_loaders(loaders, input_path):
-    old_exp = None
-    input_path = Path(str(input_path)).resolve()
-
-    for loader in loaders:
-        try:
-            return loader(path=input_path)
-        except (ValueError, KeyError, TypeError, IOError) as exp:
-            try:
-                raise exp from old_exp
-            except type(exp):
-                old_exp = exp
-    else:
-        raise NotImplementedError(f"Unable to find frontend that could load the file: {input_path}") from old_exp
 
 
 @typecaster_function

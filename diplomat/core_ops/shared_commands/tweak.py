@@ -7,8 +7,7 @@ import diplomat.processing.type_casters as tc
 from diplomat.utils.track_formats import load_diplomat_table, to_diplomat_pose, save_diplomat_table, to_diplomat_table
 from diplomat.utils.video_io import ContextVideoCapture
 from diplomat.utils.shapes import shape_iterator
-
-from .utils import _fix_path_pairs
+from diplomat.core_ops.shared_commands.utils import _fix_path_pairs, _get_track_loaders, _load_tracks_from_loaders
 
 
 @extra_cli_args(VISUAL_SETTINGS, auto_cast=False)
@@ -22,7 +21,8 @@ def tweak_videos(
     Make minor modifications and tweaks to arbitrary csv files using DIPLOMAT's light interactive UI.
 
     :param videos: Paths to video file(s) corresponding to the provided csv files.
-    :param csvs: The path (or list of paths) to the csv file(s) to edit.
+    :param csvs: The path (or list of paths) to the csv file(s) to edit. If not csv files, will attempt to detect if
+                 file is frontend specific and convert it to a csv.
     :param kwargs: The following additional arguments are supported:
 
                    {extra_cli_args}
@@ -68,7 +68,7 @@ def _tweak_video_single(
     visual_cfg: Config
 ):
     print(f"Making modifications to: '{csv}' (video: '{video}')")
-    pose_table = load_diplomat_table(csv)
+    pose_table = _load_tracks_from_loaders(_get_track_loaders(True), csv)
     poses, bp_names, num_outputs = to_diplomat_pose(pose_table)
 
     ui_manager = TweakUI()
