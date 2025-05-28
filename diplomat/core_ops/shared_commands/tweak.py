@@ -4,7 +4,7 @@ from diplomat.processing import Config, Pose
 from diplomat.utils.cli_tools import extra_cli_args
 from diplomat.utils.tweak_ui import TweakUI
 import diplomat.processing.type_casters as tc
-from diplomat.utils.track_formats import load_diplomat_table, to_diplomat_pose, save_diplomat_table, to_diplomat_table
+from diplomat.utils.track_formats import to_diplomat_pose, save_diplomat_table, to_diplomat_table
 from diplomat.utils.video_io import ContextVideoCapture
 from diplomat.utils.shapes import shape_iterator
 from diplomat.core_ops.shared_commands.utils import _fix_path_pairs, _get_track_loaders, _load_tracks_from_loaders
