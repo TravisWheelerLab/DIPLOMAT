@@ -117,17 +117,42 @@ def apca_contrast(fg_color, bg_color):
     return np.where(np.abs(s_apc) < 0.1, 0.0, np.where(s_apc < 0, (s_apc - 0.027) * 100, (s_apc + 0.027) * 100))
 
 
-def circle_line_intersection(circle, line):
-    pass
+def circle_line_intersection(circle_center, radius, point_a, point_b):
+    # Place circle at center...
+    point_a = point_a - circle_center
+    point_b = point_b - circle_center
+
+    # Params...
+    dx = point_a[0] - point_b[0]
+    dy = point_a[1] - point_b[1]
+    dr = np.sqrt(dx * dx + dy * dy)
+    determ = point_a[0] * point_b[1] - point_a[1] * point_b[0]
+
+    discrim = dr * dr * radius * radius - determ
+    sgn = lambda x: np.where(x < 0, -1, 1)
+
+    discrim_rt = np.sqrt(discrim)
+
+    p0 = np.stack([
+        determ * dy - sgn(dy) * dx * discrim_rt,
+        -determ * dx - np.abs(dy) * discrim_rt
+    ])
+    p1 = np.stack([
+        determ * dy + sgn(dy) * dx * discrim_rt,
+        -determ * dx + np.abs(dy) * discrim_rt
+    ])
+
+    return (
+        np.where(discrim >= 0, p0, np.nan),
+        np.where(discrim >= 0, p1, np.nan)
+    )
 
 
+# TODO: Finish and enable eventually...
 def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False):
     fg_color = linear_rgb_to_oklab(srgb_to_linear_rgb(fg_color, as_int8))
     bg_color = linear_rgb_to_oklab(srgb_to_linear_rgb(fg_color, as_int8))
     initial_distance_sq = np.sum((fg_color - bg_color) ** 2, -1)
-
-    print(fg_color, bg_color)
-    print(np.sqrt(initial_distance_sq))
 
     # We want the plane on which the hue stays the same (same angle, any lightness)
     plane_norm_vec = np.zeros(fg_color.shape)
@@ -136,29 +161,22 @@ def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False
     # Normalize the vector...
     plane_norm_vec /= np.sqrt(np.dot(plane_norm_vec, plane_norm_vec))
 
-    print(plane_norm_vec)
-
     # Project background point onto the plane...
     bg_from_plane_delta = np.dot(bg_color, plane_norm_vec)
     nearest_bg_point_on_plane = bg_color - bg_from_plane_delta * plane_norm_vec
     remaining_distance = np.sqrt(distance * distance - bg_from_plane_delta * bg_from_plane_delta)
-    print(bg_from_plane_delta, nearest_bg_point_on_plane)
 
     fg_bg_delta = fg_color - nearest_bg_point_on_plane
     fg_to_bg_dist = np.sqrt(np.dot(fg_bg_delta, fg_bg_delta))
-    print(fg_bg_delta, fg_to_bg_dist, remaining_distance)
-    print()
+
     # Calculate all intersections, and direct compliments...
     # TODO: Actually compute 2d intersections of circle with bounds (rectangle) within valid color plane.
     #       than pick nearest color...
-    fg_shifted = (
-        nearest_bg_point_on_plane + (remaining_distance / fg_to_bg_dist) * (fg_color - nearest_bg_point_on_plane)
-    )
+    fg_shifted = nearest_bg_point_on_plane + (remaining_distance / fg_to_bg_dist) * (fg_color - nearest_bg_point_on_plane),
+    nearest_bg_point_on_plane + (remaining_distance / fg_to_bg_dist) * (fg_color - nearest_bg_point_on_plane)
 
     l_bounds = (0, 1)
     ab_bounds = (-0.5, 0.5)
-
-    print(linear_rgb_to_srgb(oklab_to_linear_rgb(np.where(fg_to_bg_dist < remaining_distance, fg_shifted, fg_color)), as_int8))
     return linear_rgb_to_srgb(oklab_to_linear_rgb(np.where(fg_to_bg_dist < remaining_distance, fg_shifted, fg_color)), as_int8)
 
 
@@ -168,8 +186,7 @@ class WxPlotStyles:
         self.foreground_color = widget.GetForegroundColour()
 
         def apply_apca(fg, bg, desired_val):
-            #return fg
-            return wx.Colour(*contrastify_color(fg[:3], bg[:3], desired_val, True), 255)
+            return wx.Colour(*fg[:3], 255)
 
         def alpha_shift(color, salpha):
             return wx.Colour(*color[:3], int(color.Alpha() * salpha))
