@@ -1,1 +1,3 @@
-Provides small bug fixes and installation improvements for version 0.3.3 of DIPLOMAT.
+This version of diplomat:
+ - Enhanced skeletal transition curve that takes into account spread of body parts.
+ - Support for converting DLC hdf5 and sleap hdf5 pose files to diplomat csvs, and passing them directly to the tweak and annotate commands.
