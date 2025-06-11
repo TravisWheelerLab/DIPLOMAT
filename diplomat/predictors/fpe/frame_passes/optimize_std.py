@@ -1,7 +1,5 @@
 from typing import Optional
 import numpy as np
-from wx.lib.agw.speedmeter import weights
-
 from diplomat.predictors.fpe.frame_pass import FramePass
 from diplomat.predictors.fpe.skeleton_structures import Histogram
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardData, ForwardBackwardFrame, AttributeDict
