@@ -1,4 +1,7 @@
 from typing import Iterable, Optional, Union, List
+
+from typing_extensions import overload
+
 from .sleap_imports import onnx
 
 
@@ -128,14 +131,19 @@ def to_onnx_graph_def(
 
             import onnx
 
+            extra_args = dict(
+                name=node.name,
+                doc_string=node.doc_string,
+                domain=node.domain,
+                overload=node.overload  # Older version of onnx don't have this argument....
+            )
+            extra_args = {k: v for k, v in extra_args.items() if v is not None}
+
             onnx_nodes.append(onnx.helper.make_node(
                 node.op_type,
                 inputs=op_inputs,
                 outputs=op_outputs,
-                name=node.name,
-                doc_string=node.doc_string,
-                domain=node.domain,
-                overload=node.overload,
+                **extra_args,
                 **node.attributes
             ))
         else:
