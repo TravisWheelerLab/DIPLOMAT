@@ -126,14 +126,16 @@ def to_onnx_graph_def(
             op_inputs = [n.name if n is not None else "" for n in node.inputs]
             op_outputs = [n.name for n in node.outputs]
 
+            import onnx
+
             onnx_nodes.append(onnx.helper.make_node(
                 node.op_type,
-                op_inputs,
-                op_outputs,
-                node.name,
-                node.doc_string,
-                node.domain,
-                node.overload,
+                inputs=op_inputs,
+                outputs=op_outputs,
+                name=node.name,
+                doc_string=node.doc_string,
+                domain=node.domain,
+                overload=node.overload,
                 **node.attributes
             ))
         else:
