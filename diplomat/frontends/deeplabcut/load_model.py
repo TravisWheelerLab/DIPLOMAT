@@ -1,4 +1,3 @@
-import functools
 import tempfile
 from io import BytesIO
 from pathlib import Path
@@ -153,7 +152,6 @@ def _get_dlc_inputs_and_outputs(meta_path):
 
 def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cpu: bool):
     import tensorflow as tf
-    from tensorflow.python.training import py_checkpoint_reader
     import tensorflow.compat.v1 as tf_v1
     import tf2onnx
     tf.compat.v1.disable_eager_execution()
@@ -166,7 +164,6 @@ def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cp
     latest_meta_file = max(meta_files, key=lambda k: int(k.stem.split("-")[-1]))
 
     inputs, outputs = _get_dlc_inputs_and_outputs(str(latest_meta_file))
-    print(inputs, outputs)
 
     graph_def, inputs, outputs = from_checkpoint(
         str(latest_meta_file), inputs, outputs

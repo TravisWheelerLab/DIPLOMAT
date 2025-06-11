@@ -1,3 +1,4 @@
+import contextlib
 from .sleap_imports import tf, h5py
 import json
 import zipfile
@@ -127,24 +128,26 @@ def _load_configs_from_zip(z: zipfile.ZipFile, include_model = True):
 
 @resolve_lazy_imports
 def _load_config_and_model(path, include_model = True):
-    path = Path(path)
-    if(zipfile.is_zipfile(path)):
-        with zipfile.ZipFile(path, "r") as z:
-            return _load_configs_from_zip(z, include_model)
+    device_ctx = tf.device('/cpu:0') if include_model else contextlib.nullcontext()
+    with device_ctx:
+        path = Path(path)
+        if(zipfile.is_zipfile(path)):
+            with zipfile.ZipFile(path, "r") as z:
+                return _load_configs_from_zip(z, include_model)
 
-    if(path.is_dir()):
-        path = path / "training_config.json"
-    path = path.resolve()
+        if(path.is_dir()):
+            path = path / "training_config.json"
+        path = path.resolve()
 
-    with path.open("rb") as f:
-        cfg = json.load(f)
-        _correct_skeletons_in_config(cfg)
-    model_path = _resolve_model_path(path.parent.iterdir())
-    if(include_model):
-        model = tf.keras.models.load_model(model_path, compile=False)
-        return [(cfg, model)]
-    else:
-        return [cfg]
+        with path.open("rb") as f:
+            cfg = json.load(f)
+            _correct_skeletons_in_config(cfg)
+        model_path = _resolve_model_path(path.parent.iterdir())
+        if(include_model):
+            model = tf.keras.models.load_model(model_path, compile=False)
+            return [(cfg, model)]
+        else:
+            return [cfg]
 
 
 def _load_configs(paths, include_models: bool = True):

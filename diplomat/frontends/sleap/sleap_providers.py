@@ -239,31 +239,33 @@ def _reset_input_layer(
     Returns:
         A copy of `keras_model` with input shape `new_shape`.
     """
+    with tf.device("/cpu:0"):
+        if new_shape is None:
+            new_shape = (None, None, None, keras_model.input_shape[-1])
 
-    if new_shape is None:
-        new_shape = (None, None, None, keras_model.input_shape[-1])
+        model_config = keras_model.get_config()
+        model_config["layers"][0]["config"]["batch_input_shape"] = new_shape
+        new_model = tf.keras.Model.from_config(
+            model_config, custom_objects={}
+        )  # Change custom objects if necessary
 
-    model_config = keras_model.get_config()
-    model_config["layers"][0]["config"]["batch_input_shape"] = new_shape
-    new_model = tf.keras.Model.from_config(
-        model_config, custom_objects={}
-    )  # Change custom objects if necessary
-
-    # Iterate over all the layers that we want to get weights from
-    weights = [layer.get_weights() for layer in keras_model.layers]
-    for layer, weight in zip(new_model.layers, weights):
-        if len(weight) > 0:
-            layer.set_weights(weight)
+        # Iterate over all the layers that we want to get weights from
+        weights = [layer.get_weights() for layer in keras_model.layers]
+        for layer, weight in zip(new_model.layers, weights):
+            if len(weight) > 0:
+                layer.set_weights(weight)
 
     return new_model
 
 
 @resolve_lazy_imports
 def _keras_to_onnx_model(keras_model) -> onnx.ModelProto:
-    input_signature = [
-        tf.TensorSpec(keras_model.input_shape, tf.float32, name="image")
-    ]
-    return tf2onnx.convert.from_keras(keras_model, input_signature, opset=17)[0]
+    with tf.device("/cpu:0"):
+        input_signature = [
+            tf.TensorSpec(keras_model.input_shape, tf.float32, name="image")
+        ]
+        mdl = tf2onnx.convert.from_keras(keras_model, input_signature, opset=17)[0]
+        return mdl
 
 
 def _find_model_output(model: ort.InferenceSession, name: str, required: bool = True):
