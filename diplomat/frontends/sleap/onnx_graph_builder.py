@@ -129,8 +129,6 @@ def to_onnx_graph_def(
             op_inputs = [n.name if n is not None else "" for n in node.inputs]
             op_outputs = [n.name for n in node.outputs]
 
-            import onnx
-
             extra_args = dict(
                 name=node.name,
                 doc_string=node.doc_string,
