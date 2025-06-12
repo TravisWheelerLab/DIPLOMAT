@@ -534,7 +534,8 @@ def interact(
 @typecaster_function
 def convert_tracks(
     inputs: Union[List[PathLike], PathLike],
-    outputs: Union[NoneType, List[PathLike], PathLike] = None
+    outputs: Union[NoneType, List[PathLike], PathLike] = None,
+    force: Flag = False
 ):
     """
     Convert files storing final tracking results for a video from other software to diplomat csv's format that can be
@@ -543,7 +544,9 @@ def convert_tracks(
     :param inputs: A single or list of paths to files to convert to diplomat csvs.
     :param outputs: An optional single path or list of paths, the location to write converted files to. If not
                     specified, places the converted files at same locations as inputs with an extension of .csv
-                    instead of the original extension.
+                    instead of the original extension. If the original file was a csv,
+                    appends _converted to the filename
+    :param force: Flag, if enabled diplomat won't ask if before overwriting an output file that already exists...
     """
     from pathlib import Path
 
@@ -557,7 +560,8 @@ def convert_tracks(
         outputs = []
         for p in inputs:
             p = Path(p).resolve()
-            outputs.append(p.parent / (p.stem + ".csv"))
+            fname = (p.stem + ".csv") if p.suffix != ".csv" else (p.stem + "_converted.csv")
+            outputs.append(p.parent / fname)
     if not isinstance(outputs, (list, tuple)):
         outputs = [outputs]
 
@@ -566,6 +570,15 @@ def convert_tracks(
 
     for inp, out in zip(inputs, outputs):
         print(f"Converting HDF5 to CSV: {inp}->{out}")
+        if out.exists():
+            print(f"WARNING: Output {out} already exists!")
+            if not force:
+                res = input("Are you sure you want to overwrite the file? (Y/[N]): ")
+                if not res.strip().lower() in ["y", "yes"]:
+                    print(f"Skipping conversion of {inp}.")
+                    continue
+            print(f"Overwriting file {out}...")
+
         out = Path(out).resolve()
         diplomat_table = _load_tracks_from_loaders(loaders, inp)
         save_diplomat_table(diplomat_table, str(out))

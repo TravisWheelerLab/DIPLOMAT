@@ -9,6 +9,9 @@ import diplomat.processing.type_casters as tc
 def _sleap_analysis_h5_to_diplomat_table(path: tc.PathLike) -> pd.DataFrame:
     import h5py
 
+    if not h5py.is_hdf5(path):
+        raise ValueError("Passed file is not an hdf5 file!")
+
     with h5py.File(path, "r") as f:
         info = json.loads(f["metadata"].attrs["json"])
 

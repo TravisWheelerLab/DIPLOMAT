@@ -5,14 +5,38 @@ import numpy as np
 import pandas as pd
 
 
+DLC_HEADER_ROW_NAMES = [
+    ["scorer", "bodyparts", "coords"],
+    ["scorer", "individuals", "bodyparts", "coords"]
+]
+DLC_4_HEADER_ROW_NAMES = DLC_HEADER_ROW_NAMES[-1]
+
+
 @tc.typecaster_function
 def _dlc_hdf_to_diplomat_table(path: tc.PathLike) -> pd.DataFrame:
+    import h5py
+
     if isinstance(path, Path):
         path = str(path)
-    table = pd.read_hdf(path)
+
+    if h5py.is_hdf5(path):
+        table = pd.read_hdf(path)
+    else:
+        table = pd.read_csv(path, header=list(range(4)), index_col=0)
+        if table.columns.names != DLC_4_HEADER_ROW_NAMES:
+            table = pd.read_csv(path, header=list(range(3)), index_col=0)
 
     if(not isinstance(table, pd.DataFrame)):
         raise ValueError("HDF file did not contain table data.")
+
+    for column_names in DLC_HEADER_ROW_NAMES:
+        if table.columns.names == column_names:
+            break
+    else:
+        raise ValueError(
+            f"Invalid table format for DeepLabCut, columns names are {table.columns.names}, "
+            f"must be the following: {DLC_HEADER_ROW_NAMES}"
+        )
 
     np_table_data = table.to_numpy(np.float32)
     full_table_data = np.zeros((np.max(table.index) + 1, np_table_data.shape[1]), np.float32)

@@ -52,7 +52,19 @@ def load_diplomat_table(path_or_buf: Union[str, BufferedReader]) -> pd.DataFrame
 
     :return: A pd.DataFrame, being the diplomat-pandas pose table stored at the given location.
     """
-    return pd.read_csv(path_or_buf, index_col=None, header=[0, 1, 2])
+    table = pd.read_csv(path_or_buf, index_col=None, header=[0, 1, 2])
+
+    # Validation: Verify csv has expected entries needed...
+    expected_columns = pd.MultiIndex.from_product([
+        table.columns.unique(0),  # Individuals...
+        table.columns.unique(1),  # Body parts...
+        ["x", "y", "likelihood"]
+    ])
+    for col in expected_columns:
+        if col not in table.columns:
+            raise ValueError(f"Table is missing expected column: {col}.")
+
+    return table
 
 
 def to_diplomat_pose(table: pd.DataFrame) -> Tuple[Pose, List[str], int]:
@@ -64,6 +76,13 @@ def to_diplomat_pose(table: pd.DataFrame) -> Tuple[Pose, List[str], int]:
     :return: A tuple containing a diplomat Pose object, a list of string giving the body part names in order,
              and an integer giving the number of bodies, our outputs.
     """
+    expected_columns = pd.MultiIndex.from_product([
+        table.columns.unique(0),
+        table.columns.unique(1),
+        ["x", "y", "likelihood"]
+    ])
+    table = table[expected_columns]
+
     num_outputs = len(table.columns.unique(0))
     names = table.columns.unique(1)
 
