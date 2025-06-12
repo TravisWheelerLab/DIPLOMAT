@@ -112,6 +112,7 @@ def _analyze_frame_store(
 
             video_metadata, __ = _get_video_metadata(
                 "diplomat_frame_store",
+                bp_lst,
                 video_path,
                 output_path,
                 num_outputs,
@@ -248,6 +249,7 @@ def _analyze_single_video(
 
     video_metadata, num_f = _get_video_metadata(
         model_info["frontend"],
+        bp_lst,
         video_path,
         output_path,
         num_outputs,

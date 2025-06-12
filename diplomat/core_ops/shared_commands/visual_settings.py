@@ -24,7 +24,7 @@ VISUAL_SETTINGS: ConfigSpec = {
                                                     "individual's dots."),
     "line_thickness": (1, int, "Thickness of lines drawn."),
     "skeleton": (None, Skeleton, "The skeleton to use for this this run of DIPLOMAT. Defaults to None, which uses "
-                                 "the skeleton associated with the sleap project. Can be a list of strings, a list of "
+                                 "the skeleton associated with the project. Can be a list of strings, a list of "
                                  "tuples of strings, a dictionary of strings to strings or lists of strings, or "
                                  "True/False (True connects all parts, False connects no parts, disabling the "
                                  "skeleton).")

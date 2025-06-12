@@ -2,7 +2,7 @@ import functools
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, List, Type
+from typing import Optional, Tuple, List, Type, Union, Dict
 
 import cv2
 
@@ -62,18 +62,58 @@ def _paths_to_str(paths):
         return str(paths)
 
 
+def _convert_user_skeleton(
+    skeleton: Union[bool, Dict[str, List[str]], List[str], List[Tuple[str, str]]],
+    bp_list: List[str]
+) -> List[Tuple[str, str]]:
+    if skeleton is False:
+        return []
+
+    if skeleton is True:
+        skeleton = bp_list
+
+    edge = lambda a, b: (a, b) if a <= b else (b, a)
+
+    if isinstance(skeleton, dict):
+        skeleton = [edge(x, y) for x, elems in skeleton.items() for y in elems if x != y]
+    if isinstance(skeleton, list) and len(skeleton) > 0 and all(isinstance(v, str) for v in skeleton):
+        skeleton = [edge(skeleton[i], skeleton[j]) for i in range(len(skeleton)) for j in range(i + 1, len(skeleton))]
+
+    if not all(isinstance(v, tuple) and len(v) == 2 for v in skeleton):
+        raise ValueError("Invalid skeleton passed!")
+
+    # Validate edge list...
+    skeleton_new = set()
+    bp_list = set(bp_list)
+
+    for aa, bb in skeleton:
+        if aa == bb:
+            continue
+        if aa not in bp_list:
+            raise ValueError(f"Invalid part in skeleton: {aa}, valid parts: {bp_list}")
+        if bb not in bp_list:
+            raise ValueError(f"Invalid part in skeleton: {b}, valid parts: {bp_list}")
+        skeleton_new.add(edge(aa, bb))
+
+    return sorted(skeleton_new)
+
+
 def _get_video_metadata(
     frontend: str,
+    bp_list: List[str],
     video_path: Optional[Path],
     output_path: Path,
     num_outputs: int,
     visual_settings: Config,
-    skeleton: List[Tuple[int, int]] = None,
+    skeleton: List[Tuple[str, str]] = None,
     crop_loc: Optional[Tuple[int, int]] = None,
     frame_store_header: Optional[DLFSHeader] = None
 ) -> Tuple[Config, int]:
+    if visual_settings.skeleton is not None:
+        skeleton = _convert_user_skeleton(visual_settings.skeleton, bp_list)
+
     if(skeleton is None):
-        skeleton = []
+       skeleton = []
 
     if(frame_store_header is None):
         with ContextVideoCapture(str(video_path)) as vid:

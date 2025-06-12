@@ -197,6 +197,8 @@ class CreateSkeleton(FramePass):
                 # Convert all dictionary arguments to lists...
                 return [(str(k), str(v)) for k, v in skel]
 
+        raise ValueError("Invalid skeleton!")
+
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
