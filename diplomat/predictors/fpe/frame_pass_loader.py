@@ -25,10 +25,10 @@ class FramePassBuilder:
         self,
         width: int,
         height: int,
-        allow_multi_threading: bool = True
+        thread_count: int = 1
     ) -> FramePass:
         return self._clazz(
-            width, height, allow_multi_threading, self._config
+            width, height, thread_count, self._config
         )
 
     @classmethod

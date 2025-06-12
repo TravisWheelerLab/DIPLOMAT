@@ -542,7 +542,7 @@ class FixFrame(FramePass):
         to_index = lambda i: slice(i * cls.SCORES_PER_CHUNK, (i + 1) * cls.SCORES_PER_CHUNK)
         max_dist = np.sqrt(fb_data.metadata.width ** 2 + fb_data.metadata.height ** 2)
 
-        if(thread_count > 0):
+        if(thread_count > 1):
             from ...sfpe.segmented_frame_pass_engine import PoolWithProgress
             with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
                 pool.fast_map(

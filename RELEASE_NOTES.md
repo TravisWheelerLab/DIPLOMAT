@@ -1,1 +1,2 @@
-Reduces GPU memory usage when running inference on top of sleap.
+ - Adds support for DeepLabCut's csv format.
+ - Unifies multithreading configuration to be through a single argument (thread_count).

@@ -19,6 +19,7 @@ def _get_readme():
 
 ONNX_TF_DEPS = [
     "h5py",
+    "tables",
     "tensorflow",
     "tf2onnx>=1.16.1",
     "onnx",

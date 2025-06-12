@@ -271,7 +271,7 @@ class PoolWithProgress:
     def __init__(
         self,
         progress_bar: ProgressBar,
-        process_count: int = os.cpu_count(),
+        process_count: int,
         refresh_rate_seconds: float = DEF_MAX_REFRESH_RATE,
         sub_ticks: int = DEF_SUB_TICKS,
         max_worker_reuse: Optional[int] = None,
@@ -764,8 +764,10 @@ class SegmentedFramePassEngine(Predictor):
         return poses
 
     def _run_full_passes(self, progress_bar: Optional[ProgressBar]):
+        thread_count = self._get_thread_count()
+
         for (i, frame_pass_builder) in enumerate(self.FULL_PASSES):
-            frame_pass = frame_pass_builder(self._width, self._height, True)
+            frame_pass = frame_pass_builder(self._width, self._height, thread_count)
 
             if(progress_bar is not None):
                 progress_bar.message(
@@ -861,7 +863,7 @@ class SegmentedFramePassEngine(Predictor):
         frame_pass_builders: List[FramePassBuilder],
         width: int,
         height: int,
-        allow_multi_threading: bool,
+        thread_count: int,
         fix_frame_idx: int, 
         fix_frame_score: float,
         progress_bar: Optional[ProgressBar] = None,
@@ -871,7 +873,7 @@ class SegmentedFramePassEngine(Predictor):
             frame_pass_builders,
             width,
             height,
-            allow_multi_threading,
+            thread_count,
             fix_frame_idx, 
             fix_frame_score,
             progress_bar,
@@ -885,7 +887,7 @@ class SegmentedFramePassEngine(Predictor):
         frame_pass_builders: List[FramePassBuilder],
         width: int,
         height: int,
-        allow_multi_threading: bool,
+        thread_count: int,
         fix_frame_idx: int, 
         fix_frame_score,
         progress_bar: Optional[ProgressBar] = None,
@@ -925,7 +927,7 @@ class SegmentedFramePassEngine(Predictor):
             progress_bar.inc_rerun_counter()
 
         for (i, frame_pass_builder) in enumerate(frame_pass_builders):
-            frame_pass = frame_pass_builder(width, height, allow_multi_threading)
+            frame_pass = frame_pass_builder(width, height, thread_count)
 
             sub_frame = frame_pass.run_pass(
                 sub_frame,
@@ -950,7 +952,14 @@ class SegmentedFramePassEngine(Predictor):
         sub_frame.frames = self._frame_holder.frames[start:end]
         sub_frame.metadata = self._frame_holder.metadata
 
-        return (sub_frame, self.SEGMENTED_PASSES, self._width, self._height, False, fix_frame - start, segment_score)
+        return (
+            sub_frame,
+            self.SEGMENTED_PASSES,
+            self._width,
+            self._height,
+            0,
+            fix_frame - start,
+            segment_score)
 
     def _set_segment(self, index: int, frame_data: ForwardBackwardData):
         start, end, fix_frame = self._segments[index]
@@ -1047,11 +1056,8 @@ class SegmentedFramePassEngine(Predictor):
 
         self._frame_holder.allow_pickle = False
 
-        if(thread_count <= 0):
+        if(thread_count <= 1):
             pass_count = (len(self.SEGMENTED_PASSES) + 1) * total_segments
-
-            passes_can_use_pool = any(b.clazz.UTILIZE_GLOBAL_POOL for b in self.SEGMENTED_PASSES)
-            allow_multithread = self.settings.allow_pass_multithreading
 
             wrapper_bar = NestedProgressIndicator(
                 progress_bar,
@@ -1060,18 +1066,10 @@ class SegmentedFramePassEngine(Predictor):
             )
             progress_bar.message("Running on Segments...")
 
-            if(passes_can_use_pool and allow_multithread):
-                with PoolWithProgress.get_optimal_ctx().Pool(processes=os.cpu_count()) as pool:
-                    FramePass.GLOBAL_POOL = AntiCloseObject(pool)
-                    for is_pre_init, segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
-                        for idx in segment_idx:
-                            frm, segs, width, height, __, fix_frame_idx, fix_frame_score = self._get_segment(idx)
-                            self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, fix_frame_score, wrapper_bar, is_pre_init)
-            else:
-                for is_pre_init, segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
-                    for idx in segment_idx:
-                        frm, segs, width, height, __, fix_frame_idx, fix_frame_score = self._get_segment(idx)
-                        self._run_segment(frm, segs, width, height, self.settings.allow_pass_multithreading, fix_frame_idx, fix_frame_score, wrapper_bar, is_pre_init)
+            for is_pre_init, segment_idx in self._iter_run_levels(segment_idxs, run_level_data):
+                for idx in segment_idx:
+                    frm, segs, width, height, __, fix_frame_idx, fix_frame_score = self._get_segment(idx)
+                    self._run_segment(frm, segs, width, height, thread_count, fix_frame_idx, fix_frame_score, wrapper_bar, is_pre_init)
 
             FramePass.GLOBAL_POOL = None
         else:
@@ -1533,11 +1531,6 @@ class SegmentedFramePassEngine(Predictor):
                 "The number of threads to use when running segmented passes. "
                 "Defaults to None, which resolves to os.cpu_count() at runtime. "
                 "If set to 0, disables multithreading..."
-            ),
-            "allow_pass_multithreading": (
-                True,
-                bool,
-                "Whether or not to allow frame passes to utilize multithreading. Defaults to True."
             ),
             "segment_size": (
                 200,

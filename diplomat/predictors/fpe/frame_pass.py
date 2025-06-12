@@ -30,7 +30,7 @@ class FramePass(ABC):
         self,
         width: int,
         height: int,
-        multi_threading_allowed: bool,
+        thread_count: int,
         config: Dict[str, Any]
     ):
         # Set defaults to forward iteration...
@@ -41,7 +41,8 @@ class FramePass(ABC):
 
         self.__width = width
         self.__height = height
-        self.__multi_threading_allowed = multi_threading_allowed
+        self.__multi_threading_allowed = thread_count > 1
+        self.__thread_count = thread_count
 
         self._config = Config(config, self.get_config_options())
         self._frame_data = None
@@ -57,6 +58,10 @@ class FramePass(ABC):
     @property
     def multi_threading_allowed(self) -> bool:
         return self.__multi_threading_allowed
+
+    @property
+    def thread_count(self) -> int:
+        return self.__thread_count
 
     def _get_step_controls(self) -> Tuple[oint, oint, oint, oint]:
         return self._start, self._stop, self._step, self._prior_off

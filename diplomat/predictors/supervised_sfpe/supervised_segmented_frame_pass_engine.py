@@ -504,7 +504,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             poses[s_i:e_i, :] = poses[s_i:e_i, seg_ord]
         old_poses.get_all()[:] = poses.reshape(old_poses.get_frame_count(), old_poses.get_bodypart_count() * 3)
         
-        
         return (
             self.get_maximums(
                 self._frame_holder,

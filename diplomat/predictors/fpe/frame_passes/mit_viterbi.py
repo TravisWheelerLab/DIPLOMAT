@@ -17,6 +17,9 @@ class NotAPool:
     T = TypeVar("T")
     E = TypeVar("E")
 
+    def __init__(self, *args, **kwargs):
+        pass
+
     def __enter__(self):
         return self
 
@@ -332,7 +335,7 @@ class MITViterbi(FramePass):
         backtrace_priors = [None for __ in range(fb_data.num_bodyparts)]
         backtrace_current = [None for __ in range(fb_data.num_bodyparts)]
 
-        with pool_cls() as pool:
+        with pool_cls(self.thread_count) as pool:
             exit_prob = fb_data.metadata.enter_trans_prob
             transition_function = ViterbiTransitionTable(self._gaussian_table, 1, exit_prob, 1 - exit_prob)
 
@@ -422,7 +425,7 @@ class MITViterbi(FramePass):
         return fb_data
 
     @staticmethod
-    def _get_pool():
+    def _get_pool(processes):
         # Check globals for a pool...
         """This function sets up a multiprocessing pool for parallel processing,
         improving the efficiency of the algorithm by allowing it to process 
@@ -434,11 +437,11 @@ class MITViterbi(FramePass):
         for ctx, args in [("forkserver", {}), ("spawn", {}), ("fork", {"maxtasksperchild": 1})]:
             try:
                 ctx = get_context(ctx)
-                return ctx.Pool(**args)
+                return ctx.Pool(processes, **args)
             except ValueError:
                 continue
 
-        return get_context().Pool()
+        return get_context().Pool(processes)
 
     def _run_forward(
         self,
@@ -475,7 +478,7 @@ class MITViterbi(FramePass):
         # We only use a pool if the body part group is high enough...
         pool_cls = self._get_pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // meta.num_outputs) > 2) else NotAPool
 
-        with pool_cls() as pool:
+        with pool_cls(self.thread_count) as pool:
             exit_prob = fb_data.metadata.enter_trans_prob
             transition_func = ViterbiTransitionTable(self._gaussian_table, 1, exit_prob, 1 - exit_prob)
 

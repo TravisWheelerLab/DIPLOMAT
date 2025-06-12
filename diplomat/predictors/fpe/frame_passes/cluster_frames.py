@@ -56,9 +56,7 @@ class ClusterFrames(FramePass):
         if(not in_place):
             raise ValueError("Clustering must be done in place!")
 
-        thread_count = os.cpu_count() if(self.config.thread_count is None) else self.config.thread_count
-
-        if(self.multi_threading_allowed and (thread_count > 0)):
+        if(self.multi_threading_allowed and (self.thread_count > 1)):
             from diplomat.predictors.sfpe.segmented_frame_pass_engine import PoolWithProgress
 
             self._frame_data = fb_data
@@ -66,7 +64,7 @@ class ClusterFrames(FramePass):
 
             iter_range = RangeSlicer(self._frame_data.frames)[self._start:self._stop:self._step]
 
-            with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
+            with PoolWithProgress(prog_bar, process_count=self.thread_count, sub_ticks=1) as pool:
                 pool.fast_map(
                     ClusterFrames._cluster_frames,
                     lambda i: self._get_frame(iter_range[i]),
@@ -297,12 +295,6 @@ class ClusterFrames(FramePass):
             ),
             "max_throwaway_count": (
                 10, float, "The maximum number of clusters to throw away before giving up on clustering a given frame."
-            ),
-            "thread_count": (
-                None,
-                tc.Union(tc.Literal(None), tc.RangedInteger(0, np.inf)),
-                "The number of threads to use during processing. If None, uses os.cpu_count(). "
-                "If 0 disables multithreading."
             ),
             "clustering_mode": (
                 ClusteringMethod.COMPLETE.name,
