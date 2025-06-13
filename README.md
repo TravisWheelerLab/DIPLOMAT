@@ -16,7 +16,7 @@ DIPLOMAT provides a multi-animal tracking/pose-estimation interface that (1) red
 
 ![UI Demo Showing user correcting tracking in a video](interact_retrack_gif.gif)
 
-**Correcting and rerunning the Viterbi algorithm on the Interact Interface**
+**Correcting and re-tracing on the Interact Interface**
 
 | Example of tracking 2 Degus in a Box | Example of tracking 3 Rats |
 |:------------------------------------:|:--------------------------:|
