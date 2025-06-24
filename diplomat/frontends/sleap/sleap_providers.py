@@ -171,8 +171,8 @@ class PreProcessingLayer:
             mdl = OnnxOp(
                 "Resize",
                 mdl, None, desired_scale,
+                axes=[1, 2],
                 coordinate_transformation_mode="asymmetric",
-                keep_aspect_ratio_policy="not_larger"
             )
 
         graph = to_onnx_graph_def(

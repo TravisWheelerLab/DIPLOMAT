@@ -264,6 +264,9 @@ def table_transition_interpolate(
     rx = delta_x - lx
     ry = delta_y - ly
 
-    top_interp = __trans(lookup_table, lx, ly) * (1 - rx) + __trans(lookup_table, lx + 1, ly) * rx
-    bottom_interp = __trans(lookup_table, lx, ly + 1) * (1 - rx) + __trans(lookup_table, lx + 1, ly + 1) * rx
+    lyp1 = np.clip(ly + 1, 0, lookup_table.shape[0] - 1)
+    lxp1 = np.clip(lx + 1, 0, lookup_table.shape[1] - 1)
+
+    top_interp = __trans(lookup_table, lx, ly) * (1 - rx) + __trans(lookup_table, lxp1, ly) * rx
+    bottom_interp = __trans(lookup_table, lx, lyp1) * (1 - rx) + __trans(lookup_table, lxp1, lyp1) * rx
     return top_interp * (1 - ry) + bottom_interp * ry
