@@ -1,2 +1,2 @@
- - Adds support for DeepLabCut's csv format.
- - Unifies multithreading configuration to be through a single argument (thread_count).
+ - Fixes inference for SLEAP when image scaling is enabled for the project.
+ - Resolves out of bounds indexing error when looking up confidences.
