@@ -171,7 +171,7 @@ diplomat track -c path/to/config -v [path/to/video1, path/to/video2, "path/to/vi
             <p>After tracking, the <code>annotate</code> command can be used to generate labeled videos. This command overlays tracking data onto the original footage, providing a visual representation of the tracking results.</p>
             <div class="commands">
                 <pre># Create annotated videos with tracking labels:
-diplomat annotate -c path/to/config -v path/to/video</pre>
+diplomat annotate -c path/to/tracks.csv -v path/to/video</pre>
             </div>
             <p>Annotated videos are valuable for presentations, publications, and further analysis.</p>
         </section>
@@ -195,7 +195,7 @@ diplomat interact -s path/to/ui_state.dipui</pre>
             <p>For minor adjustments, the <code>tweak</code> subcommand offers a streamlined version of the interactive UI. This tool is perfect for quick fixes and minor corrections without the need to open the full interface.</p>
             <div class="commands">
                 <pre># Make minor adjustments to tracking data:
-diplomat tweak -c path/to/config -v path/to/video</pre>
+diplomat tweak -c path/to/tracks.csv -v path/to/video</pre>
             </div>
         </section>
 
