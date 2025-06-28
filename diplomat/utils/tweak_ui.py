@@ -141,8 +141,8 @@ def _simplify_editor_class(wx, editor_class):
             self._video_splitter.Unsplit(self._plot_panel)
             self._do_save = do_save
 
-        def _get_tools(self, manual_save: Optional[Callable]):
-            tools = super()._get_tools(manual_save)
+        def _get_tools(self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]):
+            tools = super()._get_tools(manual_save, heatmap_entries)
             return [
                 tool for tool in tools
                 if(tool is self.SEPERATOR or tool.name not in ["Run Frame Passes", "Export Frames"])

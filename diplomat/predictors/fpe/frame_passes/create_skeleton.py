@@ -86,6 +86,8 @@ class CreateSkeleton(FramePass):
         if((lnk_parts is not None) and (lnk_parts != False)):
             if(lnk_parts == True):
                 lnk_parts = list(self._skeleton.node_names())
+            if len(lnk_parts) == 0:
+                return False
             if(not isinstance(lnk_parts[0], (tuple, list))):
                 lnk_parts = [(a, b) for a in lnk_parts for b in lnk_parts if(a != b)]
 

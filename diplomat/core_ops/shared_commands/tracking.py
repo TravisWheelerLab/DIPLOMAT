@@ -85,7 +85,7 @@ def _analyze_frame_store(
     visual_settings: Config,
     predictor_settings: Optional[dict],
     batch_size: int,
-    output_suffix: str
+    output_suffix: str,
 ):
     frame_store_path = Path(frame_store_path).resolve()
     if(not is_video(frame_store_path)):

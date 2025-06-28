@@ -7,8 +7,10 @@ from pathlib import Path
 import wx
 import cv2
 import numpy as np
-from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable, NamedTuple, Literal, Union
+from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable, NamedTuple, Literal, Union, Protocol, \
+    MutableMapping
 
+from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData
 from diplomat.utils.colormaps import iter_colormap, to_colormap
 from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table
 from diplomat.wx_gui.id_swap_dialog import IdSwapDialog
@@ -36,6 +38,65 @@ class Tool:
     widget: Optional[wx.Window] = None
     shortcut_code: tuple = ()
     toolbar_obj: Optional[wx.ToolBarToolBase] = None
+    tool_type: wx.ItemKind = wx.ITEM_NORMAL
+
+
+class FramePassEngineData(Protocol):
+    @property
+    def changed_frames(self) -> MutableMapping[Tuple[int, int], ForwardBackwardFrame]:
+        raise NotImplementedError
+
+    @property
+    def frame_data(self) -> ForwardBackwardData:
+        raise NotImplementedError
+
+    @property
+    def width(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def height(self) -> int:
+        raise NotImplementedError
+
+
+@dataclasses.dataclass
+class HeatmapOptions:
+    entries: List[str]
+    """ The list of options to show in the UI for heatmaps. """
+    heatmap_extractor: Callable[[int, int], Tuple[np.ndarray, float]]
+    """ Provided a frame index and option index (corresponding to the entries list), returns the heatmap and downscaling factor. """
+
+
+def default_heatmap_entries(part_list: List[str], frame_engine: FramePassEngineData) -> HeatmapOptions:
+    part_list_len = len(part_list)
+    full_part_list = [f"{p}-{s}" for s in ["Source", "Trace", "Occluded"] for p in part_list]
+    source_extractors = [
+        lambda x: x.src_data,
+        lambda x: SparseTrackingData(x.src_data.downscaling).pack(*x.src_data.unpack()[:2], x.frame_probs),
+        lambda x: SparseTrackingData(x.src_data.downscaling).pack(*x.occluded_coords.T, x.occluded_probs)
+    ]
+
+    def get_heatmap(frame: int, part: int):
+        source, part = divmod(part, part_list_len)
+        if((frame, part) in frame_engine.changed_frames):
+            frame = frame_engine.changed_frames[(frame, part)]
+        else:
+            frame = frame_engine.frame_data.frames[frame][part]
+
+        data = source_extractors[source](frame)
+
+        return (
+            data.desparsify(
+                int(frame_engine.width / frame.src_data.downscaling),
+                int(frame_engine.height / frame.src_data.downscaling)
+            ).get_prob_table(0, 0),
+            frame.src_data.downscaling
+        )
+
+    return HeatmapOptions(
+        entries=full_part_list,
+        heatmap_extractor=get_heatmap
+    )
 
 
 class History:
@@ -214,6 +275,7 @@ class FPEEditor(wx.Frame):
         identity_swapper: Optional[IdentitySwapper] = None,
         part_groups: Optional[List[str]] = None,
         manual_save: Optional[Callable] = None,
+        heatmap_options: Optional[HeatmapOptions] = None,
         w_id=wx.ID_ANY,
         title="",
         pos=wx.DefaultPosition,
@@ -226,7 +288,6 @@ class FPEEditor(wx.Frame):
 
         :param parent: The parent window, can be None.
         :param video_hdl: A cv2.VideoCapture, the video to display to the user.
-        :param data: A list of 1D numpy arrays, probability data for each body part...
         :param poses: Pose object, being the poses produced by the FB Algorithm...
         :param names: A list of strings, being the names of the body parts...
         :param plot_settings: The video_metadata object from the predictor plugin, includes important point and video
@@ -237,6 +298,9 @@ class FPEEditor(wx.Frame):
         :param identity_swapper: An identity swapper object, enables identity swapping functionality in the UI.
         :param part_groups: An optional list of integers, the group to place a body part in when building the selection
                             list on the side.
+        :param manual_save: Optional callable, executed when the save button in the UI is pressed. If not set, no
+                            save option shows up in the toolbar.
+        :param heatmap_options: Optional settings for displaying heatmap overlays in the UI. See the HeatmapOptions dataclass...
         :param w_id: The WX ID of the window. Defaults to wx.ID_ANY
         :param title: String title of the window. Defaults to "".
         :param pos: WX Position of the window. Defaults to wx.DefaultPosition.
@@ -291,6 +355,8 @@ class FPEEditor(wx.Frame):
          #   skeleton_info = self.skeleton_info
             **ps
         )
+        if(heatmap_options is not None):
+            self.video_player.video_viewer.set_heatmap_source(heatmap_options.heatmap_extractor)
         self.video_controls = VideoController(self._sub_panel, video_player=self.video_player.video_viewer)
 
         with FBProgressDialog(self, inner_msg="Calculating Scores...") as dlg:
@@ -319,7 +385,7 @@ class FPEEditor(wx.Frame):
         self._main_splitter.SplitHorizontally(self._video_splitter, self._sub_panel, -self._sub_panel.GetMinSize().GetHeight())
         self._splitter_sizer.Add(self._main_splitter, 1, wx.EXPAND)
 
-        self._build_toolbar(manual_save)
+        self._build_toolbar(manual_save, heatmap_options.entries if(heatmap_options is not None) else None)
 
         self._main_panel.SetSizerAndFit(self._splitter_sizer)
         self.SetSizerAndFit(self._main_sizer)
@@ -375,7 +441,7 @@ class FPEEditor(wx.Frame):
         self.SetAcceleratorTable(wx.AcceleratorTable([wx.AcceleratorEntry(*s) for s in keyboard_shortcuts]))
 
     def _tools_only(self):
-        return [tool for tool in self._tools if(tool is not self.SEPERATOR)]
+        return (tool for tool in self._tools if(tool is not self.SEPERATOR))
 
     def _launch_help(self):
         """
@@ -419,12 +485,38 @@ class FPEEditor(wx.Frame):
         if(self._manual_save_func is not None):
             self._manual_save_func()
 
-    def _get_tools(self, manual_save: Optional[Callable]) -> List[Union[Tool, Literal[SEPERATOR]]]:
+    def _build_heatmap_tool(self, heatmap_entries: Optional[List[str]]) -> Tool:
+        options = wx.Choice(self._toolbar, choices=["", *heatmap_entries])
+        def on_choice(evt):
+            idx = options.GetSelection()
+            self.video_player.video_viewer.set_selected_heatmap(-1 if idx == wx.NOT_FOUND else idx - 1)
+
+        options.SetSelection(0)
+        options.Bind(wx.EVT_CHOICE, on_choice)
+
+        return Tool(
+            "Display Part Confidences",
+            icons.HEATMAP_ICON,
+            icons.HEATMAP_ICON_SIZE,
+            "Toggle confidence map overlay for a single body part on the video.",
+            lambda: None,
+            options
+        )
+
+    def _get_tools(self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]) -> List[Union[Tool, SEPERATOR]]:
         spin_ctrl = wx.SpinCtrl(self._toolbar, min=1, max=50, initial=PointViewNEdit.DEF_FAST_MODE_SPEED_FRACTION)
         spin_ctrl.SetMaxSize(wx.Size(-1, self.TOOLBAR_ICON_SIZE[1]))
         spin_ctrl.Bind(wx.EVT_SPINCTRL, self._on_spin)
 
         self._manual_save_func = manual_save
+
+        heatmap_tools = []
+        if heatmap_entries is not None and len(heatmap_entries) > 0:
+            heatmap_tools.extend([
+                self.SEPERATOR,
+                self._build_heatmap_tool(heatmap_entries)
+            ])
+
 
         tools = [
             Tool(
@@ -500,6 +592,7 @@ class FPEEditor(wx.Frame):
                 lambda: None,
                 spin_ctrl
             ),
+            *heatmap_tools,
             self.SEPERATOR,
             Tool(
                 "Export Frames",
@@ -535,7 +628,7 @@ class FPEEditor(wx.Frame):
 
         return [tool for tool in tools if(tool is not None)]
 
-    def _build_toolbar(self, manual_save: Optional[Callable]):
+    def _build_toolbar(self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]):
         """
         PRIVATE: Constructs the toolbar, adds all tools to the toolbar, and sets up toolbar events to trigger actions
         within the UI.
@@ -549,7 +642,7 @@ class FPEEditor(wx.Frame):
 
         self._toolbar = self.CreateToolBar()
 
-        self._tools = self._get_tools(manual_save)
+        self._tools = self._get_tools(manual_save, heatmap_entries)
         self._bitmaps = []
 
         for tool in self._tools:
@@ -566,9 +659,10 @@ class FPEEditor(wx.Frame):
             self._bitmaps.append(icon)
 
             if(tool.widget is None):
-                tool_obj = self._toolbar.CreateTool(wx.ID_ANY, tool.name, icon, shortHelp=tool.help)
+                tool_obj = self._toolbar.CreateTool(wx.ID_ANY, tool.name, icon, kind=tool.tool_type, shortHelp=tool.help)
             else:
-                tool_obj = self._toolbar.CreateTool(wx.ID_ANY, tool.name, icon, icon, shortHelp=tool.help)
+                tool_obj = self._toolbar.CreateTool(wx.ID_ANY, tool.name, icon, icon, kind=tool.tool_type, shortHelp=tool.help)
+
             tool.toolbar_obj = tool_obj
             self._toolbar.AddTool(tool_obj)
 

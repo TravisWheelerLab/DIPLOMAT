@@ -6,7 +6,6 @@ from diplomat.predictors.fpe.arr_utils import find_peaks
 from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData, \
     video_to_sparse_tracking_data_point, sparse_tracking_data_to_video_point
 from diplomat.wx_gui import labeler_lib
-
 import numpy as np
 
 

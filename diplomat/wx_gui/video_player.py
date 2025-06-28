@@ -126,7 +126,9 @@ class VideoPlayer(wx.Control):
         """
         PRIVATE: Get the dimensions to resize the video to in order to fit the widget.
         """
-        frame_aspect = frame.shape[0] / frame.shape[1]  # <-- Height / Width
+        frame_h, frame_w = frame.shape[:2]
+
+        frame_aspect = frame_h / frame_w  # <-- Height / Width
         passed_aspect = height / width
 
         if(passed_aspect <= frame_aspect):

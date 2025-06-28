@@ -196,7 +196,7 @@ def yaml(
 @extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
 @typecaster_function
 def track_with(
-    config: Union[List[PathLike], PathLike],
+    config: Union[List[PathLike], PathLike, NoneType] = None,
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
@@ -232,6 +232,9 @@ def track_with(
     from diplomat import CLI_RUN
 
     if (help_extra):
+        if config is None:
+            raise ArgumentError("Must pass a config path to get extra help.")
+
         selected_frontend_name, selected_frontend = _find_frontend(
             contracts=[DIPLOMATCommands._load_model],
             config=config,
@@ -262,11 +265,13 @@ def track_with(
         return
 
     if (videos is None and frame_stores is None):
-        print("No frame stores or videos passed, terminating.")
-        return
+        raise ArgumentError("No frame stores or videos passed, terminating.")
 
     # If some videos are supplied, run the frontends video analysis function.
     if (videos is not None):
+        if(config is None):
+            raise ArgumentError("No config file passed, can't run on video, terminating.")
+
         print("Running on videos...")
         selected_frontend_name, selected_frontend = _find_frontend(
             contracts=[DIPLOMATCommands._load_model],
@@ -294,7 +299,7 @@ def track_with(
             model_info=model_info,
             videos=videos,
             predictor=predictor,
-            predictor_settings=predictor_settings,
+            predictor_settings=ps_video,
             output_suffix=output_suffix,
             **visual_args
         )
@@ -308,7 +313,6 @@ def track_with(
         ps_frames.update(additional_args)
 
         analyze_frames(
-            config=config,
             frame_stores=frame_stores,
             num_outputs=num_outputs,
             predictor=predictor,
@@ -321,7 +325,7 @@ def track_with(
 @extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
 @typecaster_function
 def track(
-    config: Union[List[PathLike], PathLike],
+    config: Union[List[PathLike], PathLike, NoneType] = None,
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,
@@ -370,7 +374,7 @@ def track(
 @extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
 @typecaster_function
 def track_and_interact(
-    config: Union[List[PathLike], PathLike],
+    config: Union[List[PathLike], PathLike, NoneType] = None,
     videos: Optional[Union[List[PathLike], PathLike]] = None,
     frame_stores: Optional[Union[List[PathLike], PathLike]] = None,
     num_outputs: Optional[int] = None,

@@ -1,7 +1,7 @@
 """
 Provides a point editing widget. This is a video player with a body part and labeler selections available on the side.
 """
-from typing import Tuple, List, Optional, Union, Any, Iterable
+from typing import Tuple, List, Optional, Union, Any, Iterable, Callable
 from diplomat.predictors.fpe.skeleton_structures import StorageGraph
 import numpy as np
 import wx
@@ -124,7 +124,9 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         ("point_radius", "_point_radius", int),
         ("point_alpha", "_point_alpha", _bounded_float(0, 1)),
         ("line_thickness", "_line_thickness", int),
-        ("shape_list", "_shape_list", shape_iterator)
+        ("shape_list", "_shape_list", shape_iterator),
+        ("heatmap_colormap", "_heatmap_colormap", to_colormap),
+        ("heatmap_alpha", "_heatmap_alpha", _bounded_float(0, 1))
     ]
 
     # All events emitted by this class.
@@ -191,22 +193,46 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         self._fast_m_speed = ctrl_speed_divider
         self._pose_label_modes = {}
         self._current_pose_labeling_mode = ""
+        self._selected_heatmap = -1
+        self._heatmap_colormap = None
+        self._heatmap_alpha = 0.4
+        self._heatmap_source = None
+
         self.skeleton_info = skeleton_info
 
-        BasicDataFields.__init__(self, colormap, plot_threshold, point_radius, point_alpha, line_thickness, shape_list)
+        BasicDataFields.__init__(self, colormap, plot_threshold, point_radius, point_alpha, line_thickness, shape_list, None, self._heatmap_alpha)
 
         self._edit_points = np.array([])
         self._old_locations = None
         self._ctrl_mode = False
         self._pressed = False
+        self._last_mouse_location = (None, None)
         # Handle point changing events....
         self.Bind(wx.EVT_LEFT_DOWN, self.on_press)
         self.Bind(wx.EVT_MOTION, self.on_move)
         self.Bind(wx.EVT_LEFT_UP, self.on_release)
         self.Bind(wx.EVT_RIGHT_UP, self.on_right_click)
+        # For heatmap tooltip...
+        self.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_exit)
 
     def register_labeling_mode(self, pose_labeler: PoseLabeler):
         self._pose_label_modes[pose_labeler.get_display_name()] = pose_labeler
+
+    def get_heatmap_source(self) -> Optional[Callable[[int, int], Tuple[np.ndarray, float]]]:
+        return self._heatmap_source
+
+    def set_heatmap_source(self, func: Optional[Callable[[int, int], Tuple[np.ndarray, float]]]):
+        self._heatmap_source = func
+        self.Refresh()
+
+    def set_selected_heatmap(self, selected_heatmap: int):
+        selected_heatmap = int(-1 if(selected_heatmap < 0) else selected_heatmap)
+        if self._selected_heatmap != selected_heatmap:
+            self._selected_heatmap = selected_heatmap
+            self.Refresh()
+
+    def get_selected_heatmap(self) -> int:
+        return self._selected_heatmap
 
     def unregister_labeling_mode(self, labeler_name: str):
         del self._pose_label_modes[labeler_name]
@@ -335,38 +361,18 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         else:
             return (x, y)
 
-    def on_draw(self, dc: wx.DC):
-        """
-        Called when redrawing the PointViewNEdit Control.
-
-        :param dc: The wx.DC to draw to.
-        """
-        # Call superclass draw to draw the video...
-        super().on_draw(dc)
-
-        if(not isinstance(dc, wx.GCDC)):
-            dc = wx.GCDC(dc)
-
-        width, height = self.GetClientSize()
-        if((not width) or (not height)):
-            return
-
-        frame = self._current_frame
-        if(self._crop_box is not None):
-            x, y, w, h = self._crop_box
-            frame = self._current_frame[y:y+h, x:x+w]
-
-        ov_h, ov_w = frame.shape[:2]
-        x_off, y_off, nv_w, nv_h = self._get_video_bbox(frame, width, height)
-
+    def _draw_points(self, dc, frame_idx, original_video_size, video_display_box):
+        # x offset, y offset, width, height
+        x_off, y_off, nv_w, nv_h = video_display_box
+        # Original, not resized video size, width and height...
+        ov_w, ov_h = original_video_size
         num_out = self._poses.get_bodypart_count()
         colors = iter_colormap(self._colormap, num_out, bytes=True)
-        frame = self.get_offset_count()
 
         for bp_idx, color, shape in zip(range(num_out), colors, self._shape_list):
-            x = self._poses.get_x_at(frame, bp_idx)
-            y = self._poses.get_y_at(frame, bp_idx)
-            prob = self._poses.get_prob_at(frame, bp_idx)
+            x = self._poses.get_x_at(frame_idx, bp_idx)
+            y = self._poses.get_y_at(frame_idx, bp_idx)
+            prob = self._poses.get_prob_at(frame_idx, bp_idx)
 
             if(np.isnan(x) or np.isnan(y)):
                 continue
@@ -385,6 +391,78 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
                 (y * (nv_h / ov_h)) + y_off,
                 self._point_radius * (nv_h / ov_h)
             )
+
+    def on_draw(self, dc: wx.DC):
+        """
+        Called when redrawing the PointViewNEdit Control.
+
+        :param dc: The wx.DC to draw to.
+        """
+        # Call superclass draw to draw the video...
+        super().on_draw(dc)
+
+        if(not isinstance(dc, wx.GCDC)):
+            dc = wx.GCDC(dc)
+
+        width, height = self.GetClientSize()
+        frame = self._current_frame
+        if((not width) or (not height) or (frame is None)):
+            return
+
+        if(self._crop_box is not None):
+            x, y, w, h = self._crop_box
+            frame = self._current_frame[y:y+h, x:x+w]
+
+        ov_h, ov_w = frame.shape[:2]
+        x_off, y_off, nv_w, nv_h = self._get_video_bbox(frame, width, height)
+        frame_idx = self.get_offset_count()
+
+        self._draw_points(dc, frame_idx, (ov_w, ov_h), (x_off, y_off, nv_w, nv_h))
+
+        if(callable(self._heatmap_source) and self._selected_heatmap >= 0):
+            try:
+                heatmap, down_scale = self._heatmap_source(frame_idx, self._selected_heatmap)
+                if (heatmap is not None):
+                    new_w = int(heatmap.shape[1] * down_scale * nv_w / ov_w)
+                    new_h = int(heatmap.shape[0] * down_scale * nv_h / ov_h)
+                    heatmap_resized = cv2.resize(
+                        self._heatmap_colormap(heatmap, self._heatmap_alpha, True),
+                        (new_w, new_h),
+                        interpolation=cv2.INTER_AREA
+                    )
+                    heatmap_resized = wx.Bitmap(wx.Image(
+                        heatmap_resized.shape[1],
+                        heatmap_resized.shape[0],
+                        heatmap_resized[..., :3].tobytes(),
+                        heatmap_resized[..., 3].tobytes()
+                    ), dc)
+                    dc.DrawBitmap(heatmap_resized, x_off, y_off, True)
+
+                    x, y = self._last_mouse_location
+                    if x is not None and y is not None:
+                        hx = int((x - x_off) * ov_w / (down_scale * nv_w))
+                        hy = int((y - y_off) * ov_h / (down_scale * nv_h))
+                        if (0 <= hx < heatmap.shape[1] and 0 <= hy < heatmap.shape[0]):
+                            dc.SetBrush(wx.TRANSPARENT_BRUSH)
+                            dc.SetPen(wx.Pen(self.GetForegroundColour(), 2, wx.PENSTYLE_SOLID))
+                            dc.DrawRectangle(
+                                int(x_off + hx * down_scale * nv_w / ov_w),
+                                int(y_off + hy * down_scale * nv_h / ov_h),
+                                int(down_scale * nv_w / ov_w),
+                                int(down_scale * nv_h / ov_h)
+                            )
+                            prob = heatmap[hy, hx]
+                            msg = f"Score: {prob:{'.03f' if prob >= 1e-3 or prob == 0.0 else '.02e'}}"
+                            w, h = dc.GetTextExtent(msg)
+                            dc.SetTextForeground(self.GetForegroundColour())
+                            dc.SetBrush(wx.Brush(self.GetBackgroundColour(), wx.BRUSHSTYLE_SOLID))
+                            dc.SetPen(wx.TRANSPARENT_PEN)
+                            tx, ty = x - w / 2 + 2, y - h + 2
+                            dc.DrawRoundedRectangle(int(tx - 2), int(ty - 2), int(w + 4), int(h + 4), 2)
+                            dc.DrawText(msg, int(tx), int(ty))
+            except Exception as e:
+                print(repr(e))
+
 
     def _get_selected_bodyparts(self) -> List[Tuple[float, float, float]]:
         """
@@ -562,25 +640,38 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
             self._push_point_init_event(self._old_locations)
             self.on_move(event)
 
+    def on_mouse_exit(self, event: wx.MouseEvent):
+        self._last_mouse_location = (None, None)
+        if (self._heatmap_source is not None and self._selected_heatmap >= 0):
+            self.Refresh()
+
     def on_move(self, event: wx.MouseEvent):
         """
         PRIVATE: Executed whenever the mouse is moved, simply displaying the new point location on screen.
         """
+        self._last_mouse_location = event.GetX(), event.GetY()
+
+        do_refresh = (
+            (self._heatmap_source is not None and self._selected_heatmap >= 0)
+            or self._ctrl_mode
+            or (self._pressed and event.LeftIsDown())
+        )
+
         if((len(self._edit_points) == 0) or (not self.is_frozen())):
             self._pressed = False
-            return
-
-        if(self._ctrl_mode):
-            self._pressed = False
+        elif(self._ctrl_mode):
             x, y = self._get_mouse_loc_video(event)
+            self._pressed = False
             self._point_prediction(x, y)
-            self.Refresh()
         elif(self._pressed and event.LeftIsDown()):
             x, y = self._get_mouse_loc_video(event)
             if(x is None):
                 return
             self._point_prediction(x, y)
+
+        if do_refresh:
             self.Refresh()
+
 
     def on_release(self, event: wx.MouseEvent):
         """

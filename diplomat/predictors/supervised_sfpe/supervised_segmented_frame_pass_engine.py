@@ -11,7 +11,7 @@ from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, Near
 from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
 from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
-from diplomat.wx_gui.fpe_editor import FPEEditor
+from diplomat.wx_gui.fpe_editor import FPEEditor, default_heatmap_entries
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData, sparse_tracking_data_to_video_point
 from diplomat.processing import *
 
@@ -648,7 +648,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
             None,
             list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs),
-            self._on_manual_save if(self.settings.storage_mode == "memory") else None
+            self._on_manual_save if(self.settings.storage_mode == "memory") else None,
+            heatmap_options=default_heatmap_entries(self._get_names(), self)
         )
 
         for s in self._fb_editor.score_displays:
