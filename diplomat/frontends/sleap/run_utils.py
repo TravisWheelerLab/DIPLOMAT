@@ -102,7 +102,7 @@ def _load_configs_from_zip(z: zipfile.ZipFile, include_model = True):
     cfg_lst = []
 
     for file in z.infolist():
-        if (file.filename.split("/")[-1].endswith("training_config.yaml")):
+        if (file.filename.split("/")[-1].endswith("training_config.json")):
             inner_path = PurePosixPath(file.filename)
             config_dir = inner_path.parent
 
@@ -112,13 +112,14 @@ def _load_configs_from_zip(z: zipfile.ZipFile, include_model = True):
                 PurePosixPath(name) for name in z.namelist() if (PurePosixPath(name).parent == config_dir)
             )
             if (include_model):
-                model = tf.keras.models.load_model(
+                from keras.src.legacy.saving.legacy_h5_format import load_model_from_hdf5
+                model = load_model_from_hdf5(
                     h5py.File(BytesIO(z.read(str(model_path))), "r"),
                     compile=False
                 )
-                return cfg_lst.append((cfg, model))
+                cfg_lst.append((cfg, model))
             else:
-                return cfg_lst.append(cfg)
+                cfg_lst.append(cfg)
 
     if len(cfg_lst) == 0:
         raise IOError("Sleap model zip file does not contain a training configuration file!")
