@@ -468,8 +468,9 @@ class FPEEditor(wx.Frame):
             (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_BACK), "Stop the video."),
             (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_RIGHT), "Move 1 frame forward in the video."),
             (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_LEFT), "Move 1 frame back in the video."),
-            (empty_bitmap, "Left Click/Drag", "Label the selected point within the video."),
-            (empty_bitmap, "Right Click", "Mark the selected point as not being in the current frame of the video.")
+            (empty_bitmap, "Left Click/Drag", "Label the selected point within the video. If no point is selected, pan around zoomed video."),
+            (empty_bitmap, "Right Click", "Mark the selected point as not being in the current frame of the video."),
+            (empty_bitmap, "Scroll Up/Down", "Zoom in or out on the video view if no point is selected.")
         ]
         entries.extend(other_entries)
 

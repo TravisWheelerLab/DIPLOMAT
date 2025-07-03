@@ -280,7 +280,7 @@ class StorageGraph:
         return s
 
     def __str__(self):
-        return f"Skeleton({str(dict(self.items()))}"
+        return f"Skeleton({str(dict(self.items()))})"
 
 
 class Histogram:

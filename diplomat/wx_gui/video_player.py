@@ -2,6 +2,7 @@
 Module contains a wx video player widget and a wx video controller widget. Uses multi-threading to load frames to a
 deque while playing them, allowing for smoother playback...
 """
+import dataclasses
 from typing import Optional, Tuple
 import wx
 from wx.lib.newevent import NewCommandEvent
@@ -42,6 +43,176 @@ def tell_frame(video_hdl: cv2.VideoCapture) -> int:
 
 # Represents (x, y, width, height)
 Box = Tuple[int, int, int, int]
+Coord = Tuple[float, float]
+IntCoord = Tuple[int, int]
+
+class VideoTransform:
+    def __init__(
+        self,
+        video_dims: IntCoord,
+        widget_dims: IntCoord,
+        crop_box: Optional[Box] = None,
+        offset: Coord = (0, 0),
+        scale: float = 1
+    ):
+        self._params = dict(
+            video_dims=video_dims,
+            widget_dims=widget_dims,
+            crop_box=crop_box,
+            offset=offset,
+            scale=scale
+        )
+        crop_box = self.check_crop_box(crop_box, *video_dims)
+        self._cropped_video_size = tuple(crop_box[2:] if crop_box is not None else video_dims)
+        self._widget_size = tuple(widget_dims)
+        self._video_offset, self._video_scale = self._get_video_pos_and_scale(
+            *self._cropped_video_size, *self._widget_size
+        )
+        self._post_offset = tuple(offset)
+        self._post_scale = float(scale)
+
+    @classmethod
+    def check_crop_box(cls, box: Optional[Box], vid_width: int, vid_height: int):
+        """
+        PRIVATE: Validate that the passed cropping box is valid.
+        """
+        if(box is None):
+            return None
+
+        x, y, w, h = box
+        if((0 <= x < vid_width) and (0 <= y < vid_height)):
+            if((h > 0) and (w > 0)):
+                if((x + w <= vid_width) and (y + h <= vid_height)):
+                    return box
+
+        raise ValueError("Invalid cropping box!!!!")
+
+    def update(
+        self,
+        video_dims: Optional[IntCoord] = None,
+        widget_dims: Optional[IntCoord] = None,
+        crop_box: Optional[Box] = None,
+        offset: Optional[Coord] = None,
+        scale: Optional[float] = None
+    ):
+        obj = dict(
+            video_dims=video_dims,
+            widget_dims=widget_dims,
+            crop_box=crop_box,
+            offset=offset,
+            scale=scale
+        )
+        obj = {k: self._params[k] if v is None else v for k, v in obj.items()}
+        # If object is already up to date, do nothing...
+        if all(obj[k] == self._params[k] for k in obj):
+            return
+        self.__init__(**obj)
+
+    @property
+    def offset(self) -> Coord:
+        return self._post_offset
+
+    @property
+    def scale(self) -> float:
+        return self._post_scale
+
+    def adjust(self, offset: Coord, scale: float):
+        self.update(
+            offset=offset,
+            scale=scale
+        )
+
+    @classmethod
+    def _get_resize_dims(cls, frame_w: int, frame_h: int, width: int, height: int) -> Tuple[int, int]:
+        """
+        PRIVATE: Get the dimensions to resize the video to in order to fit the widget.
+        """
+        frame_aspect = frame_h / frame_w  # <-- Height / Width
+        passed_aspect = height / width
+
+        if passed_aspect <= frame_aspect:
+            # Passed aspect has less height per unit width, so height is the limiting dimension
+            return int(height / frame_aspect), height
+        else:
+            # Otherwise the width is the limiting dimension
+            return width, int(width * frame_aspect)
+
+    @classmethod
+    def _get_video_pos_and_scale(cls, frame_w: int, frame_h: int, width: int, height: int) -> Tuple[IntCoord, Coord]:
+        """
+        PRIVATE: Get the video bounding box within the widget...
+        """
+        v_w, v_h = cls._get_resize_dims(frame_w, frame_h, width, height)
+        return (
+            ((width - v_w) // 2, (height - v_h) // 2),
+            (v_w / frame_w, v_h / frame_h)
+        )
+
+    def video_crop_to_widget(self, xy: Coord) -> Coord:
+        ps = self._post_scale
+        x, y = tuple(((v * vs + vo) - (po * ws)) * ps for v, vs, vo, po, ws in zip(
+            xy,
+            self._video_scale,
+            self._video_offset,
+            self._post_offset,
+            self._widget_size
+        ))
+        return x, y
+
+    def widget_to_video_crop(self, xy: Coord) -> Coord:
+        ps = self._post_scale
+        x, y = tuple((((w / ps) + (po * ws)) - vo) / vs for w, vs, vo, po, ws in zip(
+            xy,
+            self._video_scale,
+            self._video_offset,
+            self._post_offset,
+            self._widget_size
+        ))
+        return x, y
+
+    def get_cropped_image(self, img: np.ndarray) -> np.ndarray:
+        c_box = self._params["crop_box"]
+        if c_box is None:
+            return img
+        x, y, w, h = c_box
+        return img[y:y + h, x:x + w]
+
+    def transform_image(
+        self,
+        img: np.ndarray,
+        img_scale: float = 1.0,
+        interpolation: int = cv2.INTER_AREA
+    ) -> Tuple[np.ndarray, Coord]:
+        # Get visible bounds of the video...
+        video_top_left = [int(v / img_scale) for v in self.widget_to_video_crop((0, 0))]
+        video_bottom_right = [int(np.ceil(v / img_scale)) for v in self.widget_to_video_crop(self._widget_size)]
+
+        video_top_left = [np.clip(v, 0, mx - 1) for v, mx in zip(video_top_left, self._cropped_video_size)]
+        video_bottom_right = [np.clip(v, 1, mx) for v, mx in zip(video_bottom_right, self._cropped_video_size)]
+
+        # Grab the subsection of the image...
+        img = img[video_top_left[1]:video_bottom_right[1], video_top_left[0]:video_bottom_right[0]]
+        img_scaled = cv2.resize(
+            img,
+            (
+                int(img.shape[1] * img_scale * self._video_scale[0] * self._post_scale),
+                int(img.shape[0] * img_scale * self._video_scale[1] * self._post_scale)
+            ),
+            interpolation=interpolation
+        )
+
+        return (
+            img_scaled,
+            self.video_crop_to_widget((video_top_left[0] * img_scale, video_top_left[1] * img_scale))
+        )
+
+@dataclasses.dataclass
+class ZoomConfig:
+    key: Optional[wx.KeyCode] = None
+    min_zoom: float = 1
+    max_zoom: float = 20
+    zoom_slow_down: float = 1000
+    min_move_refresh: float = 10
 
 
 class VideoPlayer(wx.Control):
@@ -58,9 +229,19 @@ class VideoPlayer(wx.Control):
     FrameChangeEvent, EVT_FRAME_CHANGE = NewCommandEvent()
     PlayStateChangeEvent, EVT_PLAY_STATE_CHANGE = NewCommandEvent()
 
-    def __init__(self, parent, w_id=wx.ID_ANY, video_hdl: cv2.VideoCapture = None, crop_box: Optional[Box]=None,
-                 pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.BORDER_DEFAULT, validator=wx.DefaultValidator,
-                 name="VideoPlayer"):
+    def __init__(
+        self,
+        parent,
+        w_id=wx.ID_ANY,
+        video_hdl: cv2.VideoCapture = None,
+        crop_box: Optional[Box] = None,
+        zoom_config: Optional[ZoomConfig] = None,
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=wx.BORDER_DEFAULT,
+        validator=wx.DefaultValidator,
+        name="VideoPlayer"
+    ):
         """
         Create a new VideoPlayer
 
@@ -69,6 +250,8 @@ class VideoPlayer(wx.Control):
         :param video_hdl: The cv2 VideoCapture to play video from. One should avoid never manipulate the video capture
                           once passed to this constructor, as the handle will be passed to another thread for fast
                           video loading.
+        :param crop_box: Tuple of ints, x, y, width, height, being the area of the video to show instead of the entire video.
+                         if set to None, just shows the entire video...
         :param pos: The position of the widget.
         :param size: The size of the widget.
         :param style: The style of the widget.
@@ -78,10 +261,10 @@ class VideoPlayer(wx.Control):
         super().__init__(parent, w_id, pos, size, style | wx.FULL_REPAINT_ON_RESIZE, validator, name)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
 
-        self._width = video_hdl.get(cv2.CAP_PROP_FRAME_WIDTH)
-        self._height = video_hdl.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self._width = int(video_hdl.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self._height = int(video_hdl.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self._fps = video_hdl.get(cv2.CAP_PROP_FPS)
-        self._crop_box = self._check_crop_box(crop_box, self._width, self._height)
+        self._crop_box = VideoTransform.check_crop_box(crop_box, self._width, self._height)
 
         try:
             self._num_frames = int(video_hdl.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -107,10 +290,122 @@ class VideoPlayer(wx.Control):
         # Create the video loader to start loading frames:
         self._video_hdl = video_hdl
         self._current_frame = read_frame(video_hdl)[1]
+        self._video_transform = None
+        self._zoom_config = zoom_config
+        self._is_pressed = False
+        self._prior_mouse_location = (0, 0)
 
         self.Bind(wx.EVT_TIMER, self._on_timer)
         self.Bind(wx.EVT_PAINT, self.on_paint)
+        self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
+        self.Bind(wx.EVT_LEFT_DOWN, self._on_mouse_down)
+        self.Bind(wx.EVT_LEFT_UP, self._on_mouse_up)
+        self.Bind(wx.EVT_MOTION, self._on_mouse_move)
         self.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt: None)
+
+    @property
+    def video_transform(self) -> VideoTransform:
+        if self._video_transform is None:
+            fh, fw = self._current_frame.shape[:2]
+            self._video_transform = VideoTransform(
+                (fw, fh),
+                self.GetSize().Get(),
+                self._crop_box
+            )
+        else:
+            fh, fw = self._current_frame.shape[:2]
+            self._video_transform.update(
+                (fw, fh),
+                self.GetSize().Get(),
+                self._crop_box
+            )
+        return self._video_transform
+
+    def _on_wheel(self, evt):
+        if self._zoom_config is None:
+            evt.Skip()
+            return
+        if self._zoom_config.key is not None and not wx.GetKeyState(self._zoom_config.key):
+            evt.Skip()
+            return
+
+        vt = self.video_transform
+
+        w, h = self.GetClientSize()
+        x, y = self.ScreenToClient(wx.GetMousePosition())
+        scale = vt.scale
+        offset = vt.offset
+
+        ix = (x + (scale * w * offset[0])) / (scale * w)
+        iy = (y + (scale * h * offset[1])) / (scale * h)
+
+        scale = min(
+            self._zoom_config.max_zoom,
+            max(self._zoom_config.min_zoom,
+            scale + evt.GetWheelRotation() / self._zoom_config.zoom_slow_down)
+        )
+        offset = (
+            ix - (x / (scale * w)),
+            iy - (y / (scale * h))
+        )
+
+        if scale <= 1:
+            offset = (0, 0)
+
+        vt.update(
+            offset=offset,
+            scale=scale
+        )
+        self.Refresh()
+        evt.Skip()
+
+    def _on_mouse_down(self, evt):
+        if self._zoom_config is None or self._is_pressed:
+            evt.Skip()
+            return
+        self._is_pressed = True
+        self._prior_mouse_location = tuple(evt.GetPosition())
+        self._net_dist = 0
+        evt.Skip()
+
+    def _on_mouse_up(self, evt):
+        if self._zoom_config is None or not self._is_pressed:
+            evt.Skip()
+            return
+        self._on_mouse_move(evt, True)
+        self._is_pressed = False
+        evt.Skip()
+
+    def _on_mouse_move(self, evt, force_move=False):
+        if self._zoom_config is None or not self._is_pressed:
+            evt.Skip()
+            return
+
+        vt = self.video_transform
+
+        nx, ny = evt.GetPosition()
+        px, py = self._prior_mouse_location
+        w, h = evt.GetEventObject().GetClientSize()
+        offset = vt.offset
+        scale = vt.scale
+
+        offset = (
+            offset[0] + ((px - nx) / (scale * w)),
+            offset[1] + ((py - ny) / (scale * h))
+        )
+        self._net_dist += np.sqrt((px - nx) ** 2 + (py - ny) ** 2)
+
+        if force_move or self._net_dist > self._zoom_config.min_move_refresh:
+            self._prior_mouse_location = (nx, ny)
+            self._net_dist = 0
+
+            if scale <= 1:
+                offset = (0, 0)
+
+            vt.update(offset=offset)
+            self.Refresh()
+
+        evt.Skip()
 
     def _compute_min_size(self) -> wx.Size:
         displays = (wx.Display(i) for i in range(wx.Display.GetCount()))
@@ -120,65 +415,6 @@ class VideoPlayer(wx.Control):
         h = int(min(self._height / 2, *(s.GetHeight() / 3 for s in sizes)))
 
         return wx.Size(w, h)
-
-    @classmethod
-    def _get_resize_dims(cls, frame: np.ndarray, width: int, height: int) -> Tuple[int, int]:
-        """
-        PRIVATE: Get the dimensions to resize the video to in order to fit the widget.
-        """
-        frame_h, frame_w = frame.shape[:2]
-
-        frame_aspect = frame_h / frame_w  # <-- Height / Width
-        passed_aspect = height / width
-
-        if(passed_aspect <= frame_aspect):
-            # Passed aspect has less height per unit width, so height is the limiting dimension
-            return (int(height / frame_aspect), height)
-        else:
-            # Otherwise the width is the limiting dimension
-            return (width, int(width * frame_aspect))
-
-    @classmethod
-    def _check_crop_box(cls, box: Optional[Box], vid_width: int, vid_height: int):
-        """
-        PRIVATE: Validate that the passed cropping box is valid.
-        """
-        if(box is None):
-            return None
-
-        x, y, w, h = box
-        if((0 <= x < vid_width) and (0 <= y < vid_height)):
-            if((h > 0) and (w > 0)):
-                if((x + w <= vid_width) and (y + h <= vid_height)):
-                    return box
-
-        raise ValueError("Invalid cropping box!!!!")
-
-    @classmethod
-    def _get_video_bbox(cls, frame: np.ndarray, width: int, height: int) -> Tuple[int, int, int, int]:
-        """
-        PRIVATE: Get the video bounding box within the widget...
-        """
-        v_w, v_h = cls._get_resize_dims(frame, width, height)
-        return ((width - v_w) // 2, (height - v_h) // 2, v_w, v_h)
-
-    @classmethod
-    def _resize_video(cls, frame: np.ndarray, width: int, height: int, crop_box: Optional[Box]) -> np.ndarray:
-        """
-        PRIVATE: Resizes the passed frame to optimally fit into the specified width and height, while maintaining
-        aspect ratio.
-
-        :param frame: The frame (cv2 image which is really a numpy array) to resize.
-        :param width: The desired width of the resized frame.
-        :param height: The desired height of the resized frame.
-        :return: A new numpy array, being the resized version of the frame.
-        """
-        # If we have a valid crop box, crop the frame...
-        if(crop_box is not None):
-            x, y, w, h = crop_box
-            frame = frame[y:y+h, x:x+w]
-
-        return cv2.resize(frame, cls._get_resize_dims(frame, width, height), interpolation=cv2.INTER_LINEAR)
 
     def on_paint(self, event):
         """
@@ -204,16 +440,18 @@ class VideoPlayer(wx.Control):
         if(self._current_frame is None):
             return
 
-        resized_frame = self._resize_video(self._current_frame, width, height, self._crop_box)
+        vt = self.video_transform
+        resized_frame, (loc_x, loc_y) = vt.transform_image(
+            vt.get_cropped_image(self._current_frame),
+            img_scale=1,
+            interpolation=cv2.INTER_LINEAR
+        )
 
         # Draw the video background
         b_h, b_w = resized_frame.shape[:2]
         bitmap = wx.Bitmap.FromBuffer(b_w, b_h, resized_frame[:, :, ::-1].astype(dtype=np.uint8))
 
-        loc_x = (width - b_w) // 2
-        loc_y = (height - b_h) // 2
-
-        dc.DrawBitmap(bitmap, loc_x, loc_y)
+        dc.DrawBitmap(bitmap, int(loc_x), int(loc_y))
 
     def _push_time_change_event(self):
         """ PRIVATE: Used to specify how long the event should """
@@ -619,7 +857,7 @@ def _main_test():
 
     sizer = wx.BoxSizer(wx.VERTICAL)
 
-    wid = VideoPlayer(panel, video_hdl=ContextVideoCapture(vid_path))
+    wid = VideoPlayer(panel, video_hdl=ContextVideoCapture(vid_path), zoom_config=ZoomConfig())
     obj3 = ProbabilityDisplayer(panel, data=np.random.randint(0, 10, (wid.get_total_frames())), bad_locations=np.array([], np.uint64))
     obj2 = VideoController(panel, video_player=wid)
 
