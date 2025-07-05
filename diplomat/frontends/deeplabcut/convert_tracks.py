@@ -22,9 +22,13 @@ def _dlc_hdf_to_diplomat_table(path: tc.PathLike) -> pd.DataFrame:
     if h5py.is_hdf5(path):
         table = pd.read_hdf(path)
     else:
-        table = pd.read_csv(path, header=list(range(4)), index_col=0)
-        if table.columns.names != DLC_4_HEADER_ROW_NAMES:
-            table = pd.read_csv(path, header=list(range(3)), index_col=0)
+        try:
+            table = pd.read_csv(path, header=list(range(4)), index_col=0, dtype=defaultdict(lambda: np.float64, {0: np.int64}))
+            invalid = table.columns.names != DLC_4_HEADER_ROW_NAMES
+        except ValueError:
+            invalid = True
+        if invalid:
+            table = pd.read_csv(path, header=list(range(3)), index_col=0, dtype=defaultdict(lambda: np.float64, {0: np.int64}))
 
     if(not isinstance(table, pd.DataFrame)):
         raise ValueError("HDF file did not contain table data.")

@@ -9,6 +9,8 @@ from wx.lib.newevent import NewCommandEvent
 import cv2
 from collections import deque
 import numpy as np
+
+from diplomat.utils.video_info import get_frame_count_robust_fast
 from diplomat.utils.video_io import ContextVideoCapture
 
 
@@ -835,13 +837,7 @@ class VideoController(wx.Panel):
             self._video_player.move_forward()
 
 
-def get_frame_count(video_hdl):
-    i = 0
-    while(video_hdl.isOpened() and video_hdl.grab()):
-        i += 1
-
-    video_hdl.set(cv2.CAP_PROP_POS_MSEC, 0)
-    return i
+get_frame_count = get_frame_count_robust_fast
 
 
 def _main_test():

@@ -87,6 +87,13 @@ class EntropyOfTransitions(ScoreEngine):
                     pys = poses.get_y_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
                     pprobs = poses.get_prob_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
 
+                    bad_idxs = np.isnan(cxs) | np.isnan(cys) | np.isnan(pxs) | np.isnan(pys)
+                    if np.any(bad_idxs):
+                        pprobs[bad_idxs] = np.nan
+                        cprobs[bad_idxs] = np.nan
+                        for arr in [cxs, cys, pxs, pys]:
+                            arr[bad_idxs] = 0
+
                     matrix = np.expand_dims(cprobs, 1) * fpe_math.table_transition_interpolate(
                         (pxs, pys), 1, (cxs, cys), 1, self._gaussian_table, 1
                     ) * np.expand_dims(pprobs, 0)

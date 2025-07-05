@@ -1,4 +1,6 @@
 from typing import List, Union, Tuple
+
+import numpy as np
 import pandas as pd
 from io import BufferedWriter, BufferedReader
 from diplomat.processing import Pose
@@ -52,7 +54,7 @@ def load_diplomat_table(path_or_buf: Union[str, BufferedReader]) -> pd.DataFrame
 
     :return: A pd.DataFrame, being the diplomat-pandas pose table stored at the given location.
     """
-    table = pd.read_csv(path_or_buf, index_col=None, header=[0, 1, 2])
+    table = pd.read_csv(path_or_buf, index_col=None, header=[0, 1, 2], dtype=np.float64)
 
     # Validation: Verify csv has expected entries needed...
     expected_columns = pd.MultiIndex.from_product([

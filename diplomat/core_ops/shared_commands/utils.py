@@ -10,6 +10,7 @@ from diplomat.processing import Config, Predictor
 from diplomat.utils.frame_store_api import DLFSHeader
 from diplomat.utils.shapes import shape_iterator
 from diplomat.utils.track_formats import load_diplomat_table
+from diplomat.utils.video_info import get_frame_count_robust_fast
 from diplomat.utils.video_io import ContextVideoCapture
 
 
@@ -120,9 +121,7 @@ def _get_video_metadata(
             fps = vid.get(cv2.CAP_PROP_FPS)
             w = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
             h = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            frame_count = 0
-            while (vid.isOpened() and vid.grab()):
-                frame_count += 1
+            frame_count = get_frame_count_robust_fast(vid)
     else:
         fps = frame_store_header.frame_rate
         w = frame_store_header.frame_width

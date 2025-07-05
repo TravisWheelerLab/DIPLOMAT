@@ -371,7 +371,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
             y = float(self._poses.get_y_at(frame_idx, bp_idx))
             prob = float(self._poses.get_prob_at(frame_idx, bp_idx))
 
-            if(np.isnan(x) or np.isnan(y)):
+            if(np.isnan(x) or np.isnan(y) or np.isnan(prob)):
                 continue
 
             wx_color = wx.Colour(*color[:3], alpha=int(255 * self._point_alpha))
