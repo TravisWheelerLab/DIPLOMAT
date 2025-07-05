@@ -1,2 +1,4 @@
- - Fixes inference for SLEAP when image scaling is enabled for the project.
- - Resolves out of bounds indexing error when looking up confidences.
+ - Fixes tweak when csv with NaN entries is passed.
+ - Fixes tweak when csv file has more or less frames than the video passed along with it.
+ - Adds support for zooming in on the editor.
+ - Adds support for rendering heatmap overlays in the editor.
