@@ -196,7 +196,7 @@ def normalize_all(arrays: Iterable[np.ndarray]) -> Tuple[np.ndarray, ...]:
 # Type for a transition function....
 Probs = np.ndarray
 Coords = Tuple[np.ndarray, np.ndarray]
-TransitionFunction = Callable[[Probs, Coords, float, Probs, Coords, float], np.ndarray]
+TransitionFunction = Callable[[int, Probs, Coords, float, int, Probs, Coords, float], np.ndarray]
 
 
 def table_transition(prior_coords: Coords, current_coords: Coords, lookup_table: np.ndarray) -> np.ndarray:
