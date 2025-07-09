@@ -15,7 +15,14 @@ from diplomat.processing import TrackingData
 from diplomat.utils.cli_tools import Flag
 
 
-def _get_model_folder(cfg: dict, project_root: Path, shuffle: int = 1, train_fraction: float = None, model_prefix: str = ""):
+def _get_model_folder(
+    cfg: dict,
+    project_root: Path,
+    shuffle: int = 1,
+    train_fraction: float = None,
+    model_prefix: str = "",
+    is_pytorch: bool = False
+) -> Path:
     task = cfg["Task"]
     date = cfg["date"]
     iterate = f"iteration-{str(cfg['iteration'])}"
@@ -23,7 +30,7 @@ def _get_model_folder(cfg: dict, project_root: Path, shuffle: int = 1, train_fra
     model_prefix = "" if(model_prefix in ["..", "."] or "/" in model_prefix or "\\" in model_prefix) else model_prefix
     return Path(project_root) / Path(
         model_prefix,
-        "dlc-models",
+        "dlc-models-pytorch" if is_pytorch else "dlc-models",
         iterate,
         f"{task}{date}-trainset{str(int(train_fraction * 100))}shuffle{str(shuffle)}"
     )

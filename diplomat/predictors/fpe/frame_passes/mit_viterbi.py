@@ -85,7 +85,7 @@ class ViterbiTransitionTable:
         self._table_down_scale = table_down_scale
         self._enter_exit_prob = to_log_space(enter_exit_prob)
         self._enter_stay_prob = to_log_space(enter_stay_prob)
-        self._occ_trans_penalty = occluded_transition_penalty
+        self._occ_trans_penalty = to_log_space(occluded_transition_penalty)
 
     """The ViterbiTransitionTable class is used to manage transition probabilities, 
     including those modified by the dominance relationship and the "flat-topped" Gaussian distribution."""
@@ -111,12 +111,12 @@ class ViterbiTransitionTable:
             return np.full((len(current_probs), len(prior_probs)), -np.inf, np.float32)
 
         multiplier = (
-            self._occ_trans_penalty if(current_state == States.OCCLUDED or prior_state == States.OCCLUDED) else 1.0
+            self._occ_trans_penalty if(current_state == States.OCCLUDED) else 0
         )
 
         return fpe_math.table_transition_interpolate(
             prior_coords, prior_dscale, current_coords, current_dscale, self._table, self._table_down_scale
-        ) * multiplier
+        ) + multiplier
 
 
 class MITViterbi(FramePass):
@@ -211,7 +211,8 @@ class MITViterbi(FramePass):
                     ),
                     self.config.lowest_skeleton_score
                 )
-            
+
+            # Disabled, makes performance much worse....
             # self.config.skeleton_weight = self._augment_skeleton_weight(
             #     self.config.skeleton_weight, metadata.normalized_fixed_frame_score
             # )
@@ -222,7 +223,6 @@ class MITViterbi(FramePass):
         """Initialize probabilities relating to an obscured state"""
         metadata.obscured_prob = self.config.obscured_probability
         metadata.obscured_survival_max = self.config.obscured_survival_max
-        metadata.obscured_decay_rate = self.config.obscured_decay_rate
 
     def _init_edge_state(self, metadata: AttributeDict):
         """Initialize probabilities relating to an edge / boundary state"""
@@ -275,7 +275,6 @@ class MITViterbi(FramePass):
             self._init_skeleton(fb_data.metadata)
             self._init_obscured_state(fb_data.metadata)
             self._init_edge_state(fb_data.metadata)
-
 
             if(reset_bar and prog_bar is not None):
                 prog_bar.reset(fb_data.num_frames * 3)
@@ -349,7 +348,13 @@ class MITViterbi(FramePass):
 
         with pool_cls(self.thread_count) as pool:
             exit_prob = fb_data.metadata.enter_trans_prob
-            transition_function = ViterbiTransitionTable(self._gaussian_table, 1, exit_prob, 1 - exit_prob)
+            transition_function = ViterbiTransitionTable(
+                self._gaussian_table,
+                1,
+                exit_prob,
+                1 - exit_prob,
+                self.config.occluded_transition_probability
+            )
 
             for frame_idx in RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]:
                 if(not (0 <= (frame_idx + self._prior_off) < len(fb_data.frames))):
@@ -423,7 +428,8 @@ class MITViterbi(FramePass):
                         fb_data.metadata,
                         transition_function,
                         self._skeleton_tables if (self.config.include_skeleton) else None,
-                        self.config.skeleton_weight
+                        self.config.skeleton_weight,
+                        self.config.occluded_transition_probability
                     ) for bp_i in range(fb_data.num_bodyparts)]
                 )
 
@@ -495,7 +501,13 @@ class MITViterbi(FramePass):
 
         with pool_cls(self.thread_count) as pool:
             exit_prob = fb_data.metadata.enter_trans_prob
-            transition_func = ViterbiTransitionTable(self._gaussian_table, 1, exit_prob, 1 - exit_prob)
+            transition_func = ViterbiTransitionTable(
+                self._gaussian_table,
+                1,
+                exit_prob,
+                1 - exit_prob,
+                self.config.occluded_transition_probability,
+            )
 
             for i in frame_iter:
                 prior_idx = i + self._prior_off
@@ -516,6 +528,7 @@ class MITViterbi(FramePass):
                         transition_func,
                         self._skeleton_tables if (self.config.include_skeleton) else None,
                         self.config.skeleton_weight,
+                        self.config.occluded_transition_probability
                     ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)])
 
                 for (bp_grp_i, res) in enumerate(results):
@@ -538,7 +551,8 @@ class MITViterbi(FramePass):
         metadata: AttributeDict,
         transition_function: TransitionFunction,
         skeleton_table: Optional[StorageGraph] = None,
-        skeleton_weight: float = 0
+        skeleton_weight: float = 0,
+        occluded_penalty: float = 0.5
     ) -> List[np.ndarray]:
         """This method is responsible for computing the transition probabilities from the prior maximum locations 
         (highest probability states) of all body parts in the prior frame to the current frame's states. 
@@ -577,7 +591,8 @@ class MITViterbi(FramePass):
             bp_idx,
             metadata,
             skeleton_table,
-            1
+            1,
+            occluded_penalty
         )
 
         #The core of the method involves calculating the transition probabilities from the prior states to the current states. 
@@ -685,9 +700,10 @@ class MITViterbi(FramePass):
         metadata: AttributeDict,
         skeleton_table: Optional[StorageGraph] = None,
         skeleton_table_downscale: float = 1,
+        occluded_penalty: float = 0.5,
         merge_arrays: Callable[[Iterable[np.ndarray]], np.ndarray] = np.maximum.reduce,
         merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.max,
-        merge_results: bool = True
+        merge_results: bool = True,
     ) -> Union[List[Tuple[int, List[NumericArray]]], List[NumericArray]]:
         
         """
@@ -749,7 +765,13 @@ class MITViterbi(FramePass):
 
             # No skeleton penalty for transitioning from enter state
             num_links += 1
-            transition_func = ViterbiTransitionTable(trans_table, skeleton_table_downscale, 0.5, 0.5)
+            transition_func = ViterbiTransitionTable(
+                trans_table,
+                skeleton_table_downscale,
+                0.5,
+                0.5,
+                occluded_penalty
+            )
 
             results.append((
                 other_bp_group_idx * metadata.num_outputs + bp_off,
@@ -790,6 +812,7 @@ class MITViterbi(FramePass):
         transition_function: TransitionFunction,
         skeleton_table: Optional[StorageGraph] = None,
         skeleton_weight: float = 0,
+        occluded_penalty: float = 0.5
     ) -> List[ForwardBackwardFrame]:
         
         """processes a single frame in the context of tracking multiple body parts or individuals, 
@@ -874,7 +897,6 @@ class MITViterbi(FramePass):
                 prior[bp_i].occluded_coords,
                 prior[bp_i].occluded_probs,
                 metadata.obscured_prob, #obscured = occluded
-                metadata.obscured_decay_rate,
                 current[bp_i].disable_occluded and (cy is not None)
             )
 
@@ -895,7 +917,8 @@ class MITViterbi(FramePass):
                 bp_i,
                 metadata,
                 skeleton_table,
-                1
+                1,
+                occluded_penalty
             )
 
             from_transition = cls.log_viterbi_between(
@@ -912,7 +935,7 @@ class MITViterbi(FramePass):
             ])
 
             # Result coordinates, exclude the enter state...
-            result_coords.append([c[1] for c in current_data[:-1]])
+            result_coords.append([c[2] for c in current_data[:-1]])
 
         # Pad all arrays so we can do element-wise comparisons between them...
         frm_probs, frm_coords, frm_idxs = arr_utils.pad_coordinates_and_probs(
@@ -1017,7 +1040,6 @@ class MITViterbi(FramePass):
         prior_occluded_coords: np.ndarray,
         prior_occluded_probs: np.ndarray,
         occluded_prob: float,
-        decay_rate: float,
         disable_occluded: bool
     ) -> Tuple[np.ndarray, np.ndarray]:
         # otherwise the visible probs will override the occluded probs and the occluded state becomes "sticky."
@@ -1033,7 +1055,7 @@ class MITViterbi(FramePass):
         new_probs = (
             np.full(new_coords.shape[0], to_log_space(0))
             if disable_occluded else
-            np.maximum(*merged_probs) + to_log_space(decay_rate)
+            np.maximum(*merged_probs)
         )
 
         return (
@@ -1101,10 +1123,6 @@ class MITViterbi(FramePass):
                 "An integer, the max number of points to allow to survive for each frame, "
                 "if there is more than this value, the top ones are kept."
             ),
-            "obscured_decay_rate": (
-                0.99, tc.RangedFloat(0, 1),
-                "A constant float defining the decay rate of probabilities in the occluded state."
-            ),
             "gaussian_plateau": (
                 None, tc.Union(float, tc.Literal(None)),
                 "A float specifying the area over which to flatten the "
@@ -1127,5 +1145,10 @@ class MITViterbi(FramePass):
                 tc.RangedFloat(-np.inf, 0),
                 "A float, the lowest allowed log-probability for the distribution of skeleton scores."
                 "This prevents the skeleton transitions from zeroing all probabilities in the viterbi."
+            ),
+            "occluded_transition_probability": (
+                0.5,
+                tc.RangedFloat(0, 1),
+                "A float, how much less likely going to the occluded state is compared to an in-frame transition."
             )
         }
