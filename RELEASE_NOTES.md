@@ -1,4 +1,4 @@
- - Fixes tweak when csv with NaN entries is passed.
- - Fixes tweak when csv file has more or less frames than the video passed along with it.
- - Adds support for zooming in on the editor.
- - Adds support for rendering heatmap overlays in the editor.
+ - Several adjustments to MIT-Viterbi for improved tracking performance.
+ - Add options to change heatmap colors in settings dialog.
+ - Better colormap selection widgets.
+
