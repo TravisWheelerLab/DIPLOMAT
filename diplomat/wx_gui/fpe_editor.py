@@ -355,7 +355,8 @@ class FPEEditor(wx.Frame):
          #   skeleton_info = self.skeleton_info
             **ps
         )
-        if(heatmap_options is not None):
+        self._heatmap_is_enabled = heatmap_options is not None
+        if self._heatmap_is_enabled:
             self.video_player.video_viewer.set_heatmap_source(heatmap_options.heatmap_extractor)
         self.video_controls = VideoController(self._sub_panel, video_player=self.video_player.video_viewer)
 
@@ -385,7 +386,7 @@ class FPEEditor(wx.Frame):
         self._main_splitter.SplitHorizontally(self._video_splitter, self._sub_panel, -self._sub_panel.GetMinSize().GetHeight())
         self._splitter_sizer.Add(self._main_splitter, 1, wx.EXPAND)
 
-        self._build_toolbar(manual_save, heatmap_options.entries if(heatmap_options is not None) else None)
+        self._build_toolbar(manual_save, heatmap_options.entries if self._heatmap_is_enabled else None)
 
         self._main_panel.SetSizerAndFit(self._splitter_sizer)
         self.SetSizerAndFit(self._main_sizer)
@@ -858,27 +859,38 @@ class FPEEditor(wx.Frame):
 
     def _change_visual_settings(self):
         from diplomat.wx_gui.labeler_lib import Slider, FloatSpin
-        from diplomat.wx_gui.settings_dialog import DropDown
+        from diplomat.wx_gui.settings_dialog import DropDown, ColormapSelector
         from matplotlib import colormaps
         point_video_viewer = self.video_player.video_viewer
 
         sorted_colormaps = sorted(colormaps)
 
+        extra = {}
+        if self._heatmap_is_enabled:
+            extra.update(dict(
+                heatmap_colormap=ColormapSelector(default=point_video_viewer.get_heatmap_colormap()),
+                heatmap_alpha=FloatSpin(0, 1, point_video_viewer.get_heatmap_alpha(), increment=0.01, digits=2)
+            ))
+
         with SettingsDialog(self, title="Visual Settings", settings=SettingCollection(
-            colormap=DropDown([to_colormap(point_video_viewer.get_colormap())] + sorted_colormaps, ["CURRENT"] + sorted_colormaps),
+            colormap=ColormapSelector(default=to_colormap(point_video_viewer.get_colormap())),
             point_radius=FloatSpin(1, 1000, point_video_viewer.get_point_radius(), increment=1, digits=0),
             point_alpha=FloatSpin(0, 1, point_video_viewer.get_point_alpha(), increment=0.01, digits=2),
             plot_threshold=FloatSpin(0, 1, point_video_viewer.get_plot_threshold(), increment=0.001, digits=3),
-            line_thickness=Slider(1, 10, point_video_viewer.get_line_thickness())
+            line_thickness=Slider(1, 10, point_video_viewer.get_line_thickness()),
+            **extra
         )) as dlg:
             if(dlg.ShowModal() == wx.ID_OK):
-                for k, v in dlg.get_values().items():
+                dlg_results = dlg.get_values()
+
+                for k, v in dlg_results.items():
                     getattr(point_video_viewer, f"set_{k}")(v)
 
                 if(self._on_plot_settings_change is not None):
-                    self._on_plot_settings_change(
-                        {self.PLOT_SETTINGS_MAPPING[k]: val for k, val in dlg.get_values().items()}
-                    )
+                    self._on_plot_settings_change({
+                        self.PLOT_SETTINGS_MAPPING[k]: val for k, val in dlg_results.items()
+                        if k in self.PLOT_SETTINGS_MAPPING
+                    })
 
                 self.Refresh()
                 self.Update()

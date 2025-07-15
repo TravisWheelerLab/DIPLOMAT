@@ -134,6 +134,10 @@ class DiplomatColormap:
         v[:, 0] = np.clip(v[:, 0], 0.0, 1.0)
         return v
 
+    @property
+    def name(self) -> str:
+        return self._name
+
     def __call__(self, data: np.ndarray, alpha: Optional[float] = None, bytes: bool = False):
         if(alpha is None):
             alpha = 1.0
@@ -235,6 +239,7 @@ def iter_colormap(cmap: DiplomatColormap, count: int, bytes: bool = False) -> Se
         # If the colormap's largest jump in color difference is small, this is likely not a qualitative map, skip treating it like one...
         if(_MAX_LISTED_THRESHOLD < np.max(np.sqrt(np.sum((colors[1:] - colors[:-1]) ** 2, axis=-1)))):
             reps = int(np.ceil(count / len(colors)))
-            return np.tile(colors, [reps, 1])[:count]
+            colors = np.tile(colors, [reps, 1])[:count]
+            return (colors * 255).astype(np.uint8) if bytes else colors
 
     return cmap(np.linspace(0, 1, count), bytes=bytes)

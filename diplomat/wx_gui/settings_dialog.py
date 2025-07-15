@@ -2,11 +2,15 @@
 Provides a dialog for displaying an arbitrary set of configurable settings to the user to be changed. Utilizes
 the :class:`~diplomat.wx_gui.labeler_lib.SettingWidget` API for specifying dialog settings and retrieving results.
 """
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Union
+
+import numpy as np
 import wx
 from diplomat.processing import Config
+from diplomat.utils.colormaps import DiplomatColormap, to_colormap
 from diplomat.wx_gui.labeler_lib import SettingWidget, SettingCollection, SettingCollectionWidget
 import platform
+import matplotlib.colors as mpl_colors
 
 
 class DropDown(SettingWidget):
@@ -68,6 +72,89 @@ class DropDown(SettingWidget):
 
     def get_value(self) -> Any:
         return self._options[self._value]
+
+
+class ColormapSelector(SettingWidget):
+    """
+    A SettingWidget for representing a colormap dropdown, for selecting a colormap.
+    """
+    def __init__(
+        self,
+        options: Optional[List[Union[DiplomatColormap, str, mpl_colors.Colormap]]] = None,
+        option_names: Optional[List[str]] = None,
+        default: Optional[Union[DiplomatColormap, str, mpl_colors.Colormap]] = None,
+        **kwargs
+    ):
+        """
+        Create a new drop-down widget.
+
+        :param options: The list of objects to select from.
+        :param option_names: Optional, a list of names to actually display in the selection box. If not set or set to
+                             None, this widget gets display names by calling the `str` function on each object in the
+                             options list.
+        :param default: The index of the default selected value when the widget is first loaded. Defaults to 0, or the
+                        first element in the selection box.
+        """
+        self._options = []
+        self._option_names = []
+
+        if default is not None:
+            self._options.append(default)
+            self._option_names.append(f"CURRENT ({getattr(default, 'name', str(default))})")
+
+        if options is None:
+            from matplotlib import colormaps
+            options = sorted(colormaps)
+        if(len(options) == 0):
+            raise ValueError("No options offered!")
+        if(option_names is None):
+            option_names = [getattr(o, "name", str(o)) for o in options]
+        if(len(option_names) != len(options)):
+            raise ValueError("Options and name arrays don't have the same length.")
+        self._options.extend(options)
+        self._option_names.extend(option_names)
+        self._default = 0
+        self._kwargs = kwargs
+        self._hook = None
+        self._value = self._default
+
+    def set_hook(self, hook: Callable[[DiplomatColormap], None]):
+        self._hook = hook
+
+    def get_new_widget(self, parent=None) -> wx.Control:
+        from wx.adv import BitmapComboBox
+        text_list = BitmapComboBox(parent, choices=[], style=wx.CB_READONLY, **self._kwargs)
+
+        w, h = text_list.GetFont().GetPixelSize().Get()
+        w *= 8
+        h = int(h * 1.5)
+
+        for name, cmap in zip(self._option_names, self._options):
+            cmap = to_colormap(cmap)
+            img = cmap(np.linspace(0, 1, w), bytes=True)[..., :3]
+            img = np.repeat(img[None], h, axis=0)
+            bitmap = wx.Bitmap.FromBuffer(w, h, img.tobytes())
+            text_list.Append(name, bitmap)
+
+        text_list.SetSelection(self._default)
+
+        def val_change(evt):
+            sel = text_list.GetSelection()
+            if(sel == wx.NOT_FOUND):
+                text_list.SetSelection(self._default)
+                self._value = self._default
+            else:
+                self._value = sel
+
+            if(self._hook is not None):
+                self._hook(to_colormap(self._options[self._value]))
+
+        text_list.Bind(wx.EVT_COMBOBOX, val_change)
+
+        return text_list
+
+    def get_value(self) -> Any:
+        return to_colormap(self._options[self._value])
 
 
 class SettingsDialog(wx.Dialog):
