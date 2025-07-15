@@ -160,12 +160,6 @@ class MITViterbi(FramePass):
             conf.lowest_value, self._flatten_std, conf.square_distances, True
         ))
 
-    def _augment_skeleton_weight(self, skeleton_weight, normalized_score):
-        if normalized_score == -np.inf:
-            return self.config.minimum_skeleton_weight
-        else:
-            return max(self.config.minimum_skeleton_weight, skeleton_weight * np.sqrt(normalized_score))
-
     def _init_skeleton(self, metadata: AttributeDict):
         """If skeleton data is available, this function initializes the skeleton tables, 
         which are used to enhance tracking by considering the structural 
@@ -211,11 +205,6 @@ class MITViterbi(FramePass):
                     ),
                     self.config.lowest_skeleton_score
                 )
-
-            # Disabled, makes performance much worse....
-            # self.config.skeleton_weight = self._augment_skeleton_weight(
-            #     self.config.skeleton_weight, metadata.normalized_fixed_frame_score
-            # )
         else:
             self.config.skeleton_weight = 0
 
