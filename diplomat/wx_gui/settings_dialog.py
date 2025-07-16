@@ -74,6 +74,171 @@ class DropDown(SettingWidget):
         return self._options[self._value]
 
 
+def _draw_colormap_entry(dc, rect, cmap):
+    fw, fh = dc.GetFont().GetPixelSize()
+    x, y, w, h = rect.Get()
+    if h <= 0 or w <= 0:
+        return
+    img_w = fw * 8
+    img_h = int(fh * 1.5)
+    pad_w = fw
+
+    img = cmap(np.linspace(0, 1, img_w), bytes=True)[..., :3]
+    img = np.repeat(img[None], img_h, axis=0)
+    bitmap = wx.Bitmap.FromBuffer(img_w, img_h, img.tobytes())
+
+    dc.DrawBitmap(bitmap, x + pad_w, y + (h - img_h) // 2)
+    dc.DrawText(cmap.name, x + pad_w * 2 + img_w, y + (h - fh) // 2)
+
+
+class ColormapListBox(wx.VListBox):
+    def __init__(
+        self,
+        parent,
+        id=wx.ID_ANY,
+        colormaps: List[DiplomatColormap] = (),
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=0,
+        name="ColormapListBox"
+    ):
+        super().__init__(parent, id, pos, size, style, name)
+        self._colormaps = tuple(colormaps)
+        self._colormaps_enabled = [True] * len(colormaps)
+        self.SetItemCount(len(self._colormaps))
+
+    def apply_filter(self, filt: Optional[Callable[[DiplomatColormap], bool]] = None):
+        self._colormaps_enabled = [True if filt is None else filt(cmap) for cmap in self._colormaps]
+        self.SetItemCount(len(self._colormaps))
+        self.Update()
+        self.Refresh()
+
+    def get_selected_colormap(self):
+        res = self.GetSelection()
+        if res != wx.NOT_FOUND:
+            return self._colormaps[res]
+        return None
+
+    def get_colormap(self, index: int):
+        return self._colormaps[index]
+
+    @property
+    def colormaps(self):
+        return self._colormaps
+
+    def GetItemRect(self, item):
+        return super().GetItemRect(item) if self._colormaps_enabled[item] else wx.Rect()
+
+    def OnMeasureItem(self, n):
+        w, h = self.GetFont().GetPixelSize()
+        return h * 2 if self._colormaps_enabled[n] else 0
+
+    def OnDrawItem(self, dc, rect, n):
+        if not self._colormaps_enabled[n]:
+            return
+        _draw_colormap_entry(dc, rect, self._colormaps[n])
+
+
+class ColormapPopup(wx.ComboPopup):
+    def __init__(self, colormaps: List[DiplomatColormap]):
+        super().__init__()
+        self.colormaps = [to_colormap(c) for c in colormaps]
+        self.frame = None
+        self.search = None
+        self.list = None
+        self.value = -1
+        self.curent_item = -1
+
+    def OnMotion(self, evt):
+        offset = self.list.CalcUnscrolledPosition(evt.GetPosition()[1])
+        selected_item = -1
+        for i in range(self.list.GetItemCount()):
+            item_dim = self.list.OnMeasureItem(i)
+            if item_dim > offset:
+                selected_item = i
+                break
+            offset -= item_dim
+        if selected_item >= 0:
+            self.list.SetSelection(selected_item)
+            self.curent_item = selected_item
+
+    def OnLeftDown(self, evt):
+        self.value = self.curent_item
+        self.Dismiss()
+
+    def OnSearch(self, evt):
+        value = self.search.GetValue()
+        self.list.apply_filter(lambda c: value.lower() in c.name.lower())
+
+    def Init(self):
+        self.value = -1
+        self.curent_item = -1
+
+    def Create(self, parent):
+        self.frame = wx.Panel(parent, style=wx.SIMPLE_BORDER)
+        self.search = wx.SearchCtrl(self.frame, value="")
+        self.search.SetDescriptiveText("Search")
+        self.list = ColormapListBox(self.frame, colormaps=self.colormaps, style=wx.LC_LIST | wx.LC_SINGLE_SEL)
+        l1 = wx.BoxSizer(wx.VERTICAL)
+        l1.Add(self.search, 0, wx.ALL | wx.EXPAND)
+        l1.Add(self.list, 1, wx.ALL | wx.EXPAND)
+        self.frame.SetSizer(l1)
+
+        self.list.Bind(wx.EVT_MOTION, self.OnMotion)
+        self.list.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.search.Bind(wx.EVT_TEXT, self.OnSearch)
+
+        return True
+
+    def GetStringValue(self):
+        if self.value >= 0:
+            return self.list.get_colormap(self.value).name
+        return ""
+
+    def SetStringValue(self, value):
+        if self.list is None:
+            return
+        for i, cmap in enumerate(self.list.colormaps):
+            if value == cmap.name:
+                self.list.SetSelection(i)
+                self.value = i
+                break
+
+    def PaintComboControl(self, dc, rect):
+        if self.value < 0:
+            return
+        _draw_colormap_entry(dc, rect, self.colormaps[self.value])
+
+    def GetControl(self):
+        return self.frame
+
+
+class ColormapChoice(wx.ComboCtrl):
+    def __init__(
+        self,
+        parent,
+        id=wx.ID_ANY,
+        colormaps: List[DiplomatColormap] = None,
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=wx.CB_READONLY,
+        validator=wx.DefaultValidator,
+        name="ColormapChoice"
+    ):
+        if colormaps is None:
+            from matplotlib import colormaps
+            colormaps = sorted(colormaps)
+        colormaps = [to_colormap(c) for c in colormaps]
+        super().__init__(parent, id, colormaps[0].name if len(colormaps) > 0 else "", pos, size, style, validator, name)
+
+        self.UseAltPopupWindow(True)
+        self._popup = ColormapPopup(colormaps)
+        self.SetPopupControl(self._popup)
+        min_size = self.GetMinSize()
+        w, h = self.GetFont().GetPixelSize()
+        self.SetMinSize(wx.Size(min_size.width, h * 2))
+
+
 class ColormapSelector(SettingWidget):
     """
     A SettingWidget for representing a colormap dropdown, for selecting a colormap.
@@ -81,7 +246,6 @@ class ColormapSelector(SettingWidget):
     def __init__(
         self,
         options: Optional[List[Union[DiplomatColormap, str, mpl_colors.Colormap]]] = None,
-        option_names: Optional[List[str]] = None,
         default: Optional[Union[DiplomatColormap, str, mpl_colors.Colormap]] = None,
         **kwargs
     ):
@@ -96,23 +260,16 @@ class ColormapSelector(SettingWidget):
                         first element in the selection box.
         """
         self._options = []
-        self._option_names = []
 
         if default is not None:
-            self._options.append(default)
-            self._option_names.append(f"CURRENT ({getattr(default, 'name', str(default))})")
+            self._options.append(to_colormap(default))
 
         if options is None:
             from matplotlib import colormaps
             options = sorted(colormaps)
         if(len(options) == 0):
             raise ValueError("No options offered!")
-        if(option_names is None):
-            option_names = [getattr(o, "name", str(o)) for o in options]
-        if(len(option_names) != len(options)):
-            raise ValueError("Options and name arrays don't have the same length.")
-        self._options.extend(options)
-        self._option_names.extend(option_names)
+        self._options.extend([to_colormap(op) for op in options])
         self._default = 0
         self._kwargs = kwargs
         self._hook = None
@@ -122,34 +279,26 @@ class ColormapSelector(SettingWidget):
         self._hook = hook
 
     def get_new_widget(self, parent=None) -> wx.Control:
-        from wx.adv import BitmapComboBox
-        text_list = BitmapComboBox(parent, choices=[], style=wx.CB_READONLY, **self._kwargs)
-
-        w, h = text_list.GetFont().GetPixelSize().Get()
-        w *= 8
-        h = int(h * 1.5)
-
-        for name, cmap in zip(self._option_names, self._options):
-            cmap = to_colormap(cmap)
-            img = cmap(np.linspace(0, 1, w), bytes=True)[..., :3]
-            img = np.repeat(img[None], h, axis=0)
-            bitmap = wx.Bitmap.FromBuffer(w, h, img.tobytes())
-            text_list.Append(name, bitmap)
-
-        text_list.SetSelection(self._default)
+        text_list = ColormapChoice(parent, wx.ID_ANY, colormaps=self._options)
+        text_list.SetValue(self._options[self._value].name)
 
         def val_change(evt):
-            sel = text_list.GetSelection()
-            if(sel == wx.NOT_FOUND):
-                text_list.SetSelection(self._default)
-                self._value = self._default
+            try:
+                sel = text_list.GetValue()
+            except RuntimeError:
+                return
+            for i, cmap in enumerate(self._options):
+                if cmap.name == sel:
+                    self._value = i
+                    break
             else:
-                self._value = sel
+                text_list.SetValue(self._options[self._default].name)
+                self._value = self._default
 
             if(self._hook is not None):
-                self._hook(to_colormap(self._options[self._value]))
+                self._hook(self._options[self._value])
 
-        text_list.Bind(wx.EVT_COMBOBOX, val_change)
+        text_list.Bind(wx.EVT_COMBOBOX_CLOSEUP, val_change)
 
         return text_list
 
@@ -192,3 +341,20 @@ class SettingsDialog(wx.Dialog):
         :return: A :class:`~diplomat.processing.containers.Config` object, containing the values selected by the user.
         """
         return self._settings.get_values()
+
+
+def _test_colormap_selector():
+    app = wx.App()
+
+    with SettingsDialog(None, title="Settings", settings=SettingCollection(
+        colormap=ColormapSelector()
+    )) as dlg:
+        if dlg.ShowModal() == wx.ID_OK:
+            print(dlg.get_values())
+            print(dlg.get_values().colormap.name)
+        else:
+            print("Canceled...")
+
+
+if __name__ == "__main__":
+    _test_colormap_selector()

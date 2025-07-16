@@ -57,6 +57,9 @@ class CreateSkeleton(FramePass):
             for edge, hist in self._skeleton.items():
                 b, freq, avg_val = hist.get_quantile(0.5)
                 relative_std = hist.get_mad_using_median(avg_val) / self.MAGIC_CONST
+                if relative_std < 0.1:
+                    print("WARNING: Skeletal STD was too small! Setting to 1...")
+                    relative_std = 1
                 new_skeleton_info[edge] = (b, freq, avg_val, relative_std)
 
         new_frame_data.metadata.skeleton = new_skeleton_info
@@ -241,6 +244,6 @@ class CreateSkeleton(FramePass):
                 1, float, "The amount to multiply each standard deviation to create skeleton transition curves."
             ),
             "DEBUG": (
-                False, bool, "Set to True to print skeleton information to console while this pass is running."
+                True, bool, "Set to True to print skeleton information to console while this pass is running."
             )
         }

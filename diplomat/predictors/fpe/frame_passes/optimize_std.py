@@ -49,6 +49,9 @@ class OptimizeStandardDeviation(FramePass):
         result = super().run_pass(fb_data, prog_bar, in_place, reset_bar)
 
         approx_std = (self._histogram.get_quantile(0.5)[2] / self.MAGIC_CONST) * self.config.std_multiplier
+        if approx_std < 0.1:
+            print("WARN: Got std for motion that is too low, setting to 1.")
+            approx_std = 1
         result.metadata.optimal_std = (*self._histogram.get_bin_for_value(approx_std)[:2], float(approx_std))
 
         if(self.config.DEBUG):
@@ -127,5 +130,5 @@ class OptimizeStandardDeviation(FramePass):
                 3, tc.RangedFloat(0, np.inf),
                 "A positive float, the computed standard deviation is multiplied by this value before "
             ),
-            "DEBUG": (False, bool, "Set to True to print the optimal standard deviation found...")
+            "DEBUG": (True, bool, "Set to True to print the optimal standard deviation found...")
         }

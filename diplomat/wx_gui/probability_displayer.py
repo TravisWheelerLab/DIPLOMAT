@@ -148,11 +148,27 @@ def circle_line_intersection(circle_center, radius, point_a, point_b):
     )
 
 
+def get_oklab_bounds(color_plane_norm, x_bounds, y_bounds):
+    x = color_plane_norm[..., 0]
+    y = color_plane_norm[..., 1]
+    x0, x1 = x_bounds
+    y0, y1 = y_bounds
+    low_bound = np.where(y > x, color_plane_norm * (y0 / y), color_plane_norm * (x0 / x))
+
 # TODO: Finish and enable eventually...
 def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False):
     fg_color = linear_rgb_to_oklab(srgb_to_linear_rgb(fg_color, as_int8))
     bg_color = linear_rgb_to_oklab(srgb_to_linear_rgb(fg_color, as_int8))
     initial_distance_sq = np.sum((fg_color - bg_color) ** 2, -1)
+
+    # These are 2d-spaces axes... We can get 2d plane coords from 3d coords via dot product
+    # "Hue" axis...
+    hue_axis_norm = np.zeros(fg_color.shape)
+    hue_axis_norm[..., 1:] = fg_color[..., 1:]
+    hue_axis_norm /= np.sqrt(np.dot(hue_axis_norm, hue_axis_norm))
+    # Lightness axis...
+    lightness_axis = np.zeros(fg_color.shape)
+    lightness_axis[..., 0] = 1
 
     # We want the plane on which the hue stays the same (same angle, any lightness)
     plane_norm_vec = np.zeros(fg_color.shape)
@@ -172,8 +188,8 @@ def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False
     # Calculate all intersections, and direct compliments...
     # TODO: Actually compute 2d intersections of circle with bounds (rectangle) within valid color plane.
     #       than pick nearest color...
-    fg_shifted = nearest_bg_point_on_plane + (remaining_distance / fg_to_bg_dist) * (fg_color - nearest_bg_point_on_plane),
-    nearest_bg_point_on_plane + (remaining_distance / fg_to_bg_dist) * (fg_color - nearest_bg_point_on_plane)
+    #
+    fg_shifted = nearest_bg_point_on_plane + (remaining_distance / fg_to_bg_dist) * (fg_color - nearest_bg_point_on_plane)
 
     l_bounds = (0, 1)
     ab_bounds = (-0.5, 0.5)
