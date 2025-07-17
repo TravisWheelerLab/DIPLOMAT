@@ -3,7 +3,6 @@ Provides a dialog for displaying an arbitrary set of configurable settings to th
 the :class:`~diplomat.wx_gui.labeler_lib.SettingWidget` API for specifying dialog settings and retrieving results.
 """
 from typing import Any, Callable, List, Optional, Union
-
 import numpy as np
 import wx
 from diplomat.processing import Config
@@ -139,6 +138,38 @@ class ColormapListBox(wx.VListBox):
         _draw_colormap_entry(dc, rect, self._colormaps[n])
 
 
+class ColormapSearch(wx.Panel):
+
+    def generate_search_bitmap(self, size: int, thickness: int):
+        bitmap = wx.Bitmap(size, size)
+        bc = self.GetBackgroundColour()
+        fc = self.GetForegroundColour()
+        dc = wx.GCDC(wx.MemoryDC(bitmap))
+        dc.SetBackground(wx.Brush(bc, wx.BRUSHSTYLE_SOLID))
+        dc.Clear()
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.SetPen(wx.Pen(fc, thickness, wx.PENSTYLE_SOLID))
+        tsize = size - thickness * 2
+        circ_off = thickness + tsize * 3 // 8
+        dc.DrawCircle(circ_off, circ_off, tsize * 3 // 8)
+        line_start = circ_off + int(tsize * (3 / 8) / np.sqrt(2))
+        line_end = size - thickness
+        dc.DrawLine(line_start, line_start, line_end, line_end)
+        return bitmap
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        fw, fh = self.GetFont().GetPixelSize()
+        search_bmp_size = int(fh * 1.5)
+        search_bmp_thickness = max(1, fw // 3)
+        self.search_bitmap = wx.StaticBitmap(self, bitmap=self.generate_search_bitmap(search_bmp_size, search_bmp_thickness))
+        self.text = wx.TextCtrl(self)
+        self._sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self._sizer.Add(self.search_bitmap, 0, wx.EXPAND)
+        self._sizer.Add(self.text, 1, wx.ALL | wx.EXPAND)
+        self.SetSizerAndFit(self._sizer)
+
+
 class ColormapPopup(wx.ComboPopup):
     def __init__(self, colormaps: List[DiplomatColormap]):
         super().__init__()
@@ -167,8 +198,8 @@ class ColormapPopup(wx.ComboPopup):
         self.Dismiss()
 
     def OnSearch(self, evt):
-        value = self.search.GetValue()
-        self.list.apply_filter(lambda c: value.lower() in c.name.lower())
+        value = self.search.text.GetValue().strip().lower()
+        self.list.apply_filter(lambda c: value in c.name.lower())
 
     def Init(self):
         self.value = -1
@@ -176,8 +207,7 @@ class ColormapPopup(wx.ComboPopup):
 
     def Create(self, parent):
         self.frame = wx.Panel(parent, style=wx.SIMPLE_BORDER)
-        self.search = wx.SearchCtrl(self.frame, value="")
-        self.search.SetDescriptiveText("Search")
+        self.search = ColormapSearch(self.frame)
         self.list = ColormapListBox(self.frame, colormaps=self.colormaps, style=wx.LC_LIST | wx.LC_SINGLE_SEL)
         l1 = wx.BoxSizer(wx.VERTICAL)
         l1.Add(self.search, 0, wx.ALL | wx.EXPAND)
@@ -186,7 +216,7 @@ class ColormapPopup(wx.ComboPopup):
 
         self.list.Bind(wx.EVT_MOTION, self.OnMotion)
         self.list.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.search.Bind(wx.EVT_TEXT, self.OnSearch)
+        self.search.text.Bind(wx.EVT_TEXT, self.OnSearch)
 
         return True
 
@@ -230,7 +260,6 @@ class ColormapChoice(wx.ComboCtrl):
             colormaps = sorted(colormaps)
         colormaps = [to_colormap(c) for c in colormaps]
         super().__init__(parent, id, colormaps[0].name if len(colormaps) > 0 else "", pos, size, style, validator, name)
-
         self.UseAltPopupWindow(True)
         self._popup = ColormapPopup(colormaps)
         self.SetPopupControl(self._popup)
@@ -283,6 +312,7 @@ class ColormapSelector(SettingWidget):
         text_list.SetValue(self._options[self._value].name)
 
         def val_change(evt):
+            print(evt)
             try:
                 sel = text_list.GetValue()
             except RuntimeError:
