@@ -107,10 +107,14 @@ def oklch_to_oklab(color):
     return color
 
 
+def vec_dot(arr1, arr2):
+    return np.einsum("...i,...i->...", arr1, arr2)
+
+
 def color_to_luminance(color):
     to_y = np.array([0.2126729, 0.7151522, 0.0721750])
     color = (color / 255) ** 2.4
-    return np.inner(color, to_y)
+    return vec_dot(color, to_y)
 
 
 def clamp_luminance_black_levels(y):
@@ -132,6 +136,7 @@ def apca_contrast(fg_color, bg_color):
 
 def circle_line_intersection(circle_center, radius, point_a, point_b):
     # Place circle at center...
+    print(circle_center, radius, point_a, point_b)
     point_a = point_a - circle_center
     point_b = point_b - circle_center
 
@@ -151,22 +156,29 @@ def circle_line_intersection(circle_center, radius, point_a, point_b):
             determ * dy - sgn(dy) * dx * discrim_rt,
             -determ * dx - np.abs(dy) * discrim_rt,
         ],
-        axis=-1
+        axis=-1,
     )
     p1 = np.stack(
         [
             determ * dy + sgn(dy) * dx * discrim_rt,
             -determ * dx + np.abs(dy) * discrim_rt,
         ],
-        axis=-1
+        axis=-1,
     )
 
     res = []
     for point in [p0, p1]:
-        pa_delta = (point - point_a)
-        ba_delta = (point_b - point_a)
-        segment_percent_in = np.inner(pa_delta, ba_delta) / np.inner(ba_delta, ba_delta)
-        res.append(circle_center + np.where((discrim >= 0) & (segment_percent_in >= 0) & (segment_percent_in <= 1), point, np.nan))
+        pa_delta = point - point_a
+        ba_delta = point_b - point_a
+        segment_percent_in = vec_dot(pa_delta, ba_delta) / vec_dot(ba_delta, ba_delta)
+        res.append(
+            circle_center
+            + np.where(
+                (discrim >= 0) & (segment_percent_in >= 0) & (segment_percent_in <= 1),
+                point,
+                np.nan,
+            )
+        )
 
     return res
 
@@ -182,50 +194,52 @@ def aabb_vector_intersections(color_plane_norm, x_bounds, y_bounds):
         multipliers[i] = bound / norm_val
 
     # Take two middle values, this is when the vector is inside the square in terms of vector multipliers...
-    b1, b2 = multipliers.sort(axis=0)[1:3]
+    multipliers.sort(axis=0)
+    b1, b2 = multipliers[1:3]
     return b1, b2
 
 
 def project_to_plane(coord, axis1_norm, axis2_norm):
-    return np.stack([
-        np.inner(coord, axis1_norm),
-        np.inner(coord, axis2_norm)
-    ], axis=-1)
+    return np.stack([vec_dot(coord, axis1_norm), vec_dot(coord, axis2_norm)], axis=-1)
 
 
 def plane_to_3d(coord, axis1_norm, axis2_norm):
     return coord[0][..., None] * axis1_norm + coord[1][..., None] * axis2_norm
 
 
-def vector_distance(vector_a, vector_b = None):
+def vector_distance(vector_a, vector_b=None):
     if vector_b is not None:
         vector_a = vector_a - vector_b
-    return np.sqrt(np.inner(vector_a, vector_a))
+    return np.sqrt(np.einsum("...i,...i->...", vector_a, vector_a))
 
 
-# TODO: Finish and enable eventually...
+def unit_vector(vec):
+    return vec / np.expand_dims(vector_distance(vec), -1)
+
+
+# TODO: Fix batch processing (multiple colors at once), currently gives incorrect colors in that scenario.
+# TODO: Doesn't work well, disabled, find fix.
 def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False):
     fg_color = linear_rgb_to_oklab(srgb_to_linear_rgb(fg_color, as_int8))
-    bg_color = linear_rgb_to_oklab(srgb_to_linear_rgb(fg_color, as_int8))
+    bg_color = linear_rgb_to_oklab(srgb_to_linear_rgb(bg_color, as_int8))
 
     # These are 2d-spaces axes... We can get 2d plane coords from 3d coords via dot product
     # "Hue" axis...
     hue_axis_norm = np.zeros(fg_color.shape)
     hue_axis_norm[..., 1:] = fg_color[..., 1:]
-    hue_axis_norm /= vector_distance(hue_axis_norm)
+    hue_axis_norm = unit_vector(hue_axis_norm)
     # Lightness axis...
-    lightness_axis_norm = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    lightness_axis_norm = np.array([1.0, 0.0, 0.0], dtype=np.float32)
 
     # We want the plane on which the hue stays the same (same angle, any lightness)
     plane_norm_vec = np.zeros(fg_color.shape)
     plane_norm_vec[..., 1] = -fg_color[..., 2]
     plane_norm_vec[..., 2] = fg_color[..., 1]
     # Normalize the vector...
-    plane_norm_vec /= vector_distance(plane_norm_vec)
+    plane_norm_vec = unit_vector(plane_norm_vec)
 
     # Project background point onto the plane...
-    bg_from_plane_delta = np.inner(bg_color, plane_norm_vec)
-    nearest_bg_point_on_plane = bg_color - bg_from_plane_delta * plane_norm_vec
+    bg_from_plane_delta = vec_dot(bg_color, plane_norm_vec)
     remaining_distance = np.sqrt(
         distance * distance - bg_from_plane_delta * bg_from_plane_delta
     )
@@ -238,16 +252,19 @@ def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False
     fg_to_bg_dist = vector_distance(fg_bg_delta)
 
     # Get the legal bounds for oklab colors on this fixed-hue plane
-    bh0, bh1 = aabb_vector_intersections(hue_axis_norm[..., 1:], (-0.5, 0.5), (-0.5, 0.5))
+    bh0, bh1 = aabb_vector_intersections(
+        hue_axis_norm[..., 1:], (-0.4, 0.4), (-0.4, 0.4)
+    )
     bl0, bl1 = 0, 1
+    bh0, bh1, bl0, bl1 = np.broadcast_arrays(bh0, bh1, bl0, bl1)
 
     # Calculate all intersections, and direct compliments...
-    # TODO: Actually compute 2d intersections of circle with bounds (rectangle) within valid color plane.
-    #       than pick nearest color...
-    #
     proposals = []
     for direction in [-1, 1]:
-        fg_shifted = bg_plane_point + direction * (remaining_distance / fg_to_bg_dist) * fg_bg_delta
+        fg_shifted = (
+            bg_plane_point
+            + direction * (remaining_distance / fg_to_bg_dist) * fg_bg_delta
+        )
         is_valid = (
             (fg_shifted[..., 0] >= bh0)
             & (fg_shifted[..., 0] <= bh1)
@@ -257,28 +274,33 @@ def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False
         proposals.append(np.where(is_valid, fg_shifted, np.nan))
 
     # Get hue limits on the plane...
-    points = [(bl0, bh0), (bl1, bh0), (bl1, bh1), (bl0, bh1)]
-    proposals.extend(
-        circle_line_intersection(bg_plane_point, remaining_distance, points[i - 1], points[i])
-        for i in range(len(points))
-    )
+    points = [
+        np.stack(v, axis=-1) for v in [(bl0, bh0), (bl1, bh0), (bl1, bh1), (bl0, bh1)]
+    ]
+    for i in range(len(points)):
+        proposals.extend(
+            circle_line_intersection(
+                bg_plane_point, remaining_distance, points[i - 1], points[i]
+            )
+        )
 
     proposals = np.stack(proposals, axis=0)
 
     # Get foreground point on plane...
-
-    intersection_dists = vector_distance(proposals, np.expand_dims(fg_plane_point, 0))
-    indexes = np.nanargmax(intersection_dists, axis=0, keepdims=True)
-    best_intersections = np.take_along_axis(intersections, indexes, axis=0).squeeze(0)
-
-
-
-    prior_point = None
-    for l in
+    proposal_dists = vector_distance(proposals, fg_plane_point)
+    indexes = np.nanargmin(proposal_dists, axis=0)
+    best_proposals = np.take_along_axis(
+        proposals, indexes[None, ..., None], axis=0
+    ).squeeze(0)
+    best_proposals = plane_to_3d(best_proposals, hue_axis_norm, lightness_axis_norm)
 
     return linear_rgb_to_srgb(
         oklab_to_linear_rgb(
-            np.where(fg_to_bg_dist < remaining_distance, fg_shifted, fg_color)
+            np.where(
+                (fg_to_bg_dist < remaining_distance)[..., None],
+                best_proposals,
+                fg_color,
+            )
         ),
         as_int8,
     )
@@ -288,19 +310,19 @@ class WxPlotStyles:
     def __init__(
         self,
         widget: wx.Control,
-        min_color_dist: float = 0.5,
+        min_color_dist: float = 0.3,
         accented_alpha: float = 0.3,
     ):
         self.background_color = widget.GetBackgroundColour()
         self.foreground_color = widget.GetForegroundColour()
 
-        def apply_apca(fg, bg, desired_val):
-            return wx.Colour(*fg[:3], 255)
+        def apply_min_contrast(fg, bg, desired_val):
+            return wx.Colour(*fg.Get(False), 255)
 
         def alpha_shift(color, salpha):
             return wx.Colour(*color[:3], int(color.Alpha() * salpha))
 
-        self.highlight_color = apply_apca(
+        self.highlight_color = apply_min_contrast(
             wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT),
             self.background_color,
             min_color_dist,
@@ -312,7 +334,7 @@ class WxPlotStyles:
         # background, we take the complement of it as a second selection color
         # (This color happens to usually be a Blue, so this typically produces
         #  a Red/Orange)
-        self.error_color = apply_apca(
+        self.error_color = apply_min_contrast(
             wx.Colour(
                 *(255 - np.asarray(self.highlight_color[:3])),
                 self.highlight_color.Alpha(),
@@ -322,7 +344,7 @@ class WxPlotStyles:
         )
         self.error_color2 = alpha_shift(self.error_color, accented_alpha)
 
-        self.fixed_error_color = apply_apca(
+        self.fixed_error_color = apply_min_contrast(
             wx.Colour(
                 *(
                     (
@@ -960,7 +982,7 @@ class ProbabilityDisplayer(wx.Control):
         self._segment_fix_frames = value
 
 
-def test_demo_displayer():
+def _test_demo_displayer():
     app = wx.App()
     print_all_sys_colors()
 
@@ -1007,4 +1029,4 @@ def print_all_sys_colors():
 
 
 if __name__ == "__main__":
-    test_demo_displayer()
+    _test_demo_displayer()

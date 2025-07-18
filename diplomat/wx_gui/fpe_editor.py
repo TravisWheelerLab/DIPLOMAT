@@ -18,7 +18,8 @@ from typing import (
     Iterable,
     Union,
     Protocol,
-    MutableMapping, Literal,
+    MutableMapping,
+    Literal,
 )
 
 from diplomat.predictors.fpe.sparse_storage import (
