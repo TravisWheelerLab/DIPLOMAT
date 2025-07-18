@@ -726,7 +726,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             for frame_list in self._frame_holder.frames:
                 for frame in frame_list:
                     if frame.frame_probs is None:
-                        frame.frame_probs = frame.src_data.probs[:]
+                        probs = frame.src_data.probs
+                        frame.frame_probs = probs[:] if probs is not None else None
                     progress_bar.update()
 
             self._width = self._frame_holder.metadata.width
