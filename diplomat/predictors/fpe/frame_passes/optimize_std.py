@@ -147,7 +147,7 @@ class OptimizeStandardDeviation(FramePass):
                 "A positive float, the computed standard deviation is multiplied by this value before ",
             ),
             "DEBUG": (
-                True,
+                False,
                 bool,
                 "Set to True to print the optimal standard deviation found...",
             ),

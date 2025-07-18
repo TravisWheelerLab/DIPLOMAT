@@ -739,7 +739,7 @@ class FixFrame(FramePass):
                 "The algorithm to use for assigning body parts to skeletons when creating the fix frame.",
             ),
             "outlier_threshold": (
-                1.0,
+                3.0,
                 float,
                 "The threshold z-score used to detect when a pose is an outlier in the skeletal distance distribution.",
             ),

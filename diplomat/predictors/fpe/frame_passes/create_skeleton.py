@@ -263,7 +263,7 @@ class CreateSkeleton(FramePass):
                 "The amount to multiply each standard deviation to create skeleton transition curves.",
             ),
             "DEBUG": (
-                True,
+                False,
                 bool,
                 "Set to True to print skeleton information to console while this pass is running.",
             ),

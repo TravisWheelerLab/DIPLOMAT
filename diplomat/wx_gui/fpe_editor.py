@@ -18,7 +18,7 @@ from typing import (
     Iterable,
     Union,
     Protocol,
-    MutableMapping,
+    MutableMapping, Literal,
 )
 
 from diplomat.predictors.fpe.sparse_storage import (
@@ -596,7 +596,7 @@ class FPEEditor(wx.Frame):
 
     def _get_tools(
         self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]
-    ) -> List[Union[Tool, SEPERATOR]]:
+    ) -> List[Union[Tool, Literal[SEPERATOR]]]:
         spin_ctrl = wx.SpinCtrl(
             self._toolbar,
             min=1,
