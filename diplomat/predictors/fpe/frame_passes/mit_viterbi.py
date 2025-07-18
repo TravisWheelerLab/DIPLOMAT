@@ -323,7 +323,6 @@ class MITViterbi(FramePass):
             super()._set_step_controls(None, fix_frame_index, -1, 1)
             self._run_backtrace(fb_data, prog_bar)
 
-            # TODO check if this is being run for any segment other than the first one
             super()._set_step_controls(
                 fix_frame_index - 1, None, -1, 1
             )  # starting from the frame before the fix_frame, going past
@@ -423,7 +422,6 @@ class MITViterbi(FramePass):
                     )  # Is it in occluded or frame?
 
                     # If enter state is higher than occluded or frame state, select it over the actual frame coordinates...
-                    # TODO what is going on here
                     if (
                         combined[max_of_maxes][prior_max_idxs[max_of_maxes]]
                         < prior.enter_state
@@ -797,8 +795,6 @@ class MITViterbi(FramePass):
           NumericArray objects, depending on the merge_results parameter. These lists represent the updated
           probabilities and states for the body part being processed.
         """
-
-        # TODO: Add docstring and notes in coda
         if skeleton_table is None:
             return [0] * len(current_data) if (merge_results) else []
 

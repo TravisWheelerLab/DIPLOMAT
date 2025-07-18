@@ -581,9 +581,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         old_poses: Pose,
         progress_bar: ProgressBar,
     ) -> Tuple[Pose, Iterable[int]]:
-
-        # TODO : delete below lines, not doing as expected
-
         # Determine what segments have been manipulated...
         segment_indexes = sorted(
             {
