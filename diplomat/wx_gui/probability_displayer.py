@@ -110,7 +110,7 @@ def oklch_to_oklab(color):
 def color_to_luminance(color):
     to_y = np.array([0.2126729, 0.7151522, 0.0721750])
     color = (color / 255) ** 2.4
-    return np.dot(color, to_y)
+    return np.inner(color, to_y)
 
 
 def clamp_luminance_black_levels(y):
@@ -163,7 +163,9 @@ def circle_line_intersection(circle_center, radius, point_a, point_b):
 
     res = []
     for point in [p0, p1]:
-        segment_percent_in = (point - point_a) / (point_b - point_a)
+        pa_delta = (point - point_a)
+        ba_delta = (point_b - point_a)
+        segment_percent_in = np.inner(pa_delta, ba_delta) / np.inner(ba_delta, ba_delta)
         res.append(circle_center + np.where((discrim >= 0) & (segment_percent_in >= 0) & (segment_percent_in <= 1), point, np.nan))
 
     return res
@@ -184,17 +186,33 @@ def aabb_vector_intersections(color_plane_norm, x_bounds, y_bounds):
     return b1, b2
 
 
+def project_to_plane(coord, axis1_norm, axis2_norm):
+    return np.stack([
+        np.inner(coord, axis1_norm),
+        np.inner(coord, axis2_norm)
+    ], axis=-1)
+
+
+def plane_to_3d(coord, axis1_norm, axis2_norm):
+    return coord[0][..., None] * axis1_norm + coord[1][..., None] * axis2_norm
+
+
+def vector_distance(vector_a, vector_b = None):
+    if vector_b is not None:
+        vector_a = vector_a - vector_b
+    return np.sqrt(np.inner(vector_a, vector_a))
+
+
 # TODO: Finish and enable eventually...
 def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False):
     fg_color = linear_rgb_to_oklab(srgb_to_linear_rgb(fg_color, as_int8))
     bg_color = linear_rgb_to_oklab(srgb_to_linear_rgb(fg_color, as_int8))
-    initial_distance_sq = np.sum((fg_color - bg_color) ** 2, -1)
 
     # These are 2d-spaces axes... We can get 2d plane coords from 3d coords via dot product
     # "Hue" axis...
     hue_axis_norm = np.zeros(fg_color.shape)
     hue_axis_norm[..., 1:] = fg_color[..., 1:]
-    hue_axis_norm /= np.sqrt(np.dot(hue_axis_norm, hue_axis_norm))
+    hue_axis_norm /= vector_distance(hue_axis_norm)
     # Lightness axis...
     lightness_axis_norm = np.array([0.0, 0.0, 1.0], dtype=np.float32)
 
@@ -203,48 +221,53 @@ def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False
     plane_norm_vec[..., 1] = -fg_color[..., 2]
     plane_norm_vec[..., 2] = fg_color[..., 1]
     # Normalize the vector...
-    plane_norm_vec /= np.sqrt(np.dot(plane_norm_vec, plane_norm_vec))
+    plane_norm_vec /= vector_distance(plane_norm_vec)
 
     # Project background point onto the plane...
-    bg_from_plane_delta = np.dot(bg_color, plane_norm_vec)
+    bg_from_plane_delta = np.inner(bg_color, plane_norm_vec)
     nearest_bg_point_on_plane = bg_color - bg_from_plane_delta * plane_norm_vec
     remaining_distance = np.sqrt(
         distance * distance - bg_from_plane_delta * bg_from_plane_delta
     )
 
-    fg_bg_delta = fg_color - nearest_bg_point_on_plane
-    fg_to_bg_dist = np.sqrt(np.dot(fg_bg_delta, fg_bg_delta))
+    # Get foreground and background points on the plane.
+    bg_plane_point = project_to_plane(bg_color, hue_axis_norm, lightness_axis_norm)
+    fg_plane_point = project_to_plane(fg_color, hue_axis_norm, lightness_axis_norm)
+    # Get distance between foreground and background on the plane...
+    fg_bg_delta = fg_plane_point - bg_plane_point
+    fg_to_bg_dist = vector_distance(fg_bg_delta)
+
+    # Get the legal bounds for oklab colors on this fixed-hue plane
+    bh0, bh1 = aabb_vector_intersections(hue_axis_norm[..., 1:], (-0.5, 0.5), (-0.5, 0.5))
+    bl0, bl1 = 0, 1
 
     # Calculate all intersections, and direct compliments...
     # TODO: Actually compute 2d intersections of circle with bounds (rectangle) within valid color plane.
     #       than pick nearest color...
     #
-    fg_shifted = nearest_bg_point_on_plane + (remaining_distance / fg_to_bg_dist) * (
-        fg_color - nearest_bg_point_on_plane
-    )
-
-    bg_plane_point = np.stack([
-        np.dot(bg_color, hue_axis_norm),
-        np.dot(bg_color, lightness_axis_norm)
-    ], axis=-1)
+    proposals = []
+    for direction in [-1, 1]:
+        fg_shifted = bg_plane_point + direction * (remaining_distance / fg_to_bg_dist) * fg_bg_delta
+        is_valid = (
+            (fg_shifted[..., 0] >= bh0)
+            & (fg_shifted[..., 0] <= bh1)
+            & (fg_shifted[..., 1] >= bl0)
+            & (fg_shifted[..., 1] <= bl1)
+        )
+        proposals.append(np.where(is_valid, fg_shifted, np.nan))
 
     # Get hue limits on the plane...
-    bh0, bh1 = aabb_vector_intersections(hue_axis_norm[..., 1:], (-0.5, 0.5), (-0.5, 0.5))
-    bl0, bl1 = 0, 1
-
     points = [(bl0, bh0), (bl1, bh0), (bl1, bh1), (bl0, bh1)]
-    intersections = np.stack([
+    proposals.extend(
         circle_line_intersection(bg_plane_point, remaining_distance, points[i - 1], points[i])
         for i in range(len(points))
-    ], axis=0)
+    )
+
+    proposals = np.stack(proposals, axis=0)
 
     # Get foreground point on plane...
-    fg_plane_point = np.stack([
-        np.dot(fg_color, hue_axis_norm),
-        np.dot(fg_color, lightness_axis_norm)
-    ], axis=-1)
 
-    intersection_dists = np.sum((intersections - np.expand_dims(fg_plane_point, 0)) ** 2, axis=-1)
+    intersection_dists = vector_distance(proposals, np.expand_dims(fg_plane_point, 0))
     indexes = np.nanargmax(intersection_dists, axis=0, keepdims=True)
     best_intersections = np.take_along_axis(intersections, indexes, axis=0).squeeze(0)
 
