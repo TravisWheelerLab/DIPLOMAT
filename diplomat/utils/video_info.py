@@ -1,6 +1,7 @@
 """
 Provides functions for extracting certain metadata from videos.
 """
+
 from os import PathLike
 import cv2
 from diplomat.utils.video_io import ContextVideoCapture

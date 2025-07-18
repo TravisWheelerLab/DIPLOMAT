@@ -1,6 +1,7 @@
 """
 Provides a function for splitting videos into consecutive chunks at provided intervals or at exact locations.
 """
+
 from typing import Union, Tuple, List, Optional, Iterable
 
 import diplomat.processing.type_casters as tc
@@ -22,7 +23,7 @@ def split_videos(
     videos: tc.Union[tc.Path, tc.List[tc.Path]],
     seconds_per_segment: tc.Union[tc.List[int], int] = 300,
     output_fourcc_string: tc.Optional[str] = None,
-    output_extension: tc.Optional[str] = None
+    output_extension: tc.Optional[str] = None,
 ) -> tc.List[tc.List[Path]]:
     """
     Split a video into even length segments. This will produce a list of videos with "-part{number}" appended to the
@@ -44,17 +45,22 @@ def split_videos(
     """
     videos = _sanitize_path_arg(videos)
 
-    if(videos is None):
+    if videos is None:
         raise ValueError("No videos provided!!!")
 
-    return [_split_single_video(video, seconds_per_segment, output_fourcc_string, output_extension) for video in videos]
+    return [
+        _split_single_video(
+            video, seconds_per_segment, output_fourcc_string, output_extension
+        )
+        for video in videos
+    ]
 
 
 def _split_single_video(
     video_path: Path,
     seconds_per_segment: Union[int, List[int]],
     output_fourcc_string: Optional[str] = None,
-    output_extension: Optional[str] = None
+    output_extension: Optional[str] = None,
 ) -> List[Path]:
     """
     PRIVATE: Splits a single video.
@@ -68,43 +74,57 @@ def _split_single_video(
     """
     printer(f"Processing video: {video_path}")
     with ContextVideoCapture(str(video_path)) as vid:
-        width, height = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)), int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        width, height = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)), int(
+            vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        )
         fps = vid.get(cv2.CAP_PROP_FPS)
         total_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
 
         four_cc = int(vid.get(cv2.CAP_PROP_FOURCC))
-        if(four_cc == 0):
+        if four_cc == 0:
             four_cc = -1
         else:
             four_cc = "".join([chr((four_cc >> i) & 255) for i in range(0, 32, 8)])
             four_cc = cv2.VideoWriter_fourcc(*four_cc)
 
-        if(output_fourcc_string is not None):
+        if output_fourcc_string is not None:
             four_cc = cv2.VideoWriter_fourcc(*output_fourcc_string)
 
-        extension = video_path.suffix if(output_extension is None) else output_extension
+        extension = (
+            video_path.suffix if (output_extension is None) else output_extension
+        )
 
         writer = None
         segment = 0
         frame = 0
 
-        if(isinstance(seconds_per_segment, int)):
+        if isinstance(seconds_per_segment, int):
             # Yes, a range can be indexed just like an array... :)
             split_loc = range(0, total_frames, int(seconds_per_segment * fps))
         else:
-            split_loc = sorted(set([0] + [int(seg * fps) for seg in seconds_per_segment]))
+            split_loc = sorted(
+                set([0] + [int(seg * fps) for seg in seconds_per_segment])
+            )
 
         bar = tqdm.tqdm(total=total_frames)
 
         zero_pad_amt = int(math.ceil(math.log10(total_frames + 1)))
         paths = []
 
-        while(vid.isOpened()):
-            if(writer is None):
+        while vid.isOpened():
+            if writer is None:
                 try:
                     start = _list_access(split_loc, [total_frames], segment)
                     end = _list_access(split_loc, [total_frames], segment + 1) - 1
-                    writer, p = _new_video_writer(video_path, (start, end), zero_pad_amt, four_cc, fps, (width, height), extension)
+                    writer, p = _new_video_writer(
+                        video_path,
+                        (start, end),
+                        zero_pad_amt,
+                        four_cc,
+                        fps,
+                        (width, height),
+                        extension,
+                    )
                     paths.append(p)
                 except OSError:
                     vid.release()
@@ -114,20 +134,20 @@ def _split_single_video(
 
             res, frm = vid.read()
 
-            if(not res):
+            if not res:
                 break
 
-            if(writer.isOpened()):
+            if writer.isOpened():
                 writer.write(frm)
 
-            if((segment < len(split_loc)) and (frame >= split_loc[segment])):
+            if (segment < len(split_loc)) and (frame >= split_loc[segment]):
                 writer.release()
                 writer = None
 
             frame += 1
             bar.update(1)
 
-        if(writer is not None):
+        if writer is not None:
             writer.release()
 
         bar.close()
@@ -141,7 +161,7 @@ def _list_access(list1, list2, index):
 
 
 def _sanitize_path_arg(
-    paths: Union[None, Iterable[PathLike], PathLike]
+    paths: Union[None, Iterable[PathLike], PathLike],
 ) -> Optional[List[Path]]:
     """
     Sanitizes a pathlike or list of pathlike argument and returns a list of Path, or None if rogue data was passed...
@@ -165,7 +185,7 @@ def _new_video_writer(
     four_cc: int,
     fps: float,
     size: Tuple[int, int],
-    ext: str
+    ext: str,
 ) -> Tuple[cv2.VideoWriter, Path]:
     """
     PRIVATE: Construct a new video writer. Will try to use the passed codec if possible, otherwise uses a fallback codec and
@@ -173,16 +193,23 @@ def _new_video_writer(
     """
     suffix = f"_part{segment[0]:0{padding}d}-{segment[1]:0{padding}d}"
     preferred_path = video_path.parent / f"{video_path.stem}{suffix}{ext}"
-    writer = ContextVideoWriter(str(preferred_path), four_cc, fps, size, throw_on_unopened=False)
-    if(writer.isOpened()):
+    writer = ContextVideoWriter(
+        str(preferred_path), four_cc, fps, size, throw_on_unopened=False
+    )
+    if writer.isOpened():
         return (writer, preferred_path)
 
     writer.release()
     fallback_path = video_path.parent / f"{video_path.stem}{suffix}{FALLBACK_EXT}"
-    writer = ContextVideoWriter(str(fallback_path), cv2.VideoWriter_fourcc(*FALLBACK_CODEC), fps, size, throw_on_unopened=False)
-    if(writer.isOpened()):
+    writer = ContextVideoWriter(
+        str(fallback_path),
+        cv2.VideoWriter_fourcc(*FALLBACK_CODEC),
+        fps,
+        size,
+        throw_on_unopened=False,
+    )
+    if writer.isOpened():
         return (writer, fallback_path)
 
     writer.release()
     raise OSError("Can't find a codec to write with!!!")
-

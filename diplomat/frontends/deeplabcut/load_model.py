@@ -10,7 +10,7 @@ import yaml
 import diplomat.processing.type_casters as tc
 from diplomat.frontends import ModelInfo, ModelLike
 from ._verify_func import _load_dlc_like_zip_file
-from .dlc_importer import ort, tf, tf2onnx, onnx
+from .dlc_importer import ort, tf, onnx
 from diplomat.processing import TrackingData
 from diplomat.utils.cli_tools import Flag
 
@@ -21,18 +21,24 @@ def _get_model_folder(
     shuffle: int = 1,
     train_fraction: float = None,
     model_prefix: str = "",
-    is_pytorch: bool = False
+    is_pytorch: bool = False,
 ) -> Path:
     task = cfg["Task"]
     date = cfg["date"]
     iterate = f"iteration-{str(cfg['iteration'])}"
-    train_fraction = train_fraction if(train_fraction is not None) else cfg["TrainingFraction"][0]
-    model_prefix = "" if(model_prefix in ["..", "."] or "/" in model_prefix or "\\" in model_prefix) else model_prefix
+    train_fraction = (
+        train_fraction if (train_fraction is not None) else cfg["TrainingFraction"][0]
+    )
+    model_prefix = (
+        ""
+        if (model_prefix in ["..", "."] or "/" in model_prefix or "\\" in model_prefix)
+        else model_prefix
+    )
     return Path(project_root) / Path(
         model_prefix,
         "dlc-models-pytorch" if is_pytorch else "dlc-models",
         iterate,
-        f"{task}{date}-trainset{str(int(train_fraction * 100))}shuffle{str(shuffle)}"
+        f"{task}{date}-trainset{str(int(train_fraction * 100))}shuffle{str(shuffle)}",
     )
 
 
@@ -41,18 +47,18 @@ def _build_provider_ordering(device_index: Optional[int], use_cpu: bool):
     device_config = []
 
     def _add(val, extra=None):
-        if(extra is None):
+        if extra is None:
             extra = {}
-        if(device_index is not None):
+        if device_index is not None:
             extra["device_id"] = device_index
         return (val, extra)
 
-    if(not use_cpu):
-        if("CUDAExecutionProvider" in supported_devices):
+    if not use_cpu:
+        if "CUDAExecutionProvider" in supported_devices:
             device_config.append(_add("CUDAExecutionProvider"))
-        if("ROCMExecutionProvider" in supported_devices):
+        if "ROCMExecutionProvider" in supported_devices:
             device_config.append(_add("ROCMExecutionProvider"))
-        if("CoreMLExecutionProvider" in supported_devices):
+        if "CoreMLExecutionProvider" in supported_devices:
             device_config.append("CoreMLExecutionProvider")
 
     # Fallback...
@@ -75,7 +81,10 @@ def _prune_tf_model(graph_def, outputs: List[str]):
         idx = name_to_idx[node_name]
         visited[idx] = True
         for input_node_name in graph_def.node[idx].input:
-            if input_node_name in name_to_idx and not visited[name_to_idx[input_node_name]]:
+            if (
+                input_node_name in name_to_idx
+                and not visited[name_to_idx[input_node_name]]
+            ):
                 stack.append(input_node_name)
 
     temp_stack = []
@@ -93,7 +102,7 @@ def _prune_tf_model(graph_def, outputs: List[str]):
 
 def _load_meta_graph_def(meta_file):
     meta_graph_def = tf.compat.v1.MetaGraphDef()
-    with open(meta_file, 'rb') as f:
+    with open(meta_file, "rb") as f:
         meta_graph_def.MergeFromString(f.read())
     return meta_graph_def
 
@@ -102,6 +111,7 @@ def from_checkpoint(model_path, input_names, output_names):
     """Load tensorflow graph from checkpoint."""
     import tensorflow as tf
     import tf2onnx
+
     tf_v1 = tf.compat.v1
     # make sure we start with clean default graph
     tf_v1.reset_default_graph()
@@ -113,12 +123,18 @@ def from_checkpoint(model_path, input_names, output_names):
             sess.run(tf_v1.global_variables_initializer())
             saver.restore(sess, model_path[:-5])
             input_names = tf2onnx.tf_loader.inputs_without_resource(sess, input_names)
-            frozen_graph = tf2onnx.tf_loader.freeze_session(sess, input_names=input_names, output_names=output_names)
-            input_names = tf2onnx.tf_loader.remove_redundant_inputs(frozen_graph, input_names)
+            frozen_graph = tf2onnx.tf_loader.freeze_session(
+                sess, input_names=input_names, output_names=output_names
+            )
+            input_names = tf2onnx.tf_loader.remove_redundant_inputs(
+                frozen_graph, input_names
+            )
 
         tf_v1.reset_default_graph()
         with tf_v1.Session() as sess:
-            frozen_graph = tf2onnx.tf_loader.tf_optimize(input_names, output_names, frozen_graph)
+            frozen_graph = tf2onnx.tf_loader.tf_optimize(
+                input_names, output_names, frozen_graph
+            )
     tf_v1.reset_default_graph()
     return frozen_graph, input_names, output_names
 
@@ -127,7 +143,7 @@ def _find_direct_consumers(graph_def, node):
     consumers = []
     for n in graph_def.node:
         for i, ins in enumerate(n.input):
-            if(ins == node):
+            if ins == node:
                 consumers.append(f"{n.name}:{i}")
 
     return consumers
@@ -138,61 +154,67 @@ def _get_dlc_inputs_and_outputs(meta_path):
 
     desired_outputs = [
         ("pose/part_pred/block4/BiasAdd:0", True),
-        ("pose/locref_pred/block4/BiasAdd:0", False)
+        ("pose/locref_pred/block4/BiasAdd:0", False),
     ]
     output_names = []
     op_names = {n.name for n in meta_graph_def.graph_def.node}
 
     for op_name, is_required in desired_outputs:
         op_only = op_name.split(":")[0]
-        if(op_only in op_names):
+        if op_only in op_names:
             output_names.append(op_name)
-        elif(is_required):
-            raise ValueError(f"Unable to find weights for layer: {op_name} in DLC model, which is required.")
+        elif is_required:
+            raise ValueError(
+                f"Unable to find weights for layer: {op_name} in DLC model, which is required."
+            )
 
     input_names = ["fifo_queue_Dequeue:0"]
     for input_name in input_names:
-        if(input_name.split(":")[0] not in op_names):
+        if input_name.split(":")[0] not in op_names:
             raise ValueError("Can't find input node!")
     return input_names, output_names
 
 
-def _load_and_convert_model(model_dir: Path, device_index: Optional[int], use_cpu: bool):
+def _load_and_convert_model(
+    model_dir: Path, device_index: Optional[int], use_cpu: bool
+):
     import tensorflow as tf
     import tensorflow.compat.v1 as tf_v1
     import tf2onnx
+
     tf.compat.v1.disable_eager_execution()
     tf.compat.v1.disable_v2_behavior()
     tf.compat.v1.reset_default_graph()
 
-    meta_files = [file for file in model_dir.iterdir() if file.stem.startswith("snapshot-") and file.suffix == ".meta"]
-    if(len(meta_files) == 0):
-        raise ValueError("No checkpoint files, make sure you've trained a DLC model first!")
+    meta_files = [
+        file
+        for file in model_dir.iterdir()
+        if file.stem.startswith("snapshot-") and file.suffix == ".meta"
+    ]
+    if len(meta_files) == 0:
+        raise ValueError(
+            "No checkpoint files, make sure you've trained a DLC model first!"
+        )
     latest_meta_file = max(meta_files, key=lambda k: int(k.stem.split("-")[-1]))
 
     inputs, outputs = _get_dlc_inputs_and_outputs(str(latest_meta_file))
 
-    graph_def, inputs, outputs = from_checkpoint(
-        str(latest_meta_file), inputs, outputs
-    )
+    graph_def, inputs, outputs = from_checkpoint(str(latest_meta_file), inputs, outputs)
 
     model, __ = tf2onnx.convert.from_graph_def(
         graph_def,
         name=str(latest_meta_file.name),
         input_names=inputs,
         output_names=outputs,
-        shape_override={
-            inputs[0]: [None, None, None, 3]
-        },
-        opset=17
+        shape_override={inputs[0]: [None, None, None, 3]},
+        opset=17,
     )
 
     b = BytesIO()
     onnx.save(model, b)
 
     return ort.InferenceSession(
-        b.getvalue(),
-        providers=_build_provider_ordering(device_index, use_cpu)
+        b.getvalue(), providers=_build_provider_ordering(device_index, use_cpu)
     )
 
 
@@ -214,18 +236,27 @@ class FrameExtractor:
         self._config = model_config
 
     def __call__(self, frames: np.ndarray) -> TrackingData:
-        outputs = self._model.run(None, {self._image_input_name: frames.astype(np.float32)})
+        outputs = self._model.run(
+            None, {self._image_input_name: frames.astype(np.float32)}
+        )
 
-        locref = outputs[1] if(len(outputs) > 1) else None
+        locref = outputs[1] if (len(outputs) > 1) else None
 
-        if(locref is not None):
+        if locref is not None:
             locref = locref.reshape((*locref.shape[:-1], -1, 2))
             locref *= self._config["locref_stdev"]
 
         return TrackingData(
             1 / (1 + np.exp(-outputs[0])),
             locref,
-            float(np.ceil(max(frames.shape[1] / outputs[0].shape[1], frames.shape[2] / outputs[0].shape[2])))
+            float(
+                np.ceil(
+                    max(
+                        frames.shape[1] / outputs[0].shape[1],
+                        frames.shape[2] / outputs[0].shape[2],
+                    )
+                )
+            ),
         )
 
 
@@ -238,7 +269,7 @@ def load_model(
     model_prefix: str = "",
     shuffle: int = 1,
     training_set_index: int = 0,
-    use_cpu: Flag = False
+    use_cpu: Flag = False,
 ) -> tc.Tuple[ModelInfo, ModelLike]:
     """
     Run DIPLOMAT tracking on videos using a DEEPLABCUT project and trained network.
@@ -257,12 +288,12 @@ def load_model(
 
     :return: A model info dictionary, and a deeplabcut model wrapper that can be used to estimate poses from video frames.
     """
-    if(isinstance(config, (tuple, list))):
-        if(len(config) != 1):
+    if isinstance(config, (tuple, list)):
+        if len(config) != 1:
             raise ValueError("Can't pass multiple config files!")
         config = config[0]
 
-    if(is_zipfile(config)):
+    if is_zipfile(config):
         tmp_dir = tempfile.TemporaryDirectory()
         is_zip = True
     else:
@@ -283,7 +314,9 @@ def load_model(
     iteration = config["iteration"]
     train_frac = config["TrainingFraction"][training_set_index]
 
-    model_directory = _get_model_folder(config, project_dir, shuffle, train_frac, model_prefix)
+    model_directory = _get_model_folder(
+        config, project_dir, shuffle, train_frac, model_prefix
+    )
     model_directory = model_directory.resolve()
 
     try:
@@ -291,16 +324,27 @@ def load_model(
             model_config = yaml.load(f, yaml.SafeLoader)
     except FileNotFoundError as e:
         print(e)
-        raise FileNotFoundError(f"Invalid model selection: (Iteration {iteration}, Training Fraction {train_frac}, Shuffle: {shuffle})")
+        raise FileNotFoundError(
+            f"Invalid model selection: (Iteration {iteration}, Training Fraction {train_frac}, Shuffle: {shuffle})"
+        )
 
     # Set the number of outputs...
-    num_outputs = config.get("num_outputs", model_config.get("num_outputs", None)) if(num_outputs is None) else num_outputs
-    if(num_outputs is not None):
+    num_outputs = (
+        config.get("num_outputs", model_config.get("num_outputs", None))
+        if (num_outputs is None)
+        else num_outputs
+    )
+    if num_outputs is not None:
         num_outputs = int(num_outputs)
-    batch_size = batch_size if(batch_size is not None) else config["batch_size"]
+    batch_size = batch_size if (batch_size is not None) else config["batch_size"]
     body_parts = list(model_config["all_joints_names"])
-    if("partaffinityfield_graph" in model_config):
-        skeleton = sorted(set(tuple(sorted([body_parts[a], body_parts[b]])) for a, b in model_config["partaffinityfield_graph"]))
+    if "partaffinityfield_graph" in model_config:
+        skeleton = sorted(
+            set(
+                tuple(sorted([body_parts[a], body_parts[b]]))
+                for a, b in model_config["partaffinityfield_graph"]
+            )
+        )
     else:
         skeleton = []
 
@@ -316,10 +360,12 @@ def load_model(
             line_thickness=1,
             bp_names=body_parts,
             skeleton=skeleton,
-            frontend="deeplabcut"
+            frontend="deeplabcut",
         ),
         FrameExtractor(
-            _load_and_convert_model(model_directory / "train", gpu_index, bool(use_cpu)),
-            model_config
-        )
+            _load_and_convert_model(
+                model_directory / "train", gpu_index, bool(use_cpu)
+            ),
+            model_config,
+        ),
     )

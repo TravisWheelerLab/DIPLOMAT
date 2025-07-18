@@ -4,10 +4,8 @@ from typing import Tuple
 
 from .scipy_hungarian import linear_sum_assignment
 
-@numba.experimental.jitclass([
-    ["_stack_ptr", numba.int64],
-    ["_stack", numba.int64[:]]
-])
+
+@numba.experimental.jitclass([["_stack_ptr", numba.int64], ["_stack", numba.int64[:]]])
 class Stack:
     def __init__(self, max_size: int):
         self._stack = np.zeros(max_size, dtype=np.int64)
@@ -34,13 +32,13 @@ def _connected_components(graph: np.ndarray) -> np.ndarray:
     for i in range(node_count):
         stack.push(i)
 
-        while(stack.size() > 0):
+        while stack.size() > 0:
             current_node = stack.pop()
-            if(component[current_node] < 0):
+            if component[current_node] < 0:
                 component[current_node] = i
 
             for j in range(node_count):
-                if((graph[current_node, j] != 0) and (component[j] < 0)):
+                if (graph[current_node, j] != 0) and (component[j] < 0):
                     stack.push(j)
 
     return component
@@ -88,7 +86,7 @@ def _min_spanning_tree(graph: np.ndarray) -> np.ndarray:
 
     for __ in range(num_nodes - 1):
         for j in range(num_nodes):
-            if(not in_tree[j] and graph[explore_node, j] < min_links[j]):
+            if not in_tree[j] and graph[explore_node, j] < min_links[j]:
                 min_source[j] = explore_node
                 min_links[j] = graph[explore_node, j]
 
@@ -96,7 +94,7 @@ def _min_spanning_tree(graph: np.ndarray) -> np.ndarray:
         best_val = np.inf
         for j in range(num_nodes):
 
-            if(not in_tree[j] and min_links[j] < best_val):
+            if not in_tree[j] and min_links[j] < best_val:
                 best_idx = j
                 best_val = min_links[j]
 
@@ -120,18 +118,22 @@ def _min_row_subtract(g: np.ndarray) -> np.ndarray:
         min_row_val = np.inf
 
         for j in range(g.shape[1]):
-            min_row_val = g[i, j] if(g[i, j] < min_row_val) else min_row_val
+            min_row_val = g[i, j] if (g[i, j] < min_row_val) else min_row_val
 
         for j in range(g.shape[1]):
             g[i, j] -= min_row_val
 
     return g
 
-def min_cost_matching(cost_matrix: np.ndarray, mode="scipy") -> Tuple[np.ndarray, np.ndarray]:
+
+def min_cost_matching(
+    cost_matrix: np.ndarray, mode="scipy"
+) -> Tuple[np.ndarray, np.ndarray]:
     if mode == "scipy":
         return linear_sum_assignment(cost_matrix)
     else:
         return _min_cost_matching(cost_matrix)
+
 
 @numba.njit
 def _min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -147,7 +149,7 @@ def _min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]
 
     graph_copy = cost_matrix.copy()
 
-    while(True):
+    while True:
         # Subtract current minimum row/column values to get current greedy solution...
         graph_copy = _min_row_subtract(graph_copy)
         graph_copy = _min_row_subtract(graph_copy.T).T
@@ -165,8 +167,8 @@ def _min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]
             for j in range(len(col_zeros)):
                 # If we find a zero, either it's row or column MUST be marked to cover it.
                 # We select the one which covers more zeros, this guarantees an optimal assignment...
-                if(graph_copy[i, j] <= 0 and not marked_rows[i] and not marked_cols[j]):
-                    if(row_zeros[i] > col_zeros[j]):
+                if graph_copy[i, j] <= 0 and not marked_rows[i] and not marked_cols[j]:
+                    if row_zeros[i] > col_zeros[j]:
                         marked_rows[i] = 1
                     else:
                         marked_cols[j] = 1
@@ -174,7 +176,7 @@ def _min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]
         # Compute the assignment coverage...
         coverage = np.sum(marked_rows) + np.sum(marked_cols)
 
-        if(coverage >= graph_copy.shape[0]):
+        if coverage >= graph_copy.shape[0]:
             break
 
         min_uncovered = np.inf
@@ -182,14 +184,18 @@ def _min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]
         for i in range(graph_copy.shape[0]):
             for j in range(graph_copy.shape[1]):
                 val = graph_copy[i, j]
-                if((not marked_rows[i]) and (not marked_cols[j]) and (val < min_uncovered)):
+                if (
+                    (not marked_rows[i])
+                    and (not marked_cols[j])
+                    and (val < min_uncovered)
+                ):
                     min_uncovered = val
 
         for i in range(graph_copy.shape[0]):
             for j in range(graph_copy.shape[1]):
-                if(not marked_rows[i] and not marked_cols[j]):
+                if not marked_rows[i] and not marked_cols[j]:
                     graph_copy[i, j] -= min_uncovered
-                elif(marked_rows[i] and marked_cols[j]):
+                elif marked_rows[i] and marked_cols[j]:
                     graph_copy[i, j] += min_uncovered
 
     row_solution = np.full(graph_copy.shape[0], -1, np.int64)
@@ -199,16 +205,23 @@ def _min_cost_matching(cost_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]
         min_row = 0
 
         for i2 in range(len(row_solution)):
-            if(row_zeros[i2] < row_zeros[min_row]):
+            if row_zeros[i2] < row_zeros[min_row]:
                 min_row = i2
 
         for j in range(len(col_solution)):
-            if(graph_copy[min_row, j] == 0 and row_solution[min_row] < 0 and col_solution[j] < 0):
+            if (
+                graph_copy[min_row, j] == 0
+                and row_solution[min_row] < 0
+                and col_solution[j] < 0
+            ):
                 row_solution[min_row] = j
                 col_solution[j] = min_row
                 row_zeros[min_row] = np.iinfo(row_zeros.dtype).max
                 for k in range(len(row_zeros)):
-                    if(graph_copy[k, j] == 0 and row_zeros[k] != np.iinfo(row_zeros.dtype).max):
+                    if (
+                        graph_copy[k, j] == 0
+                        and row_zeros[k] != np.iinfo(row_zeros.dtype).max
+                    ):
                         row_zeros[k] -= 1
                 break
 
@@ -227,7 +240,7 @@ def to_valid_graph(g: np.ndarray, diag_fill: float = np.inf) -> np.ndarray:
     return g
 
 
-if(__name__ == "__main__"):
+if __name__ == "__main__":
     inf = np.inf
 
     # print(_min_spanning_tree(np.array([
@@ -251,6 +264,14 @@ if(__name__ == "__main__"):
     #     [99, 91, 8, 1]
     # ])))
 
-    print(min_cost_matching(np.array([[9.92690898e+04, 1.07946068e+01, 2.50553569e-01],
-        [3.14225839e+01, 1.54683226e+00, 1.06039718e+05],
-        [3.12269539e+01, 9.64991177e+04, 1.47355721e-03]])))
+    print(
+        min_cost_matching(
+            np.array(
+                [
+                    [9.92690898e04, 1.07946068e01, 2.50553569e-01],
+                    [3.14225839e01, 1.54683226e00, 1.06039718e05],
+                    [3.12269539e01, 9.64991177e04, 1.47355721e-03],
+                ]
+            )
+        )
+    )

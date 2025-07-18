@@ -2,7 +2,7 @@
 Provides the :py:class:`~diplomat.processing.pose.Pose` class, used for storing final predicted body part locations.
 """
 
-from typing import Optional, Union, Tuple, Literal
+from typing import Union, Tuple
 from numpy import ndarray
 import numpy as np
 
@@ -14,6 +14,7 @@ class Pose:
     multiple body parts. Also, it should be noted that data is stored in terms of original video coordinates, not
     probability source map indexes.
     """
+
     def __init__(self, x: ndarray, y: ndarray, prob: ndarray):
         """
         Create a new Pose object, or batch of poses for frames.

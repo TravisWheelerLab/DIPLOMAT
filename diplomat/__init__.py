@@ -6,10 +6,23 @@ __version__ = "0.3.11"
 # Can be used by functions to determine if diplomat was invoked through it's CLI interface.
 CLI_RUN = False
 
-from diplomat.predictor_ops import list_predictor_plugins, get_predictor_settings, test_predictor_plugin
+from diplomat.predictor_ops import (
+    list_predictor_plugins,
+    get_predictor_settings,
+    test_predictor_plugin,
+)
 from diplomat.frontend_ops import list_all_frontends, list_loaded_frontends
 from diplomat.utils.video_splitter import split_videos
-from diplomat.core_ops import track_with, track, track_and_interact, annotate, tweak, yaml, interact, convert_tracks
+from diplomat.core_ops import (
+    track_with,
+    track,
+    track_and_interact,
+    annotate,
+    tweak,
+    yaml,
+    interact,
+    convert_tracks,
+)
 
 __all__ = [
     "list_predictor_plugins",
@@ -25,7 +38,7 @@ __all__ = [
     "tweak",
     "yaml",
     "interact",
-    "convert_tracks"
+    "convert_tracks",
 ]
 
 
@@ -38,7 +51,7 @@ def _load_frontends():
     from types import ModuleType
     from multiprocessing import current_process
 
-    if(current_process().name != "MainProcess"):
+    if current_process().name != "MainProcess":
         # If something in this package is using multiprocessing, disable the automatic frontend loading code.
         # This is done because some frontends (DEEPLABCUT) use about 1/3 a Gig of memory on import, which can
         # cause memory issues if a lot of processes are started by a predictor...
@@ -50,7 +63,7 @@ def _load_frontends():
     for frontend in frontends:
         res = frontend.init()
 
-        if(res is not None):
+        if res is not None:
             name = frontend.get_package_name()
             mod = ModuleType(__name__ + "." + name)
             mod.__all__ = []
@@ -58,11 +71,11 @@ def _load_frontends():
             globals()[name] = mod
             loaded_funcs[name] = res
 
-            if(hasattr(frontend, "__doc__")):
+            if hasattr(frontend, "__doc__"):
                 mod.__doc__ = frontend.__doc__
 
-            for (name, func) in res:
-                if(not name.startswith("_")):
+            for name, func in res:
+                if not name.startswith("_"):
                     func = replace_function_name_and_module(func, name, mod.__name__)
                     setattr(mod, name, func)
                     mod.__all__.append(name)

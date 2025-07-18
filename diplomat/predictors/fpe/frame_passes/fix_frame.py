@@ -2,7 +2,11 @@ import heapq
 from typing import List, Optional, Tuple, Dict
 from diplomat.predictors.fpe.frame_pass import FramePass, PassOrderError
 from diplomat.predictors.fpe.skeleton_structures import StorageGraph
-from diplomat.predictors.fpe.sparse_storage import SparseTrackingData, ForwardBackwardFrame, ForwardBackwardData
+from diplomat.predictors.fpe.sparse_storage import (
+    SparseTrackingData,
+    ForwardBackwardFrame,
+    ForwardBackwardData,
+)
 from diplomat.utils.graph_ops import min_cost_matching
 import numpy as np
 from diplomat.processing import ProgressBar, ConfigSpec, Config
@@ -16,6 +20,7 @@ class FixFrame(FramePass):
     rest of the frames are restored, and :py:plugin:`~diplomat.predictors.frame_passes.MITViterbi` uses the fixed
     frame as it's ground truth frame.
     """
+
     SCORES_PER_CHUNK = 20
 
     def __init__(self, *args, **kwargs):
@@ -26,9 +31,7 @@ class FixFrame(FramePass):
 
     @classmethod
     def get_max_location(
-        cls,
-        frame: ForwardBackwardFrame,
-        down_scaled: bool = False
+        cls, frame: ForwardBackwardFrame, down_scaled: bool = False
     ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
         """
         Determines the maximum location within a frame after downscaling.
@@ -44,13 +47,15 @@ class FixFrame(FramePass):
         - Tuple[Optional[float], Optional[float], Optional[float]]: The adjusted x and y coordinates of the maximum
           location and its probability. Returns None for each value if the probability data is not available.
         """
-        x, y, prob = frame.src_data.unpack() if down_scaled else frame.src_data.unpack_unscaled()
+        x, y, prob = (
+            frame.src_data.unpack() if down_scaled else frame.src_data.unpack_unscaled()
+        )
 
-        if(prob is None):
+        if prob is None:
             return None, None, None
 
         max_idx = np.argmax(prob)
-        if(prob[max_idx] == 0):
+        if prob[max_idx] == 0:
             w = np.ones(prob.shape, dtype=prob.dtype)
         else:
             w = prob
@@ -58,7 +63,7 @@ class FixFrame(FramePass):
         return (
             float(np.average(x, weights=w)),
             float(np.average(y, weights=w)),
-            float(prob[max_idx])
+            float(prob[max_idx]),
         )
 
     @classmethod
@@ -72,10 +77,10 @@ class FixFrame(FramePass):
         frame1: ForwardBackwardFrame,
         frame2: ForwardBackwardFrame,
     ) -> float:
-        return np.abs((avg - cls.dist(
-            cls.get_max_location(frame1),
-            cls.get_max_location(frame2)
-        )) ** 2)
+        return np.abs(
+            (avg - cls.dist(cls.get_max_location(frame1), cls.get_max_location(frame2)))
+            ** 2
+        )
 
     @classmethod
     def get_bidirectional_score_graphs(
@@ -83,7 +88,7 @@ class FixFrame(FramePass):
         storage_graph: StorageGraph,
         frame_list: List[ForwardBackwardFrame],
         num_outputs: int,
-        fixed_group: int = 0
+        fixed_group: int = 0,
     ) -> List[List[Dict[int, float]]]:
         # Construct a graph...
         graphs = []
@@ -95,13 +100,13 @@ class FixFrame(FramePass):
             for node_group1 in range(len(storage_graph)):
                 for node_group2, (__, __, avg, __) in storage_graph[node_group1]:
                     for node_off1 in range(num_outputs):
-                        if(node_group1 == fixed_group and node_off1 != i):
+                        if node_group1 == fixed_group and node_off1 != i:
                             continue
 
                         idx1 = node_group1 * num_outputs + node_off1
 
                         for node_off2 in range(num_outputs):
-                            if(node_group2 == fixed_group and node_off2 != i):
+                            if node_group2 == fixed_group and node_off2 != i:
                                 continue
 
                             idx2 = node_group2 * num_outputs + node_off2
@@ -131,17 +136,19 @@ class FixFrame(FramePass):
                 for j_out in range(i_out + 1, num_outputs):
                     m1 = cls.get_max_location(frame_list[g_i * num_outputs + i_out])
                     m2 = cls.get_max_location(frame_list[g_i * num_outputs + j_out])
-                    if(m1[0] is None or m2[0] is None):
+                    if m1[0] is None or m2[0] is None:
                         group_dist_scores[g_i] = -np.inf
                     else:
-                        group_dist_scores[g_i] = min(cls.dist(m1, m2) * m1[2] * m2[2], group_dist_scores[g_i])
+                        group_dist_scores[g_i] = min(
+                            cls.dist(m1, m2) * m1[2] * m2[2], group_dist_scores[g_i]
+                        )
 
         best = (0, 0)
         best_i = 0
 
         for i, new in enumerate(zip(degrees, group_dist_scores)):
             # We don't want to allow a high degree node to be used if it's distance is 0 for some of the nodes...
-            if(new[1] > 0 and new > best):
+            if new[1] > 0 and new > best:
                 best = new
                 best_i = i
 
@@ -149,9 +156,7 @@ class FixFrame(FramePass):
 
     @classmethod
     def _shortest_paths(
-        cls,
-        score_graph: List[Dict[int, float]],
-        start_node: int
+        cls, score_graph: List[Dict[int, float]], start_node: int
     ) -> List[float]:
         visited = [False] * len(score_graph)
         node_scores = [np.inf] * len(score_graph)
@@ -160,7 +165,7 @@ class FixFrame(FramePass):
         visited[start_node] = True
         node_scores[start_node] = 0
 
-        while(len(next_nodes) > 0):
+        while len(next_nodes) > 0:
             __, node = heapq.heappop(next_nodes)
 
             for sub_node in score_graph[node]:
@@ -168,7 +173,7 @@ class FixFrame(FramePass):
 
                 node_scores[sub_node] = min(node_scores[sub_node], proposed_score)
 
-                if(not visited[sub_node]):
+                if not visited[sub_node]:
                     visited[sub_node] = True
                     heapq.heappush(next_nodes, (node_scores[sub_node], sub_node))
 
@@ -180,7 +185,7 @@ class FixFrame(FramePass):
         shortest_paths: List[List[float]],
         score_graphs: List[List[Dict[int, float]]],
         skeleton: StorageGraph,
-        num_outputs: int
+        num_outputs: int,
     ) -> List[List[float]]:
         best_skeleton_scores = []
 
@@ -189,7 +194,7 @@ class FixFrame(FramePass):
             best_skel_scores = [0] * len(best_path_scores)
 
             for i, score in enumerate(best_path_scores):
-                if (np.isinf(score)):
+                if np.isinf(score):
                     best_skel_scores[i] = np.inf
                     continue
 
@@ -198,7 +203,11 @@ class FixFrame(FramePass):
 
                     for other_off in range(num_outputs):
                         other_idx = other_group * num_outputs + other_off
-                        score = min(score, best_path_scores[other_idx] + score_graph[i].get(other_idx, np.inf))
+                        score = min(
+                            score,
+                            best_path_scores[other_idx]
+                            + score_graph[i].get(other_idx, np.inf),
+                        )
 
                     best_skel_scores[i] += score
 
@@ -218,13 +227,17 @@ class FixFrame(FramePass):
         fb_data: ForwardBackwardData,
         frame_idx: int,
         skeleton: Optional[StorageGraph],
-        algorithm: str = "greedy"
+        algorithm: str = "greedy",
     ) -> List[ForwardBackwardFrame]:
-        #print(f"FixFrame.create_fix_frame.algorithm:={algorithm}")
-        if(algorithm not in ("greedy", "hungarian")):
-            raise ValueError("Algorithm passed not a support algorithm, use greedy or hungarian.")
+        # print(f"FixFrame.create_fix_frame.algorithm:={algorithm}")
+        if algorithm not in ("greedy", "hungarian"):
+            raise ValueError(
+                "Algorithm passed not a support algorithm, use greedy or hungarian."
+            )
 
-        fixed_frame = [None] * fb_data.num_bodyparts
+        fixed_frame: List[Optional[ForwardBackwardFrame]] = [
+            None
+        ] * fb_data.num_bodyparts
         num_outputs = fb_data.metadata.num_outputs
 
         # Copy over data to start, ignoring skeleton...
@@ -232,7 +245,7 @@ class FixFrame(FramePass):
             fixed_frame[bp_i] = fb_data.frames[frame_idx][bp_i].copy()
 
             __, __, prob = fixed_frame[bp_i].src_data.unpack()
-            if(prob is None):
+            if prob is None:
                 # Fallback fix frame: We just create a single cell with 0 probability, forcing viterbi to use entry
                 # states...
                 src_data = SparseTrackingData(
@@ -243,35 +256,42 @@ class FixFrame(FramePass):
 
             fixed_frame[bp_i].disable_occluded = True
 
-        if(skeleton is not None):
-            fixed_group = cls.get_fixed_group(skeleton, fb_data.frames[frame_idx], num_outputs)
-
-            score_graphs = cls.get_bidirectional_score_graphs(
-                skeleton,
-                fb_data.frames[frame_idx],
-                num_outputs,
-                fixed_group
+        if skeleton is not None:
+            fixed_group = cls.get_fixed_group(
+                skeleton, fb_data.frames[frame_idx], num_outputs
             )
 
-            if(algorithm == "greedy"):
+            score_graphs = cls.get_bidirectional_score_graphs(
+                skeleton, fb_data.frames[frame_idx], num_outputs, fixed_group
+            )
+
+            if algorithm == "greedy":
                 select_mask = np.zeros((num_outputs, fb_data.num_bodyparts), bool)
                 for __ in range(fb_data.num_bodyparts):
                     # Compute the shortest node paths for every skeleton...
-                    skel_scores = np.asarray(cls._best_skeleton_scores(
-                        [cls._shortest_paths(score_graph, fixed_group * num_outputs + i)
-                         for i, score_graph in enumerate(score_graphs)],
-                        score_graphs,
-                        skeleton,
-                        num_outputs
-                    ))
+                    skel_scores = np.asarray(
+                        cls._best_skeleton_scores(
+                            [
+                                cls._shortest_paths(
+                                    score_graph, fixed_group * num_outputs + i
+                                )
+                                for i, score_graph in enumerate(score_graphs)
+                            ],
+                            score_graphs,
+                            skeleton,
+                            num_outputs,
+                        )
+                    )
 
                     # Find the best location...
                     best_body, best_part = cls._masked_argmin(skel_scores, ~select_mask)
 
                     # Copy the select body part to the correct skeleton.
-                    group_start = ((best_part // num_outputs) * num_outputs)
+                    group_start = (best_part // num_outputs) * num_outputs
                     select_mask[:, best_part] = True
-                    select_mask[best_body, group_start:group_start+num_outputs] = True
+                    select_mask[best_body, group_start : group_start + num_outputs] = (
+                        True
+                    )
                     new_i = group_start + best_body
                     fixed_frame[new_i] = fb_data.frames[frame_idx][best_part]
                     fixed_frame[new_i].disable_occluded = True
@@ -284,7 +304,7 @@ class FixFrame(FramePass):
                     score_graphs[best_body][best_part][hub_part] = 0
                     # Delete all of its edges in other graphs....
                     for i, score_graph in enumerate(score_graphs):
-                        if(i == best_body):
+                        if i == best_body:
                             continue
                         for other_part in list(score_graph[best_part]):
                             del score_graph[other_part][best_part]
@@ -295,22 +315,34 @@ class FixFrame(FramePass):
 
                 for group_iter in range((fb_data.num_bodyparts // num_outputs) - 1):
                     # Compute the shortest node paths for every skeleton...
-                    skel_scores = np.asarray(cls._best_skeleton_scores(
-                        [cls._shortest_paths(score_graph, fixed_group * num_outputs + i)
-                         for i, score_graph in enumerate(score_graphs)],
-                        score_graphs,
-                        skeleton,
-                        num_outputs
-                    ))
+                    skel_scores = np.asarray(
+                        cls._best_skeleton_scores(
+                            [
+                                cls._shortest_paths(
+                                    score_graph, fixed_group * num_outputs + i
+                                )
+                                for i, score_graph in enumerate(score_graphs)
+                            ],
+                            score_graphs,
+                            skeleton,
+                            num_outputs,
+                        )
+                    )
 
-                    grouped_skel_scores = skel_scores.reshape((num_outputs, -1, num_outputs))
-                    net_part_type_error = np.nanmin(grouped_skel_scores, axis=2).sum(axis=0)
+                    grouped_skel_scores = skel_scores.reshape(
+                        (num_outputs, -1, num_outputs)
+                    )
+                    net_part_type_error = np.nanmin(grouped_skel_scores, axis=2).sum(
+                        axis=0
+                    )
 
                     min_group = cls._masked_argmin(net_part_type_error, ~select_mask)[0]
 
                     select_mask[min_group] = True
                     opt_rows, opt_cols = min_cost_matching(
-                        grouped_skel_scores[:, min_group, :].reshape(num_outputs, num_outputs)
+                        grouped_skel_scores[:, min_group, :].reshape(
+                            num_outputs, num_outputs
+                        )
                     )
 
                     for row_idx, col_idx in zip(opt_rows, opt_cols):
@@ -327,7 +359,7 @@ class FixFrame(FramePass):
                         score_graphs[row_idx][best_part][hub_part] = 0
                         # Delete all of its edges in other graphs....
                         for i, score_graph in enumerate(score_graphs):
-                            if (i == row_idx):
+                            if i == row_idx:
                                 continue
                             for other_part in list(score_graph[best_part]):
                                 del score_graph[other_part][best_part]
@@ -344,12 +376,12 @@ class FixFrame(FramePass):
         optimal_std: float,
         max_dist: float,
         outlier_threshold: float,
-        progress_bar: Optional[ProgressBar] = None
+        progress_bar: Optional[ProgressBar] = None,
     ) -> Tuple[float, float]:
         """
-        Computes a single score for a given set of frames, considering the number of outputs, down scaling factor, 
-        an optional skeleton, and the maximum distance. This function aggregates the scores across all body part groupings, 
-        taking into account the minimum distance between body parts and their confidence levels. It returns a tuple 
+        Computes a single score for a given set of frames, considering the number of outputs, down scaling factor,
+        an optional skeleton, and the maximum distance. This function aggregates the scores across all body part groupings,
+        taking into account the minimum distance between body parts and their confidence levels. It returns a tuple
         containing two scores, which represent different aspects of the frame's quality or suitability for further processing.
 
         Parameters:
@@ -361,7 +393,7 @@ class FixFrame(FramePass):
         - progress_bar: Optional[ProgressBar], an optional progress bar to display processing progress.
 
         Returns:
-        - Tuple[float, float]: A tuple containing two scores calculated based on the minimum distances and confidence levels 
+        - Tuple[float, float]: A tuple containing two scores calculated based on the minimum distances and confidence levels
           of body part pairs across the given frames.
         """
         num_bp = len(frames) // num_outputs
@@ -387,40 +419,42 @@ class FixFrame(FramePass):
 
             # For body part groupings...
             for i in range(num_outputs - 1):
-                #get the maximum probability location for the body part
+                # get the maximum probability location for the body part
                 f1_loc = cls.get_max_location(frames[bp_group_off * num_outputs + i])
 
-                if (f1_loc[0] is None):
+                if f1_loc[0] is None:
                     geometric_component = -np.inf
                     continue
 
                 for j in range(i + 1, num_outputs):
-                    f2_loc = cls.get_max_location(frames[bp_group_off * num_outputs + j])
+                    f2_loc = cls.get_max_location(
+                        frames[bp_group_off * num_outputs + j]
+                    )
 
-                    if (f2_loc[0] is None):
+                    if f2_loc[0] is None:
                         geometric_component = -np.inf
                         continue
-                    
-                    #mininum distance between the two body parts
+
+                    # mininum distance between the two body parts
                     min_dist = min(cls.dist(f1_loc, f2_loc), min_dist)
                     total_conf += f1_loc[2] * f2_loc[2]
                     count += 1
 
-            if(np.isinf(min_dist)):
+            if np.isinf(min_dist):
                 min_dist = 0
-            if(np.isclose(min_dist, 0) or count == 0):
+            if np.isclose(min_dist, 0) or count == 0:
                 # BAD! We found a frame that failed to cluster properly...
                 geometric_component = -np.inf
 
-            if(min_dist > farthest_component):
+            if min_dist > farthest_component:
                 farthest_component = min_dist
 
             # Minimum distance, weighted by average skeleton-pair confidence...
-            if(count > 0):
+            if count > 0:
                 geometric_component += min_dist * (total_conf / count)
                 geometric_component2 += min_dist * (total_conf / count)
 
-        if(farthest_component < optimal_std):
+        if farthest_component < optimal_std:
             # Indicates the bodies are overlapping...
             geometric_component = -np.inf
 
@@ -428,7 +462,7 @@ class FixFrame(FramePass):
         skeletal_component2 = 0.0
 
         # If skeleton is implemented...
-        if (skeleton is not None):
+        if skeleton is not None:
             skel = skeleton
 
             for bp in range(len(frames)):
@@ -436,20 +470,24 @@ class FixFrame(FramePass):
                 bp_group_off, bp_off = divmod(bp, num_outputs)
 
                 num_pairs = num_outputs * len(skel[bp_group_off])
-                f1_loc = cls.get_max_location(frames[bp_group_off * num_outputs + bp_off])
+                f1_loc = cls.get_max_location(
+                    frames[bp_group_off * num_outputs + bp_off]
+                )
 
-                if (f1_loc[0] is None):
+                if f1_loc[0] is None:
                     skeletal_component = -np.inf
-                    skeletal_component2 -= (max_dist / num_pairs)
+                    skeletal_component2 -= max_dist / num_pairs
                     continue
 
-                for (bp2_group_off, (__, __, avg, relative_std)) in skel[bp_group_off]:
+                for bp2_group_off, (__, __, avg, relative_std) in skel[bp_group_off]:
                     min_score = np.inf
 
                     for bp2_off in range(num_outputs):
-                        f2_loc = cls.get_max_location(frames[bp2_group_off * num_outputs + bp2_off])
+                        f2_loc = cls.get_max_location(
+                            frames[bp2_group_off * num_outputs + bp2_off]
+                        )
 
-                        if(f2_loc[0] is None):
+                        if f2_loc[0] is None:
                             skeletal_component = -np.inf
                             result = max_dist
                         else:
@@ -461,15 +499,15 @@ class FixFrame(FramePass):
                     if min_score / relative_std > outlier_threshold:
                         # if the best score for this pose is still an outlier, the frame will be filtered out.
                         skeletal_component = -np.inf
-                        skeletal_component2 -= (min_score / num_pairs)
+                        skeletal_component2 -= min_score / num_pairs
                     else:
                         # otherwise, this frame can be used.
-                        skeletal_component -= (min_score / num_pairs)
-                        skeletal_component2 -= (min_score / num_pairs)
+                        skeletal_component -= min_score / num_pairs
+                        skeletal_component2 -= min_score / num_pairs
 
         score = geometric_component + skeletal_component
         score2 = geometric_component2 + skeletal_component2
-        
+
         return score, score2
 
     @classmethod
@@ -481,18 +519,20 @@ class FixFrame(FramePass):
         optimal_std: float,
         max_dist: float,
         outlier_threshold: float,
-        progress_bar: Optional[ProgressBar] = None
+        progress_bar: Optional[ProgressBar] = None,
     ) -> np.ndarray:
         final_scores = np.zeros((len(frames), 2))
 
-        if(progress_bar is not None):
+        if progress_bar is not None:
             progress_bar.reset(len(frames))
 
         for i, frame in enumerate(frames):
-            #this will be a tuple of scores per frame 
-            final_scores[i] = cls.compute_single_score(frame, num_outputs, skeleton, optimal_std, max_dist, outlier_threshold)
+            # this will be a tuple of scores per frame
+            final_scores[i] = cls.compute_single_score(
+                frame, num_outputs, skeleton, optimal_std, max_dist, outlier_threshold
+            )
 
-            if(progress_bar is not None):
+            if progress_bar is not None:
                 progress_bar.update()
 
         return final_scores
@@ -504,7 +544,7 @@ class FixFrame(FramePass):
         config: Config,
         prog_bar: ProgressBar,
         reset_bar: bool = False,
-        thread_count: int = 0
+        thread_count: int = 0,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Computes the scores for each frame in the ForwardBackwardData object.
@@ -523,10 +563,8 @@ class FixFrame(FramePass):
         Returns:
         - Tuple[np.ndarray, np.ndarray], two arrays containing the computed scores for each frame.
         """
-        if("is_clustered" not in fb_data.metadata):
-            raise PassOrderError(
-                "Clustering must be done before frame fixing!"
-            )
+        if "is_clustered" not in fb_data.metadata:
+            raise PassOrderError("Clustering must be done before frame fixing!")
 
         outlier_threshold = config.outlier_threshold
         scores = np.zeros((fb_data.num_frames, 2))
@@ -536,43 +574,59 @@ class FixFrame(FramePass):
         skeleton = fb_data.metadata.get("skeleton", None)
         optimal_std = fb_data.metadata.optimal_std[2]
 
-        if(reset_bar and prog_bar is not None):
+        if reset_bar and prog_bar is not None:
             prog_bar.reset(fb_data.num_frames)
 
-        to_index = lambda i: slice(i * cls.SCORES_PER_CHUNK, (i + 1) * cls.SCORES_PER_CHUNK)
-        max_dist = np.sqrt(fb_data.metadata.width ** 2 + fb_data.metadata.height ** 2)
+        to_index = lambda i: slice(
+            i * cls.SCORES_PER_CHUNK, (i + 1) * cls.SCORES_PER_CHUNK
+        )
+        max_dist = np.sqrt(fb_data.metadata.width**2 + fb_data.metadata.height**2)
 
-        if(thread_count > 1):
+        if thread_count > 1:
             from ...sfpe.segmented_frame_pass_engine import PoolWithProgress
-            with PoolWithProgress(prog_bar, process_count=thread_count, sub_ticks=1) as pool:
+
+            with PoolWithProgress(
+                prog_bar, process_count=thread_count, sub_ticks=1
+            ) as pool:
                 pool.fast_map(
                     cls.compute_list_of_scores,
-                    lambda i: ([list(l) for l in fb_data.frames[to_index(i)]], num_outputs, skeleton, optimal_std, max_dist, outlier_threshold),
+                    lambda i: (
+                        [list(l) for l in fb_data.frames[to_index(i)]],
+                        num_outputs,
+                        skeleton,
+                        optimal_std,
+                        max_dist,
+                        outlier_threshold,
+                    ),
                     lambda i, val: scores.__setitem__(to_index(i), val),
-                    (fb_data.num_frames + (cls.SCORES_PER_CHUNK - 1)) // cls.SCORES_PER_CHUNK
+                    (fb_data.num_frames + (cls.SCORES_PER_CHUNK - 1))
+                    // cls.SCORES_PER_CHUNK,
                 )
         else:
             for f_idx in range(num_frames):
                 scores[f_idx] = cls.compute_single_score(
-                    fb_data.frames[f_idx], num_outputs, skeleton, optimal_std, max_dist, outlier_threshold
+                    fb_data.frames[f_idx],
+                    num_outputs,
+                    skeleton,
+                    optimal_std,
+                    max_dist,
+                    outlier_threshold,
                 )
-                if (prog_bar is not None):
+                if prog_bar is not None:
                     prog_bar.update(1)
 
         return (scores[:, 0], scores[:, 1])
 
     @classmethod
-    def normalize_score(
-        cls,
-        fb_data: ForwardBackwardData,
-        frame_score: float
-    ) -> float:
+    def normalize_score(cls, fb_data: ForwardBackwardData, frame_score: float) -> float:
         num_outputs = fb_data.metadata.num_outputs
         # approximate the maximal minimum distance between num_outputs points spread in the unit square
         maxmin_dist = approximate_maxmin_distance(num_outputs)
-        # scale the distance wrt the video resolution. 
+        # scale the distance wrt the video resolution.
         # this is definitely not perfect for rectangular resolutions but it gets close enough.
-        scaled_maxmin_dist = maxmin_dist * np.sqrt(fb_data.metadata.width * fb_data.metadata.height)
+        scaled_maxmin_dist = maxmin_dist * np.sqrt(
+            fb_data.metadata.width * fb_data.metadata.height
+        )
         # normalize the frame score
         num_bp = len(fb_data.metadata.bodyparts)
         return frame_score / (scaled_maxmin_dist * num_bp)
@@ -586,27 +640,31 @@ class FixFrame(FramePass):
         fix_frame_data: List[ForwardBackwardFrame],
         prog_bar: ProgressBar,
         reset_bar: bool = False,
-        is_pre_initialized: bool = False
+        is_pre_initialized: bool = False,
     ) -> ForwardBackwardData:
         # For passes to use....
         fb_data.metadata.fixed_frame_index = int(frame_idx)
         fb_data.metadata.fixed_frame_score = frame_score
-        fb_data.metadata.normalized_fixed_frame_score = cls.normalize_score(fb_data,frame_score)
+        fb_data.metadata.normalized_fixed_frame_score = cls.normalize_score(
+            fb_data, frame_score
+        )
         fb_data.metadata.is_pre_initialized = is_pre_initialized
-        
-        if(reset_bar and prog_bar is not None):
+
+        if reset_bar and prog_bar is not None:
             prog_bar.reset(fb_data.num_frames)
 
         for f_i, frm in enumerate(fb_data.frames):
             for b_i, data in enumerate(frm):
                 # If the fixed frame, return the fixed frame...
-                if(f_i == frame_idx):
+                if f_i == frame_idx:
                     fb_data.frames[f_i][b_i] = fix_frame_data[b_i]
                 # If any other frame, return the frame as the merged clusters...
                 else:
-                    fb_data.frames[f_i][b_i].src_data = fb_data.frames[f_i][b_i].orig_data
+                    fb_data.frames[f_i][b_i].src_data = fb_data.frames[f_i][
+                        b_i
+                    ].orig_data
 
-            if(prog_bar is not None):
+            if prog_bar is not None:
                 prog_bar.update()
 
         return fb_data
@@ -617,45 +675,47 @@ class FixFrame(FramePass):
         prog_bar: Optional[ProgressBar] = None,
         in_place: bool = True,
         reset_bar: bool = True,
-        run_main_pass: bool = True
+        run_main_pass: bool = True,
     ) -> ForwardBackwardData:
-        if(reset_bar and prog_bar is not None):
+        if reset_bar and prog_bar is not None:
             prog_bar.reset(fb_data.num_frames * 2)
 
-        self._scores, fallback_scores = self.compute_scores(fb_data, self.config, prog_bar, False)
+        self._scores, fallback_scores = self.compute_scores(
+            fb_data, self.config, prog_bar, False
+        )
 
         self._max_frame_idx = int(np.argmax(self._scores))
         self._max_frame_score = self._scores[self._max_frame_idx]
 
-        if(np.isneginf(self._scores[self._max_frame_idx])):
+        if np.isneginf(self._scores[self._max_frame_idx]):
             self._max_frame_idx = int(np.argmax(fallback_scores))
             self._scores = fallback_scores
 
-        if(self.config.fix_frame_override is not None):
-            if(not (0 <= self.config.fix_frame_override < len(self._scores))):
+        if self.config.fix_frame_override is not None:
+            if not (0 <= self.config.fix_frame_override < len(self._scores)):
                 raise ValueError("Override Fix Frame Value is not valid!")
             self._max_frame_idx = self.config.fix_frame_override
 
-        if(self.config.DEBUG):
+        if self.config.DEBUG:
             print(f"Max Scoring Frame: {self._max_frame_idx}")
             print(f"Max Score: {self._max_frame_score}")
-            
+
         self._fixed_frame = self.create_fix_frame(
             fb_data,
             self._max_frame_idx,
-            fb_data.metadata.skeleton if("skeleton" in fb_data.metadata) else None,
-            self.config.skeleton_assignment_algorithm
+            fb_data.metadata.skeleton if ("skeleton" in fb_data.metadata) else None,
+            self.config.skeleton_assignment_algorithm,
         )
 
         # Now the pass...
-        if(run_main_pass):
+        if run_main_pass:
             return self.restore_all_except_fix_frame(
                 fb_data,
                 self._max_frame_idx,
                 self._max_frame_score,
                 self._fixed_frame,
                 prog_bar,
-                False
+                False,
             )
         else:
             return fb_data
@@ -663,20 +723,24 @@ class FixFrame(FramePass):
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         return {
-            "DEBUG": (True, bool, "Set to True to dump additional information while the pass is running."),
+            "DEBUG": (
+                True,
+                bool,
+                "Set to True to dump additional information while the pass is running.",
+            ),
             "fix_frame_override": (
                 None,
                 tc.Union(tc.Literal(None), tc.RangedInteger(0, np.inf)),
-                "Specify the fixed frame manually by setting to an integer index."
+                "Specify the fixed frame manually by setting to an integer index.",
             ),
             "skeleton_assignment_algorithm": (
                 "hungarian",
                 tc.Literal("greedy", "hungarian"),
-                "The algorithm to use for assigning body parts to skeletons when creating the fix frame."
+                "The algorithm to use for assigning body parts to skeletons when creating the fix frame.",
             ),
             "outlier_threshold": (
                 1.0,
                 float,
-                "The threshold z-score used to detect when a pose is an outlier in the skeletal distance distribution."
-            )
+                "The threshold z-score used to detect when a pose is an outlier in the skeletal distance distribution.",
+            ),
         }

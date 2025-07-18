@@ -2,15 +2,30 @@
 Includes DIPLOMAT's main GUI editor window. Displayed when an interactive run is performed or restored.
 The GUI allows for editing and rerunning tracking on the fly by the user.
 """
+
 import dataclasses
 from pathlib import Path
 import wx
 import cv2
 import numpy as np
-from typing import List, Any, Tuple, Optional, Callable, Mapping, Iterable, NamedTuple, Literal, Union, Protocol, \
-    MutableMapping
+from typing import (
+    List,
+    Any,
+    Tuple,
+    Optional,
+    Callable,
+    Mapping,
+    Iterable,
+    Union,
+    Protocol,
+    MutableMapping,
+)
 
-from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData
+from diplomat.predictors.fpe.sparse_storage import (
+    ForwardBackwardFrame,
+    ForwardBackwardData,
+    SparseTrackingData,
+)
 from diplomat.utils.colormaps import iter_colormap, to_colormap
 from diplomat.utils.track_formats import to_diplomat_table, save_diplomat_table
 from diplomat.wx_gui.id_swap_dialog import IdSwapDialog
@@ -27,6 +42,7 @@ from wx.lib.scrolledpanel import ScrolledPanel
 from collections import deque
 from diplomat.wx_gui import icons
 from diplomat.wx_gui.identity_swapper import IdentitySwapper
+
 
 @dataclasses.dataclass
 class Tool:
@@ -67,18 +83,26 @@ class HeatmapOptions:
     """ Provided a frame index and option index (corresponding to the entries list), returns the heatmap and downscaling factor. """
 
 
-def default_heatmap_entries(part_list: List[str], frame_engine: FramePassEngineData) -> HeatmapOptions:
+def default_heatmap_entries(
+    part_list: List[str], frame_engine: FramePassEngineData
+) -> HeatmapOptions:
     part_list_len = len(part_list)
-    full_part_list = [f"{p}-{s}" for s in ["Source", "Trace", "Occluded"] for p in part_list]
+    full_part_list = [
+        f"{p}-{s}" for s in ["Source", "Trace", "Occluded"] for p in part_list
+    ]
     source_extractors = [
         lambda x: x.src_data,
-        lambda x: SparseTrackingData(x.src_data.downscaling).pack(*x.src_data.unpack()[:2], x.frame_probs),
-        lambda x: SparseTrackingData(x.src_data.downscaling).pack(*x.occluded_coords.T, x.occluded_probs)
+        lambda x: SparseTrackingData(x.src_data.downscaling).pack(
+            *x.src_data.unpack()[:2], x.frame_probs
+        ),
+        lambda x: SparseTrackingData(x.src_data.downscaling).pack(
+            *x.occluded_coords.T, x.occluded_probs
+        ),
     ]
 
     def get_heatmap(frame: int, part: int):
         source, part = divmod(part, part_list_len)
-        if((frame, part) in frame_engine.changed_frames):
+        if (frame, part) in frame_engine.changed_frames:
             frame = frame_engine.changed_frames[(frame, part)]
         else:
             frame = frame_engine.frame_data.frames[frame][part]
@@ -88,25 +112,24 @@ def default_heatmap_entries(part_list: List[str], frame_engine: FramePassEngineD
         return (
             data.desparsify(
                 int(frame_engine.width / frame.src_data.downscaling),
-                int(frame_engine.height / frame.src_data.downscaling)
+                int(frame_engine.height / frame.src_data.downscaling),
             ).get_prob_table(0, 0),
-            frame.src_data.downscaling
+            frame.src_data.downscaling,
         )
 
-    return HeatmapOptions(
-        entries=full_part_list,
-        heatmap_extractor=get_heatmap
-    )
+    return HeatmapOptions(entries=full_part_list, heatmap_extractor=get_heatmap)
 
 
 class History:
     """
     History Object, represents a navigable history, allowing for doing, undoing, and redoing actions using little doers.
     """
+
     class Element:
         """
         A history 'element'. Used internally.
         """
+
         def __init__(self, name: str, value: Any):
             """
             Create a new element for placement in the history queue.
@@ -133,7 +156,7 @@ class History:
         self._on_chg = None
 
     def _change(self):
-        if(self._on_chg is not None):
+        if self._on_chg is not None:
             self._on_chg(self)
 
     def set_change_handler(self, func: Optional[Callable[["History"], None]]):
@@ -190,16 +213,18 @@ class History:
         """
         Undo the most recent change in history, using one of the registered little undoers.
         """
-        if(self.can_undo()):
+        if self.can_undo():
             result = self.history.pop()
-            if(result.name in self._little_confirmers):
-                if(not self._little_confirmers[result.name](True)):
+            if result.name in self._little_confirmers:
+                if not self._little_confirmers[result.name](True):
                     self.history.append(result)
                     return
 
-            if(result.name in self._little_undoers):
-                new_result = self.Element(result.name, self._little_undoers[result.name](result.value))
-                if(new_result.value is not None):
+            if result.name in self._little_undoers:
+                new_result = self.Element(
+                    result.name, self._little_undoers[result.name](result.value)
+                )
+                if new_result.value is not None:
                     self.future.appendleft(new_result)
         self._change()
 
@@ -207,16 +232,18 @@ class History:
         """
         Redo the most recent change in history, using one of the registered little redoers.
         """
-        if(self.can_redo()):
+        if self.can_redo():
             result = self.future.popleft()
-            if(result.name in self._little_confirmers):
-                if(not self._little_confirmers[result.name](False)):
+            if result.name in self._little_confirmers:
+                if not self._little_confirmers[result.name](False):
                     self.future.appendleft(result)
                     return
 
-            if(result.name in self._little_redoers):
-                new_result = self.Element(result.name, self._little_undoers[result.name](result.value))
-                if(new_result.value is not None):
+            if result.name in self._little_redoers:
+                new_result = self.Element(
+                    result.name, self._little_undoers[result.name](result.value)
+                )
+                if new_result.value is not None:
                     self.history.append(new_result)
         self._change()
 
@@ -232,13 +259,13 @@ class History:
         """
         Returns True if the history is not empty, otherwise False.
         """
-        return (len(self.history) > 0)
+        return len(self.history) > 0
 
     def can_redo(self) -> bool:
         """
         Returns False if the future is not empty, otherwise False.
         """
-        return (len(self.future) > 0)
+        return len(self.future) > 0
 
 
 Box = Optional[Tuple[int, int, int, int]]
@@ -259,7 +286,7 @@ class FPEEditor(wx.Frame):
         "plot_threshold": "pcutoff",
         "point_radius": "dotsize",
         "point_alpha": "alphavalue",
-        "line_thickness": "line_thickness"
+        "line_thickness": "line_thickness",
     }
 
     def __init__(
@@ -281,7 +308,7 @@ class FPEEditor(wx.Frame):
         pos=wx.DefaultPosition,
         size=wx.DefaultSize,
         style=wx.DEFAULT_FRAME_STYLE,
-        name="FPEEditor"
+        name="FPEEditor",
     ):
         """
         Construct a new FBEditor UI.
@@ -316,9 +343,13 @@ class FPEEditor(wx.Frame):
         self._history.set_change_handler(self._update_hist_btns)
         self._history.register_undoer(self.HIST_POSE_CHANGE, self._pose_doer)
         self._history.register_redoer(self.HIST_POSE_CHANGE, self._pose_doer)
-        if(self._identity_swapper is not None):
-            self._history.register_undoer(self.HIST_IDENTITY_SWAP, self._identity_swapper.undo)
-            self._history.register_redoer(self.HIST_IDENTITY_SWAP, self._identity_swapper.redo)
+        if self._identity_swapper is not None:
+            self._history.register_undoer(
+                self.HIST_IDENTITY_SWAP, self._identity_swapper.undo
+            )
+            self._history.register_redoer(
+                self.HIST_IDENTITY_SWAP, self._identity_swapper.redo
+            )
             self._identity_swapper.set_progress_handler(self._id_swap_prog)
             self._identity_swapper.set_extra_hook(self._id_swap_hook)
 
@@ -343,7 +374,10 @@ class FPEEditor(wx.Frame):
         self._main_splitter.SetSashGravity(1.0)
         self._main_splitter.SetMinimumPaneSize(20)
 
-        ps = {new_k: plot_settings[old_k] for new_k, old_k in self.PLOT_SETTINGS_MAPPING.items()}
+        ps = {
+            new_k: plot_settings[old_k]
+            for new_k, old_k in self.PLOT_SETTINGS_MAPPING.items()
+        }
         self.video_player = PointEditor(
             self._video_splitter,
             video_hdl=video_hdl,
@@ -352,13 +386,17 @@ class FPEEditor(wx.Frame):
             bp_names=names,
             labeling_modes=labeling_modes,
             group_list=part_groups,
-         #   skeleton_info = self.skeleton_info
-            **ps
+            #   skeleton_info = self.skeleton_info
+            **ps,
         )
         self._heatmap_is_enabled = heatmap_options is not None
         if self._heatmap_is_enabled:
-            self.video_player.video_viewer.set_heatmap_source(heatmap_options.heatmap_extractor)
-        self.video_controls = VideoController(self._sub_panel, video_player=self.video_player.video_viewer)
+            self.video_player.video_viewer.set_heatmap_source(
+                heatmap_options.heatmap_extractor
+            )
+        self.video_controls = VideoController(
+            self._sub_panel, video_player=self.video_player.video_viewer
+        )
 
         with FBProgressDialog(self, inner_msg="Calculating Scores...") as dlg:
             dlg.Show()
@@ -369,24 +407,39 @@ class FPEEditor(wx.Frame):
         self._plot_panel = wx.Panel(self._video_splitter)
 
         self.plot_button = wx.Button(self._plot_panel, label="Plot This Frame")
-        plot_imgs = [wx.Bitmap.FromRGBA(100, 100, 0, 0, 0, 0) for __ in range(poses.get_bodypart_count())]
-        self.plot_list = ScrollImageList(self._plot_panel, plot_imgs, wx.VERTICAL, size=wx.Size(200, -1))
+        plot_imgs = [
+            wx.Bitmap.FromRGBA(100, 100, 0, 0, 0, 0)
+            for __ in range(poses.get_bodypart_count())
+        ]
+        self.plot_list = ScrollImageList(
+            self._plot_panel, plot_imgs, wx.VERTICAL, size=wx.Size(200, -1)
+        )
 
         self._side_sizer.Add(self.plot_button, 0, wx.ALIGN_CENTER)
         self._side_sizer.Add(self.plot_list, 1, wx.EXPAND)
         self._plot_panel.SetSizerAndFit(self._side_sizer)
 
-        self._video_splitter.SplitVertically(self._plot_panel, self.video_player, self._plot_panel.GetMinSize().GetWidth())
+        self._video_splitter.SplitVertically(
+            self._plot_panel,
+            self.video_player,
+            self._plot_panel.GetMinSize().GetWidth(),
+        )
 
         self._sub_sizer.Add(self._score_disp, 1, wx.EXPAND)
         self._sub_sizer.Add(self.video_controls, 0, wx.EXPAND)
 
         self._sub_panel.SetSizerAndFit(self._sub_sizer)
 
-        self._main_splitter.SplitHorizontally(self._video_splitter, self._sub_panel, -self._sub_panel.GetMinSize().GetHeight())
+        self._main_splitter.SplitHorizontally(
+            self._video_splitter,
+            self._sub_panel,
+            -self._sub_panel.GetMinSize().GetHeight(),
+        )
         self._splitter_sizer.Add(self._main_splitter, 1, wx.EXPAND)
 
-        self._build_toolbar(manual_save, heatmap_options.entries if self._heatmap_is_enabled else None)
+        self._build_toolbar(
+            manual_save, heatmap_options.entries if self._heatmap_is_enabled else None
+        )
 
         self._main_panel.SetSizerAndFit(self._splitter_sizer)
         self.SetSizerAndFit(self._main_sizer)
@@ -395,7 +448,9 @@ class FPEEditor(wx.Frame):
         self.video_controls.set_keyboard_listener(self)
         self._setup_keyboard()
 
-        self.Bind(PointViewNEdit.EVT_POINT_INIT, lambda a: self.video_controls.Enable(False))
+        self.Bind(
+            PointViewNEdit.EVT_POINT_INIT, lambda a: self.video_controls.Enable(False)
+        )
         self.Bind(PointViewNEdit.EVT_POINT_END, lambda a: self._refocus(a))
         self.Bind(PointViewNEdit.EVT_POINT_CHANGE, self._on_prob_chg)
 
@@ -404,21 +459,20 @@ class FPEEditor(wx.Frame):
 
         self.video_controls.Bind(PointViewNEdit.EVT_FRAME_CHANGE, self._on_frame_chg)
 
-
     def _on_close_caller(self, event: wx.CloseEvent):
         self._on_close(event, self._was_save_button_flag)
         self._was_save_button_flag = False
 
     def _on_close(self, event: wx.CloseEvent, was_save_button: bool):
-        if(event.CanVeto()):
+        if event.CanVeto():
             with wx.MessageDialog(
                 self,
                 "Are you sure you want to exit and save your results?",
                 "Confirmation",
-                wx.YES_NO
+                wx.YES_NO,
             ) as dlg:
                 selection = dlg.ShowModal()
-                if(selection != wx.ID_YES):
+                if selection != wx.ID_YES:
                     event.Veto()
                     return
         event.Skip()
@@ -436,13 +490,16 @@ class FPEEditor(wx.Frame):
         PRIVATE: Connects keyboard events to toolbar actions.
         """
         keyboard_shortcuts = [
-            (*tool.shortcut_code, tool.toolbar_obj.GetId()) for tool in self._tools_only()
-            if(len(tool.shortcut_code) != 0)
+            (*tool.shortcut_code, tool.toolbar_obj.GetId())
+            for tool in self._tools_only()
+            if (len(tool.shortcut_code) != 0)
         ]
-        self.SetAcceleratorTable(wx.AcceleratorTable([wx.AcceleratorEntry(*s) for s in keyboard_shortcuts]))
+        self.SetAcceleratorTable(
+            wx.AcceleratorTable([wx.AcceleratorEntry(*s) for s in keyboard_shortcuts])
+        )
 
     def _tools_only(self):
-        return (tool for tool in self._tools if(tool is not self.SEPERATOR))
+        return (tool for tool in self._tools if (tool is not self.SEPERATOR))
 
     def _launch_help(self):
         """
@@ -452,26 +509,55 @@ class FPEEditor(wx.Frame):
         entries = []
 
         for tool, bmp in zip(self._tools_only(), self._bitmaps):
-            entries.append((
-                bmp,
-                tool.shortcut_code if(len(tool.shortcut_code) != 0) else None,
-                self._toolbar.GetToolShortHelp(tool.toolbar_obj.GetId())
-            ))
+            entries.append(
+                (
+                    bmp,
+                    tool.shortcut_code if (len(tool.shortcut_code) != 0) else None,
+                    self._toolbar.GetToolShortHelp(tool.toolbar_obj.GetId()),
+                )
+            )
 
         empty_bitmap = wx.Bitmap.FromRGBA(32, 32)
 
         other_entries = [
-            (empty_bitmap, (wx.ACCEL_CTRL, None), "Enter Fast Labeling Mode. Hover over the video to label the "
-                                                   "selected point. Hover outside the video to indicate the point is not in the frame."),
-            (empty_bitmap, (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, None),
-             f"Pressing SHIFT while in fast labeling mode will jump back {PointViewNEdit.JUMP_BACK_AMT} frames."),
+            (
+                empty_bitmap,
+                (wx.ACCEL_CTRL, None),
+                "Enter Fast Labeling Mode. Hover over the video to label the "
+                "selected point. Hover outside the video to indicate the point is not in the frame.",
+            ),
+            (
+                empty_bitmap,
+                (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, None),
+                f"Pressing SHIFT while in fast labeling mode will jump back {PointViewNEdit.JUMP_BACK_AMT} frames.",
+            ),
             (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_SPACE), "Play/Pause the video."),
             (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_BACK), "Stop the video."),
-            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_RIGHT), "Move 1 frame forward in the video."),
-            (empty_bitmap, (wx.ACCEL_NORMAL, wx.WXK_LEFT), "Move 1 frame back in the video."),
-            (empty_bitmap, "Left Click/Drag", "Label the selected point within the video. If no point is selected, pan around zoomed video."),
-            (empty_bitmap, "Right Click", "Mark the selected point as not being in the current frame of the video."),
-            (empty_bitmap, "Scroll Up/Down", "Zoom in or out on the video view if no point is selected.")
+            (
+                empty_bitmap,
+                (wx.ACCEL_NORMAL, wx.WXK_RIGHT),
+                "Move 1 frame forward in the video.",
+            ),
+            (
+                empty_bitmap,
+                (wx.ACCEL_NORMAL, wx.WXK_LEFT),
+                "Move 1 frame back in the video.",
+            ),
+            (
+                empty_bitmap,
+                "Left Click/Drag",
+                "Label the selected point within the video. If no point is selected, pan around zoomed video.",
+            ),
+            (
+                empty_bitmap,
+                "Right Click",
+                "Mark the selected point as not being in the current frame of the video.",
+            ),
+            (
+                empty_bitmap,
+                "Scroll Up/Down",
+                "Zoom in or out on the video view if no point is selected.",
+            ),
         ]
         entries.extend(other_entries)
 
@@ -479,19 +565,22 @@ class FPEEditor(wx.Frame):
             d.ShowModal()
 
     def _do_fb_run(self):
-        if (self._fb_runner is not None):
-            if (self._fb_runner()):
+        if self._fb_runner is not None:
+            if self._fb_runner():
                 self._history.clear()
 
     def _save_ui_to_disk(self):
-        if(self._manual_save_func is not None):
+        if self._manual_save_func is not None:
             self._manual_save_func()
 
     def _build_heatmap_tool(self, heatmap_entries: Optional[List[str]]) -> Tool:
         options = wx.Choice(self._toolbar, choices=["", *heatmap_entries])
+
         def on_choice(evt):
             idx = options.GetSelection()
-            self.video_player.video_viewer.set_selected_heatmap(-1 if idx == wx.NOT_FOUND else idx - 1)
+            self.video_player.video_viewer.set_selected_heatmap(
+                -1 if idx == wx.NOT_FOUND else idx - 1
+            )
 
         options.SetSelection(0)
         options.Bind(wx.EVT_CHOICE, on_choice)
@@ -502,11 +591,18 @@ class FPEEditor(wx.Frame):
             icons.HEATMAP_ICON_SIZE,
             "Toggle confidence map overlay for a single body part on the video.",
             lambda: None,
-            options
+            options,
         )
 
-    def _get_tools(self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]) -> List[Union[Tool, SEPERATOR]]:
-        spin_ctrl = wx.SpinCtrl(self._toolbar, min=1, max=50, initial=PointViewNEdit.DEF_FAST_MODE_SPEED_FRACTION)
+    def _get_tools(
+        self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]
+    ) -> List[Union[Tool, SEPERATOR]]:
+        spin_ctrl = wx.SpinCtrl(
+            self._toolbar,
+            min=1,
+            max=50,
+            initial=PointViewNEdit.DEF_FAST_MODE_SPEED_FRACTION,
+        )
         spin_ctrl.SetMaxSize(wx.Size(-1, self.TOOLBAR_ICON_SIZE[1]))
         spin_ctrl.Bind(wx.EVT_SPINCTRL, self._on_spin)
 
@@ -514,11 +610,9 @@ class FPEEditor(wx.Frame):
 
         heatmap_tools = []
         if heatmap_entries is not None and len(heatmap_entries) > 0:
-            heatmap_tools.extend([
-                self.SEPERATOR,
-                self._build_heatmap_tool(heatmap_entries)
-            ])
-
+            heatmap_tools.extend(
+                [self.SEPERATOR, self._build_heatmap_tool(heatmap_entries)]
+            )
 
         tools = [
             Tool(
@@ -527,7 +621,7 @@ class FPEEditor(wx.Frame):
                 icons.JUMP_BACK_ICON_SIZE,
                 "Jump to the prior detected frame.",
                 lambda: self._move_to_poor_label(False),
-                shortcut_code=(wx.ACCEL_ALT, wx.WXK_RIGHT)
+                shortcut_code=(wx.ACCEL_ALT, wx.WXK_RIGHT),
             ),
             Tool(
                 "Next Detected Frame",
@@ -535,7 +629,7 @@ class FPEEditor(wx.Frame):
                 icons.JUMP_FORWARD_ICON_SIZE,
                 "Jump to the next detected frame.",
                 lambda: self._move_to_poor_label(True),
-                shortcut_code=(wx.ACCEL_ALT, wx.WXK_LEFT)
+                shortcut_code=(wx.ACCEL_ALT, wx.WXK_LEFT),
             ),
             self.SEPERATOR,
             Tool(
@@ -544,7 +638,7 @@ class FPEEditor(wx.Frame):
                 icons.BACK_ICON_SIZE,
                 "Undo the last action.",
                 self._history.undo,
-                shortcut_code=(wx.ACCEL_ALT, ord("Z"))
+                shortcut_code=(wx.ACCEL_ALT, ord("Z")),
             ),
             Tool(
                 "Redo",
@@ -552,7 +646,7 @@ class FPEEditor(wx.Frame):
                 icons.FORWARD_ICON_SIZE,
                 "Redo the last action.",
                 self._history.redo,
-                shortcut_code=(wx.ACCEL_ALT | wx.ACCEL_SHIFT, ord("Z"))
+                shortcut_code=(wx.ACCEL_ALT | wx.ACCEL_SHIFT, ord("Z")),
             ),
             self.SEPERATOR,
             Tool(
@@ -561,29 +655,37 @@ class FPEEditor(wx.Frame):
                 icons.RUN_ICON_SIZE,
                 "Rerun the frame passes on user modified results.",
                 self._do_fb_run,
-                shortcut_code=(wx.ACCEL_ALT, ord("R"))
+                shortcut_code=(wx.ACCEL_ALT, ord("R")),
             ),
-            Tool(
-                "Swap Identities",
-                icons.SWAP_IDENTITIES_ICON,
-                icons.SWAP_IDENTITIES_SIZE,
-                "Swap body part positions for this frame and all frames in front of it.",
-                self._display_id_swap_dialog
-            ) if(self._identity_swapper is not None) else None,
-            Tool(
-                "Save and Continue",
-                icons.SAVE_CONT_ICON,
-                icons.SAVE_CONT_ICON_SIZE,
-                "Save the current UI state and continue editing.",
-                self._save_ui_to_disk,
-            ) if(manual_save is not None) else None,
+            (
+                Tool(
+                    "Swap Identities",
+                    icons.SWAP_IDENTITIES_ICON,
+                    icons.SWAP_IDENTITIES_SIZE,
+                    "Swap body part positions for this frame and all frames in front of it.",
+                    self._display_id_swap_dialog,
+                )
+                if (self._identity_swapper is not None)
+                else None
+            ),
+            (
+                Tool(
+                    "Save and Continue",
+                    icons.SAVE_CONT_ICON,
+                    icons.SAVE_CONT_ICON_SIZE,
+                    "Save the current UI state and continue editing.",
+                    self._save_ui_to_disk,
+                )
+                if (manual_save is not None)
+                else None
+            ),
             Tool(
                 "Save Results",
                 icons.SAVE_ICON,
                 icons.SAVE_ICON_SIZE,
                 "Save the current results to file.",
                 self._save_and_close,
-                shortcut_code=(wx.ACCEL_ALT, ord("S"))
+                shortcut_code=(wx.ACCEL_ALT, ord("S")),
             ),
             self.SEPERATOR,
             Tool(
@@ -592,7 +694,7 @@ class FPEEditor(wx.Frame):
                 icons.TURTLE_ICON_SIZE,
                 "Modify the labeling speed when CTRL Key is pressed (fast labeling mode).",
                 lambda: None,
-                spin_ctrl
+                spin_ctrl,
             ),
             *heatmap_tools,
             self.SEPERATOR,
@@ -602,21 +704,21 @@ class FPEEditor(wx.Frame):
                 icons.DUMP_FRAMES_SIZE,
                 "Export the current modified frames from the UI.",
                 self._on_export,
-                shortcut_code=(wx.ACCEL_ALT, ord("E"))
+                shortcut_code=(wx.ACCEL_ALT, ord("E")),
             ),
             Tool(
                 "Export Tracks to CSV",
                 icons.SAVE_TRACKS_ICON,
                 icons.SAVE_TRACKS_SIZE,
                 "Export current tracks to a csv file from the UI.",
-                self._save_to_csv
+                self._save_to_csv,
             ),
             Tool(
                 "Visual Settings",
                 icons.SETTINGS_ICON,
                 icons.SETTINGS_SIZE,
                 "Adjust some visual settings of the editor.",
-                self._change_visual_settings
+                self._change_visual_settings,
             ),
             Tool(
                 "Help",
@@ -624,13 +726,15 @@ class FPEEditor(wx.Frame):
                 icons.HELP_ICON_SIZE,
                 "Display the help dialog.",
                 self._launch_help,
-                shortcut_code=(wx.ACCEL_ALT, ord("H"))
-            )
+                shortcut_code=(wx.ACCEL_ALT, ord("H")),
+            ),
         ]
 
-        return [tool for tool in tools if(tool is not None)]
+        return [tool for tool in tools if (tool is not None)]
 
-    def _build_toolbar(self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]):
+    def _build_toolbar(
+        self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]
+    ):
         """
         PRIVATE: Constructs the toolbar, adds all tools to the toolbar, and sets up toolbar events to trigger actions
         within the UI.
@@ -648,34 +752,40 @@ class FPEEditor(wx.Frame):
         self._bitmaps = []
 
         for tool in self._tools:
-            if(tool is self.SEPERATOR):
+            if tool is self.SEPERATOR:
                 self._toolbar.AddSeparator()
                 continue
 
             icon = icons.to_wx_bitmap(
-                tool.icon,
-                tool.icon_size,
-                self.GetForegroundColour(),
-                (32, 32)
+                tool.icon, tool.icon_size, self.GetForegroundColour(), (32, 32)
             )
             self._bitmaps.append(icon)
 
-            if(tool.widget is None):
-                tool_obj = self._toolbar.CreateTool(wx.ID_ANY, tool.name, icon, kind=tool.tool_type, shortHelp=tool.help)
+            if tool.widget is None:
+                tool_obj = self._toolbar.CreateTool(
+                    wx.ID_ANY, tool.name, icon, kind=tool.tool_type, shortHelp=tool.help
+                )
             else:
-                tool_obj = self._toolbar.CreateTool(wx.ID_ANY, tool.name, icon, icon, kind=tool.tool_type, shortHelp=tool.help)
+                tool_obj = self._toolbar.CreateTool(
+                    wx.ID_ANY,
+                    tool.name,
+                    icon,
+                    icon,
+                    kind=tool.tool_type,
+                    shortHelp=tool.help,
+                )
 
             tool.toolbar_obj = tool_obj
             self._toolbar.AddTool(tool_obj)
 
-            if(tool.widget is not None):
+            if tool.widget is not None:
                 self._toolbar.EnableTool(tool_obj.GetId(), False)
                 self._toolbar.AddControl(tool.widget)
 
         for tool in self._tools_only():
-            if(tool.name == "Undo"):
+            if tool.name == "Undo":
                 self._undo = tool.toolbar_obj
-            elif(tool.name == "Redo"):
+            elif tool.name == "Redo":
                 self._redo = tool.toolbar_obj
 
         self._update_hist_btns(self._history)
@@ -704,9 +814,7 @@ class FPEEditor(wx.Frame):
         new_x, new_y, new_prob = evt.new_location
 
         # Update the probability in the probability displayer and also the point editor...
-        old_scores = [
-            score.get_data_at(evt.frame) for score in self.score_displays
-        ]
+        old_scores = [score.get_data_at(evt.frame) for score in self.score_displays]
         for score in self.score_displays:
             score.update_at(evt.frame, np.nan)
 
@@ -721,8 +829,8 @@ class FPEEditor(wx.Frame):
                 (evt.frame, evt.part, *evt.old_location),
                 old_scores,
                 evt.labeler_data,
-                True
-            )
+                True,
+            ),
         )
 
     def _update_hist_btns(self, hist_elm):
@@ -743,7 +851,9 @@ class FPEEditor(wx.Frame):
         """
         self._fb_runner = func
 
-    def set_frame_exporter(self, func: Optional[Callable[[int, str, Path], Tuple[bool, str]]]):
+    def set_frame_exporter(
+        self, func: Optional[Callable[[int, str, Path], Tuple[bool, str]]]
+    ):
         """
         Set the frame exporting function, which exports current modified frames UI is showing...
 
@@ -758,7 +868,9 @@ class FPEEditor(wx.Frame):
     def set_radiobox_colors(self, colormap):
         self.video_player.select_box.set_colormap(colormap)
 
-    def set_plot_settings_changer(self, func: Optional[Callable[[Mapping[str, Any]], None]]):
+    def set_plot_settings_changer(
+        self, func: Optional[Callable[[Mapping[str, Any]], None]]
+    ):
         """
         Set the plot settings changing function, which allows for adjusting certain video metadata values when they
         become adjusted.
@@ -771,7 +883,7 @@ class FPEEditor(wx.Frame):
             if "colormap" in data:
                 self.set_radiobox_colors(data["colormap"])
             func(data)
-        
+
         self._on_plot_settings_change = func2
 
     @property
@@ -800,7 +912,7 @@ class FPEEditor(wx.Frame):
         for score, value in zip(self.score_displays, old_scores):
             score.update_at(frm, value)
 
-        if(undo):
+        if undo:
             labeler_data = labeler.undo(old_labeler_data)
         else:
             labeler_data = labeler.redo(old_labeler_data)
@@ -816,28 +928,37 @@ class FPEEditor(wx.Frame):
         selection = [
             "Original Frames with Latest User Edits",
             "Frames after Latest Frame Pass Run",
-            "Frames after Latest Frame Pass Run, All Data."
+            "Frames after Latest Frame Pass Run, All Data.",
         ]
 
-        if(self._frame_exporter is not None):
-            with wx.SingleChoiceDialog(self, "Select Frames to Export.", "Frame Type Selection", selection) as sd:
-                if(sd.ShowModal() == wx.ID_CANCEL):
+        if self._frame_exporter is not None:
+            with wx.SingleChoiceDialog(
+                self, "Select Frames to Export.", "Frame Type Selection", selection
+            ) as sd:
+                if sd.ShowModal() == wx.ID_CANCEL:
                     return
 
                 frame_exp_type = sd.GetSelection()
 
-            with wx.FileDialog(self, "Select FrameStore Save Location",
-                               wildcard="DLFS File (*.dlfs)|H5 File (*.h5)",
-                               style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
-                if(fd.ShowModal() == wx.ID_CANCEL):
+            with wx.FileDialog(
+                self,
+                "Select FrameStore Save Location",
+                wildcard="DLFS File (*.dlfs)|H5 File (*.h5)",
+                style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+            ) as fd:
+                if fd.ShowModal() == wx.ID_CANCEL:
                     return
 
-                file_format, ext = ("DLFS", ".dlfs") if(fd.GetFilterIndex() == 0) else ("HDF5", ".h5")
+                file_format, ext = (
+                    ("DLFS", ".dlfs") if (fd.GetFilterIndex() == 0) else ("HDF5", ".h5")
+                )
                 path = Path(fd.GetPath()).with_suffix(ext)
 
                 res, msg = self._frame_exporter(frame_exp_type, file_format, path)
-                if(not res):
-                    with wx.MessageDialog(self, msg, "File Export Error", wx.ICON_ERROR | wx.OK) as msgd:
+                if not res:
+                    with wx.MessageDialog(
+                        self, msg, "File Export Error", wx.ICON_ERROR | wx.OK
+                    ) as msgd:
                         msgd.ShowModal()
 
     @property
@@ -854,52 +975,89 @@ class FPEEditor(wx.Frame):
         PRIVATE: Triggered whenever a tool is clicked on in the toolbar....
         """
         for tool in self._tools_only():
-            if(evt.GetId() == tool.toolbar_obj.GetId()):
+            if evt.GetId() == tool.toolbar_obj.GetId():
                 tool.on_click()
 
     def _change_visual_settings(self):
         from diplomat.wx_gui.labeler_lib import Slider, FloatSpin
-        from diplomat.wx_gui.settings_dialog import DropDown, ColormapSelector
+        from diplomat.wx_gui.settings_dialog import ColormapSelector
         from matplotlib import colormaps
+
         point_video_viewer = self.video_player.video_viewer
 
         sorted_colormaps = sorted(colormaps)
 
         extra = {}
         if self._heatmap_is_enabled:
-            extra.update(dict(
-                heatmap_colormap=ColormapSelector(default=point_video_viewer.get_heatmap_colormap()),
-                heatmap_alpha=FloatSpin(0, 1, point_video_viewer.get_heatmap_alpha(), increment=0.01, digits=2)
-            ))
+            extra.update(
+                dict(
+                    heatmap_colormap=ColormapSelector(
+                        default=point_video_viewer.get_heatmap_colormap()
+                    ),
+                    heatmap_alpha=FloatSpin(
+                        0,
+                        1,
+                        point_video_viewer.get_heatmap_alpha(),
+                        increment=0.01,
+                        digits=2,
+                    ),
+                )
+            )
 
-        with SettingsDialog(self, title="Visual Settings", settings=SettingCollection(
-            colormap=ColormapSelector(default=to_colormap(point_video_viewer.get_colormap())),
-            point_radius=FloatSpin(1, 1000, point_video_viewer.get_point_radius(), increment=1, digits=0),
-            point_alpha=FloatSpin(0, 1, point_video_viewer.get_point_alpha(), increment=0.01, digits=2),
-            plot_threshold=FloatSpin(0, 1, point_video_viewer.get_plot_threshold(), increment=0.001, digits=3),
-            line_thickness=Slider(1, 10, point_video_viewer.get_line_thickness()),
-            **extra
-        )) as dlg:
-            if(dlg.ShowModal() == wx.ID_OK):
+        with SettingsDialog(
+            self,
+            title="Visual Settings",
+            settings=SettingCollection(
+                colormap=ColormapSelector(
+                    default=to_colormap(point_video_viewer.get_colormap())
+                ),
+                point_radius=FloatSpin(
+                    1,
+                    1000,
+                    point_video_viewer.get_point_radius(),
+                    increment=1,
+                    digits=0,
+                ),
+                point_alpha=FloatSpin(
+                    0, 1, point_video_viewer.get_point_alpha(), increment=0.01, digits=2
+                ),
+                plot_threshold=FloatSpin(
+                    0,
+                    1,
+                    point_video_viewer.get_plot_threshold(),
+                    increment=0.001,
+                    digits=3,
+                ),
+                line_thickness=Slider(1, 10, point_video_viewer.get_line_thickness()),
+                **extra,
+            ),
+        ) as dlg:
+            if dlg.ShowModal() == wx.ID_OK:
                 dlg_results = dlg.get_values()
 
                 for k, v in dlg_results.items():
                     getattr(point_video_viewer, f"set_{k}")(v)
 
-                if(self._on_plot_settings_change is not None):
-                    self._on_plot_settings_change({
-                        self.PLOT_SETTINGS_MAPPING[k]: val for k, val in dlg_results.items()
-                        if k in self.PLOT_SETTINGS_MAPPING
-                    })
+                if self._on_plot_settings_change is not None:
+                    self._on_plot_settings_change(
+                        {
+                            self.PLOT_SETTINGS_MAPPING[k]: val
+                            for k, val in dlg_results.items()
+                            if k in self.PLOT_SETTINGS_MAPPING
+                        }
+                    )
 
                 self.Refresh()
                 self.Update()
 
     def _save_to_csv(self):
-        with wx.FileDialog(self, "Select FrameStore Save Location",
-                           wildcard="CSV File (*.csv)",
-                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
-            if(fd.ShowModal() == wx.ID_CANCEL):
+        with wx.FileDialog(
+            self,
+            "Select FrameStore Save Location",
+            wildcard="CSV File (*.csv)",
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        ) as fd:
+            if fd.ShowModal() == wx.ID_CANCEL:
                 return
 
             path = Path(fd.GetPath()).with_suffix(".csv")
@@ -907,36 +1065,52 @@ class FPEEditor(wx.Frame):
             poses = self.video_player.video_viewer.get_all_poses()
 
             def replace_suffix(string, suffix):
-                return string[:-len(suffix)] if(string.endswith(suffix)) else string
+                return string[: -len(suffix)] if (string.endswith(suffix)) else string
 
             orig_part_names = [
                 replace_suffix(label, str((i % num_outputs) + 1))
                 for i, label in enumerate(self.video_player.select_box.get_labels())
-                if((i % num_outputs) == 0)
+                if ((i % num_outputs) == 0)
             ]
 
             try:
                 table = to_diplomat_table(num_outputs, orig_part_names, poses)
                 save_diplomat_table(table, str(path))
             except IOError as e:
-                with wx.MessageDialog(self, str(e), "File Export Error", wx.ICON_ERROR | wx.OK) as msgd:
+                with wx.MessageDialog(
+                    self, str(e), "File Export Error", wx.ICON_ERROR | wx.OK
+                ) as msgd:
                     msgd.ShowModal()
 
     def _display_id_swap_dialog(self):
         self.video_player.video_viewer.pause()
         num_outputs = len(self.video_player.select_box.ids)
         labels = self.video_player.select_box.get_labels()
-        colors = iter_colormap(self.video_player.select_box.get_colormap(), len(labels), bytes=True)
-        shapes = [v for i, v in zip(range(len(labels)), self.video_player.select_box.get_shape_list())]
-        with IdSwapDialog(None, wx.ID_ANY, num_outputs=num_outputs, labels=labels, colors=colors, shapes=shapes) as dlg:
-            if(dlg.ShowModal() == wx.ID_OK):
+        colors = iter_colormap(
+            self.video_player.select_box.get_colormap(), len(labels), bytes=True
+        )
+        shapes = [
+            v
+            for i, v in zip(
+                range(len(labels)), self.video_player.select_box.get_shape_list()
+            )
+        ]
+        with IdSwapDialog(
+            None,
+            wx.ID_ANY,
+            num_outputs=num_outputs,
+            labels=labels,
+            colors=colors,
+            shapes=shapes,
+        ) as dlg:
+            if dlg.ShowModal() == wx.ID_OK:
                 self._do_id_swap(dlg.get_proposed_order())
 
     def _do_id_swap(self, new_order: List[int]):
         current_offset = self.video_player.video_viewer.get_offset_count()
         self._history.do(
             self.HIST_IDENTITY_SWAP,
-            self._identity_swapper.do(current_offset, new_order)
+            self._identity_swapper.do(current_offset, new_order),
         )
 
     def _id_swap_prog(self, msg: str, iterable: Iterable) -> Iterable:
@@ -953,7 +1127,9 @@ class FPEEditor(wx.Frame):
         poses = self.video_player.video_viewer.get_all_poses().get_all()
         poses = poses.reshape((poses.shape[0], poses.shape[1] // 3, 3))
         poses[frame:, np.arange(poses.shape[1])] = poses[frame:, new_order]
-        self.video_player.video_viewer.set_all_poses(Pose(poses[:, :, 0], poses[:, :, 1], poses[:, :, 2]))
+        self.video_player.video_viewer.set_all_poses(
+            Pose(poses[:, :, 0], poses[:, :, 1], poses[:, :, 2])
+        )
 
     def _save_and_close(self):
         self._was_save_button_flag = True
@@ -965,25 +1141,27 @@ class FPEEditor(wx.Frame):
         frame_count = self.video_player.video_viewer.get_total_frames()
 
         def dist_forward(val):
-            if(val <= current_offset):
+            if val <= current_offset:
                 val = frame_count + val
             return val - current_offset
 
         def dist_backward(val):
-            if(val >= current_offset):
+            if val >= current_offset:
                 val = -frame_count + val
             return current_offset - val
 
         def get_frame(score):
-            if(forward):
+            if forward:
                 return score.get_next_bad_location()
             else:
                 return score.get_prev_bad_location()
 
-        res = int(min(
-            (get_frame(score) for score in self.score_displays),
-            key=dist_forward if(forward) else dist_backward
-        ))
+        res = int(
+            min(
+                (get_frame(score) for score in self.score_displays),
+                key=dist_forward if (forward) else dist_backward,
+            )
+        )
         self.video_player.video_viewer.set_offset_frames(res)
 
 
@@ -994,6 +1172,7 @@ class MultiScoreDisplay(wx.Panel):
     A MultiScoreDisplay. Is simply a scrollable list of ScoreEngineDisplayer.
     Convenience class used by the FBEditor class.
     """
+
     # The number of probability displays to allow at max...
     MAX_HEIGHT_IN_WIDGETS = 4
 
@@ -1004,7 +1183,7 @@ class MultiScoreDisplay(wx.Panel):
         poses: Pose,
         progress_bar: ProgressBar,
         w_id=wx.ID_ANY,
-        **kwargs
+        **kwargs,
     ):
         """
         Construct a new MultiScoreDisplay.
@@ -1023,9 +1202,8 @@ class MultiScoreDisplay(wx.Panel):
         self._scroll_sizer = wx.BoxSizer(wx.VERTICAL)
 
         self.displays = [
-            ScoreEngineDisplayer(
-                engine, poses, progress_bar, self._scroll_panel
-            ) for engine in score_engines
+            ScoreEngineDisplayer(engine, poses, progress_bar, self._scroll_panel)
+            for engine in score_engines
         ]
 
         for display in self.displays:
@@ -1038,7 +1216,12 @@ class MultiScoreDisplay(wx.Panel):
         self._main_sizer.Add(self._scroll_panel, 1, wx.EXPAND)
 
         self.SetSizer(self._main_sizer)
-        self.SetMinSize(wx.Size(
-            max(disp.GetMinSize().GetWidth() for disp in self.displays),
-            sum(disp.GetMinSize().GetHeight() for disp in self.displays[:self.MAX_HEIGHT_IN_WIDGETS]))
+        self.SetMinSize(
+            wx.Size(
+                max(disp.GetMinSize().GetWidth() for disp in self.displays),
+                sum(
+                    disp.GetMinSize().GetHeight()
+                    for disp in self.displays[: self.MAX_HEIGHT_IN_WIDGETS]
+                ),
+            )
         )

@@ -4,6 +4,7 @@ be passed back into DeepLabCut again to perform frame predictions later. This al
 the neural network (expensive) on a headless server or supercomputer, and then run through a predictor with gui
 feedback on a laptop or somewhere else.
 """
+
 import shutil
 from pathlib import Path
 from typing import List, Optional
@@ -17,6 +18,7 @@ class FrameExporter(Predictor):
     frame predictions later. This allows for a video to be run through the neural network (expensive) on a headless
     server or supercomputer, and then run through a predictor with gui feedback on a laptop or somewhere else.
     """
+
     def __init__(
         self,
         bodyparts: List[str],
@@ -28,10 +30,12 @@ class FrameExporter(Predictor):
         super().__init__(bodyparts, num_outputs, num_frames, settings, video_metadata)
 
         bp_to_k = settings.bodyparts_to_keep
-        if(bp_to_k is not None):
-            self._bp_to_idx = {bp: index for index, bp in enumerate(bodyparts) if(bp in bp_to_k)}
+        if bp_to_k is not None:
+            self._bp_to_idx = {
+                bp: index for index, bp in enumerate(bodyparts) if (bp in bp_to_k)
+            }
 
-            if(len(self._bp_to_idx) == 0):
+            if len(self._bp_to_idx) == 0:
                 raise ValueError("0 body parts specified to be saved!")
         else:
             self._bp_to_idx = None
@@ -50,18 +54,19 @@ class FrameExporter(Predictor):
         vid_path = Path(self.video_metadata["orig-video-path"])
 
         self._out_file = (
-            orig_out_path.parent / (vid_path.name + "~" + self.settings.filename_suffix + ".dlfs")
+            orig_out_path.parent
+            / (vid_path.name + "~" + self.settings.filename_suffix + ".dlfs")
         ).open("w+b")
 
-        if(self.settings.include_video):
+        if self.settings.include_video:
             with vid_path.open("rb") as video_file:
                 shutil.copyfileobj(video_file, self._out_file)
 
     def _close(self):
-        if(self._frame_writer is not None):
+        if self._frame_writer is not None:
             self._frame_writer.close()
             self._frame_writer = None
-        if(self._out_file is not None):
+        if self._out_file is not None:
             self._out_file.close()
             self._out_file = None
 
@@ -79,19 +84,23 @@ class FrameExporter(Predictor):
                 scmap.get_down_scaling(),
                 *self.video_metadata["size"],
                 *self._crop_off,
-                self.bodyparts if(self._bp_to_idx is None) else list(self._bp_to_idx.keys()),
-                skeleton if(skeleton is not None) else []
+                (
+                    self.bodyparts
+                    if (self._bp_to_idx is None)
+                    else list(self._bp_to_idx.keys())
+                ),
+                skeleton if (skeleton is not None) else []
             )
 
             self._frame_writer = DLFSWriter(
                 self._out_file,
                 header,
                 s.threshold if (s.sparsify) else None,
-                s.compression_level
+                s.compression_level,
             )
 
         # Writing all frames in this batch...
-        if(self._bp_to_idx is None):
+        if self._bp_to_idx is None:
             self._frame_writer.write_data(scmap)
         else:
             bp_idx = list(self._bp_to_idx.values())
@@ -100,16 +109,14 @@ class FrameExporter(Predictor):
             new_scmap = TrackingData(
                 scmap.get_source_map()[:, :, :, bp_idx],
                 None if (locref is None) else locref[:, :, :, bp_idx],
-                scmap.get_down_scaling()
+                scmap.get_down_scaling(),
             )
 
             self._frame_writer.write_data(new_scmap)
 
         self._current_frame += scmap.get_frame_count()
 
-        return scmap.get_poses_for(
-            scmap.get_max_scmap_points(num_max=self.num_outputs)
-        )
+        return scmap.get_poses_for(scmap.get_max_scmap_points(num_max=self.num_outputs))
 
     def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         return None
@@ -120,7 +127,7 @@ class FrameExporter(Predictor):
             "sparsify": (
                 True,
                 bool,
-                "Specify whether to optimize and store the data in a sparse format when dumping frames."
+                "Specify whether to optimize and store the data in a sparse format when dumping frames.",
             ),
             "threshold": (
                 1e-7,
@@ -133,23 +140,23 @@ class FrameExporter(Predictor):
                 type_casters.RangedInteger(0, 9),
                 "Determines the z-lib compression level. Higher compression level "
                 "means it takes longer to compress the data, while 0 is no compression. Note this "
-                "only applies if the dlfs format is being used, the hdf5 format ignores this value."
+                "only applies if the dlfs format is being used, the hdf5 format ignores this value.",
             ),
             "filename_suffix": (
                 "DATA",
                 str,
-                "A string, The suffix to place onto the end of the file name."
+                "A string, The suffix to place onto the end of the file name.",
             ),
             "bodyparts_to_keep": (
                 None,
                 type_casters.Union(type_casters.Literal(None), type_casters.List(str)),
-                "A list of body parts to store. None means keep all the body parts."
+                "A list of body parts to store. None means keep all the body parts.",
             ),
             "include_video": (
                 True,
                 bool,
-                "If true, the video is embedded in the file, making this file fully independent. Defaults to True."
-            )
+                "If true, the video is embedded in the file, making this file fully independent. Defaults to True.",
+            ),
         }
 
     @classmethod

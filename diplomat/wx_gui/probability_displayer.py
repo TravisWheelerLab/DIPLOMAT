@@ -6,7 +6,6 @@ from enum import IntEnum
 from typing import Iterable, NamedTuple, Optional
 import wx
 import numpy as np
-from pygments import highlight
 
 
 class DrawMode(IntEnum):
@@ -37,50 +36,54 @@ def srgb_to_linear_rgb(color, as_int8: bool = False):
     if as_int8:
         color = color / 255
 
-    return np.where(
-        color <= 0.04045,
-        color / 12.92,
-        ((color + 0.055) / 1.055) ** 2.4
-    )
+    return np.where(color <= 0.04045, color / 12.92, ((color + 0.055) / 1.055) ** 2.4)
 
 
 def linear_rgb_to_srgb(color, as_int8: bool = False):
     color = np.where(
-        color <= 0.0031308,
-        12.92 * color,
-        1.055 * color ** (1 / 2.4) - 0.055
+        color <= 0.0031308, 12.92 * color, 1.055 * color ** (1 / 2.4) - 0.055
     )
     return color if not as_int8 else (np.clip(color, 0, 1) * 255).astype(np.uint8)
 
 
-LRGB_TO_LMS = np.array([
-    [0.4122214708, 0.5363325363, 0.0514459929],
-    [0.2119034982, 0.6806995451, 0.1073969566],
-    [0.0883024619, 0.2817188376, 0.6299787005]
-])
-LMS_TO_LRGB = np.array([
-    [ 4.07674166, -3.30771159, 0.23096993],
-    [-1.268438,  2.6097574, -0.3413194 ],
-    [-0.00419609, -0.70341861, 1.7076147]
-])
+LRGB_TO_LMS = np.array(
+    [
+        [0.4122214708, 0.5363325363, 0.0514459929],
+        [0.2119034982, 0.6806995451, 0.1073969566],
+        [0.0883024619, 0.2817188376, 0.6299787005],
+    ]
+)
+LMS_TO_LRGB = np.array(
+    [
+        [4.07674166, -3.30771159, 0.23096993],
+        [-1.268438, 2.6097574, -0.3413194],
+        [-0.00419609, -0.70341861, 1.7076147],
+    ]
+)
 
-LMS_PRIME_TO_LAB = np.array([
-    [0.2104542553, 0.7936177850, -0.0040720468],
-    [1.9779984951, -2.4285922050, 0.4505937099],
-    [0.0259040371, 0.7827717662, -0.8086757660],
-])
-LAB_TO_LMS_PRIME = np.array([
-    [1., 0.39633779, 0.21580376],
-    [1.00000001, -0.10556134, -0.06385417],
-    [1.00000005, -0.08948418, -1.29148554]
-])
+LMS_PRIME_TO_LAB = np.array(
+    [
+        [0.2104542553, 0.7936177850, -0.0040720468],
+        [1.9779984951, -2.4285922050, 0.4505937099],
+        [0.0259040371, 0.7827717662, -0.8086757660],
+    ]
+)
+LAB_TO_LMS_PRIME = np.array(
+    [
+        [1.0, 0.39633779, 0.21580376],
+        [1.00000001, -0.10556134, -0.06385417],
+        [1.00000005, -0.08948418, -1.29148554],
+    ]
+)
 
 
 def linear_rgb_to_oklab(color):
     return ((color @ LRGB_TO_LMS.T) ** (1 / 3)) @ LMS_PRIME_TO_LAB.T
 
+
 def oklab_to_linear_rgb(color):
     return ((color @ LAB_TO_LMS_PRIME.T) ** 3) @ LMS_TO_LRGB.T
+
 
 def oklab_to_oklch(color):
     color = np.copy(color)
@@ -92,6 +95,7 @@ def oklab_to_oklch(color):
     color_view[..., 2] = h
     return color
 
+
 def oklch_to_oklab(color):
     color = np.copy(color)
     color_view = np.atleast_2d(color)
@@ -102,19 +106,28 @@ def oklch_to_oklab(color):
     color_view[..., 2] = b
     return color
 
+
 def color_to_luminance(color):
     to_y = np.array([0.2126729, 0.7151522, 0.0721750])
     color = (color / 255) ** 2.4
     return np.dot(color, to_y)
 
+
 def clamp_luminance_black_levels(y):
     return np.where(y < 0.022, np.where(y < 0, 0, y + (0.022 - y) ** 1.414), y)
+
 
 def apca_contrast(fg_color, bg_color):
     fg_y = clamp_luminance_black_levels(color_to_luminance(fg_color))
     bg_y = clamp_luminance_black_levels(color_to_luminance(bg_color))
-    s_apc = np.where(bg_y > fg_y, bg_y ** 0.56 - fg_y ** 0.57, bg_y ** 0.65 - fg_y ** 0.62) * 1.14
-    return np.where(np.abs(s_apc) < 0.1, 0.0, np.where(s_apc < 0, (s_apc - 0.027) * 100, (s_apc + 0.027) * 100))
+    s_apc = (
+        np.where(bg_y > fg_y, bg_y**0.56 - fg_y**0.57, bg_y**0.65 - fg_y**0.62) * 1.14
+    )
+    return np.where(
+        np.abs(s_apc) < 0.1,
+        0.0,
+        np.where(s_apc < 0, (s_apc - 0.027) * 100, (s_apc + 0.027) * 100),
+    )
 
 
 def circle_line_intersection(circle_center, radius, point_a, point_b):
@@ -133,19 +146,20 @@ def circle_line_intersection(circle_center, radius, point_a, point_b):
 
     discrim_rt = np.sqrt(discrim)
 
-    p0 = np.stack([
-        determ * dy - sgn(dy) * dx * discrim_rt,
-        -determ * dx - np.abs(dy) * discrim_rt
-    ])
-    p1 = np.stack([
-        determ * dy + sgn(dy) * dx * discrim_rt,
-        -determ * dx + np.abs(dy) * discrim_rt
-    ])
-
-    return (
-        np.where(discrim >= 0, p0, np.nan),
-        np.where(discrim >= 0, p1, np.nan)
+    p0 = np.stack(
+        [
+            determ * dy - sgn(dy) * dx * discrim_rt,
+            -determ * dx - np.abs(dy) * discrim_rt,
+        ]
     )
+    p1 = np.stack(
+        [
+            determ * dy + sgn(dy) * dx * discrim_rt,
+            -determ * dx + np.abs(dy) * discrim_rt,
+        ]
+    )
+
+    return (np.where(discrim >= 0, p0, np.nan), np.where(discrim >= 0, p1, np.nan))
 
 
 def get_oklab_bounds(color_plane_norm, x_bounds, y_bounds):
@@ -153,7 +167,10 @@ def get_oklab_bounds(color_plane_norm, x_bounds, y_bounds):
     y = color_plane_norm[..., 1]
     x0, x1 = x_bounds
     y0, y1 = y_bounds
-    low_bound = np.where(y > x, color_plane_norm * (y0 / y), color_plane_norm * (x0 / x))
+    low_bound = np.where(
+        y > x, color_plane_norm * (y0 / y), color_plane_norm * (x0 / x)
+    )
+
 
 # TODO: Finish and enable eventually...
 def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False):
@@ -180,7 +197,9 @@ def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False
     # Project background point onto the plane...
     bg_from_plane_delta = np.dot(bg_color, plane_norm_vec)
     nearest_bg_point_on_plane = bg_color - bg_from_plane_delta * plane_norm_vec
-    remaining_distance = np.sqrt(distance * distance - bg_from_plane_delta * bg_from_plane_delta)
+    remaining_distance = np.sqrt(
+        distance * distance - bg_from_plane_delta * bg_from_plane_delta
+    )
 
     fg_bg_delta = fg_color - nearest_bg_point_on_plane
     fg_to_bg_dist = np.sqrt(np.dot(fg_bg_delta, fg_bg_delta))
@@ -189,15 +208,27 @@ def contrastify_color(fg_color, bg_color, distance: float, as_int8: bool = False
     # TODO: Actually compute 2d intersections of circle with bounds (rectangle) within valid color plane.
     #       than pick nearest color...
     #
-    fg_shifted = nearest_bg_point_on_plane + (remaining_distance / fg_to_bg_dist) * (fg_color - nearest_bg_point_on_plane)
+    fg_shifted = nearest_bg_point_on_plane + (remaining_distance / fg_to_bg_dist) * (
+        fg_color - nearest_bg_point_on_plane
+    )
 
     l_bounds = (0, 1)
     ab_bounds = (-0.5, 0.5)
-    return linear_rgb_to_srgb(oklab_to_linear_rgb(np.where(fg_to_bg_dist < remaining_distance, fg_shifted, fg_color)), as_int8)
+    return linear_rgb_to_srgb(
+        oklab_to_linear_rgb(
+            np.where(fg_to_bg_dist < remaining_distance, fg_shifted, fg_color)
+        ),
+        as_int8,
+    )
 
 
 class WxPlotStyles:
-    def __init__(self, widget: wx.Control, min_color_dist: float = 0.5, accented_alpha: float = 0.3):
+    def __init__(
+        self,
+        widget: wx.Control,
+        min_color_dist: float = 0.5,
+        accented_alpha: float = 0.3,
+    ):
         self.background_color = widget.GetBackgroundColour()
         self.foreground_color = widget.GetForegroundColour()
 
@@ -210,7 +241,7 @@ class WxPlotStyles:
         self.highlight_color = apply_apca(
             wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT),
             self.background_color,
-            min_color_dist
+            min_color_dist,
         )
         self.highlight_color2 = alpha_shift(self.highlight_color, accented_alpha)
 
@@ -220,19 +251,29 @@ class WxPlotStyles:
         # (This color happens to usually be a Blue, so this typically produces
         #  a Red/Orange)
         self.error_color = apply_apca(
-            wx.Colour(*(255 - np.asarray(self.highlight_color[:3])), self.highlight_color.Alpha()),
+            wx.Colour(
+                *(255 - np.asarray(self.highlight_color[:3])),
+                self.highlight_color.Alpha(),
+            ),
             self.background_color,
-            min_color_dist
+            min_color_dist,
         )
         self.error_color2 = alpha_shift(self.error_color, accented_alpha)
 
         self.fixed_error_color = apply_apca(
-            wx.Colour(*(((
-                np.asarray(self.background_color, int)
-                + np.asarray(self.foreground_color, int)
-            ) / 2).astype(int))),
+            wx.Colour(
+                *(
+                    (
+                        (
+                            np.asarray(self.background_color, int)
+                            + np.asarray(self.foreground_color, int)
+                        )
+                        / 2
+                    ).astype(int)
+                )
+            ),
             self.background_color,
-            min_color_dist
+            min_color_dist,
         )
         self.fixed_error_color2 = alpha_shift(self.fixed_error_color, accented_alpha)
 
@@ -257,9 +298,10 @@ class WxPlotStyles:
         self.indicator_pen2 = wx.Pen(self.foreground_color, 1, wx.PENSTYLE_SOLID)
 
     def is_valid(self, widget: wx.Control):
-        return (
-            tuple(self.background_color[:3]) == tuple(widget.GetBackgroundColour()[:3])
-            and tuple(self.foreground_color[:3]) == tuple(widget.GetForegroundColour()[:3])
+        return tuple(self.background_color[:3]) == tuple(
+            widget.GetBackgroundColour()[:3]
+        ) and tuple(self.foreground_color[:3]) == tuple(
+            widget.GetForegroundColour()[:3]
         )
 
 
@@ -268,6 +310,7 @@ class ProbabilityDisplayer(wx.Control):
     A custom wx.Control which displays a list of probabilities in the form of a line segment plot. Uses native colors
     so as to match other native widgets in the UI.
     """
+
     # Minimum pixels between probabilities....
     MIN_PROB_STEP = 10
     # The number of probabilities to default to displaying on the screen...
@@ -287,7 +330,7 @@ class ProbabilityDisplayer(wx.Control):
         visible_probs: int = VISIBLE_PROBS,
         style=wx.BORDER_DEFAULT,
         name="ProbabilityDisplayer",
-        **kwargs
+        **kwargs,
     ):
         """
         Construct a new ProbabilityDisplayer....
@@ -304,12 +347,14 @@ class ProbabilityDisplayer(wx.Control):
         :param validator: WX Validator, defaults to
         :param name: WX internal name of widget.
         """
-        super().__init__(parent, style=style | wx.FULL_REPAINT_ON_RESIZE, name=name, **kwargs)
+        super().__init__(
+            parent, style=style | wx.FULL_REPAINT_ON_RESIZE, name=name, **kwargs
+        )
         # This tell WX that we are going to handle background painting ourselves, disabling system background clearing
         # and avoiding glitchy rendering and flickering...
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
 
-        if((len(data.shape) != 1)):
+        if len(data.shape) != 1:
             raise ValueError("Invalid data! Must be a numpy array of 1 dimension...")
 
         self._data = np.copy(data)
@@ -324,7 +369,10 @@ class ProbabilityDisplayer(wx.Control):
 
         self._styles = None
 
-        self._best_size = wx.Size(self.MIN_PROB_STEP * 5, max(height, (self.TRIANGLE_SIZE * 4) + self.TOP_PADDING))
+        self._best_size = wx.Size(
+            self.MIN_PROB_STEP * 5,
+            max(height, (self.TRIANGLE_SIZE * 4) + self.TOP_PADDING),
+        )
         self.SetMinSize(self._best_size)
         self.SetInitialSize(self._best_size)
 
@@ -345,14 +393,16 @@ class ProbabilityDisplayer(wx.Control):
         """
         # If the platform already uses double buffering, use a plain old PaintDC, otherwise use a BufferedPaintDC to
         # avoid flickering on unbuffered platforms....
-        painter = wx.PaintDC(self) if(self.IsDoubleBuffered()) else wx.BufferedPaintDC(self)
+        painter = (
+            wx.PaintDC(self) if (self.IsDoubleBuffered()) else wx.BufferedPaintDC(self)
+        )
         # Using a GCDC allows for much prettier aliased painting, making plot look nicer.
         painter = wx.GCDC(painter)
         self.on_draw(painter)
 
     @staticmethod
     def _is_touched(idx, bad_labels, old_user_mods):
-        if(len(old_user_mods) == 0):
+        if len(old_user_mods) == 0:
             return False
 
         idx2 = np.searchsorted(old_user_mods, idx)
@@ -367,8 +417,12 @@ class ProbabilityDisplayer(wx.Control):
         high_value = int(bad_labels[min(high_idx, len(bad_labels) - 1)])
         mid_value = int(bad_labels[min(mid_idx, len(bad_labels) - 1)])
 
-        low_gap_match = low_value == low_goal and mid_idx - low_idx == mid_value - low_value
-        high_gap_match = high_value == high_goal and high_idx - mid_idx == high_value - mid_value
+        low_gap_match = (
+            low_value == low_goal and mid_idx - low_idx == mid_value - low_value
+        )
+        high_gap_match = (
+            high_value == high_goal and high_idx - mid_idx == high_value - mid_value
+        )
 
         return (mid_value == idx) and (low_gap_match or high_gap_match)
 
@@ -385,21 +439,21 @@ class ProbabilityDisplayer(wx.Control):
             before_idx = max(start - 1, 0)
             after_idx = min(end, len(x_arr) - 1)
 
-            if(np.isnan(x_arr[before_idx]) or np.isnan(y_arr[before_idx])):
+            if np.isnan(x_arr[before_idx]) or np.isnan(y_arr[before_idx]):
                 before_idx = start
-            if(np.isnan(x_arr[after_idx]) or np.isnan(y_arr[after_idx])):
+            if np.isnan(x_arr[after_idx]) or np.isnan(y_arr[after_idx]):
                 after_idx -= 1
 
             mode = DrawMode(mode_arr[start])
-            if(mode_arr[start] == DrawMode.POORLY_LABELED):
-                if(cls._is_touched(low_val + start, bad_labels, old_user_mods)):
+            if mode_arr[start] == DrawMode.POORLY_LABELED:
+                if cls._is_touched(low_val + start, bad_labels, old_user_mods):
                     mode = DrawMode.USER_MODIFIED_AND_POORLY_LABELED
 
             yield DrawCommand(
                 mode,
                 np.stack([x_arr[start:end], y_arr[start:end]], -1),
                 np.array([x_arr[before_idx], y_arr[before_idx]]),
-                np.array([x_arr[after_idx], y_arr[after_idx]])
+                np.array([x_arr[after_idx], y_arr[after_idx]]),
             )
 
     def _compute_points(self, height: int, width: int) -> DrawingInfo:
@@ -420,7 +474,7 @@ class ProbabilityDisplayer(wx.Control):
         # Compute the amount of probabilities to display per side based on configured parameters...
         tick_step = max(self.MIN_PROB_STEP, int(width / self._ticks_visible))
 
-        center = (width // 2)
+        center = width // 2
         values_per_side = (center - 1) // tick_step
 
         # Compute the lowest and highest indexes for probabilities we can show...
@@ -437,24 +491,32 @@ class ProbabilityDisplayer(wx.Control):
         bad_locations = self._bad_locations[low_bad:high_bad] - low_val
 
         # If there are segments, identify what segments we can see...
-        if(self._segment_starts is not None):
+        if self._segment_starts is not None:
             seg_low = np.searchsorted(self._segment_starts[1:], low_val)
             seg_high = np.searchsorted(self._segment_starts[1:], high_val)
-            seg_offsets = (self._segment_starts[1:][seg_low:seg_high] - low_val) * tick_step + offset - (tick_step / 2)
+            seg_offsets = (
+                (self._segment_starts[1:][seg_low:seg_high] - low_val) * tick_step
+                + offset
+                - (tick_step / 2)
+            )
         else:
             seg_offsets = np.array([])
 
         # If there are segments, identify what segments we can see...
-        if(self._segment_fix_frames is not None):
+        if self._segment_fix_frames is not None:
             seg_low = np.searchsorted(self._segment_fix_frames, low_val)
             seg_high = np.searchsorted(self._segment_fix_frames, high_val)
-            seg_fix_offsets = (self._segment_fix_frames[seg_low:seg_high] - low_val) * tick_step + offset
+            seg_fix_offsets = (
+                self._segment_fix_frames[seg_low:seg_high] - low_val
+            ) * tick_step + offset
         else:
             seg_fix_offsets = np.array([])
 
         x = np.arange(0, high_val - low_val) * tick_step + offset
         y = data[low_val:high_val]
-        y = (1 - (y / self._max_data_point)) * (height - ((self.TRIANGLE_SIZE * 2) + self.TOP_PADDING)) + self.TOP_PADDING
+        y = (1 - (y / self._max_data_point)) * (
+            height - ((self.TRIANGLE_SIZE * 2) + self.TOP_PADDING)
+        ) + self.TOP_PADDING
 
         # Build a mode array.
         mode = np.zeros(len(y), dtype=np.int8)
@@ -468,8 +530,13 @@ class ProbabilityDisplayer(wx.Control):
             seg_offsets.astype(int),
             seg_fix_offsets.astype(int),
             self._get_draw_commands(
-                x, y, mode, low_val, self._bad_locations, self._user_modified_from_last_pass
-            )
+                x,
+                y,
+                mode,
+                low_val,
+                self._bad_locations,
+                self._user_modified_from_last_pass,
+            ),
         )
 
     def on_draw(self, dc: wx.DC):
@@ -479,26 +546,28 @@ class ProbabilityDisplayer(wx.Control):
         """
         width, height = self.GetClientSize()
 
-        if((not width) or (not height)):
+        if (not width) or (not height):
             return
 
-        if(self._styles is not None and not self._styles.is_valid(self)):
+        if self._styles is not None and not self._styles.is_valid(self):
             self._styles = None
-        if(self._styles is None):
+        if self._styles is None:
             self._styles = WxPlotStyles(self)
         s = self._styles
 
         # Clear the background with the default color...
-        dc.SetBackground(
-            wx.Brush(s.background_color, wx.BRUSHSTYLE_SOLID)
-        )
+        dc.SetBackground(wx.Brush(s.background_color, wx.BRUSHSTYLE_SOLID))
         dc.Clear()
 
         # This patches the point drawing for the latest versions of wxWidgets, which don't respect the pen's width correctly...
         def draw_points(points, pen):
             top = np.round((np.asarray(points) - pen.GetWidth() / 2)).astype(int)
-            args = np.concatenate([top, np.full(top.shape, pen.GetWidth(), dtype=int)], axis=-1)
-            dc.DrawEllipseList(args, s.transparent_pen, wx.Brush(pen.GetColour(), wx.BRUSHSTYLE_SOLID))
+            args = np.concatenate(
+                [top, np.full(top.shape, pen.GetWidth(), dtype=int)], axis=-1
+            )
+            dc.DrawEllipseList(
+                args, s.transparent_pen, wx.Brush(pen.GetColour(), wx.BRUSHSTYLE_SOLID)
+            )
 
         # Compute the center and points to place on the line...
         draw_info = self._compute_points(height, width)
@@ -506,30 +575,42 @@ class ProbabilityDisplayer(wx.Control):
         for seg_x in draw_info.segment_xs:
             seg_x = int(seg_x)
             dc.DrawLineList([[seg_x, 0, seg_x, height]], s.fixed_error_pen)
-            dc.DrawPolygonList([[
-                [seg_x - int(self.TRIANGLE_SIZE / 2), 0],
-                [seg_x + int(self.TRIANGLE_SIZE / 2), 0],
-                [seg_x, int(self.TRIANGLE_SIZE)]
-            ]], s.fixed_error_pen, s.fixed_error_brush)
+            dc.DrawPolygonList(
+                [
+                    [
+                        [seg_x - int(self.TRIANGLE_SIZE / 2), 0],
+                        [seg_x + int(self.TRIANGLE_SIZE / 2), 0],
+                        [seg_x, int(self.TRIANGLE_SIZE)],
+                    ]
+                ],
+                s.fixed_error_pen,
+                s.fixed_error_brush,
+            )
 
         for seg_x in draw_info.segment_fix_xs:
             seg_x = int(seg_x)
-            dc.DrawPolygonList([[
-                [seg_x - int(self.TRIANGLE_SIZE / 2), 0],
-                [seg_x + int(self.TRIANGLE_SIZE / 2), 0],
-                [seg_x, int(self.TRIANGLE_SIZE)]
-            ]], s.indicator_pen2, s.highlight_brush)
+            dc.DrawPolygonList(
+                [
+                    [
+                        [seg_x - int(self.TRIANGLE_SIZE / 2), 0],
+                        [seg_x + int(self.TRIANGLE_SIZE / 2), 0],
+                        [seg_x, int(self.TRIANGLE_SIZE)],
+                    ]
+                ],
+                s.indicator_pen2,
+                s.highlight_brush,
+            )
 
         # Plot all of the points the filled-in polygon underneath, and the line connecting the points...
         for draw_command in draw_info.draw_commands:
-            if(draw_command.draw_mode == DrawMode.USER_MODIFIED):
+            if draw_command.draw_mode == DrawMode.USER_MODIFIED:
                 continue
 
-            if(draw_command.draw_mode == DrawMode.NORMAL):
+            if draw_command.draw_mode == DrawMode.NORMAL:
                 pen = s.highlight_pen
                 pen2 = s.highlight_pen2
                 brush = s.highlight_brush
-            elif(draw_command.draw_mode == DrawMode.POORLY_LABELED):
+            elif draw_command.draw_mode == DrawMode.POORLY_LABELED:
                 pen = s.error_pen
                 pen2 = s.error_pen2
                 brush = s.error_brush
@@ -541,37 +622,52 @@ class ProbabilityDisplayer(wx.Control):
             poly_begin_point = (draw_command.points[0] + draw_command.point_before) / 2
             poly_end_point = (draw_command.points[-1] + draw_command.point_after) / 2
 
-            wrap_polygon_points = np.array([
-                poly_end_point,
-                [poly_end_point[0], height],
-                [poly_begin_point[0], height],
-                poly_begin_point
-            ])
+            wrap_polygon_points = np.array(
+                [
+                    poly_end_point,
+                    [poly_end_point[0], height],
+                    [poly_begin_point[0], height],
+                    poly_begin_point,
+                ]
+            )
 
             dc.DrawPolygonList(
                 [np.concatenate((draw_command.points, wrap_polygon_points))],
                 s.transparent_pen,
-                brush
+                brush,
             )
 
             all_points = np.concatenate(
                 ([poly_begin_point], draw_command.points, [poly_end_point])
             )
-            dc.DrawLineList(np.concatenate((all_points[1:], all_points[:-1]), 1).astype(int), pen)
+            dc.DrawLineList(
+                np.concatenate((all_points[1:], all_points[:-1]), 1).astype(int), pen
+            )
             draw_points(draw_command.points.astype(int), pen2)
 
         # Draw the current location indicating line, point and arrow, indicates which data point we are currently on.
-        dc.DrawLineList([[int(draw_info.x_center), 0, int(draw_info.x_center), height]], s.indicator_pen2)
-        dc.DrawPolygonList([[
-            [int(draw_info.x_center - self.TRIANGLE_SIZE), height],
-            [int(draw_info.x_center + self.TRIANGLE_SIZE), height],
-            [int(draw_info.x_center), height - int(self.TRIANGLE_SIZE * 1.5)]
-        ]], s.indicator_pen2, s.indicator_brush)
-        if(draw_info.center_draw_mode != DrawMode.USER_MODIFIED):
-            draw_points([[int(draw_info.x_center), int(draw_info.y_center)]], s.indicator_pen)
+        dc.DrawLineList(
+            [[int(draw_info.x_center), 0, int(draw_info.x_center), height]],
+            s.indicator_pen2,
+        )
+        dc.DrawPolygonList(
+            [
+                [
+                    [int(draw_info.x_center - self.TRIANGLE_SIZE), height],
+                    [int(draw_info.x_center + self.TRIANGLE_SIZE), height],
+                    [int(draw_info.x_center), height - int(self.TRIANGLE_SIZE * 1.5)],
+                ]
+            ],
+            s.indicator_pen2,
+            s.indicator_brush,
+        )
+        if draw_info.center_draw_mode != DrawMode.USER_MODIFIED:
+            draw_points(
+                [[int(draw_info.x_center), int(draw_info.y_center)]], s.indicator_pen
+            )
 
         # If the user set the name of this probability display plot, write it to the top-left corner...
-        if(self._text is not None):
+        if self._text is not None:
             back_pen = wx.Pen(s.background_color, 3, wx.PENSTYLE_SOLID)
             back_brush = wx.Brush(s.background_color, wx.BRUSHSTYLE_SOLID)
             dc.SetTextBackground(s.background_color)
@@ -589,8 +685,10 @@ class ProbabilityDisplayer(wx.Control):
 
         :param location: A integer, being the frame or index to make this probability display center and point to.
         """
-        if(not (0 <= location < self._data.shape[0])):
-            raise ValueError(f"Location {location} is not within the range: 0 through {self._data.shape[0]}.")
+        if not (0 <= location < self._data.shape[0]):
+            raise ValueError(
+                f"Location {location} is not within the range: 0 through {self._data.shape[0]}."
+            )
         self._current_index = location
         self.Refresh()
 
@@ -689,90 +787,90 @@ class ProbabilityDisplayer(wx.Control):
         view.flags.writeable = False
         return view
 
-    def get_prev_bad_location(self, location: int = None, orig_location = None, moves_done = 0) -> int:
+    def get_prev_bad_location(
+        self, location: int = None, orig_location=None, moves_done=0
+    ) -> int:
         """
         Get the previous bad location based on the current location in the
         probability display.
 
         :returns: An integer, the index of the nearest previous bad location.
         """
-        if(location is None):
+        if location is None:
             location = self.get_location()
-        if(orig_location is None):
+        if orig_location is None:
             orig_location = location
 
-        if(len(self._bad_locations) == 0):
+        if len(self._bad_locations) == 0:
             return location
 
         idx = np.searchsorted(self._bad_locations, location, side="left")
         is_bad_spot = self._bad_locations[idx % len(self._bad_locations)] == location
         idx -= 1
 
-        if(is_bad_spot):
-            while(location - int(self._bad_locations[idx]) == 1):
+        if is_bad_spot:
+            while location - int(self._bad_locations[idx]) == 1:
                 location = int(self._bad_locations[idx])
                 idx -= 1
 
-        if(self._is_touched(
+        if self._is_touched(
             self._bad_locations[idx],
             self._bad_locations,
-            self._user_modified_from_last_pass
-        )):
+            self._user_modified_from_last_pass,
+        ):
             val = self._bad_locations[idx]
-            if(val >= location):
+            if val >= location:
                 val = -len(self._data) + val
             moves_done += location - val
-            if(moves_done >= len(self._data)):
+            if moves_done >= len(self._data):
                 return orig_location
 
             return self.get_prev_bad_location(
-                self._bad_locations[idx],
-                orig_location,
-                moves_done
+                self._bad_locations[idx], orig_location, moves_done
             )
 
         return int(self._bad_locations[idx])
 
-    def get_next_bad_location(self, location: int = None, orig_location = None, moves_done = 0) -> int:
+    def get_next_bad_location(
+        self, location: int = None, orig_location=None, moves_done=0
+    ) -> int:
         """
         Get the next bad location based on the current location in the
         probability display.
 
         :returns: An integer, the index of the nearest next bad location.
         """
-        if(location is None):
+        if location is None:
             location = self.get_location()
-        if(orig_location is None):
+        if orig_location is None:
             orig_location = location
 
-        if(len(self._bad_locations) == 0):
+        if len(self._bad_locations) == 0:
             return location
 
         idx = np.searchsorted(self._bad_locations, location, side="right")
         is_bad_spot = self._bad_locations[idx - 1] == location
         idx = idx % len(self._bad_locations)
 
-        if(is_bad_spot):
-            while(int(self._bad_locations[idx]) - location == 1):
+        if is_bad_spot:
+            while int(self._bad_locations[idx]) - location == 1:
                 location = int(self._bad_locations[idx])
                 idx = (idx + 1) % len(self._bad_locations)
 
-        if(self._is_touched(
-                self._bad_locations[idx],
-                self._bad_locations,
-                self._user_modified_from_last_pass
-        )):
+        if self._is_touched(
+            self._bad_locations[idx],
+            self._bad_locations,
+            self._user_modified_from_last_pass,
+        ):
             val = self._bad_locations[idx]
-            if(val <= location):
+            if val <= location:
                 val = len(self._data) + val
             moves_done += val - location
-            if(moves_done >= len(self._data)):
+            if moves_done >= len(self._data):
                 return orig_location
 
             return self.get_prev_bad_location(
-                self._bad_locations[idx],
-                orig_location,
-                moves_done
+                self._bad_locations[idx], orig_location, moves_done
             )
 
         return int(self._bad_locations[idx])
@@ -810,12 +908,16 @@ def test_demo_displayer():
     data = np.random.rand(100)
     data[np.random.randint(0, 100, 5)] = np.nan
 
-    prob_display = ProbabilityDisplayer(frame, data, np.flatnonzero(data < 0.1), text="Test1")
+    prob_display = ProbabilityDisplayer(
+        frame, data, np.flatnonzero(data < 0.1), text="Test1"
+    )
     prob_display.set_segment_starts(np.unique(np.random.randint(0, 100, 5)))
     prob_display.set_segment_fix_frames(np.unique(np.random.randint(0, 100, 5)))
     layout.Add(prob_display, 1, wx.EXPAND)
 
-    prob_display2 = ProbabilityDisplayer(frame, data, np.flatnonzero(data < 0.1), text="Test2")
+    prob_display2 = ProbabilityDisplayer(
+        frame, data, np.flatnonzero(data < 0.1), text="Test2"
+    )
     layout.Add(prob_display2, 1, wx.EXPAND)
 
     slider = wx.Slider(frame, minValue=0, maxValue=len(data) - 1)
@@ -836,11 +938,11 @@ def test_demo_displayer():
 
 def print_all_sys_colors():
     for attr in dir(wx):
-        if(attr.startswith("SYS_COLOUR")):
+        if attr.startswith("SYS_COLOUR"):
             color = wx.SystemSettings.GetColour(getattr(wx, attr))
             red, green, blue, alpha = color
             print(f"{attr}: {color} \033[48;2;{red};{green};{blue}m  \033[0m")
 
 
-if(__name__ == "__main__"):
+if __name__ == "__main__":
     test_demo_displayer()

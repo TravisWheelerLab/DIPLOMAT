@@ -19,7 +19,9 @@ class ScoreEngine(ABC):
     """
 
     @abstractmethod
-    def compute_scores(self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None) -> np.ndarray:
+    def compute_scores(
+        self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None
+    ) -> np.ndarray:
         """
         Compute the scores for the given set of poses.
 
@@ -48,9 +50,9 @@ class ScoreEngine(ABC):
         """
 
     def get_name(self) -> str:
-        return "".join([
-            f" {c}" if(65 <= ord(c) <= 90) else c for c in type(self).__name__
-        ]).strip()
+        return "".join(
+            [f" {c}" if (65 <= ord(c) <= 90) else c for c in type(self).__name__]
+        ).strip()
 
 
 class ScoreEngineDisplayer(wx.Control):
@@ -61,7 +63,7 @@ class ScoreEngineDisplayer(wx.Control):
         progress_bar: ProgressBar,
         parent=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(parent, *args, **kwargs)
 
@@ -103,8 +105,12 @@ class ScoreEngineDisplayer(wx.Control):
         self._prob_displayer.set_data(new_scores)
         self._prob_displayer.set_bad_locations(new_bad_labels)
 
-    def update_partial(self, poses: Pose, progress_bar: ProgressBar, slices: Iterable[slice]):
-        progress_bar.reset(sum(len(range(*s.indices(poses.get_frame_count()))) for s in slices))
+    def update_partial(
+        self, poses: Pose, progress_bar: ProgressBar, slices: Iterable[slice]
+    ):
+        progress_bar.reset(
+            sum(len(range(*s.indices(poses.get_frame_count()))) for s in slices)
+        )
         progress_bar.message(f"Updating {self._score_engine.get_name()} Scores.")
 
         data = np.copy(self._prob_displayer.get_data())
@@ -156,5 +162,3 @@ class ScoreEngineDisplayer(wx.Control):
 
     def set_segment_fix_frames(self, value: np.ndarray):
         self._prob_displayer.set_segment_fix_frames(value)
-
-

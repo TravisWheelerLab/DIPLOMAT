@@ -1,4 +1,4 @@
-from typing import Union, Tuple
+from typing import Union
 import numba
 import numpy as np
 from enum import IntEnum
@@ -12,6 +12,7 @@ class ClusteringMethod(IntEnum):
     The set of agglomerate clustering methods supported by this module.
     Determines how weights are adjusted after a merge.
     """
+
     SINGLE = 0
     """ Single linkage clustering, the distance between two clusters is the distance between the two closest nodes to each. """
     COMPLETE = 1
@@ -35,21 +36,23 @@ dist_update_func_sig = numba.float64(
     numba.int64,
     numba.float64,
     numba.float64,
-    numba.float64
+    numba.float64,
 )
 
 
 @numba.njit(dist_update_func_sig)
-def distance_update(mode: int, sx: int, sy: int, si: int, dxy: float, dxi: float, dyi: float) -> float:
-    if(mode == ClusteringMethod.SINGLE):
+def distance_update(
+    mode: int, sx: int, sy: int, si: int, dxy: float, dxi: float, dyi: float
+) -> float:
+    if mode == ClusteringMethod.SINGLE:
         return min(dxi, dyi)
-    elif(mode == ClusteringMethod.COMPLETE):
+    elif mode == ClusteringMethod.COMPLETE:
         return max(dxi, dyi)
-    elif(mode == ClusteringMethod.AVERAGE):
+    elif mode == ClusteringMethod.AVERAGE:
         return (sx * dxi + sy * dyi) / (sx + sy)
-    elif(mode == ClusteringMethod.WEIGHTED):
+    elif mode == ClusteringMethod.WEIGHTED:
         return 0.5 * (dxi + dyi)
-    elif(mode == ClusteringMethod.WARD):
+    elif mode == ClusteringMethod.WARD:
         denom = 1.0 / (sx + sy + si)
         return np.sqrt(
             ((sx + si) * denom) * np.square(dxi)
@@ -60,10 +63,9 @@ def distance_update(mode: int, sx: int, sy: int, si: int, dxy: float, dxi: float
         return min(dxi, dyi)
 
 
-
 @numba.njit("types.UniTuple(i8, 2)(i8, i8)")
 def dist_index(node1: _numeric, node2: _numeric):
-    if(node1 > node2):
+    if node1 > node2:
         node1, node2 = node2, node1
     return node1, node2
 
@@ -89,7 +91,7 @@ def nn_chain(dists: np.ndarray, linkage_mode: int):
 
     for i in range(node_count - 1):
         # Chain is empty, add the first next valid cluster...
-        if(chain_length == 0):
+        if chain_length == 0:
             for j in range(node_count):
                 if sizes[j] != 0:
                     stack[0] = j
@@ -100,27 +102,31 @@ def nn_chain(dists: np.ndarray, linkage_mode: int):
         nn_next: int = 0
 
         # Grow the nearest neighbor chain...
-        while(True):
+        while True:
             nn_current = stack[chain_length - 1]
             # Set to the past link if chain is long enough, this prevents cycles...
-            nn_next = stack[chain_length - 2] if(chain_length >= 2) else nn_current
-            current_min = dists[dist_index(nn_current, nn_next)] if(chain_length >= 2) else np.inf
+            nn_next = stack[chain_length - 2] if (chain_length >= 2) else nn_current
+            current_min = (
+                dists[dist_index(nn_current, nn_next)]
+                if (chain_length >= 2)
+                else np.inf
+            )
 
             # Find the nearest neighbor for this cluster...
             for k in range(node_count):
                 # Check if a valid cluster index...
-                if(sizes[k] == 0 or k == nn_current):
+                if sizes[k] == 0 or k == nn_current:
                     continue
 
                 # If distance is closer, update next nearest neighbor...
                 dist = dists[dist_index(nn_current, k)]
-                if(dist < current_min):
+                if dist < current_min:
                     current_min = dist
                     nn_next = k
 
             # If the next nearest neighbor is second one back on the stack, we've found the next set of
             # clusters to merge...
-            if(chain_length >= 2 and nn_next == stack[chain_length - 2]):
+            if chain_length >= 2 and nn_next == stack[chain_length - 2]:
                 break
 
             stack[chain_length] = nn_next
@@ -129,7 +135,7 @@ def nn_chain(dists: np.ndarray, linkage_mode: int):
         # Pop next 2 nodes off the stack...
         chain_length -= 2
         # Node 1 should be the smaller of the two, this is to make merging encoding consistent...
-        if(nn_current > nn_next):
+        if nn_current > nn_next:
             nn_current, nn_next = nn_next, nn_current
 
         n1_size = sizes[nn_current]
@@ -146,7 +152,7 @@ def nn_chain(dists: np.ndarray, linkage_mode: int):
         # Update distances for the new merged cluster...
         for l in range(node_count):
             l_size = sizes[l]
-            if(l_size == 0 or l == nn_current):
+            if l_size == 0 or l == nn_current:
                 continue
 
             dists[dist_index(nn_current, l)] = distance_update(
@@ -156,7 +162,7 @@ def nn_chain(dists: np.ndarray, linkage_mode: int):
                 l_size,
                 current_min,
                 dists[dist_index(nn_current, l)],
-                dists[dist_index(nn_next, l)]
+                dists[dist_index(nn_next, l)],
             )
 
     # Reorder by distance, stably...
@@ -178,7 +184,7 @@ def _new_union_find(size: int) -> UnionFindType:
 def _uf_compress(uf: UnionFindType, n: int) -> int:
     parents = uf[0]
 
-    if(n == parents[n]):
+    if n == parents[n]:
         return n
     else:
         root = _uf_compress(uf, parents[n])
@@ -198,12 +204,12 @@ def _uf_union(uf: UnionFindType, n1: int, n2: int) -> int:
     n1 = _uf_find(uf, n1)
     n2 = _uf_find(uf, n2)
 
-    if(n1 == n2):
+    if n1 == n2:
         return sizes[n1]
 
     n1_size = sizes[n1]
     n2_size = sizes[n2]
-    if(n1_size < n2_size):
+    if n1_size < n2_size:
         n1, n2 = n2, n1
 
     merged_size = n1_size + n2_size
@@ -243,10 +249,9 @@ def get_components(merge_list: np.ndarray, distances: np.ndarray, num_components
     component_index = 0
     for j in range(size):
         root = _uf_find(uf, j)
-        if(components[root] < 0):
+        if components[root] < 0:
             components[root] = component_index
             component_index += 1
         components[j] = components[root]
 
     return components, num_components
-

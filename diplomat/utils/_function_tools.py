@@ -2,6 +2,7 @@
 Provides tools for replacing a functions module and name, while still allowing the function to be pickled and
 transferred around...
 """
+
 from types import FunctionType
 from typing import Any, Callable
 from functools import update_wrapper
@@ -27,5 +28,7 @@ class MovedFunction:
         return self._f.__str__()
 
 
-def replace_function_name_and_module(func: FunctionType, name: str, module: str) -> Callable:
+def replace_function_name_and_module(
+    func: FunctionType, name: str, module: str
+) -> Callable:
     return MovedFunction(func, name, module)

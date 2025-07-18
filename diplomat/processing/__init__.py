@@ -2,8 +2,10 @@
 This module defines the abstract base class for predictor plugins, and additional data structures, classes, and functions used for
 processing network outputs into body part pose predictions.
 """
+
 # Used for type hints
 from typing import Type, Set
+
 # Used by get_predictor for loading plugins
 from diplomat.utils import pluginloader
 from diplomat import predictors
@@ -29,7 +31,7 @@ __all__ = [
     "ConfigSpec",
     "TestFunction",
     "get_predictor",
-    "get_predictor_plugins"
+    "get_predictor_plugins",
 ]
 
 

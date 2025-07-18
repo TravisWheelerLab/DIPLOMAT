@@ -3,9 +3,16 @@ import sys
 from diplomat.core_ops.shared_commands.annotate import _label_videos_single
 from diplomat.core_ops.shared_commands.save_from_restore import _save_from_restore
 from diplomat.core_ops.shared_commands.tracking import analyze_frames, analyze_videos
-from diplomat.core_ops.shared_commands.utils import _fix_path_pairs, _get_track_loaders, _load_tracks_from_loaders
+from diplomat.core_ops.shared_commands.utils import (
+    _fix_path_pairs,
+    _get_track_loaders,
+    _load_tracks_from_loaders,
+)
 from diplomat.core_ops.shared_commands.tweak import _tweak_video_single
-from diplomat.core_ops.shared_commands.visual_settings import VISUAL_SETTINGS, FULL_VISUAL_SETTINGS
+from diplomat.core_ops.shared_commands.visual_settings import (
+    VISUAL_SETTINGS,
+    FULL_VISUAL_SETTINGS,
+)
 from diplomat.processing import Config, Predictor, get_predictor
 from diplomat.processing.type_casters import (
     typecaster_function,
@@ -17,22 +24,32 @@ from diplomat.processing.type_casters import (
     Any,
     get_typecaster_annotations,
     NoneType,
-    get_typecaster_required_arguments
+    get_typecaster_required_arguments,
+    TypeCasterFunction,
 )
 from diplomat.utils.pretty_printer import printer as print
-from diplomat.utils.cli_tools import (func_to_command, allow_arbitrary_flags, Flag, positional_argument_count, CLIError,
-                                      extra_cli_args, func_args_to_config_spec, clear_extra_cli_args_and_copy)
+from diplomat.utils.cli_tools import (
+    func_to_command,
+    allow_arbitrary_flags,
+    Flag,
+    positional_argument_count,
+    CLIError,
+    extra_cli_args,
+    func_args_to_config_spec,
+    clear_extra_cli_args_and_copy,
+)
 from argparse import ArgumentParser
 import typing
 from types import ModuleType
 
-from diplomat.utils.track_formats import save_diplomat_table, load_diplomat_table
+from diplomat.utils.track_formats import save_diplomat_table
 from diplomat.utils.tweak_ui import UIImportError
 from diplomat.frontends import DIPLOMATContract, DIPLOMATCommands
 
 
 class ArgumentError(CLIError):
-    """ Error in arguments passed to CLI Command """
+    """Error in arguments passed to CLI Command"""
+
     pass
 
 
@@ -41,9 +58,9 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
     PRIVATE: Get correctly casted extra arguments for the provided typecasting function. Any arguments that don't
     match those in the function raise an ArgumentError, unless error_on_miss is set to false.
     """
-    if(isinstance(tc_func, Predictor)):
+    if isinstance(tc_func, Predictor):
         def_tcs = tc_func.get_settings()
-        def_tcs = def_tcs if(def_tcs is not None) else {}
+        def_tcs = def_tcs if (def_tcs is not None) else {}
         def_tcs = {k: v[1] for k, v in def_tcs.items()}
     else:
         def_tcs = get_typecaster_annotations(tc_func)
@@ -55,19 +72,19 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
     leftover = {}
 
     for k, v in extra_args.items():
-        if (k in def_tcs):
+        if k in def_tcs:
             new_args[k] = def_tcs[k](v)
-        elif (k in extra):
+        elif k in extra:
             new_args[k] = extra[k][1](v) if (autocast) else v
         else:
-            if (allow_arb):
+            if allow_arb:
                 new_args[k] = v
                 continue
             msg = (
                 f"Warning: command '{tc_func.__name__}' does not have "
                 f"an argument called '{k}'!"
             )
-            if (not error_on_miss):
+            if not error_on_miss:
                 print(f"{msg} Ignoring the argument...")
                 leftover[k] = v
             else:
@@ -79,7 +96,7 @@ def _get_casted_args(tc_func, extra_args, error_on_miss=True):
 def _find_frontend(
     contracts: Union[DIPLOMATContract, List[DIPLOMATContract]],
     config: Union[List[os.PathLike], os.PathLike],
-    **kwargs: typing.Any
+    **kwargs: typing.Any,
 ) -> typing.Tuple[str, ModuleType]:
     from diplomat import _LOADED_FRONTENDS
 
@@ -97,16 +114,14 @@ def _find_frontend(
             verified = funcs.verify(contract=contract, config=config, **kwargs)
             print(f"Verified: {verified}")
 
-        if (all(funcs.verify(
-                contract=c,
-                config=config,
-                **kwargs
-        ) for c in contracts)):
+        if all(funcs.verify(contract=c, config=config, **kwargs) for c in contracts):
             print(f"Frontend '{name}' selected.")
             return (name, funcs)
 
-    print("Could not find a frontend that correctly handles the passed config and other arguments. Make sure the "
-          "config passed is valid.")
+    print(
+        "Could not find a frontend that correctly handles the passed config and other arguments. Make sure the "
+        "config passed is valid."
+    )
     sys.exit(1)
 
 
@@ -115,13 +130,18 @@ def _display_help(
     method_type: str,
     calling_command_name: str,
     command_func: typing.Callable,
-    is_cli: bool
+    is_cli: bool,
 ):
-    if (is_cli):
+    if is_cli:
         print(f"\n\nHelp for {frontend_name}'s {method_type} command:\n")
-        func_to_command(command_func, ArgumentParser(prog=calling_command_name), allow_short_form=False).print_help()
+        func_to_command(
+            command_func,
+            ArgumentParser(prog=calling_command_name),
+            allow_short_form=False,
+        ).print_help()
     else:
         import pydoc
+
         help_dumper = pydoc.Helper(output=sys.stdout, input=sys.stdin)
 
         print(f"\n\nDocstring for {frontend_name}'s {method_type} method:\n")
@@ -131,10 +151,7 @@ def _display_help(
 @allow_arbitrary_flags
 @typecaster_function
 @positional_argument_count(1)
-def yaml(
-    run_config: Union[PathLike, NoneType] = None,
-    **extra_args
-):
+def yaml(run_config: Union[PathLike, NoneType] = None, **extra_args):
     """
     Run DIPLOMAT based on a passed yaml run script. The yaml script should include a 'command' key specifying the
     DIPLOMAT sub-command to run and an 'arguments' key specifying the list of arguments (key-value pairs) to
@@ -150,7 +167,8 @@ def yaml(
     """
     import yaml
 
-    if (run_config is None):
+    data = {}
+    if run_config is None:
         data = yaml.load(sys.stdin, yaml.SafeLoader)
     else:
         with open(str(run_config), "r") as f:
@@ -159,13 +177,18 @@ def yaml(
     command_name = data.get("command", None)
     arguments = data.get("arguments", {})
 
-    if (not isinstance(command_name, str)):
-        raise ArgumentError(f"Yaml file 'command' attribute does not have a value that is a string.")
-    if (not isinstance(arguments, dict)):
-        raise ArgumentError(f"Yaml file 'arguments' attribute not a list of key-value pairs, or mapping.")
+    if not isinstance(command_name, str):
+        raise ArgumentError(
+            f"Yaml file 'command' attribute does not have a value that is a string."
+        )
+    if not isinstance(arguments, dict):
+        raise ArgumentError(
+            f"Yaml file 'arguments' attribute not a list of key-value pairs, or mapping."
+        )
 
     # Load the command...
     from diplomat._cli_runner import get_dynamic_cli_tree
+
     cli_tree = get_dynamic_cli_tree()
 
     sub_tree = cli_tree
@@ -173,27 +196,34 @@ def yaml(
         try:
             sub_tree = cli_tree[command_part]
         except KeyError:
-            raise ArgumentError(f"Command '{command_name}' is not a valid diplomat command.")
+            raise ArgumentError(
+                f"Command '{command_name}' is not a valid diplomat command."
+            )
 
     try:
         get_typecaster_annotations(sub_tree)
     except TypeError:
-        raise ArgumentError(f"Command '{command_name}' is not a valid diplomat command.")
+        raise ArgumentError(
+            f"Command '{command_name}' is not a valid diplomat command."
+        )
 
     arguments.update(extra_args)
 
     for arg in get_typecaster_required_arguments(sub_tree):
-        if (arg not in arguments):
+        if arg not in arguments:
             raise ArgumentError(
                 f"Command '{command_name}' requires '{arg}' to be passed, include it in the yaml file or pass it as a "
                 f"flag to this command."
             )
 
+    # noinspection PyCallingNonCallable
     return sub_tree(**(_get_casted_args(sub_tree, arguments)[0]))
 
 
 @allow_arbitrary_flags
-@extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
+@extra_cli_args(
+    VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:"
+)
 @typecaster_function
 def track_with(
     config: Union[List[PathLike], PathLike, NoneType] = None,
@@ -205,7 +235,7 @@ def track_with(
     predictor_settings: Optional[Dict[str, Any]] = None,
     output_suffix: str = "",
     help_extra: Flag = False,
-    **extra_args
+    **extra_args,
 ):
     """
     Run DIPLOMAT tracking on videos and/or frame stores. Automatically select a frontend based on the passed arguments.
@@ -231,7 +261,7 @@ def track_with(
     """
     from diplomat import CLI_RUN
 
-    if (help_extra):
+    if help_extra:
         if config is None:
             raise ArgumentError("Must pass a config path to get extra help.")
 
@@ -240,12 +270,12 @@ def track_with(
             config=config,
             num_outputs=num_outputs,
             batch_size=batch_size,
-            **extra_args
+            **extra_args,
         )
         if predictor is None:
             predictor = "SegmentedFramePassEngine"
         predictor_settings = get_predictor(predictor).get_settings()
-        if(predictor_settings is None):
+        if predictor_settings is None:
             predictor_settings = {}
 
         predictor_settings.update(VISUAL_SETTINGS)
@@ -253,24 +283,29 @@ def track_with(
             func_args_to_config_spec(selected_frontend._load_model, track_with)
         )
 
-        _track_with_help = extra_cli_args(predictor_settings, doc_header="Additional frontend, visual, and predictor settings:")(clear_extra_cli_args_and_copy(track_with))
+        _track_with_help = extra_cli_args(
+            predictor_settings,
+            doc_header="Additional frontend, visual, and predictor settings:",
+        )(clear_extra_cli_args_and_copy(track_with))
 
         _display_help(
             selected_frontend_name,
             f"track_with with the {predictor} predictor",
             "diplomat track_with",
             _track_with_help,
-            CLI_RUN
+            CLI_RUN,
         )
         return
 
-    if (videos is None and frame_stores is None):
+    if videos is None and frame_stores is None:
         raise ArgumentError("No frame stores or videos passed, terminating.")
 
     # If some videos are supplied, run the frontends video analysis function.
-    if (videos is not None):
-        if(config is None):
-            raise ArgumentError("No config file passed, can't run on video, terminating.")
+    if videos is not None:
+        if config is None:
+            raise ArgumentError(
+                "No config file passed, can't run on video, terminating."
+            )
 
         print("Running on videos...")
         selected_frontend_name, selected_frontend = _find_frontend(
@@ -278,20 +313,21 @@ def track_with(
             config=config,
             num_outputs=num_outputs,
             batch_size=batch_size,
-            **extra_args
+            **extra_args,
         )
 
-        model_args, additional_args = _get_casted_args(selected_frontend._load_model, extra_args, error_on_miss=False)
-        visual_args, additional_args = _get_casted_args(analyze_videos, additional_args, error_on_miss=False)
+        model_args, additional_args = _get_casted_args(
+            selected_frontend._load_model, extra_args, error_on_miss=False
+        )
+        visual_args, additional_args = _get_casted_args(
+            analyze_videos, additional_args, error_on_miss=False
+        )
         ps_video = {}
-        ps_video.update(predictor_settings if(predictor_settings is not None) else {})
+        ps_video.update(predictor_settings if (predictor_settings is not None) else {})
         ps_video.update(additional_args)
 
         model_info, model = selected_frontend._load_model(
-            config=config,
-            batch_size=batch_size,
-            num_outputs=num_outputs,
-            **model_args
+            config=config, batch_size=batch_size, num_outputs=num_outputs, **model_args
         )
 
         analyze_videos(
@@ -301,15 +337,17 @@ def track_with(
             predictor=predictor,
             predictor_settings=ps_video,
             output_suffix=output_suffix,
-            **visual_args
+            **visual_args,
         )
 
     # If some frame stores are supplied, run the frontends frame analysis function.
-    if (frame_stores is not None):
+    if frame_stores is not None:
         print("Running on frame stores...")
-        visual_args, additional_args = _get_casted_args(analyze_videos, extra_args, error_on_miss=False)
+        visual_args, additional_args = _get_casted_args(
+            analyze_videos, extra_args, error_on_miss=False
+        )
         ps_frames = {}
-        ps_frames.update(predictor_settings if(predictor_settings is not None) else {})
+        ps_frames.update(predictor_settings if (predictor_settings is not None) else {})
         ps_frames.update(additional_args)
 
         analyze_frames(
@@ -317,12 +355,14 @@ def track_with(
             num_outputs=num_outputs,
             predictor=predictor,
             predictor_settings=ps_frames,
-            **visual_args
+            **visual_args,
         )
 
 
 @allow_arbitrary_flags
-@extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
+@extra_cli_args(
+    VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:"
+)
 @typecaster_function
 def track(
     config: Union[List[PathLike], PathLike, NoneType] = None,
@@ -333,7 +373,7 @@ def track(
     settings: Optional[Dict[str, Any]] = None,
     output_suffix: str = "",
     help_extra: Flag = False,
-    **extra_args
+    **extra_args,
 ):
     """
     Run diplomat in a non-interactive tracking mode on the specified config and videos or frame stores. An alias for
@@ -366,12 +406,14 @@ def track(
         predictor_settings=settings,
         output_suffix=output_suffix,
         help_extra=help_extra,
-        **extra_args
+        **extra_args,
     )
 
 
 @allow_arbitrary_flags
-@extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
+@extra_cli_args(
+    VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:"
+)
 @typecaster_function
 def track_and_interact(
     config: Union[List[PathLike], PathLike, NoneType] = None,
@@ -382,7 +424,7 @@ def track_and_interact(
     settings: Optional[Dict[str, Any]] = None,
     output_suffix: str = "",
     help_extra: Flag = False,
-    **extra_args
+    **extra_args,
 ):
     """
     Run diplomat in interactive tracking mode on the specified config and videos or frame stores. An alias for
@@ -414,18 +456,20 @@ def track_and_interact(
         predictor_settings=settings,
         output_suffix=output_suffix,
         help_extra=help_extra,
-        **extra_args
+        **extra_args,
     )
 
 
-@extra_cli_args(FULL_VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
+@extra_cli_args(
+    FULL_VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:"
+)
 @typecaster_function
 def annotate(
     videos: Union[List[PathLike], PathLike],
     csvs: Union[List[PathLike], PathLike],
     body_parts_to_plot: Optional[List[str]] = None,
     video_extension: str = "mp4",
-    **kwargs
+    **kwargs,
 ):
     """
     Have diplomat annotate, or label a video given it has already been tracked.
@@ -445,15 +489,19 @@ def annotate(
         return
 
     for c, v in zip(csvs, videos):
-        _label_videos_single(str(c), str(v), body_parts_to_plot, video_extension, visual_settings)
+        _label_videos_single(
+            str(c), str(v), body_parts_to_plot, video_extension, visual_settings
+        )
 
 
-@extra_cli_args(VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:")
+@extra_cli_args(
+    VISUAL_SETTINGS, auto_cast=False, doc_header="Additional visual arguments:"
+)
 @typecaster_function
 def tweak(
     videos: Union[List[PathLike], PathLike],
     csvs: Union[List[PathLike], PathLike],
-    **kwargs
+    **kwargs,
 ):
     """
     Make modifications to DIPLOMAT produced tracking results created for a video using a limited version of the
@@ -475,9 +523,7 @@ def tweak(
 
 
 @typecaster_function
-def interact(
-    state: Union[List[PathLike], PathLike]
-):
+def interact(state: Union[List[PathLike], PathLike]):
     """
     Open diplomat's interactive UI from a .dipui file. Allows for reloading the UI when diplomat crashes, or for
     further editing. Settings and backend will be restored automatically based on the settings and info passed during
@@ -490,19 +536,24 @@ def interact(
     import time
 
     try:
-        from diplomat.predictors.supervised_sfpe.supervised_segmented_frame_pass_engine \
-            import SupervisedSegmentedFramePassEngine
+        from diplomat.predictors.supervised_sfpe.supervised_segmented_frame_pass_engine import (
+            SupervisedSegmentedFramePassEngine,
+        )
     except ImportError:
-        raise UIImportError("Unable to load diplomat UI. Make sure diplomat ui packages are installed")
+        raise UIImportError(
+            "Unable to load diplomat UI. Make sure diplomat ui packages are installed"
+        )
 
-    if (not isinstance(state, (list, tuple))):
+    if not isinstance(state, (list, tuple)):
         state = [state]
 
     for state_file_path in state:
         with open(state_file_path, "r+b") as f:
             with DiplomatFPEState(f) as dip_st:
                 meta = dip_st.get_metadata()
-                num_frames = len(dip_st) // (len(meta["bodyparts"]) * meta["num_outputs"])
+                num_frames = len(dip_st) // (
+                    len(meta["bodyparts"]) * meta["num_outputs"]
+                )
 
         # Create the UI...
         pred = SupervisedSegmentedFramePassEngine(
@@ -511,7 +562,7 @@ def interact(
             num_frames,
             Config(meta["settings"], SupervisedSegmentedFramePassEngine.get_settings()),
             Config(meta["video_metadata"]),
-            restore_path=str(state_file_path)
+            restore_path=str(state_file_path),
         )
 
         with pred as p:
@@ -520,7 +571,7 @@ def interact(
                 poses = p.on_end(prog_bar)
             end_time = time.time()
 
-        if (poses is None):
+        if poses is None:
             raise ValueError("Pass didn't return any data!")
 
         _save_from_restore(
@@ -531,7 +582,7 @@ def interact(
             frame_width_pixels=pred.width,
             frame_height_pixels=pred.height,
             start_time=start_time,
-            end_time=end_time
+            end_time=end_time,
         )
 
 
@@ -539,7 +590,7 @@ def interact(
 def convert_tracks(
     inputs: Union[List[PathLike], PathLike],
     outputs: Union[NoneType, List[PathLike], PathLike] = None,
-    force: Flag = False
+    force: Flag = False,
 ):
     """
     Convert files storing final tracking results for a video from other software to diplomat csv's format that can be
@@ -555,8 +606,10 @@ def convert_tracks(
     from pathlib import Path
 
     loaders = _get_track_loaders()
-    if(len(loaders) == 0):
-        raise ImportError("Unable to find any loaded frontends with csv conversion support.")
+    if len(loaders) == 0:
+        raise ImportError(
+            "Unable to find any loaded frontends with csv conversion support."
+        )
 
     if not isinstance(inputs, (list, tuple)):
         inputs = [inputs]
@@ -564,13 +617,17 @@ def convert_tracks(
         outputs = []
         for p in inputs:
             p = Path(p).resolve()
-            fname = (p.stem + ".csv") if p.suffix != ".csv" else (p.stem + "_converted.csv")
+            fname = (
+                (p.stem + ".csv") if p.suffix != ".csv" else (p.stem + "_converted.csv")
+            )
             outputs.append(p.parent / fname)
     if not isinstance(outputs, (list, tuple)):
         outputs = [outputs]
 
     if len(inputs) != len(outputs):
-        raise ValueError("The provided paths and destinations do not have the same length!")
+        raise ValueError(
+            "The provided paths and destinations do not have the same length!"
+        )
 
     for inp, out in zip(inputs, outputs):
         print(f"Converting HDF5 to CSV: {inp}->{out}")

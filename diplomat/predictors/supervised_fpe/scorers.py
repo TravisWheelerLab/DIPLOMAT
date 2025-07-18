@@ -2,7 +2,9 @@ from typing import Optional
 import numpy as np
 from typing_extensions import Protocol
 from diplomat.predictors.fpe import fpe_math
-from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData
+from diplomat.predictors.fpe.sparse_storage import (
+    ForwardBackwardData,
+)
 from diplomat.wx_gui import labeler_lib
 from diplomat.wx_gui.score_lib import ScoreEngine
 from diplomat.processing import *
@@ -42,8 +44,7 @@ class EntropyOfTransitions(ScoreEngine):
         self._gaussian_table = None
         self._std = self._get_std(self._frame_engine.frame_data.metadata)
         self._init_gaussian_table(
-            int(frame_engine.width) + 1,
-            int(frame_engine.height) + 1
+            int(frame_engine.width) + 1, int(frame_engine.height) + 1
         )
 
         self._settings = labeler_lib.SettingCollection(
@@ -51,24 +52,26 @@ class EntropyOfTransitions(ScoreEngine):
         )
 
     def _get_std(self, metadata):
-        if("optimal_std" in metadata):
+        if "optimal_std" in metadata:
             return metadata.optimal_std[2]
         else:
             return 1
 
     def _init_gaussian_table(self, width, height):
-        if(self._gaussian_table is None):
+        if self._gaussian_table is None:
             self._gaussian_table = fpe_math.gaussian_table(
                 height, width, self._std, 1, 0
             )
 
-    def compute_scores(self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None) -> np.ndarray:
+    def compute_scores(
+        self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None
+    ) -> np.ndarray:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
 
             frames = self._frame_engine.frame_data
 
-            if(sub_section is None):
+            if sub_section is None:
                 sub_section = slice(None)
 
             s, e, j = sub_section.indices(frames.num_frames)
@@ -80,26 +83,46 @@ class EntropyOfTransitions(ScoreEngine):
 
             for f_i in sub_section:
                 for b_g_i in range(num_groups):
-                    cxs = poses.get_x_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
-                    cys = poses.get_y_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
-                    cprobs = poses.get_prob_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
-                    pxs = poses.get_x_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
-                    pys = poses.get_y_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
-                    pprobs = poses.get_prob_at(f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group))
+                    cxs = poses.get_x_at(
+                        f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group)
+                    )
+                    cys = poses.get_y_at(
+                        f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group)
+                    )
+                    cprobs = poses.get_prob_at(
+                        f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group)
+                    )
+                    pxs = poses.get_x_at(
+                        f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group)
+                    )
+                    pys = poses.get_y_at(
+                        f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group)
+                    )
+                    pprobs = poses.get_prob_at(
+                        f_i, slice(b_g_i * num_in_group, (b_g_i + 1) * num_in_group)
+                    )
 
-                    bad_idxs = np.isnan(cxs) | np.isnan(cys) | np.isnan(pxs) | np.isnan(pys)
+                    bad_idxs = (
+                        np.isnan(cxs) | np.isnan(cys) | np.isnan(pxs) | np.isnan(pys)
+                    )
                     if np.any(bad_idxs):
                         pprobs[bad_idxs] = np.nan
                         cprobs[bad_idxs] = np.nan
                         for arr in [cxs, cys, pxs, pys]:
                             arr[bad_idxs] = 0
 
-                    matrix = np.expand_dims(cprobs, 1) * fpe_math.table_transition_interpolate(
-                        (pxs, pys), 1, (cxs, cys), 1, self._gaussian_table, 1
-                    ) * np.expand_dims(pprobs, 0)
+                    matrix = (
+                        np.expand_dims(cprobs, 1)
+                        * fpe_math.table_transition_interpolate(
+                            (pxs, pys), 1, (cxs, cys), 1, self._gaussian_table, 1
+                        )
+                        * np.expand_dims(pprobs, 0)
+                    )
 
                     k = np.nanmax(normalized_shanon_entropy(matrix))
-                    scores[f_i - sub_section.start + 1] = max(scores[f_i - sub_section.start + 1], k)
+                    scores[f_i - sub_section.start + 1] = max(
+                        scores[f_i - sub_section.start + 1], k
+                    )
 
                 prog_bar.update()
 
@@ -127,17 +150,19 @@ class MaximumJumpInStandardDeviations(ScoreEngine):
         self._pcutoff = self._frame_engine.video_metadata["pcutoff"]
 
         self._settings = labeler_lib.SettingCollection(
-            threshold = labeler_lib.FloatSpin(0.25, 1000, 4, 0.25, 4)
+            threshold=labeler_lib.FloatSpin(0.25, 1000, 4, 0.25, 4)
         )
 
     def _get_std(self, metadata):
-        if ("optimal_std" in metadata):
+        if "optimal_std" in metadata:
             return metadata.optimal_std[2]
         else:
             return 1
 
-    def compute_scores(self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None) -> np.ndarray:
-        if(sub_section is None):
+    def compute_scores(
+        self, poses: Pose, prog_bar: ProgressBar, sub_section: Optional[slice] = None
+    ) -> np.ndarray:
+        if sub_section is None:
             sub_section = slice(None)
 
         s, e, j = sub_section.indices(poses.get_frame_count())

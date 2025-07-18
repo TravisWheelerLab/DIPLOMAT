@@ -12,8 +12,18 @@ class FBProgressDialog(wx.Dialog):
     A custom wx.Dialog for displaying progress. Uses a wx.TqdmWxPanel internally, which can be accessed via the
     .progress_bar property to display progress...
     """
-    def __init__(self, parent=None, wid=wx.ID_ANY, title="Progress", inner_msg: str = "Rerunning Frame Pass Engine:",
-                 pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.DEFAULT_DIALOG_STYLE, name="ProgressDialog"):
+
+    def __init__(
+        self,
+        parent=None,
+        wid=wx.ID_ANY,
+        title="Progress",
+        inner_msg: str = "Rerunning Frame Pass Engine:",
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=wx.DEFAULT_DIALOG_STYLE,
+        name="ProgressDialog",
+    ):
         """
         Construct a new FBProgressDialog.
 
@@ -39,7 +49,12 @@ class FBProgressDialog(wx.Dialog):
 
         self.SetSizerAndFit(self._sizer)
         min_size = self.GetMinSize()
-        self._sizer.SetMinSize(wx.Size(self.progress_bar.GetTextExtent("0" * 80).GetWidth(), min_size.GetHeight()))
+        self._sizer.SetMinSize(
+            wx.Size(
+                self.progress_bar.GetTextExtent("0" * 80).GetWidth(),
+                min_size.GetHeight(),
+            )
+        )
         self.SetSize(self.GetMinSize())
         self.SendSizeEvent()
 

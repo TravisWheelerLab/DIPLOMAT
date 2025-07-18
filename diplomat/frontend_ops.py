@@ -2,7 +2,6 @@ import inspect
 from diplomat.processing.type_casters import typecaster_function
 from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import get_summary_from_doc_str
-from dataclasses import asdict
 
 
 @typecaster_function
@@ -37,8 +36,11 @@ def list_loaded_frontends():
         print(f"\t{frontend_docs[name]}")
         print("Supported Functions:")
         for k, v in funcs:
-            if(k.startswith("_")):
+            if k.startswith("_"):
                 continue
             print(f"\t{k}")
-            print("\t\t" + " ".join(get_summary_from_doc_str(str(inspect.getdoc(v))).split()))
+            print(
+                "\t\t"
+                + " ".join(get_summary_from_doc_str(str(inspect.getdoc(v))).split())
+            )
         print("\n")

@@ -1,5 +1,11 @@
 from diplomat import processing
-from diplomat.processing.type_casters import typecaster_function, Union, List, get_type_name, Optional
+from diplomat.processing.type_casters import (
+    typecaster_function,
+    Union,
+    List,
+    get_type_name,
+    Optional,
+)
 from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import Flag, positional_argument_count
 
@@ -21,6 +27,7 @@ def list_predictor_plugins():
         print("\t", predictor.get_description())
         print()
 
+
 def _get_predictor_settings(predictor_name: Union[List[str], str, None] = None):
     """
     Returns the available/modifiable settings for a specified predictor plugin.
@@ -29,7 +36,7 @@ def _get_predictor_settings(predictor_name: Union[List[str], str, None] = None):
                       settings for. If None, will print settings for all currently available predictors.
                       Defaults to None.
 
-    :return: ConfigSpec, a dictionary relating each predictor setting to a 3-tuple of its default value, type, and description strnig.
+    :return: ConfigSpec, a dictionary relating each predictor setting to a 3-tuple of its default value, type, and description string.
     """
     from typing import Iterable
 
@@ -54,6 +61,7 @@ def _get_predictor_settings(predictor_name: Union[List[str], str, None] = None):
         else:
             yield (plugin_name, config_spec)
 
+
 @typecaster_function
 @positional_argument_count(1)
 def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
@@ -68,7 +76,7 @@ def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
     """
 
     # Print name, and settings for each plugin.
-    for (plugin_name, config_spec) in _get_predictor_settings(predictor):
+    for plugin_name, config_spec in _get_predictor_settings(predictor):
         print(f"Plugin Name: {plugin_name}")
         print("Arguments: ")
         if config_spec is {}:
@@ -85,7 +93,9 @@ def get_predictor_settings(predictor: Optional[Union[List[str], str]] = None):
 
 @typecaster_function
 @positional_argument_count(1)
-def test_predictor_plugin(predictor: Optional[Union[List[str], str]] = None, interactive: Flag = False):
+def test_predictor_plugin(
+    predictor: Optional[Union[List[str], str]] = None, interactive: Flag = False
+):
     """
     Run the tests for a predictor plugin.
 

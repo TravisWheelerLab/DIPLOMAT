@@ -1,7 +1,17 @@
 from typing import Optional, Tuple, Callable, Iterable, Sequence, List, Union, TypeVar
 import numpy as np
-from diplomat.predictors.fpe.frame_pass import FramePass, PassOrderError, RangeSlicer, ConfigSpec
-from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, AttributeDict, ForwardBackwardData, SparseTrackingData
+from diplomat.predictors.fpe.frame_pass import (
+    FramePass,
+    PassOrderError,
+    RangeSlicer,
+    ConfigSpec,
+)
+from diplomat.predictors.fpe.sparse_storage import (
+    ForwardBackwardFrame,
+    AttributeDict,
+    ForwardBackwardData,
+    SparseTrackingData,
+)
 from diplomat.predictors.fpe.fpe_math import TransitionFunction, Probs, Coords
 from diplomat.processing import ProgressBar
 from diplomat.predictors.fpe import fpe_math
@@ -18,6 +28,7 @@ class States:
 
 
 np.random.seed(0)
+
 
 # Used when the body part count is <= 2, or multi-threading is disabled...
 class NotAPool:
@@ -66,7 +77,7 @@ def norm_together(arrs):
 
 def select(*info):
     for val, cond in zip(info[::2, 1::2]):
-        if(cond):
+        if cond:
             return val
 
     return info[::2][-1]
@@ -79,7 +90,7 @@ class ViterbiTransitionTable:
         table_down_scale: float,
         enter_exit_prob: float,
         enter_stay_prob: float,
-        occluded_transition_penalty: float = 1.0
+        occluded_transition_penalty: float = 1.0,
     ):
         self._table = table
         self._table_down_scale = table_down_scale
@@ -99,24 +110,36 @@ class ViterbiTransitionTable:
         current_state: int,
         current_probs: Probs,
         current_coords: Coords,
-        current_dscale: float
+        current_dscale: float,
     ) -> np.ndarray:
-        if(prior_state == States.ENTER):
+        if prior_state == States.ENTER:
             return np.full(
                 (len(current_probs), len(prior_probs)),
-                self._enter_stay_prob if(current_state == States.ENTER) else self._enter_exit_prob,
-                np.float32
+                (
+                    self._enter_stay_prob
+                    if (current_state == States.ENTER)
+                    else self._enter_exit_prob
+                ),
+                np.float32,
             )
-        elif(current_state == States.ENTER):
+        elif current_state == States.ENTER:
             return np.full((len(current_probs), len(prior_probs)), -np.inf, np.float32)
 
         multiplier = (
-            self._occ_trans_penalty if(current_state == States.OCCLUDED) else 0
+            self._occ_trans_penalty if (current_state == States.OCCLUDED) else 0
         )
 
-        return fpe_math.table_transition_interpolate(
-            prior_coords, prior_dscale, current_coords, current_dscale, self._table, self._table_down_scale
-        ) + multiplier
+        return (
+            fpe_math.table_transition_interpolate(
+                prior_coords,
+                prior_dscale,
+                current_coords,
+                current_dscale,
+                self._table,
+                self._table_down_scale,
+            )
+            + multiplier
+        )
 
 
 class MITViterbi(FramePass):
@@ -148,28 +171,40 @@ class MITViterbi(FramePass):
         conf = self.config
         std = conf.standard_deviation
 
-        if (std == "auto" and ("optimal_std" in metadata)):
+        if std == "auto" and ("optimal_std" in metadata):
             self._scaled_std = metadata.optimal_std[2]
         else:
-            self._scaled_std = (std if (std != "auto") else 1)
+            self._scaled_std = std if (std != "auto") else 1
 
-        #flat topped gaussian 
-        self._flatten_std = None if (conf.gaussian_plateau is None) else self._scaled_std * conf.gaussian_plateau
-        self._gaussian_table = norm(fpe_math.gaussian_table(
-            self.height, self.width, self._scaled_std, conf.amplitude,
-            conf.lowest_value, self._flatten_std, conf.square_distances, True
-        ))
+        # flat topped gaussian
+        self._flatten_std = (
+            None
+            if (conf.gaussian_plateau is None)
+            else self._scaled_std * conf.gaussian_plateau
+        )
+        self._gaussian_table = norm(
+            fpe_math.gaussian_table(
+                self.height,
+                self.width,
+                self._scaled_std,
+                conf.amplitude,
+                conf.lowest_value,
+                self._flatten_std,
+                conf.square_distances,
+                True,
+            )
+        )
 
     def _init_skeleton(self, metadata: AttributeDict):
-        """If skeleton data is available, this function initializes the skeleton tables, 
-        which are used to enhance tracking by considering the structural 
+        """If skeleton data is available, this function initializes the skeleton tables,
+        which are used to enhance tracking by considering the structural
         relationships between different body parts.
-        
+
         The _skeleton_tables is a StorageGraph object that stores the relationship between different body parts
         as defined in the skeleton data from the metadata. Each entry in this table represents a connection
         between two body parts (nodes) and contains the statistical data (bin_val, freq, avg) related to that connection.
         This data is used to enhance tracking accuracy by considering the structural relationships between body parts.
-        
+
         Specifically, it stores:
         # - The names of the nodes (body parts) involved in the skeleton structure.
         # - A matrix for each pair of connected nodes, which is computed based on the skeleton formula. This matrix
@@ -182,10 +217,10 @@ class MITViterbi(FramePass):
 
         """
 
-        if("skeleton" in metadata):
+        if "skeleton" in metadata:
             self._skeleton_tables = StorageGraph(metadata.skeleton.node_names())
 
-            for ((n1, n2), (bin_val, freq, avg, std)) in metadata.skeleton.items():
+            for (n1, n2), (bin_val, freq, avg, std) in metadata.skeleton.items():
 
                 fill_func = lambda x, y: fpe_math.skeleton_formula(
                     x,
@@ -194,16 +229,12 @@ class MITViterbi(FramePass):
                     std * metadata.skeleton_config["std_multiplier"],
                     metadata.skeleton_config["peak_amplitude"],
                     metadata.skeleton_config["trough_amplitude"],
-                    in_log_space=True
+                    in_log_space=True,
                 )
 
                 self._skeleton_tables[n1, n2] = np.maximum(
-                    norm(
-                        fpe_math.get_func_table(
-                            self.height, self.width, fill_func
-                        )
-                    ),
-                    self.config.lowest_skeleton_score
+                    norm(fpe_math.get_func_table(self.height, self.width, fill_func)),
+                    self.config.lowest_skeleton_score,
                 )
         else:
             self.config.skeleton_weight = 0
@@ -223,41 +254,41 @@ class MITViterbi(FramePass):
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
         in_place: bool = True,
-        reset_bar: bool = True
+        reset_bar: bool = True,
     ) -> ForwardBackwardData:
         """
-        This is the main function that orchestrates the forward and backward passes of the Viterbi algorithm. 
+        This is the main function that orchestrates the forward and backward passes of the Viterbi algorithm.
         It initializes the necessary tables and states, then runs the forward pass to calculate probabilities,
         followed by a backtrace to determine the most probable paths.
-        
-        
+
+
         fb_data: ForwardBackwardData object. I guess this comes from DLC or SLEAP (or i guess the edited data after supervision)
 
-        ****This is going to be for some segment of frames after segmentation with clustering 
+        ****This is going to be for some segment of frames after segmentation with clustering
 
 
         The ForwardBackwardData object is a crucial component in the Viterbi algorithm's implementation for frame passes. It primarily contains the following:
 
-        - frames: A list of Frame objects, each representing a snapshot of the body parts' states at a specific time point. 
+        - frames: A list of Frame objects, each representing a snapshot of the body parts' states at a specific time point.
         Each Frame object holds probabilities and other statistical data necessary for the forward and backward passes.
-        - metadata: An AttributeDict containing metadata related to the current processing, such as fixed_frame_index, 
+        - metadata: An AttributeDict containing metadata related to the current processing, such as fixed_frame_index,
         obscured_probability, and other configuration parameters that influence the algorithm's behavior.
         - num_frames: An integer representing the total number of frames to be processed.
         - num_bodyparts: An integer indicating the number of body parts being tracked.
 
-        This object is typically generated as part of the preprocessing steps before running the Viterbi algorithm. 
-        It is constructed from the input data, which includes video frames, tracking configurations, 
-        and any precomputed probabilities or states necessary for the algorithm. 
-        The ForwardBackwardData object serves as a container for all the information needed to perform 
+        This object is typically generated as part of the preprocessing steps before running the Viterbi algorithm.
+        It is constructed from the input data, which includes video frames, tracking configurations,
+        and any precomputed probabilities or states necessary for the algorithm.
+        The ForwardBackwardData object serves as a container for all the information needed to perform
         the forward and backward passes, facilitating the calculation of the most probable paths for body part movements across frames.
         """
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
-            if("fixed_frame_index" not in fb_data.metadata):
+            if "fixed_frame_index" not in fb_data.metadata:
                 raise PassOrderError(f"Must run FixFrame before this pass!")
 
-            #the index of the frame that marks the segment, in which animals are most separable
+            # the index of the frame that marks the segment, in which animals are most separable
             fix_frame_index = fb_data.metadata.fixed_frame_index
 
             self._init_gaussian_table(fb_data.metadata)
@@ -265,35 +296,37 @@ class MITViterbi(FramePass):
             self._init_obscured_state(fb_data.metadata)
             self._init_edge_state(fb_data.metadata)
 
-            if(reset_bar and prog_bar is not None):
+            if reset_bar and prog_bar is not None:
                 prog_bar.reset(fb_data.num_frames * 3)
 
             # Initialize fixed frame...
-            if(not fb_data.metadata.get("is_pre_initialized", False)):
+            if not fb_data.metadata.get("is_pre_initialized", False):
                 for bp_i in range(fb_data.num_bodyparts):
                     self._compute_init_frame(
-                        fb_data.frames[fix_frame_index][bp_i],
-                        fb_data.metadata
+                        fb_data.frames[fix_frame_index][bp_i], fb_data.metadata
                     )
             else:
                 for bp_i in range(fb_data.num_bodyparts):
                     frame = fb_data.frames[fix_frame_index][bp_i]
-                    #converting probabilities to log space 
+                    # converting probabilities to log space
                     frame.frame_probs = to_log_space(frame.frame_probs)
                     frame.occluded_probs = to_log_space(frame.occluded_probs)
                     frame.enter_state = to_log_space(frame.enter_state)
 
-            fb_data = fb_data if(in_place) else fb_data.copy()
+            fb_data = fb_data if (in_place) else fb_data.copy()
 
             # Viterbi
-            super()._set_step_controls(fix_frame_index + 1, None, 1, -1) #starting from the frame after the fix_frame, going future
+            super()._set_step_controls(
+                fix_frame_index + 1, None, 1, -1
+            )  # starting from the frame after the fix_frame, going future
             self._run_forward(fb_data, prog_bar, True, False)
             super()._set_step_controls(None, fix_frame_index, -1, 1)
             self._run_backtrace(fb_data, prog_bar)
 
-
-            #TODO check if this is being run for any segment other than the first one
-            super()._set_step_controls(fix_frame_index - 1, None, -1, 1) #starting from the frame before the fix_frame, going past
+            # TODO check if this is being run for any segment other than the first one
+            super()._set_step_controls(
+                fix_frame_index - 1, None, -1, 1
+            )  # starting from the frame before the fix_frame, going past
             self._run_forward(fb_data, prog_bar, True, False)
             super()._set_step_controls(None, fix_frame_index, 1, -1)
             self._run_backtrace(fb_data, prog_bar)
@@ -304,7 +337,7 @@ class MITViterbi(FramePass):
                     fix_frame.frame_probs = from_log_space(fix_frame.frame_probs)
                     fix_frame.occluded_probs = from_log_space(fix_frame.occluded_probs)
                     fix_frame.enter_state = from_log_space(fix_frame.enter_state)
-                if(prog_bar is not None):
+                if prog_bar is not None:
                     prog_bar.update()
 
             return fb_data
@@ -314,7 +347,6 @@ class MITViterbi(FramePass):
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
     ) -> ForwardBackwardData:
-        
         """
         Executes the backtrace process for the Viterbi algorithm on the given data.
 
@@ -330,7 +362,14 @@ class MITViterbi(FramePass):
         Returns:
         - ForwardBackwardData: The input data object updated with the backtraced path information.
         """
-        pool_cls = self._get_pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // fb_data.metadata.num_outputs) > 2) else NotAPool
+        pool_cls = (
+            self._get_pool
+            if (
+                self.multi_threading_allowed
+                and (fb_data.num_bodyparts // fb_data.metadata.num_outputs) > 2
+            )
+            else NotAPool
+        )
 
         backtrace_priors = [None for __ in range(fb_data.num_bodyparts)]
         backtrace_current = [None for __ in range(fb_data.num_bodyparts)]
@@ -342,15 +381,17 @@ class MITViterbi(FramePass):
                 1,
                 exit_prob,
                 1 - exit_prob,
-                self.config.occluded_transition_probability
+                self.config.occluded_transition_probability,
             )
 
-            for frame_idx in RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]:
-                if(not (0 <= (frame_idx + self._prior_off) < len(fb_data.frames))):
+            for frame_idx in RangeSlicer(fb_data.frames)[
+                self._start : self._stop : self._step
+            ]:
+                if not (0 <= (frame_idx + self._prior_off) < len(fb_data.frames)):
                     continue
 
                 # As outer loop iterates, the current frame data is updated to contain transition and skeleton probabilities,
-                # so in the next step, picking the maximum in the prior frame (the "current" frame we updated in the last 
+                # so in the next step, picking the maximum in the prior frame (the "current" frame we updated in the last
                 # step) will recover the source cell.
                 for bp_idx in range(fb_data.num_bodyparts):
                     prior = fb_data.frames[frame_idx + self._prior_off][bp_idx]
@@ -361,16 +402,18 @@ class MITViterbi(FramePass):
                     p_scale = prior.src_data.downscaling
                     c_scale = current.src_data.downscaling
 
-                    if (py is None):
+                    if py is None:
                         px = py = np.array([0.0])
-                    if (cy is None):
+                    if cy is None:
                         cx = cy = np.array([0.0])
 
                     # Compute the max of all the priors...
-                    combined, combined_coords, source_idxs = arr_utils.pad_coordinates_and_probs(
-                        [prior.frame_probs, prior.occluded_probs],
-                        [np.array([px, py]).T, prior.occluded_coords],
-                        -np.inf
+                    combined, combined_coords, source_idxs = (
+                        arr_utils.pad_coordinates_and_probs(
+                            [prior.frame_probs, prior.occluded_probs],
+                            [np.array([px, py]).T, prior.occluded_coords],
+                            -np.inf,
+                        )
                     )
                     combined = np.asarray(combined)
 
@@ -380,27 +423,39 @@ class MITViterbi(FramePass):
                     )  # Is it in occluded or frame?
 
                     # If enter state is higher than occluded or frame state, select it over the actual frame coordinates...
-                    #TODO what is going on here
-                    if(combined[max_of_maxes][prior_max_idxs[max_of_maxes]] < prior.enter_state):
+                    # TODO what is going on here
+                    if (
+                        combined[max_of_maxes][prior_max_idxs[max_of_maxes]]
+                        < prior.enter_state
+                    ):
                         state = States.ENTER
                         prob, coords = prior.enter_state, [-np.inf, -np.inf]
                     else:
-                        #this is likely the general case
+                        # this is likely the general case
                         state = States.FRAME if max_of_maxes == 0 else States.OCCLUDED
                         prob = combined[max_of_maxes][prior_max_idxs[max_of_maxes]]
-                        coords = combined_coords[max_of_maxes][prior_max_idxs[max_of_maxes]]
+                        coords = combined_coords[max_of_maxes][
+                            prior_max_idxs[max_of_maxes]
+                        ]
 
-                    prior_data = [(
-                        state,
-                        np.asarray([prob]),
-                        np.asarray([coords]).T,
-                        p_scale
-                    )]
+                    prior_data = [
+                        (state, np.asarray([prob]), np.asarray([coords]).T, p_scale)
+                    ]
 
                     current_data = [
                         (States.FRAME, current.frame_probs, (cx, cy), c_scale),
-                        (States.OCCLUDED, current.occluded_probs, current.occluded_coords.T, c_scale),
-                        (States.ENTER, np.array([current.enter_state]), np.array([[-np.inf, -np.inf]]).T, c_scale)
+                        (
+                            States.OCCLUDED,
+                            current.occluded_probs,
+                            current.occluded_coords.T,
+                            c_scale,
+                        ),
+                        (
+                            States.ENTER,
+                            np.array([current.enter_state]),
+                            np.array([[-np.inf, -np.inf]]).T,
+                            c_scale,
+                        ),
                     ]
 
                     backtrace_priors[bp_idx] = prior_data
@@ -410,16 +465,23 @@ class MITViterbi(FramePass):
                 # prior maximums -> current frames...
                 results = pool.starmap(
                     type(self)._compute_backtrace_step,
-                    [(
-                        backtrace_priors,
-                        backtrace_current[bp_i],
-                        bp_i,
-                        fb_data.metadata,
-                        transition_function,
-                        self._skeleton_tables if (self.config.include_skeleton) else None,
-                        self.config.skeleton_weight,
-                        self.config.occluded_transition_probability
-                    ) for bp_i in range(fb_data.num_bodyparts)]
+                    [
+                        (
+                            backtrace_priors,
+                            backtrace_current[bp_i],
+                            bp_i,
+                            fb_data.metadata,
+                            transition_function,
+                            (
+                                self._skeleton_tables
+                                if (self.config.include_skeleton)
+                                else None
+                            ),
+                            self.config.skeleton_weight,
+                            self.config.occluded_transition_probability,
+                        )
+                        for bp_i in range(fb_data.num_bodyparts)
+                    ],
                 )
 
                 # We stash the entire frame, the maximums are computed on
@@ -429,7 +491,7 @@ class MITViterbi(FramePass):
                     fb_data.frames[frame_idx][bp_i].occluded_probs = occ_prob
                     fb_data.frames[frame_idx][bp_i].enter_state = enter_state[0]
 
-                if(prog_bar is not None):
+                if prog_bar is not None:
                     prog_bar.update()
 
         return fb_data
@@ -438,13 +500,18 @@ class MITViterbi(FramePass):
     def _get_pool(processes):
         # Check globals for a pool...
         """This function sets up a multiprocessing pool for parallel processing,
-        improving the efficiency of the algorithm by allowing it to process 
+        improving the efficiency of the algorithm by allowing it to process
         multiple parts of the frame or multiple frames simultaneously."""
-        if(FramePass.GLOBAL_POOL is not None):
+        if FramePass.GLOBAL_POOL is not None:
             return FramePass.GLOBAL_POOL
 
         from multiprocessing import get_context
-        for ctx, args in [("forkserver", {}), ("spawn", {}), ("fork", {"maxtasksperchild": 1})]:
+
+        for ctx, args in [
+            ("forkserver", {}),
+            ("spawn", {}),
+            ("fork", {"maxtasksperchild": 1}),
+        ]:
             try:
                 ctx = get_context(ctx)
                 return ctx.Pool(processes, **args)
@@ -458,7 +525,7 @@ class MITViterbi(FramePass):
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
         in_place: bool = True,
-        reset_bar: bool = True
+        reset_bar: bool = True,
     ) -> ForwardBackwardData:
         """
         Executes the forward pass of the MIT Viterbi algorithm over the provided frame data.
@@ -477,16 +544,23 @@ class MITViterbi(FramePass):
         Returns:
         - ForwardBackwardData: The updated data structure with computed probabilities and states for each frame.
         """
-        frame_iter = RangeSlicer(fb_data.frames)[self._start:self._stop:self._step]
+        frame_iter = RangeSlicer(fb_data.frames)[self._start : self._stop : self._step]
         meta = fb_data.metadata
 
-        fb_data = fb_data if(in_place) else fb_data.copy()
+        fb_data = fb_data if (in_place) else fb_data.copy()
 
-        if(prog_bar is not None and reset_bar):
+        if prog_bar is not None and reset_bar:
             prog_bar.reset(total=fb_data.num_frames)
 
         # We only use a pool if the body part group is high enough...
-        pool_cls = self._get_pool if(self.multi_threading_allowed and (fb_data.num_bodyparts // meta.num_outputs) > 2) else NotAPool
+        pool_cls = (
+            self._get_pool
+            if (
+                self.multi_threading_allowed
+                and (fb_data.num_bodyparts // meta.num_outputs) > 2
+            )
+            else NotAPool
+        )
 
         with pool_cls(self.thread_count) as pool:
             exit_prob = fb_data.metadata.enter_trans_prob
@@ -501,7 +575,7 @@ class MITViterbi(FramePass):
             for i in frame_iter:
                 prior_idx = i + self._prior_off
 
-                if (not (0 <= prior_idx < fb_data.num_frames)):
+                if not (0 <= prior_idx < fb_data.num_frames):
                     continue
                 prior = fb_data.frames[prior_idx]
                 current = fb_data.frames[i]
@@ -509,24 +583,34 @@ class MITViterbi(FramePass):
 
                 results = pool.starmap(
                     MITViterbi._compute_normal_frame,
-                    [(
-                        prior,
-                        current,
-                        bp_grp_i,
-                        meta,
-                        transition_func,
-                        self._skeleton_tables if (self.config.include_skeleton) else None,
-                        self.config.skeleton_weight,
-                        self.config.occluded_transition_probability
-                    ) for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)])
+                    [
+                        (
+                            prior,
+                            current,
+                            bp_grp_i,
+                            meta,
+                            transition_func,
+                            (
+                                self._skeleton_tables
+                                if (self.config.include_skeleton)
+                                else None
+                            ),
+                            self.config.skeleton_weight,
+                            self.config.occluded_transition_probability,
+                        )
+                        for bp_grp_i in range(fb_data.num_bodyparts // meta.num_outputs)
+                    ],
+                )
 
-                for (bp_grp_i, res) in enumerate(results):
-                    section = slice(bp_grp_i * meta.num_outputs, (bp_grp_i + 1) * meta.num_outputs)
+                for bp_grp_i, res in enumerate(results):
+                    section = slice(
+                        bp_grp_i * meta.num_outputs, (bp_grp_i + 1) * meta.num_outputs
+                    )
                     current[section] = res[section]
 
                 fb_data.frames[i] = current
 
-                if(prog_bar is not None):
+                if prog_bar is not None:
                     prog_bar.update()
 
         return fb_data
@@ -541,17 +625,17 @@ class MITViterbi(FramePass):
         transition_function: TransitionFunction,
         skeleton_table: Optional[StorageGraph] = None,
         skeleton_weight: float = 0,
-        occluded_penalty: float = 0.5
+        occluded_penalty: float = 0.5,
     ) -> List[np.ndarray]:
-        """This method is responsible for computing the transition probabilities from the prior maximum locations 
-        (highest probability states) of all body parts in the prior frame to the current frame's states. 
-        It's where the algorithm determines the most probable path that leads to each pixel 
+        """This method is responsible for computing the transition probabilities from the prior maximum locations
+        (highest probability states) of all body parts in the prior frame to the current frame's states.
+        It's where the algorithm determines the most probable path that leads to each pixel
         in the current frame based on the accumulated probabilities from previous frames.
-        
+
         Parameters
-        prior: A list of lists containing tuples. 
-        Each tuple represents the probability and coordinates (x, y) of the prior maximum locations 
-        for all body parts in the prior frame. 
+        prior: A list of lists containing tuples.
+        Each tuple represents the probability and coordinates (x, y) of the prior maximum locations
+        for all body parts in the prior frame.
         This data structure allows the method to consider multiple potential origins for each body part's current position.
 
         current: A list of tuples containing the probability and coordinates (x, y) of the current frame's states
@@ -559,9 +643,9 @@ class MITViterbi(FramePass):
 
         bp_idx: The index of the body part being processed. This is used to identify which part of the data corresponds to the current body part in multi-body part tracking scenarios.
 
-        metadata: The metadata from the ForwardBackwardData object. 
+        metadata: The metadata from the ForwardBackwardData object.
         An AttributeDict containing metadata that might be necessary for the computation, such as configuration parameters or additional data needed for probability calculations.
-        
+
         transition_function:  A function or callable object that calculates the transition probabilities between states. This is crucial for determining how likely it is to move from one state to another.
 
         skeleton_table: A StorageGraph object that stores the relationship between different body parts as defined in the skeleton data from the metadata.
@@ -571,57 +655,48 @@ class MITViterbi(FramePass):
 
         """
 
-        # If skeleton information is available, the method first computes the influence of skeletal connections 
-        # on the transition probabilities. 
+        # If skeleton information is available, the method first computes the influence of skeletal connections
+        # on the transition probabilities.
         # This involves considering the structural relationships between body parts and adjusting probabilities accordingly.
         skel_res = cls._compute_from_skeleton(
-            prior,
-            current,
-            bp_idx,
-            metadata,
-            skeleton_table,
-            1,
-            occluded_penalty
+            prior, current, bp_idx, metadata, skeleton_table, 1, occluded_penalty
         )
 
-        #The core of the method involves calculating the transition probabilities from the prior states to the current states. 
-        # This is done using the transition_function, which takes into account the distances between states and other factors 
+        # The core of the method involves calculating the transition probabilities from the prior states to the current states.
+        # This is done using the transition_function, which takes into account the distances between states and other factors
         # to determine how likely it is to transition from one state to another.
-        trans_res = cls.log_viterbi_between(
-            current,
-            prior[bp_idx],
-            transition_function
-        )
+        trans_res = cls.log_viterbi_between(current, prior[bp_idx], transition_function)
 
-        #The calculated probabilities from the skeleton influence, soft domination, 
-        # and direct transitions are then combined to determine the overall probability of transitioning 
-        # to each current state from the prior states. 
+        # The calculated probabilities from the skeleton influence, soft domination,
+        # and direct transitions are then combined to determine the overall probability of transitioning
+        # to each current state from the prior states.
         # This involves weighting each component according to the configured weights and summing them up to get the final probabilities.
 
-        #Normalization: Finally, the probabilities are normalized to ensure they are within a valid range 
+        # Normalization: Finally, the probabilities are normalized to ensure they are within a valid range
         # and to facilitate comparison between different paths.
-        return norm_together([
-            # to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
-            t + s * skeleton_weight for t, s in zip(trans_res, skel_res)
-        ])
+        return norm_together(
+            [
+                # to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
+                t + s * skeleton_weight
+                for t, s in zip(trans_res, skel_res)
+            ]
+        )
 
     @classmethod
     def _compute_init_frame(
-        cls,
-        frame: ForwardBackwardFrame,
-        metadata: AttributeDict
+        cls, frame: ForwardBackwardFrame, metadata: AttributeDict
     ) -> ForwardBackwardFrame:
         x, y, probs = frame.src_data.unpack()
 
         if len(y) == 1:
-            if(y == x == probs == [0]):
+            if y == x == probs == [0]:
                 print("Invalid frame to start on! Using enter state...")
-                # The enter_state is used when no good fix frame is found over the entire video 
-                # (one where all parts are separable) the best scoring frame for the video 
-                # (typically one with most parts separated) is picked and parts that weren't 
-                # separated via clustering start in the enter state, which allows transitioning to 
+                # The enter_state is used when no good fix frame is found over the entire video
+                # (one where all parts are separable) the best scoring frame for the video
+                # (typically one with most parts separated) is picked and parts that weren't
+                # separated via clustering start in the enter state, which allows transitioning to
                 # the frame, but not back to the enter state.
-                
+
                 # this needs to change; setting the occluded coordinate to (0,0) introduces bias to the transition probabilities.
                 # (that is, jumping to the nearest point will be favored arbitrarily.)
                 # but it can't be a +/- inf, and it can't be empty. might need to make inf a condition in/above the transition table logic?
@@ -635,8 +710,8 @@ class MITViterbi(FramePass):
                 return frame
 
         frame_probs = to_log_space(probs)
-        
-        # The first occluded state is constructed from the source pixels, 
+
+        # The first occluded state is constructed from the source pixels,
         # whose probabilities are augmented by the obscured probability.
         occ_coord = np.array([x, y]).T
         occ_probs = frame_probs + to_log_space(metadata.obscured_prob)
@@ -651,9 +726,9 @@ class MITViterbi(FramePass):
         frame.frame_probs, frame.occluded_probs = norm_together(
             [frame_probs, occ_probs]
         )
-        
+
         frame.enter_state = -np.inf  # Make enter state 0 in log space...
-        
+
         return frame
 
     @classmethod
@@ -673,7 +748,7 @@ class MITViterbi(FramePass):
 
         :returns: A tuple containing the updated coordinates and probabilities.
         """
-        if (len(occluded_probs) <= max_count):
+        if len(occluded_probs) <= max_count:
             return (occluded_coords, occluded_probs)
 
         indexes = np.argpartition(occluded_probs, -max_count)[-max_count:]
@@ -683,8 +758,13 @@ class MITViterbi(FramePass):
     @classmethod
     def _compute_from_skeleton(
         cls,
-        prior: Union[List[ForwardBackwardFrame], List[List[Tuple[int, np.ndarray, Tuple[np.ndarray, np.ndarray], float]]]],
-        current_data: List[Tuple[int, np.ndarray, Tuple[np.ndarray, np.ndarray], float]],
+        prior: Union[
+            List[ForwardBackwardFrame],
+            List[List[Tuple[int, np.ndarray, Tuple[np.ndarray, np.ndarray], float]]],
+        ],
+        current_data: List[
+            Tuple[int, np.ndarray, Tuple[np.ndarray, np.ndarray], float]
+        ],
         bp_idx: int,
         metadata: AttributeDict,
         skeleton_table: Optional[StorageGraph] = None,
@@ -694,17 +774,16 @@ class MITViterbi(FramePass):
         merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.max,
         merge_results: bool = True,
     ) -> Union[List[Tuple[int, List[NumericArray]]], List[NumericArray]]:
-        
         """
-        Computes the transition probabilities between the prior and current data for a specific body part, 
-        considering the skeleton information, if available. This method integrates the transition probabilities 
-        from the prior state to the current state, leveraging the skeleton structure to inform the transition 
+        Computes the transition probabilities between the prior and current data for a specific body part,
+        considering the skeleton information, if available. This method integrates the transition probabilities
+        from the prior state to the current state, leveraging the skeleton structure to inform the transition
         probabilities and ensure that the computed paths are anatomically plausible.
 
         Parameters:
-        - prior: A union of lists containing either ForwardBackwardFrame objects or lists of tuples with numpy arrays 
+        - prior: A union of lists containing either ForwardBackwardFrame objects or lists of tuples with numpy arrays
         and tuples of numpy arrays, representing the state of each body part in the previous frame.
-        - current_data: A list of tuples containing numpy arrays and tuples of numpy arrays, representing the current 
+        - current_data: A list of tuples containing numpy arrays and tuples of numpy arrays, representing the current
                         state to be updated with new probabilities.
         - bp_idx: An integer representing the index of the body part being processed.
         - metadata: An AttributeDict containing configuration and metadata for the tracking process.
@@ -714,14 +793,14 @@ class MITViterbi(FramePass):
         - merge_results: A boolean indicating whether to merge the results into a single list or keep them separate.
 
         Returns:
-        - A union of lists containing either tuples of integers and lists of NumericArray objects or lists of 
-          NumericArray objects, depending on the merge_results parameter. These lists represent the updated 
+        - A union of lists containing either tuples of integers and lists of NumericArray objects or lists of
+          NumericArray objects, depending on the merge_results parameter. These lists represent the updated
           probabilities and states for the body part being processed.
         """
-        
-        #TODO: Add docstring and notes in coda
-        if(skeleton_table is None):
-            return [0] * len(current_data) if(merge_results) else []
+
+        # TODO: Add docstring and notes in coda
+        if skeleton_table is None:
+            return [0] * len(current_data) if (merge_results) else []
 
         bp_group_idx = bp_idx // metadata.num_outputs
         bp_off = bp_idx % metadata.num_outputs
@@ -733,21 +812,40 @@ class MITViterbi(FramePass):
         for other_bp_group_idx, trans_table in skeleton_table[bp_group_idx]:
             # Grab the prior frame...
             prior_frame = prior[other_bp_group_idx * metadata.num_outputs + bp_off]
-            if(isinstance(prior_frame, ForwardBackwardFrame)):
-                px, py, __, = prior_frame.src_data.unpack()
+            if isinstance(prior_frame, ForwardBackwardFrame):
+                (
+                    px,
+                    py,
+                    __,
+                ) = prior_frame.src_data.unpack()
                 p_scale = prior_frame.src_data.downscaling
 
                 # If wasn't found, don't include in the result.
-                if(prior_frame.frame_probs is None):
+                if prior_frame.frame_probs is None:
                     continue
 
                 z_a = lambda: np.array([0])
                 nf_a = lambda: np.array([-np.inf])
 
                 prior_data = [
-                    (States.FRAME, prior_frame.frame_probs, (px, py) if(px is not None) else (z_a(), z_a()), p_scale),
-                    (States.OCCLUDED, prior_frame.occluded_probs, prior_frame.occluded_coords.T, p_scale),
-                    (States.ENTER, np.array([prior_frame.enter_state]), (nf_a(), nf_a()), p_scale)
+                    (
+                        States.FRAME,
+                        prior_frame.frame_probs,
+                        (px, py) if (px is not None) else (z_a(), z_a()),
+                        p_scale,
+                    ),
+                    (
+                        States.OCCLUDED,
+                        prior_frame.occluded_probs,
+                        prior_frame.occluded_coords.T,
+                        p_scale,
+                    ),
+                    (
+                        States.ENTER,
+                        np.array([prior_frame.enter_state]),
+                        (nf_a(), nf_a()),
+                        p_scale,
+                    ),
                 ]
             else:
                 prior_data = prior_frame
@@ -755,30 +853,28 @@ class MITViterbi(FramePass):
             # No skeleton penalty for transitioning from enter state
             num_links += 1
             transition_func = ViterbiTransitionTable(
-                trans_table,
-                skeleton_table_downscale,
-                0.5,
-                0.5,
-                occluded_penalty
+                trans_table, skeleton_table_downscale, 0.5, 0.5, occluded_penalty
             )
 
-            results.append((
-                other_bp_group_idx * metadata.num_outputs + bp_off,
-                cls.log_viterbi_between(
-                    current_data,
-                    prior_data,
-                    transition_func, #the skeleton data is likely incorporated in this transition function 
-                    merge_arrays,
-                    merge_internal
+            results.append(
+                (
+                    other_bp_group_idx * metadata.num_outputs + bp_off,
+                    cls.log_viterbi_between(
+                        current_data,
+                        prior_data,
+                        transition_func,  # the skeleton data is likely incorporated in this transition function
+                        merge_arrays,
+                        merge_internal,
+                    ),
                 )
-            ))
+            )
 
-        if(not merge_results):
+        if not merge_results:
             return results
 
         for __, bp_res in results:
             for i, (current_total, bp_sub_res) in enumerate(zip(final_result, bp_res)):
-                if(np.all(np.isneginf(bp_sub_res))):
+                if np.all(np.isneginf(bp_sub_res)):
                     # If this skeletal transition is uninformative (all negative infinity), ignore...
                     continue
                 merged_result = current_total + (bp_sub_res / num_links)
@@ -787,9 +883,8 @@ class MITViterbi(FramePass):
         # If not a single skeletal contribution was informative, set to -inf. Note this is necessary
         # with new arithmetic based combination of in frame and skeleton scores as just setting to
         # 0 can cause the occluded state to be way too high...
-        final_result = [res if(res is not 0) else -np.inf for res in final_result]
+        final_result = [res if (res is not 0) else -np.inf for res in final_result]
         return final_result
-
 
     @classmethod
     def _compute_normal_frame(
@@ -801,16 +896,15 @@ class MITViterbi(FramePass):
         transition_function: TransitionFunction,
         skeleton_table: Optional[StorageGraph] = None,
         skeleton_weight: float = 0,
-        occluded_penalty: float = 0.5
+        occluded_penalty: float = 0.5,
     ) -> List[ForwardBackwardFrame]:
-        
-        """processes a single frame in the context of tracking multiple body parts or individuals, 
-        calculating the probabilities of each body part being in each position based on prior information, 
+        """processes a single frame in the context of tracking multiple body parts or individuals,
+        calculating the probabilities of each body part being in each position based on prior information,
         current observations, and various transition models.
-        It integrates several key concepts, including handling occlusions, leveraging skeleton information, 
+        It integrates several key concepts, including handling occlusions, leveraging skeleton information,
         and applying soft domination to refine the tracking process.
-        
-        
+
+
         prior: A list of ForwardBackwardFrame objects representing the state of each body part in the previous frame.
 
         current: A list of ForwardBackwardFrame objects representing the current state to be updated with new probabilities.
@@ -826,8 +920,7 @@ class MITViterbi(FramePass):
         """
 
         group_range = range(
-            bp_group * metadata.num_outputs,
-            (bp_group + 1) * metadata.num_outputs
+            bp_group * metadata.num_outputs, (bp_group + 1) * metadata.num_outputs
         )
 
         results = []
@@ -837,56 +930,58 @@ class MITViterbi(FramePass):
         # iterates through each body part within the specified group, unpacking prior and current state information.
 
         for bp_i in group_range:
-            #the source data from deep lab cut or sleap
+            # the source data from deep lab cut or sleap
             px, py, pprob = prior[bp_i].src_data.unpack()
             cx, cy, cprob = current[bp_i].src_data.unpack()
             p_scale = prior[bp_i].src_data.downscaling
             c_scale = current[bp_i].src_data.downscaling
 
-            if((cprob is not None) and np.all(cprob <= 0)):
-                current[bp_i].src_data = SparseTrackingData(current[bp_i].src_data.downscaling)
+            if (cprob is not None) and np.all(cprob <= 0):
+                current[bp_i].src_data = SparseTrackingData(
+                    current[bp_i].src_data.downscaling
+                )
                 cy = cx = cprob = None
 
             z_arr = lambda: np.array([0])
             neg_inf_arr = lambda: np.array([-np.inf])
 
-            #the data from running viterbi on the previous frame
+            # the data from running viterbi on the previous frame
             prior_data = [
                 (
                     States.FRAME,
-                    prior[bp_i].frame_probs if(py is not None) else neg_inf_arr(),
-                    (px, py) if(py is not None) else (z_arr(), z_arr()),
-                    p_scale
+                    prior[bp_i].frame_probs if (py is not None) else neg_inf_arr(),
+                    (px, py) if (py is not None) else (z_arr(), z_arr()),
+                    p_scale,
                 ),
                 (
                     States.OCCLUDED,
                     prior[bp_i].occluded_probs,
                     prior[bp_i].occluded_coords.T,
-                    p_scale
+                    p_scale,
                 ),
                 (
                     States.ENTER,
                     np.array([prior[bp_i].enter_state]),
                     (neg_inf_arr(), neg_inf_arr()),
-                    p_scale
-                )
+                    p_scale,
+                ),
             ]
 
-            #only have source data for the current frame
+            # only have source data for the current frame
             c_frame_data = (
                 (States.FRAME, norm(to_log_space(cprob)), (cx, cy), c_scale)
-                if(cy is not None) else
-                (States.FRAME, to_log_space(z_arr()), (z_arr(), z_arr()), c_scale)
+                if (cy is not None)
+                else (States.FRAME, to_log_space(z_arr()), (z_arr(), z_arr()), c_scale)
             )
 
-            #occluded coordinates are constrained by the coordinate probabilities in the previous frame 
+            # occluded coordinates are constrained by the coordinate probabilities in the previous frame
             c_occ_coords, c_occ_probs = cls.generate_occluded(
                 np.asarray(c_frame_data[2]).T,
                 np.asarray(c_frame_data[1]),
                 prior[bp_i].occluded_coords,
                 prior[bp_i].occluded_probs,
-                metadata.obscured_prob, #obscured = occluded
-                current[bp_i].disable_occluded and (cy is not None)
+                metadata.obscured_prob,  # obscured = occluded
+                current[bp_i].disable_occluded and (cy is not None),
             )
 
             current[bp_i].occluded_coords = c_occ_coords
@@ -894,34 +989,35 @@ class MITViterbi(FramePass):
             current_data = [
                 c_frame_data,
                 (States.OCCLUDED, c_occ_probs, c_occ_coords.T, c_scale),
-                (States.ENTER, np.array([to_log_space(metadata.enter_prob)]), (neg_inf_arr(), neg_inf_arr()), c_scale)
+                (
+                    States.ENTER,
+                    np.array([to_log_space(metadata.enter_prob)]),
+                    (neg_inf_arr(), neg_inf_arr()),
+                    c_scale,
+                ),
             ]
 
-            #the skeleton_table has transition functions for each pair of body parts 
-            #we use those functions to calculate the transition probabilities between the prior and current states for each body part
-            #having incorporated information about how likely body parts are to be in some range of each other
+            # the skeleton_table has transition functions for each pair of body parts
+            # we use those functions to calculate the transition probabilities between the prior and current states for each body part
+            # having incorporated information about how likely body parts are to be in some range of each other
             from_skel = cls._compute_from_skeleton(
-                prior,
-                current_data,
-                bp_i,
-                metadata,
-                skeleton_table,
-                1,
-                occluded_penalty
+                prior, current_data, bp_i, metadata, skeleton_table, 1, occluded_penalty
             )
 
             from_transition = cls.log_viterbi_between(
-                current_data,
-                prior_data,
-                transition_function
+                current_data, prior_data, transition_function
             )
 
             # Reverting, the arithmatic avg was destroying performance,
             # causing occluded state to basically always be used...
-            results.append([
-                t + s * skeleton_weight  # to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
-                for t, s in zip(from_transition, from_skel)
-            ])
+            results.append(
+                [
+                    t
+                    + s
+                    * skeleton_weight  # to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
+                    for t, s in zip(from_transition, from_skel)
+                ]
+            )
 
             # Result coordinates, exclude the enter state...
             result_coords.append([c[2] for c in current_data[:-1]])
@@ -930,12 +1026,12 @@ class MITViterbi(FramePass):
         frm_probs, frm_coords, frm_idxs = arr_utils.pad_coordinates_and_probs(
             [r[0] for r in results],
             [np.asarray(r[0]).T for r in result_coords],
-            -np.inf
+            -np.inf,
         )
         occ_probs, occ_coords, occ_idxs = arr_utils.pad_coordinates_and_probs(
             [r[1] for r in results],
             [np.asarray(r[1]).T for r in result_coords],
-            -np.inf
+            -np.inf,
         )
 
         enter_probs = [r[2][0] for r in results]
@@ -951,21 +1047,25 @@ class MITViterbi(FramePass):
             # Set locations which are not dominators for this identity to 0 in log space (not valid transitions)...
             best_frm = np.argmax(frm_prob)
             frm_prob[frm_prob < frame_dominators] = -np.inf
-            
+
             # New occluded-domination logic
             best_occ = np.argmax(occ_prob)
             occ_prob[occ_prob < occ_dominators] = -np.inf
-            all_dominated = np.all(np.isneginf(occ_prob)) and np.all(np.isneginf(frm_prob))
+            all_dominated = np.all(np.isneginf(occ_prob)) and np.all(
+                np.isneginf(frm_prob)
+            )
             occ_enabled = not current[bp_i].disable_occluded
             if all_dominated:
                 if occ_enabled:
                     occ_prob[best_occ] = 0
-                    occ_dominators[best_occ] = 0  # Don't allow anyone else to take this spot.
+                    occ_dominators[best_occ] = (
+                        0  # Don't allow anyone else to take this spot.
+                    )
                 else:
                     # We run the fix in frame if this frame has the occluded state disabled...
                     frm_prob[best_frm] = 0
                     frame_dominators[best_frm] = 0
-            
+
             norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
 
             # Store the results...
@@ -975,7 +1075,7 @@ class MITViterbi(FramePass):
             c, p = cls.filter_occluded_probabilities(
                 current[bp_i].occluded_coords,
                 occ_prob[occ_idx],
-                metadata.obscured_survival_max
+                metadata.obscured_survival_max,
             )
             current[bp_i].occluded_coords = c
             current[bp_i].occluded_probs = p - norm_val
@@ -986,8 +1086,12 @@ class MITViterbi(FramePass):
     @classmethod
     def log_viterbi_between(
         cls,
-        current_data: Sequence[Tuple[int, np.ndarray, Tuple[np.ndarray, np.ndarray], float]],
-        prior_data: Sequence[Tuple[int, np.ndarray, Tuple[np.ndarray, np.ndarray], float]],
+        current_data: Sequence[
+            Tuple[int, np.ndarray, Tuple[np.ndarray, np.ndarray], float]
+        ],
+        prior_data: Sequence[
+            Tuple[int, np.ndarray, Tuple[np.ndarray, np.ndarray], float]
+        ],
         transition_function: TransitionFunction,
         merge_arrays: Callable[[Iterable[np.ndarray]], np.ndarray] = np.maximum.reduce,
         merge_internal: Callable[[np.ndarray, int], np.ndarray] = np.nanmax,
@@ -1007,17 +1111,21 @@ class MITViterbi(FramePass):
         Returns:
         A list of numpy arrays representing the merged transition probabilities for each body part.
         """
-        
+
         return [
-            merge_arrays([
-                merge_internal(
-                    np.expand_dims(cprob, 1)
-                    + transition_function(pstate, pprob, pcoord, pscale, cstate, cprob, ccoord, cscale)
-                    + np.expand_dims(pprob, 0)
-                    , 1
-                )
-                for pstate, pprob, pcoord, pscale in prior_data
-            ])
+            merge_arrays(
+                [
+                    merge_internal(
+                        np.expand_dims(cprob, 1)
+                        + transition_function(
+                            pstate, pprob, pcoord, pscale, cstate, cprob, ccoord, cscale
+                        )
+                        + np.expand_dims(pprob, 0),
+                        1,
+                    )
+                    for pstate, pprob, pcoord, pscale in prior_data
+                ]
+            )
             for (cstate, cprob, ccoord, cscale) in current_data
         ]
 
@@ -1029,7 +1137,7 @@ class MITViterbi(FramePass):
         prior_occluded_coords: np.ndarray,
         prior_occluded_probs: np.ndarray,
         occluded_prob: float,
-        disable_occluded: bool
+        disable_occluded: bool,
     ) -> Tuple[np.ndarray, np.ndarray]:
         # otherwise the visible probs will override the occluded probs and the occluded state becomes "sticky."
         current_frame_probs = current_frame_probs + to_log_space(occluded_prob)
@@ -1037,107 +1145,116 @@ class MITViterbi(FramePass):
         merged_probs, merged_coords, _ = arr_utils.pad_coordinates_and_probs(
             [current_frame_probs, prior_occluded_probs],
             [current_frame_coords, prior_occluded_coords],
-            -np.inf
+            -np.inf,
         )
 
         new_coords = merged_coords[0]
         new_probs = (
             np.full(new_coords.shape[0], to_log_space(0))
-            if disable_occluded else
-            np.maximum(*merged_probs)
+            if disable_occluded
+            else np.maximum(*merged_probs)
         )
 
-        return (
-            new_coords,
-            new_probs
-        )
+        return (new_coords, new_probs)
 
     @classmethod
     def get_config_options(cls) -> ConfigSpec:
         # Class to enforce that probabilities are between 0 and 1....
-        """This function returns a dictionary of configuration options that can be adjusted to 
-        customize the behavior of the algorithm. 
-        These options include parameters for the Gaussian distribution, 
-        probabilities for obscured and edge states, 
+        """This function returns a dictionary of configuration options that can be adjusted to
+        customize the behavior of the algorithm.
+        These options include parameters for the Gaussian distribution,
+        probabilities for obscured and edge states,
         and weights for the dominance relationship and skeleton data."""
         return {
             "standard_deviation": (
-                "auto", tc.Union(float, tc.Literal("auto")),
+                "auto",
+                tc.Union(float, tc.Literal("auto")),
                 "The standard deviation of the 2D Gaussian curve used for "
                 "transition probabilities. Defaults to 'auto', which attempts"
                 " to use an optimized value if one has been computed by a "
-                "prior pass, and otherwise uses the default value of 1..."
+                "prior pass, and otherwise uses the default value of 1...",
             ),
             "skeleton_weight": (
-                1, float,
+                1,
+                float,
                 "A positive float, determines how much impact probabilities "
                 "from skeletal transitions should have in each "
                 "forward/backward step if a skeleton was created and enabled "
                 "by prior passes... This is not a probability, but rather a "
-                "ratio."
+                "ratio.",
             ),
             "minimum_skeleton_weight": (
-                1e-4, float,
+                1e-4,
+                float,
                 "A positive float, bounds skeleton_weight from below in the "
                 "adjustment of skeleton weight for poor fix frame quality. "
                 "Avoiding a zero skeleton weight is necessary to stop "
-                "information loss across segment boundaries in SFPE."
+                "information loss across segment boundaries in SFPE.",
             ),
             "amplitude": (
-                1, float,
+                1,
+                float,
                 "The max amplitude of the 2D Gaussian curve used for "
-                "transition probabilities."
+                "transition probabilities.",
             ),
             "lowest_value": (
-                0, float,
+                0,
+                float,
                 "The lowest value the 2D Gaussian curve used for transition "
-                "probabilities can reach."
+                "probabilities can reach.",
             ),
             "obscured_probability": (
-                1e-8, tc.RangedFloat(0, 1),
+                1e-8,
+                tc.RangedFloat(0, 1),
                 "A constant float between 0 and 1 that determines the "
-                "prior probability of being in any obscured state cell."
+                "prior probability of being in any obscured state cell.",
             ),
             "enter_state_probability": (
-                1e-12, tc.RangedFloat(0, 1),
-                "A constant, the probability of being in the enter state."
+                1e-12,
+                tc.RangedFloat(0, 1),
+                "A constant, the probability of being in the enter state.",
             ),
             "enter_state_exit_probability": (
-                0.9999, tc.RangedFloat(0, 1),
+                0.9999,
+                tc.RangedFloat(0, 1),
                 "A constant, the probability of exiting the enter state. Probability of staying in the "
-                "enter state is this value subtracted from 1."
+                "enter state is this value subtracted from 1.",
             ),
             "obscured_survival_max": (
-                50, int,
+                50,
+                int,
                 "An integer, the max number of points to allow to survive for each frame, "
-                "if there is more than this value, the top ones are kept."
+                "if there is more than this value, the top ones are kept.",
             ),
             "gaussian_plateau": (
-                None, tc.Union(float, tc.Literal(None)),
+                None,
+                tc.Union(float, tc.Literal(None)),
                 "A float specifying the area over which to flatten the "
                 "gaussian curve should be less than the norm_dist value. If "
-                "none, set to the norm_dist."
+                "none, set to the norm_dist.",
             ),
             "include_skeleton": (
-                True, bool,
+                True,
+                bool,
                 "A boolean. If True, include skeleton information in the "
                 "forward backward pass, otherwise don't. If no skeleton has "
-                "been built in a prior pass, does nothing."
+                "been built in a prior pass, does nothing.",
             ),
             "square_distances": (
-                False, bool,
+                False,
+                bool,
                 "A boolean. If True, square distances between points before "
-                "putting them through the gaussian, otherwise don't."
+                "putting them through the gaussian, otherwise don't.",
             ),
             "lowest_skeleton_score": (
                 -np.inf,
                 tc.RangedFloat(-np.inf, 0),
                 "A float, the lowest allowed log-probability for the distribution of skeleton scores."
-                "This prevents the skeleton transitions from zeroing all probabilities in the viterbi."
+                "This prevents the skeleton transitions from zeroing all probabilities in the viterbi.",
             ),
             "occluded_transition_probability": (
                 0.5,
                 tc.RangedFloat(0, 1),
-                "A float, how much less likely going to the occluded state is compared to an in-frame transition."
-            )
+                "A float, how much less likely going to the occluded state is compared to an in-frame transition.",
+            ),
         }

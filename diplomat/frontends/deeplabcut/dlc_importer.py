@@ -1,4 +1,8 @@
-from diplomat.utils.lazy_import import LazyImporter, verify_existence_of, onnx_preload_import
+from diplomat.utils.lazy_import import (
+    LazyImporter,
+    verify_existence_of,
+    onnx_preload_import,
+)
 
 # This enforces dlc exists so this module can't be imported when DLC doesn't exist, but still avoids
 # executing DLC's code which has a bunch of side effects...

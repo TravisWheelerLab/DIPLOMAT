@@ -13,6 +13,7 @@ class TqdmWxPanel(wx.Panel):
     """
     A WX progress bar which mimics the tqdm interface. Currently supports the update, __iter__, and reset methods...
     """
+
     # This is the number of nanoseconds that must go by before we allow another update. This is current set to
     # only allow 10 updates a second.
     UPDATE_RATE = 1e8
@@ -24,13 +25,22 @@ class TqdmWxPanel(wx.Panel):
         :param parent: The parent wx widget...
         :param wid: The id of this new wx widget...
         """
-        super().__init__(parent, wid, pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.TAB_TRAVERSAL,
-                          name="TqdmWxPanel")
+        super().__init__(
+            parent,
+            wid,
+            pos=wx.DefaultPosition,
+            size=wx.DefaultSize,
+            style=wx.TAB_TRAVERSAL,
+            name="TqdmWxPanel",
+        )
 
         self.__main_sizer = wx.BoxSizer(wx.VERTICAL)
         self.__progress_bar = wx.Gauge(self)
-        self.__text = wx.StaticText(self, label="\n?it/s | Time Spent: ?, Time Left: ?",
-                                    style=wx.ALIGN_CENTER_HORIZONTAL)
+        self.__text = wx.StaticText(
+            self,
+            label="\n?it/s | Time Spent: ?, Time Left: ?",
+            style=wx.ALIGN_CENTER_HORIZONTAL,
+        )
 
         self.__main_sizer.Add(self.__progress_bar, 0, wx.EXPAND)
         self.__main_sizer.Add(self.__text, 0, wx.ALIGN_CENTER)
@@ -59,13 +69,13 @@ class TqdmWxPanel(wx.Panel):
         (Does not construct a new object). This provides compatibility with the tqdm progress bar api.
         """
         self._iter = iterable
-        if(self._iter is not None):
+        if self._iter is not None:
             try:
                 self._total = len(self._iter)
             except AttributeError:
                 self._total = None
             self.reset(total)
-        elif(total is not None):
+        elif total is not None:
             self._total = total
             self.reset(total)
 
@@ -77,8 +87,8 @@ class TqdmWxPanel(wx.Panel):
         """
         total = None
         iterator = self._iter
-        if(self._iter is not None):
-            if(hasattr(iterator, "__len__")):
+        if self._iter is not None:
+            if hasattr(iterator, "__len__"):
                 total = len(iterator)
             self.reset(total)
         else:
@@ -102,18 +112,18 @@ class TqdmWxPanel(wx.Panel):
         """
         total = self._total
 
-        if(total is not None):
+        if total is not None:
             self._n = min(total - 1, self._n + amount)
         try:
             new_time = time.time_ns()
         except AttributeError:
             new_time = time.time() * 1e9
-        self._step = (new_time - self._old_time)
+        self._step = new_time - self._old_time
         self._speed = self._step / amount
         self._old_time = new_time
         self._display()
 
-    def reset(self, total = None):
+    def reset(self, total=None):
         """
         Reset the progress bar to 0, and set a new total value.
         """
@@ -136,7 +146,7 @@ class TqdmWxPanel(wx.Panel):
         """
         Displays the wx progress bar. Internal, should not be called directly!
         """
-        if(self._closed):
+        if self._closed:
             raise ValueError("The progress bar has been closed!")
 
         total = self._total
@@ -145,13 +155,13 @@ class TqdmWxPanel(wx.Panel):
         # We update the gap sum and check if it has been long enough since the last update(or we reached the end), if
         # not just immediately return. This makes performance much faster!!!
         self._gap_sum += self._step
-        if(self._gap_sum < self.UPDATE_RATE):
-            if((total is not None) and (n != total - 1)):
+        if self._gap_sum < self.UPDATE_RATE:
+            if (total is not None) and (n != total - 1):
                 return
         # Reset the gap sum, for next redraw...
         self._gap_sum = 0
 
-        if(total is None):
+        if total is None:
             self.__progress_bar.Pulse()
         else:
             self.__progress_bar.SetRange(total - 1)
@@ -159,15 +169,27 @@ class TqdmWxPanel(wx.Panel):
 
         time_spent = timedelta(seconds=int((self._old_time - self._start_time) / 1e9))
 
-        if(self._speed != 0):
+        if self._speed != 0:
             it_sec = f"{1 / (self._speed * 1e-9):.02f}"
-            est_time = None if(total is None) else int(((total - n) * ((self._old_time - self._start_time) / (n if(n != 0) else 1))) / 1e9)
+            est_time = (
+                None
+                if (total is None)
+                else int(
+                    (
+                        (total - n)
+                        * ((self._old_time - self._start_time) / (n if (n != 0) else 1))
+                    )
+                    / 1e9
+                )
+            )
             est_time = "?" if (est_time is None) else str(timedelta(seconds=est_time))
         else:
             it_sec = "?"
             est_time = "?"
 
-        self.__text.SetLabelText(f"{self._pre_txt}\n{it_sec}it/s | Time Spent: {time_spent}, Time Left: {est_time}")
+        self.__text.SetLabelText(
+            f"{self._pre_txt}\n{it_sec}it/s | Time Spent: {time_spent}, Time Left: {est_time}"
+        )
         # This sends a resize event, which corrects the StaticText widget and centers it properly...
         self.SendSizeEvent()
         # Vital, this gives control back to wxWidgets, and allows it to update the UI and process any events...
@@ -178,7 +200,7 @@ class TqdmWxPanel(wx.Panel):
         self.Enable(False)
 
 
-if(__name__ == "__main__"):
+if __name__ == "__main__":
     # Tests the progress bar by running it on some fake work via clicking a button...
     def run(tqdm: TqdmWxPanel):
         tqdm.message("Running main loop...")
@@ -198,8 +220,12 @@ if(__name__ == "__main__"):
             self.SetSizerAndFit(self._sizer)
             size: wx.Size = self.GetMinSize()
 
-            self._sizer.SetMinSize(wx.Size(self._tqdm.GetTextExtent("0" * 80).GetWidth(), size.GetHeight()))
-            self.SetSize(wx.Size(self._tqdm.GetTextExtent("0" * 80).GetWidth(), size.GetHeight()))
+            self._sizer.SetMinSize(
+                wx.Size(self._tqdm.GetTextExtent("0" * 80).GetWidth(), size.GetHeight())
+            )
+            self.SetSize(
+                wx.Size(self._tqdm.GetTextExtent("0" * 80).GetWidth(), size.GetHeight())
+            )
 
             self.SendSizeEvent()
             self.Bind(wx.EVT_BUTTON, self.on_btn)

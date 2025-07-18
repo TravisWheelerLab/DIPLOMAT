@@ -2,6 +2,7 @@
 Module contains a wx video player widget and a wx video controller widget. Uses multi-threading to load frames to a
 deque while playing them, allowing for smoother playback...
 """
+
 import dataclasses
 from typing import Optional, Tuple
 import wx
@@ -14,23 +15,28 @@ from diplomat.utils.video_info import get_frame_count_robust_fast
 from diplomat.utils.video_io import ContextVideoCapture
 
 
-def read_frame(video_hdl: cv2.VideoCapture, frame_idx: Optional[int] = None) -> Tuple[bool, np.ndarray]:
+def read_frame(
+    video_hdl: cv2.VideoCapture, frame_idx: Optional[int] = None
+) -> Tuple[bool, np.ndarray]:
     valid_frame = False
     frame = None
 
-    if(frame_idx is not None):
-        if(tell_frame(video_hdl) != frame_idx):
+    if frame_idx is not None:
+        if tell_frame(video_hdl) != frame_idx:
             seek_frame(video_hdl, frame_idx)
 
     if video_hdl.isOpened():
         valid_frame, frame = video_hdl.read()
 
     if not valid_frame:
-        frame = np.zeros((
-            int(video_hdl.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            int(video_hdl.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            3
-        ), dtype=np.uint8)
+        frame = np.zeros(
+            (
+                int(video_hdl.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                int(video_hdl.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                3,
+            ),
+            dtype=np.uint8,
+        )
 
     return valid_frame, frame
 
@@ -48,6 +54,7 @@ Box = Tuple[int, int, int, int]
 Coord = Tuple[float, float]
 IntCoord = Tuple[int, int]
 
+
 class VideoTransform:
     def __init__(
         self,
@@ -55,17 +62,19 @@ class VideoTransform:
         widget_dims: IntCoord,
         crop_box: Optional[Box] = None,
         offset: Coord = (0, 0),
-        scale: float = 1
+        scale: float = 1,
     ):
         self._params = dict(
             video_dims=video_dims,
             widget_dims=widget_dims,
             crop_box=crop_box,
             offset=offset,
-            scale=scale
+            scale=scale,
         )
         crop_box = self.check_crop_box(crop_box, *video_dims)
-        self._cropped_video_size = tuple(crop_box[2:] if crop_box is not None else video_dims)
+        self._cropped_video_size = tuple(
+            crop_box[2:] if crop_box is not None else video_dims
+        )
         self._widget_size = tuple(widget_dims)
         self._video_offset, self._video_scale = self._get_video_pos_and_scale(
             *self._cropped_video_size, *self._widget_size
@@ -78,13 +87,13 @@ class VideoTransform:
         """
         PRIVATE: Validate that the passed cropping box is valid.
         """
-        if(box is None):
+        if box is None:
             return None
 
         x, y, w, h = box
-        if((0 <= x < vid_width) and (0 <= y < vid_height)):
-            if((h > 0) and (w > 0)):
-                if((x + w <= vid_width) and (y + h <= vid_height)):
+        if (0 <= x < vid_width) and (0 <= y < vid_height):
+            if (h > 0) and (w > 0):
+                if (x + w <= vid_width) and (y + h <= vid_height):
                     return box
 
         raise ValueError("Invalid cropping box!!!!")
@@ -95,14 +104,14 @@ class VideoTransform:
         widget_dims: Optional[IntCoord] = None,
         crop_box: Optional[Box] = None,
         offset: Optional[Coord] = None,
-        scale: Optional[float] = None
+        scale: Optional[float] = None,
     ):
         obj = dict(
             video_dims=video_dims,
             widget_dims=widget_dims,
             crop_box=crop_box,
             offset=offset,
-            scale=scale
+            scale=scale,
         )
         obj = {k: self._params[k] if v is None else v for k, v in obj.items()}
         # If object is already up to date, do nothing...
@@ -119,13 +128,12 @@ class VideoTransform:
         return self._post_scale
 
     def adjust(self, offset: Coord, scale: float):
-        self.update(
-            offset=offset,
-            scale=scale
-        )
+        self.update(offset=offset, scale=scale)
 
     @classmethod
-    def _get_resize_dims(cls, frame_w: int, frame_h: int, width: int, height: int) -> Tuple[int, int]:
+    def _get_resize_dims(
+        cls, frame_w: int, frame_h: int, width: int, height: int
+    ) -> Tuple[int, int]:
         """
         PRIVATE: Get the dimensions to resize the video to in order to fit the widget.
         """
@@ -140,36 +148,44 @@ class VideoTransform:
             return width, int(width * frame_aspect)
 
     @classmethod
-    def _get_video_pos_and_scale(cls, frame_w: int, frame_h: int, width: int, height: int) -> Tuple[IntCoord, Coord]:
+    def _get_video_pos_and_scale(
+        cls, frame_w: int, frame_h: int, width: int, height: int
+    ) -> Tuple[IntCoord, Coord]:
         """
         PRIVATE: Get the video bounding box within the widget...
         """
         v_w, v_h = cls._get_resize_dims(frame_w, frame_h, width, height)
         return (
             ((width - v_w) // 2, (height - v_h) // 2),
-            (v_w / frame_w, v_h / frame_h)
+            (v_w / frame_w, v_h / frame_h),
         )
 
     def video_crop_to_widget(self, xy: Coord) -> Coord:
         ps = self._post_scale
-        x, y = tuple(((v * vs + vo) - (po * ws)) * ps for v, vs, vo, po, ws in zip(
-            xy,
-            self._video_scale,
-            self._video_offset,
-            self._post_offset,
-            self._widget_size
-        ))
+        x, y = tuple(
+            ((v * vs + vo) - (po * ws)) * ps
+            for v, vs, vo, po, ws in zip(
+                xy,
+                self._video_scale,
+                self._video_offset,
+                self._post_offset,
+                self._widget_size,
+            )
+        )
         return x, y
 
     def widget_to_video_crop(self, xy: Coord) -> Coord:
         ps = self._post_scale
-        x, y = tuple((((w / ps) + (po * ws)) - vo) / vs for w, vs, vo, po, ws in zip(
-            xy,
-            self._video_scale,
-            self._video_offset,
-            self._post_offset,
-            self._widget_size
-        ))
+        x, y = tuple(
+            (((w / ps) + (po * ws)) - vo) / vs
+            for w, vs, vo, po, ws in zip(
+                xy,
+                self._video_scale,
+                self._video_offset,
+                self._post_offset,
+                self._widget_size,
+            )
+        )
         return x, y
 
     def get_cropped_image(self, img: np.ndarray) -> np.ndarray:
@@ -177,36 +193,51 @@ class VideoTransform:
         if c_box is None:
             return img
         x, y, w, h = c_box
-        return img[y:y + h, x:x + w]
+        return img[y : y + h, x : x + w]
 
     def transform_image(
         self,
         img: np.ndarray,
         img_scale: float = 1.0,
-        interpolation: int = cv2.INTER_AREA
+        interpolation: int = cv2.INTER_AREA,
     ) -> Tuple[np.ndarray, Coord]:
         # Get visible bounds of the video...
         video_top_left = [int(v / img_scale) for v in self.widget_to_video_crop((0, 0))]
-        video_bottom_right = [int(np.ceil(v / img_scale)) for v in self.widget_to_video_crop(self._widget_size)]
+        video_bottom_right = [
+            int(np.ceil(v / img_scale))
+            for v in self.widget_to_video_crop(self._widget_size)
+        ]
 
-        video_top_left = [np.clip(v, 0, mx - 1) for v, mx in zip(video_top_left, self._cropped_video_size)]
-        video_bottom_right = [np.clip(v, 1, mx) for v, mx in zip(video_bottom_right, self._cropped_video_size)]
+        video_top_left = [
+            np.clip(v, 0, mx - 1)
+            for v, mx in zip(video_top_left, self._cropped_video_size)
+        ]
+        video_bottom_right = [
+            np.clip(v, 1, mx)
+            for v, mx in zip(video_bottom_right, self._cropped_video_size)
+        ]
 
         # Grab the subsection of the image...
-        img = img[video_top_left[1]:video_bottom_right[1], video_top_left[0]:video_bottom_right[0]]
+        img = img[
+            video_top_left[1] : video_bottom_right[1],
+            video_top_left[0] : video_bottom_right[0],
+        ]
         img_scaled = cv2.resize(
             img,
             (
                 int(img.shape[1] * img_scale * self._video_scale[0] * self._post_scale),
-                int(img.shape[0] * img_scale * self._video_scale[1] * self._post_scale)
+                int(img.shape[0] * img_scale * self._video_scale[1] * self._post_scale),
             ),
-            interpolation=interpolation
+            interpolation=interpolation,
         )
 
         return (
             img_scaled,
-            self.video_crop_to_widget((video_top_left[0] * img_scale, video_top_left[1] * img_scale))
+            self.video_crop_to_widget(
+                (video_top_left[0] * img_scale, video_top_left[1] * img_scale)
+            ),
         )
+
 
 @dataclasses.dataclass
 class ZoomConfig:
@@ -242,7 +273,7 @@ class VideoPlayer(wx.Control):
         size=wx.DefaultSize,
         style=wx.BORDER_DEFAULT,
         validator=wx.DefaultValidator,
-        name="VideoPlayer"
+        name="VideoPlayer",
     ):
         """
         Create a new VideoPlayer
@@ -260,20 +291,19 @@ class VideoPlayer(wx.Control):
         :param validator: The widgets validator.
         :param name: The name of the widget.
         """
-        super().__init__(parent, w_id, pos, size, style | wx.FULL_REPAINT_ON_RESIZE, validator, name)
+        super().__init__(
+            parent, w_id, pos, size, style | wx.FULL_REPAINT_ON_RESIZE, validator, name
+        )
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
 
         self._width = int(video_hdl.get(cv2.CAP_PROP_FRAME_WIDTH))
         self._height = int(video_hdl.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self._fps = video_hdl.get(cv2.CAP_PROP_FPS)
-        self._crop_box = VideoTransform.check_crop_box(crop_box, self._width, self._height)
+        self._crop_box = VideoTransform.check_crop_box(
+            crop_box, self._width, self._height
+        )
 
-        try:
-            self._num_frames = int(video_hdl.get(cv2.CAP_PROP_FRAME_COUNT))
-            if(self._num_frames == 0):
-                self._num_frames = get_frame_count(video_hdl)
-        except:
-            self._num_frames = get_frame_count(video_hdl)
+        self._num_frames = get_frame_count(video_hdl)
 
         # Useful indicator variables...
         self._playing = False
@@ -310,24 +340,20 @@ class VideoPlayer(wx.Control):
         if self._video_transform is None:
             fh, fw = self._current_frame.shape[:2]
             self._video_transform = VideoTransform(
-                (fw, fh),
-                self.GetSize().Get(),
-                self._crop_box
+                (fw, fh), self.GetSize().Get(), self._crop_box
             )
         else:
             fh, fw = self._current_frame.shape[:2]
-            self._video_transform.update(
-                (fw, fh),
-                self.GetSize().Get(),
-                self._crop_box
-            )
+            self._video_transform.update((fw, fh), self.GetSize().Get(), self._crop_box)
         return self._video_transform
 
     def _on_wheel(self, evt):
         if self._zoom_config is None:
             evt.Skip()
             return
-        if self._zoom_config.key is not None and not wx.GetKeyState(self._zoom_config.key):
+        if self._zoom_config.key is not None and not wx.GetKeyState(
+            self._zoom_config.key
+        ):
             evt.Skip()
             return
 
@@ -343,21 +369,17 @@ class VideoPlayer(wx.Control):
 
         scale = min(
             self._zoom_config.max_zoom,
-            max(self._zoom_config.min_zoom,
-            scale + evt.GetWheelRotation() / self._zoom_config.zoom_slow_down)
+            max(
+                self._zoom_config.min_zoom,
+                scale + evt.GetWheelRotation() / self._zoom_config.zoom_slow_down,
+            ),
         )
-        offset = (
-            ix - (x / (scale * w)),
-            iy - (y / (scale * h))
-        )
+        offset = (ix - (x / (scale * w)), iy - (y / (scale * h)))
 
         if scale <= 1:
             offset = (0, 0)
 
-        vt.update(
-            offset=offset,
-            scale=scale
-        )
+        vt.update(offset=offset, scale=scale)
         self.Refresh()
         evt.Skip()
 
@@ -393,7 +415,7 @@ class VideoPlayer(wx.Control):
 
         offset = (
             offset[0] + ((px - nx) / (scale * w)),
-            offset[1] + ((py - ny) / (scale * h))
+            offset[1] + ((py - ny) / (scale * h)),
         )
         self._net_dist += np.sqrt((px - nx) ** 2 + (py - ny) ** 2)
 
@@ -422,7 +444,9 @@ class VideoPlayer(wx.Control):
         """
         Run on a paint event, redraws the widget.
         """
-        painter = wx.PaintDC(self) if(self.IsDoubleBuffered()) else wx.BufferedPaintDC(self)
+        painter = (
+            wx.PaintDC(self) if (self.IsDoubleBuffered()) else wx.BufferedPaintDC(self)
+        )
         self.on_draw(painter)
 
     def on_draw(self, dc: wx.DC):
@@ -433,44 +457,46 @@ class VideoPlayer(wx.Control):
         """
         width, height = self.GetClientSize()
 
-        if((not width) or (not height)):
+        if (not width) or (not height):
             return
 
         dc.SetBackground(wx.Brush(self.GetBackgroundColour(), wx.BRUSHSTYLE_SOLID))
         dc.Clear()
 
-        if(self._current_frame is None):
+        if self._current_frame is None:
             return
 
         vt = self.video_transform
         resized_frame, (loc_x, loc_y) = vt.transform_image(
             vt.get_cropped_image(self._current_frame),
             img_scale=1,
-            interpolation=cv2.INTER_LINEAR
+            interpolation=cv2.INTER_LINEAR,
         )
 
         # Draw the video background
         b_h, b_w = resized_frame.shape[:2]
-        bitmap = wx.Bitmap.FromBuffer(b_w, b_h, resized_frame[:, :, ::-1].astype(dtype=np.uint8))
+        bitmap = wx.Bitmap.FromBuffer(
+            b_w, b_h, resized_frame[:, :, ::-1].astype(dtype=np.uint8)
+        )
 
         dc.DrawBitmap(bitmap, int(loc_x), int(loc_y))
 
     def _push_time_change_event(self):
-        """ PRIVATE: Used to specify how long the event should """
+        """PRIVATE: Used to specify how long the event should"""
         new_event = self.FrameChangeEvent(id=self.Id, frame=self.get_offset_count())
         wx.PostEvent(self, new_event)
 
-    def _on_timer(self, event, trigger_run = True):
+    def _on_timer(self, event, trigger_run=True):
         """
         PRIVATE: Executed whenever a timer event occurs, which triggers a video frame update if the video is playing.
         """
-        if(self._playing):
-            if(self._frozen):
+        if self._playing:
+            if self._frozen:
                 self.pause()
                 return
             # If we have reached the end of the video, pause the video and don't perform a frame update as
             # we will deadlock the system by waiting for a frame forever...
-            if(self._current_loc >= (self._num_frames - 1)):
+            if self._current_loc >= (self._num_frames - 1):
                 self.pause()
                 return
 
@@ -481,7 +507,7 @@ class VideoPlayer(wx.Control):
             # Post a frame change event.
             self._push_time_change_event()
             # Trigger a redraw on the next pass through the loop and start the timer to play the next frame...
-            if(trigger_run):
+            if trigger_run:
                 self._core_timer.StartOnce(int(1000 / self._fps))
         self.Refresh()  # Force a redraw....
 
@@ -489,9 +515,14 @@ class VideoPlayer(wx.Control):
         """
         Play the video.
         """
-        if(not self.is_playing()):
+        if not self.is_playing():
             self._playing = True
-            wx.PostEvent(self, self.PlayStateChangeEvent(id=self.Id, playing=True, stop_triggered = False))
+            wx.PostEvent(
+                self,
+                self.PlayStateChangeEvent(
+                    id=self.Id, playing=True, stop_triggered=False
+                ),
+            )
             self._on_timer(None)
 
     def stop(self):
@@ -499,7 +530,10 @@ class VideoPlayer(wx.Control):
         Stop the video.
         """
         self._playing = False
-        wx.PostEvent(self, self.PlayStateChangeEvent(id=self.Id, playing=False, stop_triggered = True))
+        wx.PostEvent(
+            self,
+            self.PlayStateChangeEvent(id=self.Id, playing=False, stop_triggered=True),
+        )
         self.set_offset_frames(0)
 
     def pause(self):
@@ -507,7 +541,10 @@ class VideoPlayer(wx.Control):
         Pause the video.
         """
         self._playing = False
-        wx.PostEvent(self, self.PlayStateChangeEvent(id=self.Id, playing=False, stop_triggered = False))
+        wx.PostEvent(
+            self,
+            self.PlayStateChangeEvent(id=self.Id, playing=False, stop_triggered=False),
+        )
 
     def is_playing(self) -> bool:
         """
@@ -560,7 +597,7 @@ class VideoPlayer(wx.Control):
         PRIVATE: Executes a full jump, clearing both internal deques and refilling them with frames. This is done
         whenever we need to do a large jump within a video. Should never be called outside of this class.
         """
-        if(self._frozen):
+        if self._frozen:
             return
 
         current_state = self.is_playing()
@@ -583,7 +620,7 @@ class VideoPlayer(wx.Control):
         clearing both the front and back deques and refilling them. Should never be called outside this class, as it
         performs no checks itself. Used when jump back is small.
         """
-        if(self._frozen):
+        if self._frozen:
             return
 
         current_state = self.is_playing()
@@ -606,7 +643,7 @@ class VideoPlayer(wx.Control):
         of clearing both the front and back deques and refilling them. Should never be called outside this class, as
         it performs no checks itself. Used when jump forward is small.
         """
-        if(self._frozen):
+        if self._frozen:
             return
 
         current_state = self.is_playing()
@@ -632,15 +669,17 @@ class VideoPlayer(wx.Control):
                        Can be 0, does nothing if so.
         """
         # Check if movement is valid...
-        if(amount < 0):
+        if amount < 0:
             raise ValueError("Offset must be positive!")
-        elif(amount == 0):
+        elif amount == 0:
             return
-        if(self._current_loc - amount < 0):
-            raise ValueError(f"Can't go back {amount} frames when at frame {self._current_loc}.")
+        if self._current_loc - amount < 0:
+            raise ValueError(
+                f"Can't go back {amount} frames when at frame {self._current_loc}."
+            )
         # Check if we can perform a 'fast' backtrack, where we have all of the frames in the queue. If not perform
         # a more computationally expensive full jump.
-        if(amount > len(self._prior_frames)):
+        if amount > len(self._prior_frames):
             self._full_jump(self._current_loc - amount)
         else:
             self._fast_back(amount)
@@ -653,15 +692,17 @@ class VideoPlayer(wx.Control):
                        Can be 0, does nothing if so.
         """
         # Check if movement is valid...
-        if(amount < 0):
+        if amount < 0:
             raise ValueError("Offset must be positive!")
-        elif(amount == 0):
+        elif amount == 0:
             return
-        if(self._current_loc + amount >= self._num_frames):
-            raise ValueError(f"Can't go forward {amount} frames when at frame {self._current_loc}.")
+        if self._current_loc + amount >= self._num_frames:
+            raise ValueError(
+                f"Can't go forward {amount} frames when at frame {self._current_loc}."
+            )
         # Check if we can do a fast forward, which is basically the same as moving through frames normally...
         # Otherwise we perform a more expensive full jump.
-        if(amount > self.MAX_FAST_FORWARD_MODE):
+        if amount > self.MAX_FAST_FORWARD_MODE:
             self._full_jump(self._current_loc + amount)
         else:
             self._fast_forward(amount)
@@ -673,12 +714,14 @@ class VideoPlayer(wx.Control):
         :param value: An integer index, being the frame to move to in the video.
         """
         # Is this a valid frame value?
-        if(not (0 <= value < self._num_frames)):
-            raise ValueError(f"Can't set frame index to {value}, there is only {self._num_frames} frames.")
+        if not (0 <= value < self._num_frames):
+            raise ValueError(
+                f"Can't set frame index to {value}, there is only {self._num_frames} frames."
+            )
         # Determine which way the value is moving the current video location, and move backward/forward based on that.
-        if(value < self._current_loc):
+        if value < self._current_loc:
             self.move_back(self._current_loc - value)
-        elif(value > self._current_loc):
+        elif value > self._current_loc:
             self.move_forward(value - self._current_loc)
 
     def __del__(self):
@@ -694,14 +737,22 @@ class VideoController(wx.Panel):
     Provides a set of video controls for controlling a VideoPlayer. Provides some play back controls.
     """
 
-    PLAY_SYMBOL = "\u25B6"
-    PAUSE_SYMBOL = "\u23F8"
-    STOP_SYMBOL = "\u23F9"
+    PLAY_SYMBOL = "\u25b6"
+    PAUSE_SYMBOL = "\u23f8"
+    STOP_SYMBOL = "\u23f9"
     FRAME_BACK_SYMBOL = "\u21b6"
     FRAME_FORWARD_SYMBOL = "\u21b7"
 
-    def __init__(self, parent, video_player: VideoPlayer, w_id = wx.ID_ANY, pos = wx.DefaultPosition,
-                 size = wx.DefaultSize, style = wx.TAB_TRAVERSAL, name = "VideoController"):
+    def __init__(
+        self,
+        parent,
+        video_player: VideoPlayer,
+        w_id=wx.ID_ANY,
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=wx.TAB_TRAVERSAL,
+        name="VideoController",
+    ):
         """
         Construct a new VideoController.
 
@@ -715,7 +766,7 @@ class VideoController(wx.Panel):
         """
         super().__init__(parent, w_id, pos, size, style, name)
 
-        if(video_player is None):
+        if video_player is None:
             raise ValueError("Have to pass a VideoPlayer!!!")
 
         self._video_player = video_player
@@ -727,8 +778,13 @@ class VideoController(wx.Panel):
         self._stop_btn = wx.Button(self, label=self.STOP_SYMBOL)
         self._forward_btn = wx.Button(self, label=self.FRAME_FORWARD_SYMBOL)
 
-        self._slider_control = wx.Slider(self, value=0, minValue=0, maxValue=video_player.get_total_frames() - 1,
-                                         style=wx.SL_HORIZONTAL | wx.SL_LABELS)
+        self._slider_control = wx.Slider(
+            self,
+            value=0,
+            minValue=0,
+            maxValue=video_player.get_total_frames() - 1,
+            style=wx.SL_HORIZONTAL | wx.SL_LABELS,
+        )
 
         self._sizer.Add(self._back_btn, 0, wx.EXPAND | wx.ALL)
         self._sizer.Add(self._play_pause_btn, 0, wx.EXPAND | wx.ALL)
@@ -751,7 +807,7 @@ class VideoController(wx.Panel):
         """
         PRIVATE: Handles optional keyboard events....
         """
-        if(not self.IsEnabled() and not self._video_player.is_frozen()):
+        if not self.IsEnabled() and not self._video_player.is_frozen():
             return
 
         # Is the control were working with some type of text input?
@@ -759,24 +815,25 @@ class VideoController(wx.Panel):
         window: wx.Window = wx.GetTopLevelParent(self)
         foc_widget = window.FindFocus()
         from wx.lib.agw.floatspin import FloatSpin
-        if(isinstance(foc_widget, (wx.SpinCtrl, wx.TextEntry, FloatSpin))):
+
+        if isinstance(foc_widget, (wx.SpinCtrl, wx.TextEntry, FloatSpin)):
             evt.Skip()
             return
 
-        if(evt.GetModifiers() != 0):
+        if evt.GetModifiers() != 0:
             evt.Skip()
             return
 
-        elif(evt.GetKeyCode() == wx.WXK_SPACE):
+        elif evt.GetKeyCode() == wx.WXK_SPACE:
             self.on_play_pause_press(None)
             # If it was the space key we eat the event, to stop buttons from triggering. User can still use enter key
             # to activate buttons in the UI....
             return
-        elif(evt.GetKeyCode() == wx.WXK_LEFT):
+        elif evt.GetKeyCode() == wx.WXK_LEFT:
             self.on_back_press(None)
-        elif(evt.GetKeyCode() == wx.WXK_RIGHT):
+        elif evt.GetKeyCode() == wx.WXK_RIGHT:
             self.on_forward_press(None)
-        elif(evt.GetKeyCode() == wx.WXK_BACK):
+        elif evt.GetKeyCode() == wx.WXK_BACK:
             self._video_player.stop()
 
         evt.Skip()
@@ -803,7 +860,9 @@ class VideoController(wx.Panel):
         """
         PRIVATE: Triggered when video player is paused/played.
         """
-        self._play_pause_btn.SetLabel(self.PAUSE_SYMBOL if(event.playing) else self.PLAY_SYMBOL)
+        self._play_pause_btn.SetLabel(
+            self.PAUSE_SYMBOL if (event.playing) else self.PLAY_SYMBOL
+        )
 
     def on_slide(self, event):
         """
@@ -815,10 +874,13 @@ class VideoController(wx.Panel):
         """
         PRIVATE: Triggered when the play/pause button is pressed.
         """
-        if(self._video_player.is_playing()):
+        if self._video_player.is_playing():
             self._video_player.pause()
         else:
-            if(self._video_player.get_offset_count() + 1 == self._video_player.get_total_frames()):
+            if (
+                self._video_player.get_offset_count() + 1
+                == self._video_player.get_total_frames()
+            ):
                 self._video_player.set_offset_frames(0)
             self._video_player.play()
 
@@ -826,14 +888,16 @@ class VideoController(wx.Panel):
         """
         PRIVATE: Triggered when go back 1 frame button is pressed.
         """
-        if(self._video_player.get_offset_count() > 0):
+        if self._video_player.get_offset_count() > 0:
             self._video_player.move_back()
 
     def on_forward_press(self, event):
         """
         PRIVATE: Triggered when go forward 1 frame button has been pressed.
         """
-        if(self._video_player.get_offset_count() < (self._video_player.get_total_frames() - 1)):
+        if self._video_player.get_offset_count() < (
+            self._video_player.get_total_frames() - 1
+        ):
             self._video_player.move_forward()
 
 
@@ -842,6 +906,7 @@ get_frame_count = get_frame_count_robust_fast
 
 def _main_test():
     from diplomat.wx_gui.probability_displayer import ProbabilityDisplayer
+
     # We test the video player by playing a video with it.
     vid_path = input("Enter a video path: ")
 
@@ -853,8 +918,14 @@ def _main_test():
 
     sizer = wx.BoxSizer(wx.VERTICAL)
 
-    wid = VideoPlayer(panel, video_hdl=ContextVideoCapture(vid_path), zoom_config=ZoomConfig())
-    obj3 = ProbabilityDisplayer(panel, data=np.random.randint(0, 10, (wid.get_total_frames())), bad_locations=np.array([], np.uint64))
+    wid = VideoPlayer(
+        panel, video_hdl=ContextVideoCapture(vid_path), zoom_config=ZoomConfig()
+    )
+    obj3 = ProbabilityDisplayer(
+        panel,
+        data=np.random.randint(0, 10, (wid.get_total_frames())),
+        bad_locations=np.array([], np.uint64),
+    )
     obj2 = VideoController(panel, video_player=wid)
 
     obj2.set_keyboard_listener(wid_frame)
@@ -877,5 +948,5 @@ def _main_test():
     app.MainLoop()
 
 
-if(__name__ == "__main__"):
+if __name__ == "__main__":
     _main_test()

@@ -83,6 +83,7 @@ the DeepLabCut Frame Store format.
 
 
 """
+
 import os
 from io import BytesIO
 from typing import Tuple
@@ -146,7 +147,7 @@ class DLFSReader(FrameReader):
         """
         Private method, find the start of a dlfs file.
         """
-        if(file.read(4) == DLFSConstants.FILE_MAGIC):
+        if file.read(4) == DLFSConstants.FILE_MAGIC:
             return
 
         file.seek(-12, os.SEEK_END)
@@ -154,7 +155,7 @@ class DLFSReader(FrameReader):
 
         self._assert_true(
             tail[:4] == DLFSConstants.FRAME_END_CHUNK_MAGIC,
-            "File is not of the DIPLOMAT Frame Store Format!"
+            "File is not of the DIPLOMAT Frame Store Format!",
         )
 
         offset = int(from_bytes(tail[4:], luint64))
@@ -162,7 +163,7 @@ class DLFSReader(FrameReader):
 
         self._assert_true(
             file.read(4) == DLFSConstants.FILE_MAGIC,
-            "File is not of the DIPLOMAT Frame Store Format!"
+            "File is not of the DIPLOMAT Frame Store Format!",
         )
 
     def __init__(self, file: BinaryIO):
@@ -223,17 +224,20 @@ class DLFSReader(FrameReader):
         # Verify frame lookup chunk is there, and store its file offset.
         self._assert_true(
             file.read(4) == DLFSConstants.FRAME_LOOKUP_MAGIC,
-            "Frame lookup chunk must come 3rd!"
+            "Frame lookup chunk must come 3rd!",
         )
         self._flup_offset = file.tell()
         file.read(8 * self._header.number_of_frames)
 
         next = file.read(4)
-        if(next == DLFSConstants.SKELETON_CHUNK_MAGIC):
+        if next == DLFSConstants.SKELETON_CHUNK_MAGIC:
             edge_count = from_bytes(file.read(4), luint32)
             edges = [None] * len(edge_count)
             for i in range(len(edges)):
-                edges[i] = (from_bytes(file.read(4), luint32), from_bytes(file.read(4), luint32))
+                edges[i] = (
+                    from_bytes(file.read(4), luint32),
+                    from_bytes(file.read(4), luint32),
+                )
             next = file.read(4)
             self._header.skeleton = edges
 
@@ -266,14 +270,14 @@ class DLFSReader(FrameReader):
 
     @classmethod
     def _parse_flag_byte(cls, byte: luint8) -> Tuple[bool, bool]:
-        """ Returns if it is of the sparse format, followed by if it includes offset data... """
+        """Returns if it is of the sparse format, followed by if it includes offset data..."""
         return ((byte & 1) == 1, ((byte >> 1) & 1) == 1)
 
     @classmethod
     def _take_array(
         cls, data: bytes, dtype: np.dtype, count: int
     ) -> Tuple[bytes, np.ndarray]:
-        """ Reads a numpy array from the byte array, returning the leftover data and the array. """
+        """Reads a numpy array from the byte array, returning the leftover data and the array."""
         if count <= 0:
             raise ValueError("Can't have a negative amount of entries....")
         return (
@@ -309,9 +313,11 @@ class DLFSReader(FrameReader):
         :param frame_idx: An integer, the frame index to have this frame reader seek to. Must land within the valid
                           frame range for this file, being 0 to frame_count - 1.
         """
-        if(not (0 <= frame_idx < self._header.number_of_frames)):
-            raise IndexError(f"The provided frame index does not land within "
-                             f"the valid range. (0 to {self._header.number_of_frames})")
+        if not (0 <= frame_idx < self._header.number_of_frames):
+            raise IndexError(
+                f"The provided frame index does not land within "
+                f"the valid range. (0 to {self._header.number_of_frames})"
+            )
 
         self._file.seek(self._flup_offset + (frame_idx * 8))
         data_offset = int(from_bytes(self._file.read(8), luint64))
@@ -353,7 +359,7 @@ class DLFSReader(FrameReader):
                 if sparse_fmt_flag:
                     entry_len = int(from_bytes(data[:8], luint64))
 
-                    if(entry_len == 0):
+                    if entry_len == 0:
                         # If the length is 0 there is no data, continue with following frames.
                         continue
 
@@ -424,6 +430,7 @@ class DLFSWriter(FrameWriter):
     """
     A DeepLabCut Frame Store Writer. Allows for writing ".dlfs" files.
     """
+
     def __init__(
         self,
         file: BinaryIO,
@@ -528,14 +535,14 @@ class DLFSWriter(FrameWriter):
         return DLFSHeader(*self._header.to_list())
 
     def _write_flup_data(self):
-        """ Writes out current frame offset data into frame lookup chunk area of the file. """
+        """Writes out current frame offset data into frame lookup chunk area of the file."""
         loc = self._out_file.tell()
         self._out_file.seek(self._flup_offset)
         self._out_file.write(self._frame_offsets.tobytes("C"))
         self._out_file.seek(loc)
 
     def _write_end_chunk(self):
-        """ Writes out the final chunk of the file. """
+        """Writes out the final chunk of the file."""
         loc = self._out_file.tell()
         self._out_file.write(DLFSConstants.FRAME_END_CHUNK_MAGIC)
         self._out_file.write(to_bytes(loc - self._file_start_offset, luint64))
@@ -568,7 +575,10 @@ class DLFSWriter(FrameWriter):
                 f"'{len(self._header.bodypart_names)}' body parts specified in the header."
             )
 
-        if(data.get_frame_width() != self._header.frame_width or data.get_frame_height() != self._header.frame_height):
+        if (
+            data.get_frame_width() != self._header.frame_width
+            or data.get_frame_height() != self._header.frame_height
+        ):
             raise ValueError("Frame dimensions don't match ones specified in header!")
 
         for frm_idx in range(data.get_frame_count()):
@@ -648,7 +658,7 @@ class DLFSWriter(FrameWriter):
                 self._out_file.write(to_bytes(len(comp_data), luint64))
                 self._out_file.write(comp_data)
 
-        if(self._current_frame >= self._header.number_of_frames):
+        if self._current_frame >= self._header.number_of_frames:
             # We have reached the end, dump the flup chunk
             self._write_flup_data()
             self._write_end_chunk()
@@ -659,7 +669,7 @@ class DLFSWriter(FrameWriter):
         file handle!
         """
         # If the file was only partially written, write the frame offset chunk for the frames that were written.
-        if(self._current_frame < self._header.number_of_frames):
+        if self._current_frame < self._header.number_of_frames:
             # We have reached the end, dump the flup chunk
             self._write_flup_data()
             self._write_end_chunk()

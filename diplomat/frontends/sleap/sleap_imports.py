@@ -1,4 +1,8 @@
-from diplomat.utils.lazy_import import verify_existence_of, LazyImporter, onnx_preload_import
+from diplomat.utils.lazy_import import (
+    verify_existence_of,
+    LazyImporter,
+    onnx_preload_import,
+)
 
 verify_existence_of("tensorflow")
 verify_existence_of("onnx")

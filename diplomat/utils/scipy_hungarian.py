@@ -12,6 +12,7 @@
 
 import numpy as np
 
+
 def linear_sum_assignment(cost_matrix):
     r"""Solve the linear sum assignment problem.
 
@@ -83,8 +84,9 @@ def linear_sum_assignment(cost_matrix):
     """
     cost_matrix = np.asarray(cost_matrix)
     if len(cost_matrix.shape) != 2:
-        raise ValueError("expected a matrix (2-d array), got a %r array"
-                         % (cost_matrix.shape,))
+        raise ValueError(
+            "expected a matrix (2-d array), got a %r array" % (cost_matrix.shape,)
+        )
 
     # The algorithm expects more columns than rows in the cost matrix.
     if cost_matrix.shape[1] < cost_matrix.shape[0]:
@@ -107,7 +109,6 @@ def linear_sum_assignment(cost_matrix):
     else:
         marked = state.marked
     return np.where(marked == 1)
-
 
 
 class _Hungary(object):
@@ -139,6 +140,7 @@ class _Hungary(object):
 # Individual steps of the algorithm follow, as a state machine: they return
 # the next step to be taken (function to be called), if any.
 
+
 def _step1(state):
     """Steps 1 and 2 in the Wikipedia page."""
 
@@ -164,11 +166,12 @@ def _step3(state):
     the starred zeros describe a complete set of unique assignments.
     In this case, Go to DONE, otherwise, Go to Step 4.
     """
-    marked = (state.marked == 1)
+    marked = state.marked == 1
     state.col_uncovered[np.any(marked, axis=0)] = False
 
     if marked.sum() < state.C.shape[0]:
         return _step4
+    return None
 
 
 def _step4(state):
@@ -205,7 +208,8 @@ def _step4(state):
                 state.row_uncovered[row] = False
                 state.col_uncovered[col] = True
                 covered_C[:, col] = C[:, col] * (
-                    np.asarray(state.row_uncovered, dtype=int))
+                    np.asarray(state.row_uncovered, dtype=int)
+                )
                 covered_C[row] = 0
 
 

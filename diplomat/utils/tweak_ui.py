@@ -4,11 +4,27 @@ to user saved tracking data.
 """
 
 import os
-from typing import List, Any, Dict, Optional, Tuple, MutableMapping, Sequence, Union, Callable, Mapping
-import cv2
+from typing import (
+    List,
+    Any,
+    Dict,
+    Optional,
+    Tuple,
+    MutableMapping,
+    Sequence,
+    Union,
+    Callable,
+    Mapping,
+)
 import numpy as np
-from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine
-from diplomat.predictors.fpe.sparse_storage import ForwardBackwardData, ForwardBackwardFrame, SparseTrackingData
+from diplomat.predictors.sfpe.segmented_frame_pass_engine import (
+    SegmentedFramePassEngine,
+)
+from diplomat.predictors.fpe.sparse_storage import (
+    ForwardBackwardData,
+    ForwardBackwardFrame,
+    SparseTrackingData,
+)
 from diplomat.processing import Pose, Config, ProgressBar
 from diplomat.utils.video_io import ContextVideoCapture
 
@@ -18,6 +34,7 @@ class UIImportError(ImportError):
     This error is thrown when TweakUI is unable to import the required UI toolkit packages, it typically indicates
     the user has installed DIPLOMAT without GUI support and so UI packages are missing.
     """
+
     pass
 
 
@@ -26,33 +43,44 @@ class _DummySubPoseList(Sequence[ForwardBackwardFrame]):
         self._sub_index = sub_index
         self._poses = poses
 
-    def __getitem__(self, index: Union[int, slice]) -> Union[ForwardBackwardFrame, List[ForwardBackwardFrame], List[List[ForwardBackwardFrame]]]:
+    def __getitem__(self, index: Union[int, slice]) -> Union[
+        ForwardBackwardFrame,
+        List[ForwardBackwardFrame],
+        List[List[ForwardBackwardFrame]],
+    ]:
         x = self._poses.get_x_at(self._sub_index, index)
         y = self._poses.get_y_at(self._sub_index, index)
         prob = self._poses.get_prob_at(self._sub_index, index)
         dims = np.ndim(x)
 
-        if(dims == 0):
+        if dims == 0:
             return self._get_item_single(x, y, prob)
-        elif(dims == 1):
-            return [self._get_item_single(subx, suby, subp) for subx, suby, subp in zip(x, y, prob)]
+        elif dims == 1:
+            return [
+                self._get_item_single(subx, suby, subp)
+                for subx, suby, subp in zip(x, y, prob)
+            ]
         else:
-            return [[self._get_item_single(ssx, ssy, ssp) for ssx, ssy, ssp in zip(sx, sy, sp)] for sx, sy, sp in zip(x, y, prob)]
+            return [
+                [
+                    self._get_item_single(ssx, ssy, ssp)
+                    for ssx, ssy, ssp in zip(sx, sy, sp)
+                ]
+                for sx, sy, sp in zip(x, y, prob)
+            ]
 
     def __setitem__(self, key: Union[int, slice], value: List[ForwardBackwardFrame]):
         pass
 
     @staticmethod
     def _get_item_single(x: float, y: float, p: float) -> ForwardBackwardFrame:
-        if(np.isnan(x) or np.isnan(y)):
+        if np.isnan(x) or np.isnan(y):
             x, y, p = 0, 0, 0
 
         # noinspection INSPECTION_NAME
         res = SparseTrackingData(1).pack(np.array([x]), np.array([y]), np.array([p]))
         return ForwardBackwardFrame(
-            orig_data=res,
-            src_data=res,
-            frame_probs=np.array([p])
+            orig_data=res, src_data=res, frame_probs=np.array([p])
         )
 
     def __len__(self) -> int:
@@ -86,7 +114,9 @@ class _DummyForwardBackwardData(ForwardBackwardData):
 
     @frames.setter
     def frames(self, val: Sequence[Sequence[ForwardBackwardFrame]]):
-        raise NotImplementedError("Direct setting not supported by this dummy data structure...")
+        raise NotImplementedError(
+            "Direct setting not supported by this dummy data structure..."
+        )
 
 
 class _DummyFramePassEngine:
@@ -95,7 +125,8 @@ class _DummyFramePassEngine:
         poses: Pose,
         crop_box: Tuple[int, int, int, int],
         video_meta: Dict[str, Any],
-        num_outputs: int, prog_bar: ProgressBar
+        num_outputs: int,
+        prog_bar: ProgressBar,
     ):
         self._poses = poses
         self._size = (int(crop_box[2]), int(crop_box[3]))
@@ -105,8 +136,16 @@ class _DummyFramePassEngine:
 
         self._fake_fb_data = _DummyForwardBackwardData(self._poses, self._num_outputs)
 
-        from diplomat.predictors.fpe.frame_passes.optimize_std import OptimizeStandardDeviation
-        optimizer = OptimizeStandardDeviation(self.width, self.height, True, Config({}, OptimizeStandardDeviation.get_config_options()))
+        from diplomat.predictors.fpe.frame_passes.optimize_std import (
+            OptimizeStandardDeviation,
+        )
+
+        optimizer = OptimizeStandardDeviation(
+            self.width,
+            self.height,
+            True,
+            Config({}, OptimizeStandardDeviation.get_config_options()),
+        )
         optimizer.run_pass(self.frame_data, prog_bar, True, True)
 
     @property
@@ -130,7 +169,9 @@ class _DummyFramePassEngine:
         return self._changed_frames
 
     @staticmethod
-    def get_maximum_with_defaults(frame: ForwardBackwardFrame) -> Tuple[float, float, float]:
+    def get_maximum_with_defaults(
+        frame: ForwardBackwardFrame,
+    ) -> Tuple[float, float, float]:
         return SegmentedFramePassEngine.get_maximum(frame, 0)
 
 
@@ -141,40 +182,47 @@ def _simplify_editor_class(wx, editor_class):
             self._video_splitter.Unsplit(self._plot_panel)
             self._do_save = do_save
 
-        def _get_tools(self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]):
+        def _get_tools(
+            self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]
+        ):
             tools = super()._get_tools(manual_save, heatmap_entries)
             return [
-                tool for tool in tools
-                if(tool is self.SEPERATOR or tool.name not in ["Run Frame Passes", "Export Frames"])
+                tool
+                for tool in tools
+                if (
+                    tool is self.SEPERATOR
+                    or tool.name not in ["Run Frame Passes", "Export Frames"]
+                )
             ]
 
         def _on_close(self, evt, was_save):
-            if(evt.CanVeto()):
+            if evt.CanVeto():
                 msg = (
                     "Are you sure you want to close and save your results?"
-                    if(was_save) else
-                    "Are you sure you want to close without saving your results?"
+                    if (was_save)
+                    else "Are you sure you want to close without saving your results?"
                 )
 
                 res = wx.MessageBox(
-                    msg,
-                    "Confirmation",
-                    wx.ICON_QUESTION | wx.YES_NO,
-                    self
+                    msg, "Confirmation", wx.ICON_QUESTION | wx.YES_NO, self
                 )
 
-                if(res != wx.YES):
+                if res != wx.YES:
                     evt.Veto()
                     return
                 else:
-                    self._do_save(was_save, self.video_player.video_viewer.get_all_poses())
+                    self._do_save(
+                        was_save, self.video_player.video_viewer.get_all_poses()
+                    )
 
             evt.Skip(True)
 
         def set_radiobox_colors(self, colormap):
             self.video_player.select_box.set_colormap(colormap)
 
-        def set_plot_settings_changer(self, func: Optional[Callable[[Mapping[str, Any]], None]]):
+        def set_plot_settings_changer(
+            self, func: Optional[Callable[[Mapping[str, Any]], None]]
+        ):
             """
             Set the plot settings changing function, which allows for adjusting certain video metadata values when they
             become adjusted.
@@ -187,7 +235,7 @@ def _simplify_editor_class(wx, editor_class):
                 if "colormap" in data:
                     self.set_radiobox_colors(data["colormap"])
                 func(data)
-            
+
             self._on_plot_settings_change = func2
 
     return SimplifiedEditor
@@ -198,6 +246,7 @@ class TweakUI:
     The tweak UI manager. Provides a functionality for creating a UI for modifying user tracks. Should be used by frontends to implementing
     DIPLOMAT's tweak command functionality.
     """
+
     def __init__(self):
         """
         Create a tweak UI manager, which can be used to make modifications to user tracks passed to it.
@@ -206,17 +255,26 @@ class TweakUI:
         """
         try:
             import wx
+
             self._wx = wx
             from diplomat.wx_gui.fpe_editor import FPEEditor
             from diplomat.wx_gui.progress_dialog import FBProgressDialog
+
             self._editor_class = _simplify_editor_class(wx, FPEEditor)
             self._progress_dialog_cls = FBProgressDialog
 
             from diplomat.predictors.supervised_fpe.labelers import Point
-            from diplomat.predictors.supervised_fpe.scorers import MaximumJumpInStandardDeviations, EntropyOfTransitions
+            from diplomat.predictors.supervised_fpe.scorers import (
+                MaximumJumpInStandardDeviations,
+                EntropyOfTransitions,
+            )
             from diplomat.wx_gui.identity_swapper import IdentitySwapper
+
             self._labeler_class = Point
-            self._scorer_classes = [MaximumJumpInStandardDeviations, EntropyOfTransitions]
+            self._scorer_classes = [
+                MaximumJumpInStandardDeviations,
+                EntropyOfTransitions,
+            ]
             self._id_class = IdentitySwapper
         except ImportError:
             raise UIImportError(
@@ -224,10 +282,10 @@ class TweakUI:
                 " or diplomat was installed with optional dependencies enabled."
             )
 
-    # this is a dummy function; `tweak` is a simplified version of `interact`, 
-    # so it has nothing to do, but it's necessary to pass something into 
-    # set_plot_settings_changer in order for the side effect radiobox color 
-    # update to occur. i defined this in the same style as its relative in 
+    # this is a dummy function; `tweak` is a simplified version of `interact`,
+    # so it has nothing to do, but it's necessary to pass something into
+    # set_plot_settings_changer in order for the side effect radiobox color
+    # update to occur. i defined this in the same style as its relative in
     # supervised_segmented_frame_pass_engine for consistency's sake, but really
     # you could just pass in a blank lambda fn instead.
     def _on_visual_settings_change(self, data):
@@ -243,7 +301,7 @@ class TweakUI:
         num_outputs: int,
         crop_box: Optional[Tuple[int, int, int, int]],
         on_end: Callable[[bool, Pose], Any],
-        make_app: bool = True
+        make_app: bool = True,
     ):
         """
         Load a lighter version of the interactive UI to allow for minor modifications to user saved tracking data.
@@ -263,16 +321,22 @@ class TweakUI:
                          saves their results or closes the window. If false, no app is made. Defaults to true.
         :return:
         """
-        app = self._wx.App() if(make_app) else None
+        app = self._wx.App() if (make_app) else None
 
-        with self._progress_dialog_cls(parent, title="Progress", inner_msg="Computing Average Standard Deviation") as dialog:
+        with self._progress_dialog_cls(
+            parent, title="Progress", inner_msg="Computing Average Standard Deviation"
+        ) as dialog:
             dialog.Show()
             fake_fpe = _DummyFramePassEngine(
                 poses,
-                crop_box if(crop_box is not None) else [0, 0, video_metadata["size"][1], video_metadata["size"][0]],
+                (
+                    crop_box
+                    if (crop_box is not None)
+                    else [0, 0, video_metadata["size"][1], video_metadata["size"][0]]
+                ),
                 video_metadata,
                 num_outputs,
-                dialog.progress_bar
+                dialog.progress_bar,
             )
 
         editor = self._editor_class(
@@ -287,13 +351,12 @@ class TweakUI:
             [sc(fake_fpe) for sc in self._scorer_classes],
             self._id_class(fake_fpe),
             list(range(1, num_outputs + 1)) * (len(bodypart_names) // num_outputs),
-            title="Tweak Tracks"
+            title="Tweak Tracks",
         )
 
         editor.set_plot_settings_changer(self._on_visual_settings_change)
 
         editor.Show()
 
-        if(make_app):
+        if make_app:
             app.MainLoop()
-

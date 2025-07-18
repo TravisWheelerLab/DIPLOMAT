@@ -8,13 +8,14 @@ transparent each location is. This means icons can match the foreground and high
 Data is then compressed with zlib and encoded in base64 so icons can be directly stored as short multi-line byte
 strings in the source code.
 """
+
 import base64
 import zlib
 from typing import Tuple
 import wx
 import numpy as np
 
-
+r'''
 def _dump_pic(file):
     """
     Not used, but super useful for converting images to icon format used below. Just left here if I ever wanted to
@@ -24,6 +25,7 @@ def _dump_pic(file):
     import base64
     import zlib
     import numpy as np
+
     im = Image.open(file)
     im2 = Image.new("RGB", im.size, "white")
     im2.paste(im, (0, 0), im)
@@ -32,7 +34,7 @@ def _dump_pic(file):
     dat = base64.encodebytes(zlib.compress(arr.astype(np.uint8).tobytes())).decode()
     print(im.size, "\n", dat)
     return im.size, dat
-
+'''
 
 # The undo toolbar icon...
 BACK_ICON_SIZE = (64, 64)
@@ -269,7 +271,12 @@ QEB+zvXgAfg5Rt3u0Ymp1mZRVC/2hw4QSF0L5KIOK5kGPZLraSqdbl7qDuP2Lz7/7NOtn6QbPtqS
 """
 
 
-def to_wx_bitmap(icon_bytes: bytes, icon_size: Tuple[int, int], fg_color: wx.Colour, bitmap_size: Tuple[int, int] = None):
+def to_wx_bitmap(
+    icon_bytes: bytes,
+    icon_size: Tuple[int, int],
+    fg_color: wx.Colour,
+    bitmap_size: Tuple[int, int] = None,
+):
     """
     Converts an icon in this module into a wx.Bitmap for rendering in wxWidget's UIs.
 
@@ -279,12 +286,14 @@ def to_wx_bitmap(icon_bytes: bytes, icon_size: Tuple[int, int], fg_color: wx.Col
     :param bitmap_size: A optional tuple of integers which defines the size of the returned bitmap. Defaults to the
                         size of the original icon.
     """
-    if(bitmap_size is None):
+    if bitmap_size is None:
         bitmap_size = icon_size
     out_w, out_h = bitmap_size
     w, h = icon_size
     img = np.zeros((h, w, 3), dtype=np.uint8)
-    alpha_mask = np.frombuffer(zlib.decompress(base64.b64decode(icon_bytes)), dtype=np.uint8).reshape((h, w))
+    alpha_mask = np.frombuffer(
+        zlib.decompress(base64.b64decode(icon_bytes)), dtype=np.uint8
+    ).reshape((h, w))
 
     img[:, :] = [fg_color.Red(), fg_color.Green(), fg_color.Blue()]
 
@@ -298,11 +307,13 @@ def _main():
     # Tests icon loading code above by displaying the help icon in a wx Frame...,
     app = wx.App()
     frame = wx.Frame(None, title="Image Test!")
-    bitmap = to_wx_bitmap(SAVE_CONT_ICON, SAVE_CONT_ICON_SIZE, frame.GetForegroundColour())
+    bitmap = to_wx_bitmap(
+        SAVE_CONT_ICON, SAVE_CONT_ICON_SIZE, frame.GetForegroundColour()
+    )
     icon = wx.StaticBitmap(frame, wx.ID_ANY, bitmap)
     frame.Show(1)
     app.MainLoop()
 
 
-if(__name__ == "__main__"):
+if __name__ == "__main__":
     _main()

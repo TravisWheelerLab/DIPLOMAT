@@ -15,18 +15,18 @@ def _build_provider_ordering(device_index: Optional[int], use_cpu: bool):
     device_config = []
 
     def _add(val, extra=None):
-        if(extra is None):
+        if extra is None:
             extra = {}
-        if(device_index is not None):
+        if device_index is not None:
             extra["device_id"] = device_index
         return (val, extra)
 
-    if(not use_cpu):
-        if("CUDAExecutionProvider" in supported_devices):
+    if not use_cpu:
+        if "CUDAExecutionProvider" in supported_devices:
             device_config.append(_add("CUDAExecutionProvider"))
-        if("ROCMExecutionProvider" in supported_devices):
+        if "ROCMExecutionProvider" in supported_devices:
             device_config.append(_add("ROCMExecutionProvider"))
-        if("CoreMLExecutionProvider" in supported_devices):
+        if "CoreMLExecutionProvider" in supported_devices:
             device_config.append("CoreMLExecutionProvider")
 
     # Fallback...
@@ -63,12 +63,12 @@ def load_models(
     provider = PredictorExtractor(
         configs,
         refinement_kernel_size,
-        providers=_build_provider_ordering(gpu_index, bool(use_cpu))
+        providers=_build_provider_ordering(gpu_index, bool(use_cpu)),
     )
 
     meta = provider.get_metadata()
 
-    if(batch_size is None):
+    if batch_size is None:
         batch_size = meta["batch_size"]
 
     return (
@@ -83,8 +83,7 @@ def load_models(
             line_thickness=1,
             bp_names=meta["bp_names"],
             skeleton=meta["skeleton"],
-            frontend="sleap"
+            frontend="sleap",
         ),
-        provider.extract
+        provider.extract,
     )
-

@@ -1,12 +1,15 @@
 from typing import Iterable, Optional, Union, List
-
-from typing_extensions import overload
-
 from .sleap_imports import onnx
 
 
 class OnnxVar:
-    def __init__(self, name: str, elem_type: onnx.TensorProto.DataType, shape: Iterable[Optional[int]], producing_op: Optional["_OnnxOpOutput"] = None):
+    def __init__(
+        self,
+        name: str,
+        elem_type: onnx.TensorProto.DataType,
+        shape: Iterable[Optional[int]],
+        producing_op: Optional["_OnnxOpOutput"] = None,
+    ):
         self.name = name
         self.elem_type = elem_type
         self.shape = tuple(shape)
@@ -19,13 +22,18 @@ class _OnnxOpOutput:
         self.index = index
         self._name_override = None
 
-    def to_var(self, name: str, elem_type: onnx.TensorProto.DataType, shape: Iterable[Optional[int]]) -> OnnxVar:
+    def to_var(
+        self,
+        name: str,
+        elem_type: onnx.TensorProto.DataType,
+        shape: Iterable[Optional[int]],
+    ) -> OnnxVar:
         self._name_override = name
         return OnnxVar(name, elem_type, shape, self)
 
     @property
     def name(self) -> str:
-        if(self._name_override is not None):
+        if self._name_override is not None:
             return self._name_override
         return f"{self.op.name}:{self.index}"
 
@@ -39,7 +47,7 @@ class OnnxOp:
         doc_string: str = None,
         domain: str = None,
         overload: str = None,
-        **attributes
+        **attributes,
     ):
         self.op_type = op_type
         self.doc_string = doc_string
@@ -69,11 +77,18 @@ class OnnxOp:
 
         return self.outputs[idx]
 
-    def to_var(self, name: str, elem_type: onnx.TensorProto.DataType, shape: Iterable[Optional[int]]) -> OnnxVar:
+    def to_var(
+        self,
+        name: str,
+        elem_type: onnx.TensorProto.DataType,
+        shape: Iterable[Optional[int]],
+    ) -> OnnxVar:
         return self[0].to_var(name, elem_type, shape)
 
 
-def _topo_sort(node: Union[_OnnxOpOutput, OnnxVar, None], visit_list: list, visited: set):
+def _topo_sort(
+    node: Union[_OnnxOpOutput, OnnxVar, None], visit_list: list, visited: set
+):
     if node is None:
         return
 
@@ -104,8 +119,10 @@ def to_onnx_graph_def(
     visited = set()
 
     for out in outputs:
-        if(out.producing_op is None):
-            raise ValueError("Model has output variable with no connections to the graph!")
+        if out.producing_op is None:
+            raise ValueError(
+                "Model has output variable with no connections to the graph!"
+            )
         _topo_sort(out.producing_op, visit_list, visited)
 
     op_counts = {}
@@ -115,11 +132,11 @@ def to_onnx_graph_def(
     # Traverse the nodes in order now...
     for node in visit_list:
         if isinstance(node, OnnxVar) and node.producing_op is None:
-            implicit_inputs.append(onnx.helper.make_tensor_value_info(
-                node.name,
-                node.elem_type,
-                node.shape
-            ))
+            implicit_inputs.append(
+                onnx.helper.make_tensor_value_info(
+                    node.name, node.elem_type, node.shape
+                )
+            )
         elif isinstance(node, OnnxOp):
             # Set the name...
             op_counts[node.op_type] = op_counts.get(node.op_type, 0) + 1
@@ -133,27 +150,25 @@ def to_onnx_graph_def(
                 name=node.name,
                 doc_string=node.doc_string,
                 domain=node.domain,
-                overload=node.overload  # Older version of onnx don't have this argument....
+                overload=node.overload,  # Older version of onnx don't have this argument....
             )
             extra_args = {k: v for k, v in extra_args.items() if v is not None}
 
-            onnx_nodes.append(onnx.helper.make_node(
-                node.op_type,
-                inputs=op_inputs,
-                outputs=op_outputs,
-                **extra_args,
-                **node.attributes
-            ))
+            onnx_nodes.append(
+                onnx.helper.make_node(
+                    node.op_type,
+                    inputs=op_inputs,
+                    outputs=op_outputs,
+                    **extra_args,
+                    **node.attributes,
+                )
+            )
         else:
             raise ValueError(f"Unrecognized node {node} of type {type(node)}.")
 
     onnx_outputs = [
-        onnx.helper.make_tensor_value_info(n.name, n.elem_type, n.shape) for n in outputs
+        onnx.helper.make_tensor_value_info(n.name, n.elem_type, n.shape)
+        for n in outputs
     ]
 
-    return onnx.helper.make_graph(
-        onnx_nodes,
-        name,
-        implicit_inputs,
-        onnx_outputs
-    )
+    return onnx.helper.make_graph(onnx_nodes, name, implicit_inputs, onnx_outputs)

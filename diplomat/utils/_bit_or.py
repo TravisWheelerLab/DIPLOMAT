@@ -9,7 +9,7 @@ def _bit_or(*flags: int) -> int:
     total = 0
 
     for flag in flags:
-        if(isinstance(flag, int)):
+        if isinstance(flag, int):
             total |= flag
 
     return total

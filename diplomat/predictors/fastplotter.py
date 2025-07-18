@@ -9,7 +9,7 @@ from diplomat.utils.video_io import ContextVideoWriter
 
 
 def optional_dict(val: Optional[dict]) -> dict:
-    return {} if(val is None) else dict(val)
+    return {} if (val is None) else dict(val)
 
 
 def codec_string(val: str) -> int:
@@ -17,15 +17,11 @@ def codec_string(val: str) -> int:
 
 
 _CV2_FONTS = {
-    item: getattr(cv2, item)
-    for item in dir(cv2)
-    if (item.startswith("FONT_HERSHEY"))
+    item: getattr(cv2, item) for item in dir(cv2) if (item.startswith("FONT_HERSHEY"))
 }
 
 _CV2_COLORMAPS = {
-    item: getattr(cv2, item)
-    for item in dir(cv2)
-    if (item.startswith("COLORMAP"))
+    item: getattr(cv2, item) for item in dir(cv2) if (item.startswith("COLORMAP"))
 }
 
 
@@ -37,9 +33,7 @@ def cv2_colormap(val: str) -> int:
     return _CV2_COLORMAPS[str(val)]
 
 
-bgr_color = type_casters.Tuple(
-    *([type_casters.RangedInteger(0, 255)] * 3)
-)
+bgr_color = type_casters.Tuple(*([type_casters.RangedInteger(0, 255)] * 3))
 
 
 class FastPlotterArgMax(Predictor):
@@ -63,10 +57,19 @@ class FastPlotterArgMax(Predictor):
         # Keeps track of how many frames
         self._current_frame = 0
 
-        self._parts_set = set(self.bodyparts) if (settings.parts_to_plot is None) else (set(settings.parts_to_plot) & set(self.bodyparts))
-        if (len(self._parts_set) == 0):
+        self._parts_set = (
+            set(self.bodyparts)
+            if (settings.parts_to_plot is None)
+            else (set(settings.parts_to_plot) & set(self.bodyparts))
+        )
+        if len(self._parts_set) == 0:
             raise ValueError("No parts selected to plot!")
-        self._part_idx_list = list(filter(lambda v: self.bodyparts[v] in self._parts_set, range(len(self.bodyparts))))
+        self._part_idx_list = list(
+            filter(
+                lambda v: self.bodyparts[v] in self._parts_set,
+                range(len(self.bodyparts)),
+            )
+        )
 
         # Determines grid size of charts
         self._grid_width = int(math.ceil(math.sqrt(len(self._parts_set))))
@@ -75,7 +78,11 @@ class FastPlotterArgMax(Predictor):
         self._vid_writer: Optional[cv2.VideoWriter] = None
 
         # Name of the video file to save to
-        video_metadata["orig-video-path"] = "Unknown" if(video_metadata["orig-video-path"] is None) else video_metadata["orig-video-path"]
+        video_metadata["orig-video-path"] = (
+            "Unknown"
+            if (video_metadata["orig-video-path"] is None)
+            else video_metadata["orig-video-path"]
+        )
         final_video_name = settings["video_name"].replace(
             "$VIDEO", Path(video_metadata["orig-video-path"]).stem
         )
@@ -89,7 +96,7 @@ class FastPlotterArgMax(Predictor):
             self.TEST_TEXT,
             settings.title_font,
             settings.title_font_size,
-            settings.font_thickness
+            settings.font_thickness,
         )
         (__, self._subplot_font_height), self._subplot_baseline = cv2.getTextSize(
             self.TEST_TEXT,
@@ -111,7 +118,7 @@ class FastPlotterArgMax(Predictor):
         self._colormap_view = None
 
     def _close(self):
-        if(self._vid_writer is not None):
+        if self._vid_writer is not None:
             self._vid_writer.release()
 
     def _compute_video_measurements(self, scmap_width: int, scmap_height: int):
@@ -245,7 +252,9 @@ class FastPlotterArgMax(Predictor):
 
         # Convert probabilities to a color image...
         grayscale_img = self._probs_to_grayscale(
-            self._logify(self._normalize_range(prob_map)) if (s.use_log_scale) else self._normalize_range(prob_map)
+            self._logify(self._normalize_range(prob_map))
+            if (s.use_log_scale)
+            else self._normalize_range(prob_map)
         )
         self._colormap_view[:, :] = cv2.applyColorMap(
             grayscale_img, s.colormap, self._unscaled_cmap_temp
@@ -259,9 +268,9 @@ class FastPlotterArgMax(Predictor):
             subplot_top_x + self._scmap_width,
             subplot_top_y + self._scmap_height,
         )
-        self._canvas[
-            subplot_top_y:subplot_bottom_y, subplot_top_x:subplot_bottom_x
-        ] = self._colormap_temp
+        self._canvas[subplot_top_y:subplot_bottom_y, subplot_top_x:subplot_bottom_x] = (
+            self._colormap_temp
+        )
         # Now insert the text....
         (text_width, __), __ = cv2.getTextSize(
             bp_name, s.subplot_font, s.subplot_font_size, s.font_thickness
@@ -304,16 +313,14 @@ class FastPlotterArgMax(Predictor):
                     scmap.get_prob_table(frame, bp),
                 )
 
-            if(not self._vid_writer.isOpened()):
+            if not self._vid_writer.isOpened():
                 raise IOError("Error occurred causing the video writer to close.")
             self._vid_writer.write(self._canvas)
 
             self._current_frame += 1
 
         # Return just like argmax...
-        return scmap.get_poses_for(
-            scmap.get_max_scmap_points(num_max=self.num_outputs)
-        )
+        return scmap.get_poses_for(scmap.get_max_scmap_points(num_max=self.num_outputs))
 
     def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
         return None
@@ -328,83 +335,80 @@ class FastPlotterArgMax(Predictor):
                 "$VIDEO-fast-prob-dlc.mp4",
                 str,
                 "Name of the video file that plotting data will be saved to. Can use $VIDEO to place the "
-                "name of original video somewhere in the text."
+                "name of original video somewhere in the text.",
             ),
             "parts_to_plot": (
                 None,
                 type_casters.Union(type_casters.Literal(None), type_casters.List(str)),
-                "A list of body parts to plot. None means plot all the body parts."
+                "A list of body parts to plot. None means plot all the body parts.",
             ),
             "codec": (
                 "mp4v",
                 codec_string,
-                "The codec to be used by the opencv library to save info to, typically a 4-byte string."
+                "The codec to be used by the opencv library to save info to, typically a 4-byte string.",
             ),
             "use_log_scale": (
                 False,
                 bool,
-                "Boolean, determines whether to apply log scaling to the frames in the video."
+                "Boolean, determines whether to apply log scaling to the frames in the video.",
             ),
             "title_font_size": (
                 2,
                 type_casters.RangedFloat(0.1, np.inf),
-                "The font size of the main title"
+                "The font size of the main title",
             ),
             "title_font": (
                 "FONT_HERSHEY_SIMPLEX",
                 cv2_font,
-                f"String, the cv2 font to be used in the title, options for this are:\n{font_options}"
+                f"String, the cv2 font to be used in the title, options for this are:\n{font_options}",
             ),
             "subplot_font_size": (
                 1.5,
                 type_casters.RangedFloat(0.1, np.inf),
-                "The font size of the titles of each subplot."
+                "The font size of the titles of each subplot.",
             ),
             "subplot_font": (
                 "FONT_HERSHEY_SIMPLEX",
                 cv2_font,
-                "String, the cv2 font used in the subplot titles, look at options for 'title_font'."
+                "String, the cv2 font used in the subplot titles, look at options for 'title_font'.",
             ),
             "background_color": (
                 (255, 255, 255),
                 bgr_color,
-                "Tuple of 3 integers, color of the background in BGR format"
+                "Tuple of 3 integers, color of the background in BGR format",
             ),
             "title_font_color": (
                 (0, 0, 0),
                 bgr_color,
-                "Tuple of 3 integers, color of the title text in BGR format"
+                "Tuple of 3 integers, color of the title text in BGR format",
             ),
             "subplot_font_color": (
                 (0, 0, 0),
                 bgr_color,
-                "Tuple of 3 integers, color of the title text in BGR format"
+                "Tuple of 3 integers, color of the title text in BGR format",
             ),
             "colormap": (
                 "COLORMAP_VIRIDIS",
                 cv2_colormap,
-                f"String, the cv2 colormap to use, options for this are:\n{colormap_options}"
+                f"String, the cv2 colormap to use, options for this are:\n{colormap_options}",
             ),
             "font_thickness": (
                 2,
                 type_casters.RangedInteger(1, np.inf),
-                "Integer, the thickness of the font being drawn."
+                "Integer, the thickness of the font being drawn.",
             ),
             "source_map_upscale": (
                 4,
                 type_casters.RangedInteger(1, 100),
-                "Integer, The amount to upscale the probability maps."
+                "Integer, The amount to upscale the probability maps.",
             ),
             "padding": (
                 20,
                 type_casters.RangedInteger(1, np.inf),
-                "Integer, the padding to be applied around plots in pixels."
-            )
+                "Integer, the padding to be applied around plots in pixels.",
+            ),
         }
 
     @classmethod
     def supports_multi_output(cls) -> bool:
         return True
-
-
-

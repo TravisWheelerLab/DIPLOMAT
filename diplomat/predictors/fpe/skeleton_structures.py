@@ -1,4 +1,14 @@
-from typing import NamedTuple, Union, Iterable, Any, Dict, Tuple, List, Callable, Optional
+from typing import (
+    NamedTuple,
+    Union,
+    Iterable,
+    Any,
+    Dict,
+    Tuple,
+    List,
+    Callable,
+    Optional,
+)
 import numpy as np
 import bisect
 
@@ -14,6 +24,7 @@ class Edge(NamedTuple):
     This is a bi-directional edge, so swapping the order of the edges in the tuple does nothing, it will still hash to
     the same value, and edges with their nodes swapped will equal each other. (Edge(a, b) == Edge(b, a))
     """
+
     node1: Union[str, int]
     node2: Union[str, int]
 
@@ -27,10 +38,11 @@ class Edge(NamedTuple):
         """
         Uses unordered equivalence, so that Edge(a, b) and Edge(b, a) are considered equivalent.
         """
-        if(isinstance(other, (Edge, Iterable))):
+        if isinstance(other, (Edge, Iterable)):
             return frozenset(self) == frozenset(other)
 
         return NamedTuple.__eq__(self, other)
+
 
 """
 An edge-like object, used as argument for looking up an edge in a StorageGraph. Can be an Edge namedtuple object, or 
@@ -57,7 +69,9 @@ class StorageGraph:
         :param node_names: An iterable of strings, the names of the nodes to store in this graph...
         """
         self._node_names = list(node_names)
-        self._name_to_idx: Dict[str, int] = {name: i for (i, name) in enumerate(self._node_names)}
+        self._name_to_idx: Dict[str, int] = {
+            name: i for (i, name) in enumerate(self._node_names)
+        }
         self._connections = [{} for __ in range(len(self._name_to_idx))]
 
     def __len__(self):
@@ -78,9 +92,9 @@ class StorageGraph:
 
         :throw InvalidNodeError: If the passed node reference is invalid or out of bounds...
         """
-        idx = idx if(isinstance(idx, int)) else self._name_to_idx.get(idx, -1)
+        idx = idx if (isinstance(idx, int)) else self._name_to_idx.get(idx, -1)
 
-        if(not (0 <= idx < len(self._connections))):
+        if not (0 <= idx < len(self._connections)):
             raise InvalidNodeError("Not a valid node!")
 
         return idx
@@ -96,18 +110,29 @@ class StorageGraph:
         :throws InvalidEdgeError: If the provided edge has invalid node identifiers passed or connects a node to itself.
         """
         # Remove strings...
-        cleaned_edge = Edge(*[(node if(isinstance(node, int)) else self._name_to_idx.get(node, -1)) for node in edge])
+        cleaned_edge = Edge(
+            *[
+                (node if (isinstance(node, int)) else self._name_to_idx.get(node, -1))
+                for node in edge
+            ]
+        )
 
-        if(not all(0 <= node < len(self._connections) for node in cleaned_edge)):
-            raise InvalidEdgeError(f"The edge {edge} is not a valid edge for this graph!")
+        if not all(0 <= node < len(self._connections) for node in cleaned_edge):
+            raise InvalidEdgeError(
+                f"The edge {edge} is not a valid edge for this graph!"
+            )
 
-        if(cleaned_edge.node1 == cleaned_edge.node2):
-            raise InvalidEdgeError(f"Can't connect node {cleaned_edge.node1} to itself!")
+        if cleaned_edge.node1 == cleaned_edge.node2:
+            raise InvalidEdgeError(
+                f"Can't connect node {cleaned_edge.node1} to itself!"
+            )
 
         return cleaned_edge
 
-    def __getitem__(self, idx: Union[str, int, EdgeLike]) -> Union[Any, Iterable[Tuple[int, Any]]]:
-        if(isinstance(idx, (Edge, tuple))):
+    def __getitem__(
+        self, idx: Union[str, int, EdgeLike]
+    ) -> Union[Any, Iterable[Tuple[int, Any]]]:
+        if isinstance(idx, (Edge, tuple)):
             idx = self._validate(idx)
             return self._connections[idx.node1][idx.node2]
         else:
@@ -115,12 +140,14 @@ class StorageGraph:
             return self._connections[idx].items()
 
     def __contains__(self, idx: Union[str, int, EdgeLike]) -> bool:
-        if (isinstance(idx, (Edge, tuple))):
+        if isinstance(idx, (Edge, tuple)):
             try:
                 idx = self._validate(idx)
             except InvalidEdgeError:
                 return False
-            return (idx.node1 in self._connections) and ((idx.node2 in self._connections[idx.node1]))
+            return (idx.node1 in self._connections) and (
+                (idx.node2 in self._connections[idx.node1])
+            )
         else:
             try:
                 self._validate_index(idx)
@@ -159,11 +186,13 @@ class StorageGraph:
         for n1, edge_lst in enumerate(self._connections):
             for n2 in edge_lst:
                 edge = Edge(n1, n2)
-                if(edge not in visited_edges):
+                if edge not in visited_edges:
                     visited_edges.add(edge)
                     yield edge
 
-    def dfs(self, traversal_function: Optional[Callable[[Edge, Any], None]] = None) -> List[int]:
+    def dfs(
+        self, traversal_function: Optional[Callable[[Edge, Any], None]] = None
+    ) -> List[int]:
         """
         Run a depth-first-search of the entire graph, also returning a connected component list...
 
@@ -177,7 +206,11 @@ class StorageGraph:
                   indexes of the list that are a part of the same connected component will have the same integer id as
                   their value in the list.
         """
-        traversal_function = traversal_function if(traversal_function is not None) else lambda a, b: None
+        traversal_function = (
+            traversal_function
+            if (traversal_function is not None)
+            else lambda a, b: None
+        )
         visited = [-1] * len(self)
 
         for n_i in range(len(self)):
@@ -190,21 +223,25 @@ class StorageGraph:
         traversal_function: Callable[[Edge, Any], None],
         visited: List[int],
         current_node: int,
-        prior_node: Optional[int] = None
+        prior_node: Optional[int] = None,
     ):
         """
         PRIVATE: Helper to dfs method. Performs a dfs search recursively, resolving components...
         """
         # If already visited, return...
-        if(visited[current_node] != -1):
+        if visited[current_node] != -1:
             return
 
         # Stash component this is a part of in visited... (We use the first node of the component we visit as the
         # 'root' of that component.
-        visited[current_node] = visited[prior_node] if(prior_node is not None) else current_node
+        visited[current_node] = (
+            visited[prior_node] if (prior_node is not None) else current_node
+        )
         # If we have an actual prior node, run the edge traversal function.
-        if(prior_node is not None):
-            traversal_function(Edge(prior_node, current_node), self[prior_node, current_node])
+        if prior_node is not None:
+            traversal_function(
+                Edge(prior_node, current_node), self[prior_node, current_node]
+            )
 
         # Recurse: Run DFS on things connected to us...
         for other_n_i in self._connections[current_node]:
@@ -267,10 +304,7 @@ class StorageGraph:
         return self._node_names
 
     def __tojson__(self):
-        return {
-            "nodes": list(self._node_names),
-            "edges": list(self.items())
-        }
+        return {"nodes": list(self._node_names), "edges": list(self.items())}
 
     @classmethod
     def __fromjson__(cls, data):
@@ -297,38 +331,50 @@ class Histogram:
 
         freq, avg = self._bins.get(val_bin, (0, 0.0))
         # Running Average formula, see notebook...
-        self._bins[val_bin] = (freq + 1, avg * (freq / (freq + 1)) + value * (1 / (freq + 1)))
+        self._bins[val_bin] = (
+            freq + 1,
+            avg * (freq / (freq + 1)) + value * (1 / (freq + 1)),
+        )
 
     def get_bin_for_value(self, value: float) -> Tuple[float, int, float]:
         val_bin = int((value - self._bin_offset) / self._bin_size)
         freq, avg = self._bins.get(val_bin, (0, value))
-        return (float(val_bin * self._bin_size + self._bin_offset), int(freq), float(avg))
+        return (
+            float(val_bin * self._bin_size + self._bin_offset),
+            int(freq),
+            float(avg),
+        )
 
     def __iter__(self) -> Iterable[float]:
         return (b * self._bin_size + self._bin_offset for b in self._bins)
 
     def bins(self) -> Iterable[Tuple[float, Tuple[int, float]]]:
-        return ((b * self._bin_size + self._bin_offset, (freq, avg)) for b, (freq, avg) in self._bins.items())
+        return (
+            (b * self._bin_size + self._bin_offset, (freq, avg))
+            for b, (freq, avg) in self._bins.items()
+        )
 
     def get_max(self) -> Tuple[float, int, float]:
         max_info = (0, 0, 0)
 
-        for (b, (freq, avg)) in self.bins():
-            if(max_info[1] < freq):
-                if((max_info[1] == freq) and (max_info[0] < b)):
+        for b, (freq, avg) in self.bins():
+            if max_info[1] < freq:
+                if (max_info[1] == freq) and (max_info[0] < b):
                     continue
                 max_info = (b, freq, avg)
 
         return max_info
 
     def get_quantile(
-        self,
-        quant: float,
-        start_bin: float = None
+        self, quant: float, start_bin: float = None
     ) -> Tuple[float, int, float]:
         ordered_bins = sorted(self.bins())
 
-        start_idx = bisect.bisect_left(ordered_bins, start_bin) if(start_bin is not None) else 0
+        start_idx = (
+            bisect.bisect_left(ordered_bins, start_bin)
+            if (start_bin is not None)
+            else 0
+        )
         freqs = [f for bs, (f, avg) in ordered_bins]
         avgs = [avg for bs, (f, avg) in ordered_bins]
         freqs = freqs[start_idx:]

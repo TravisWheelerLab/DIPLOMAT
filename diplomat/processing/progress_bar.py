@@ -11,6 +11,7 @@ class ProgressBar(ABC):
     """
     Abstract API for representing a progress bar. Used by predictors for displaying progress info.
     """
+
     @abstractmethod
     def __init__(self, total: Optional[int] = None):
         """
@@ -85,7 +86,10 @@ class TQDMProgressBar(ProgressBar):
     """
     A Concrete implementation of the ProgressBar API, uses TQDM to display progress.
     """
-    def __init__(self, total: Optional[int] = None, tqdm_prior: Optional[tqdm.tqdm] = None):
+
+    def __init__(
+        self, total: Optional[int] = None, tqdm_prior: Optional[tqdm.tqdm] = None
+    ):
         """
         Create a new tqdm progress bar.
 
@@ -97,7 +101,7 @@ class TQDMProgressBar(ProgressBar):
                            the total argument.
         """
         super().__init__(total)
-        if(tqdm_prior is not None):
+        if tqdm_prior is not None:
             self._tqdm = tqdm_prior
         else:
             self._tqdm = tqdm.tqdm(total=total)

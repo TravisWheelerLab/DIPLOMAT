@@ -2,7 +2,18 @@
 Provides utility functions for quickly extracting frames from diplomat frame store files, and also printing frame data to the terminal
 for debugging and display purposes.
 """
-from typing import BinaryIO, Sequence, Callable, Optional, Generator, Union, Tuple, NamedTuple, List
+
+from typing import (
+    BinaryIO,
+    Sequence,
+    Callable,
+    Optional,
+    Generator,
+    Union,
+    Tuple,
+    NamedTuple,
+    List,
+)
 from diplomat.processing import TrackingData
 from diplomat.utils import frame_store_fmt
 from io import BytesIO
@@ -17,7 +28,7 @@ def extract_frames(
     frames: Sequence[int],
     threshold: float = 1e-6,
     compression_lvl: int = 6,
-    on_frames: Optional[Callable[[TrackingData], None]] = None
+    on_frames: Optional[Callable[[TrackingData], None]] = None,
 ):
     """
     Extract frames from a DIPLOMAT frame store and store them in another frame store.
@@ -44,7 +55,7 @@ def extract_frames(
         file_reader.seek_frame(idx)
         frm = file_reader.read_frames(1)
 
-        if(on_frames is not None):
+        if on_frames is not None:
             on_frames(frm)
 
         file_writer.write_data(frm)
@@ -76,6 +87,7 @@ class BorderStyle(NamedTuple):
     """
     A named tuple, for representing a border style for the pretty print methods, mostly used internally...
     """
+
     top_left: str
     top_right: str
     bottom_right: str
@@ -91,12 +103,17 @@ class FrameStringFormats:
     """
     Some pre-provided frame string format fonts, used to style frames when dumping them to the console.
     """
+
     REGULAR = (" ░▒▓█", 2, BorderStyle("╔", "╗", "╝", "╚", "═", "║", "═", "║"))
     REGULAR_COMPACT = (" ░▒▓█", 1, BorderStyle("╔", "╗", "╝", "╚", "═", "║", "═", "║"))
     REGULAR_NO_SPACE = ("░▒▓█", 2, BorderStyle("╔", "╗", "╝", "╚", "═", "║", "═", "║"))
     DIGITS = ("0123456789", 1, BorderStyle("╔", "╗", "╝", "╚", "═", "║", "═", "║"))
-    DIGITS_FUN = ('🯰🯱🯲🯳🯴🯵🯶🯷🯸🯹', 1, None)
-    SQUARES = ("▢◫▥▩▣", 1, BorderStyle("◎", "◎", "◎", "◎", "▭", "◑", "▭", "◐", lambda w, h: ""))
+    DIGITS_FUN = ("🯰🯱🯲🯳🯴🯵🯶🯷🯸🯹", 1, None)
+    SQUARES = (
+        "▢◫▥▩▣",
+        1,
+        BorderStyle("◎", "◎", "◎", "◎", "▭", "◑", "▭", "◐", lambda w, h: ""),
+    )
 
 
 def pretty_print_frame(
@@ -106,7 +123,7 @@ def pretty_print_frame(
     dynamic_sz: bool = True,
     size_up: bool = False,
     interpol: int = cv2.INTER_CUBIC,
-    format_type: Tuple[str, int, tuple] = FrameStringFormats.REGULAR
+    format_type: Tuple[str, int, tuple] = FrameStringFormats.REGULAR,
 ):
     """
     Print a DeepLabCut Probability Frame.
@@ -123,10 +140,24 @@ def pretty_print_frame(
                         strings being the displayed characters at given magnitudes, and an integer being the number
                         of times to repeat the characters when displaying them. ('abcd', 2 with 0 becomes aa)
     """
-    if(dynamic_sz):
-        print(pretty_frame_string(data, frame_idx, body_part, get_terminal_size()[0], size_up, interpol, format_type))
+    if dynamic_sz:
+        print(
+            pretty_frame_string(
+                data,
+                frame_idx,
+                body_part,
+                get_terminal_size()[0],
+                size_up,
+                interpol,
+                format_type,
+            )
+        )
     else:
-        print(pretty_frame_string(data, frame_idx, body_part, 0, size_up, interpol, format_type))
+        print(
+            pretty_frame_string(
+                data, frame_idx, body_part, 0, size_up, interpol, format_type
+            )
+        )
 
 
 def pretty_frame_string(
@@ -136,7 +167,7 @@ def pretty_frame_string(
     width_limit: int = 0,
     size_up: bool = False,
     interpol: int = cv2.INTER_CUBIC,
-    format_type: Tuple[str, int, tuple] = FrameStringFormats.REGULAR
+    format_type: Tuple[str, int, tuple] = FrameStringFormats.REGULAR,
 ) -> str:
     """
     Return a DeepLabCut Probability Frame in a pretty string for printing to the terminal.
@@ -161,30 +192,33 @@ def pretty_frame_string(
     """
     chars, char_rep_amt, border = format_type
 
-    if(border is not None):
+    if border is not None:
         border = BorderStyle(*border)
 
     frame = data.get_prob_table(frame_idx, body_part)
     # Make range 0-1...
     max_val = np.nanmax(frame)
-    if(max_val != 0):
+    if max_val != 0:
         frame = frame / max_val
 
-    if(width_limit >= (char_rep_amt * 2)):
+    if width_limit >= (char_rep_amt * 2):
         new_w = (width_limit / char_rep_amt) - 1
-        new_w = min(frame.shape[1], new_w) if(not size_up) else new_w
+        new_w = min(frame.shape[1], new_w) if (not size_up) else new_w
 
-        sized_f = cv2.resize(frame, (int(new_w), int(frame.shape[0] * (new_w / frame.shape[1]))),
-                             interpolation=interpol)
+        sized_f = cv2.resize(
+            frame,
+            (int(new_w), int(frame.shape[0] * (new_w / frame.shape[1]))),
+            interpolation=interpol,
+        )
         max_val = np.nanmax(sized_f)
-        if(max_val != 0):
+        if max_val != 0:
             sized_f = sized_f / max_val
     else:
         sized_f = frame
 
     res = bytearray()
 
-    if(border is not None):
+    if border is not None:
         dim_str = border.info_func(frame.shape[1], frame.shape[0])
 
         res += (
@@ -194,18 +228,20 @@ def pretty_frame_string(
         ).encode()
 
     for y in range(sized_f.shape[0]):
-        if(border is not None):
+        if border is not None:
             res += border.left.encode()
 
         for x in range(sized_f.shape[1]):
-            res += (chars[int(sized_f[y, x] * (len(chars) - 0.5))] * char_rep_amt).encode()
+            res += (
+                chars[int(sized_f[y, x] * (len(chars) - 0.5))] * char_rep_amt
+            ).encode()
 
-        if(border is not None):
+        if border is not None:
             res += f"{border.right}\n".encode()
         else:
             res += "\n".encode()
 
-    if(border is not None):
+    if border is not None:
         res += (
             f"{border.bottom_left}"
             f"{border.bottom * (sized_f.shape[1] * char_rep_amt)}"
@@ -220,7 +256,7 @@ def extract_n_pack(
     frames: Sequence[int],
     threshold: float = 1e-6,
     compression_lvl: int = 6,
-    on_frames: Optional[Callable[[TrackingData], None]] = None
+    on_frames: Optional[Callable[[TrackingData], None]] = None,
 ) -> bytes:
     """
     Extract frames from a DLC Frame Store file and pack them into a base64 encoded byte string.
@@ -244,8 +280,7 @@ def extract_n_pack(
 
 
 def unpack_frame_string(
-    frame_string: bytes,
-    frames_per_iter: int = 0
+    frame_string: bytes, frames_per_iter: int = 0
 ) -> Tuple[List[str], Union[TrackingData, Generator[TrackingData, None, None]]]:
     """
     Unpack a frame store string into a tracking data object for access to the original probability frame data.
@@ -262,18 +297,26 @@ def unpack_frame_string(
 
     reader = frame_store_fmt.DLFSReader(f)
 
-    if(frames_per_iter <= 0):
-        return (reader.get_header().bodypart_names, reader.read_frames(reader.get_header().number_of_frames))
+    if frames_per_iter <= 0:
+        return (
+            reader.get_header().bodypart_names,
+            reader.read_frames(reader.get_header().number_of_frames),
+        )
     else:
-        return (reader.get_header().bodypart_names, _unpack_frame_string_gen(reader, frames_per_iter))
+        return (
+            reader.get_header().bodypart_names,
+            _unpack_frame_string_gen(reader, frames_per_iter),
+        )
 
 
-def _unpack_frame_string_gen(reader: frame_store_fmt.DLFSReader, frames_per_iter: int = 0):
-    while(reader.has_next(frames_per_iter)):
+def _unpack_frame_string_gen(
+    reader: frame_store_fmt.DLFSReader, frames_per_iter: int = 0
+):
+    while reader.has_next(frames_per_iter):
         yield reader.read_frames(frames_per_iter)
 
     extra = reader.get_header().number_of_frames - (reader.tell_frame() + 1)
-    if(extra > 0):
+    if extra > 0:
         yield reader.read_frames(extra)
 
     return None

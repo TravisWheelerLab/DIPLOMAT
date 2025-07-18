@@ -1,6 +1,7 @@
 """
 Provides utilities and interfaces for drawing shape markers, and iterating lists of shapes and converting lists of shapes names to shapes.
 """
+
 from typing import Callable, Iterable, Tuple, Iterator, Optional
 import numpy as np
 import cv2
@@ -14,19 +15,23 @@ class DotShapeDrawer(ABC):
 
     # Unit polygons for certain types of items that for which built-in drawing functions don't exist in most
     # programming languages...
-    _TRIANGLE_POLY = np.array([[0, -1], [-0.8660254037844386, 0.5], [0.8660254037844386, 0.5]])
-    _STAR_POLY = np.array([
-        [0, -1.0],
-        [-0.22451398828979272, -0.3090169943749475],
-        [-0.9510565162951535, -0.3090169943749475],
-        [-0.36327126400268056, 0.11803398874989483],
-        [-0.5877852522924732, 0.8090169943749473],
-        [-7.01660179590785e-17, 0.38196601125010526],
-        [0.5877852522924729, 0.8090169943749476],
-        [0.36327126400268056, 0.11803398874989496],
-        [0.9510565162951536, -0.3090169943749472],
-        [0.22451398828979283, -0.30901699437494745]
-    ])
+    _TRIANGLE_POLY = np.array(
+        [[0, -1], [-0.8660254037844386, 0.5], [0.8660254037844386, 0.5]]
+    )
+    _STAR_POLY = np.array(
+        [
+            [0, -1.0],
+            [-0.22451398828979272, -0.3090169943749475],
+            [-0.9510565162951535, -0.3090169943749475],
+            [-0.36327126400268056, 0.11803398874989483],
+            [-0.5877852522924732, 0.8090169943749473],
+            [-7.01660179590785e-17, 0.38196601125010526],
+            [0.5877852522924729, 0.8090169943749476],
+            [0.36327126400268056, 0.11803398874989496],
+            [0.9510565162951536, -0.3090169943749472],
+            [0.22451398828979283, -0.30901699437494745],
+        ]
+    )
     _INSIDE_SQUARE_RADIUS_RATIO = 0.9
 
     SHAPE_TYPES = tuple()
@@ -77,13 +82,17 @@ class DotShapeDrawer(ABC):
 
 
 DotShapeDrawer.SHAPE_TYPES = tuple(
-    ["_".join(val.split("_")[2:]) for val in dir(DotShapeDrawer) if(val.startswith("_draw_"))]
+    [
+        "_".join(val.split("_")[2:])
+        for val in dir(DotShapeDrawer)
+        if (val.startswith("_draw_"))
+    ]
 )
 
 
 def shape_str(shape: str) -> str:
     shape = str(shape)
-    if(shape not in DotShapeDrawer.SHAPE_TYPES):
+    if shape not in DotShapeDrawer.SHAPE_TYPES:
         raise ValueError(
             f"Shape name '{shape}' not valid, supported shape names are: {list(DotShapeDrawer.SHAPE_TYPES)}"
         )
@@ -95,6 +104,7 @@ class shape_iterator:
     Allows one to iterate over a list of shape strings indefinitely, and in groups. Used to iterate over shapes on a
     per individual basis.
     """
+
     def __init__(self, sequence: Optional[Iterable[str]] = None, rep_count: int = None):
         """
         Get a new shape iterator.
@@ -104,13 +114,17 @@ class shape_iterator:
                           If larger than the sequence length, the iteration will wrap around the sequence, and
                           continue until this value is reached and then reset.
         """
-        if(isinstance(sequence, type(self))):
+        if isinstance(sequence, type(self)):
             self._seq = sequence._seq
             self._rep = sequence._rep
             return
 
-        self._seq = sequence if(sequence is not None) else ("circle", "triangle", "square", "star")
-        self._rep = 1 if(rep_count is None) else rep_count
+        self._seq = (
+            sequence
+            if (sequence is not None)
+            else ("circle", "triangle", "square", "star")
+        )
+        self._rep = 1 if (rep_count is None) else rep_count
 
     def __iter__(self) -> Iterator[str]:
         self._count = 0
@@ -118,7 +132,7 @@ class shape_iterator:
         return self
 
     def __next__(self) -> str:
-        if(self._count >= self._rep):
+        if self._count >= self._rep:
             self._count = 0
             self._iter = iter(self._seq)
 
@@ -132,10 +146,7 @@ class shape_iterator:
         return shape_str(val)
 
     def __tojson__(self):
-        return {
-            "sequence": self._seq,
-            "rep_count": self._rep
-        }
+        return {"sequence": self._seq, "rep_count": self._rep}
 
     @classmethod
     def __fromjson__(cls, data):
@@ -147,12 +158,13 @@ class CV2DotShapeDrawer(DotShapeDrawer):
     A shape dot or marker implementation that utilizes opencv2 for drawing. It can draw to images stored as 2D
     numpy arrays.
     """
+
     def __init__(
         self,
         img: np.ndarray,
         color: Tuple[int, int, int, int],
         line_thickness: int = 1,
-        line_type: int = cv2.LINE_8
+        line_type: int = cv2.LINE_8,
     ):
         """
         Create a cv2 marker, or shape drawer.
@@ -169,7 +181,14 @@ class CV2DotShapeDrawer(DotShapeDrawer):
         self._line_type = line_type
 
     def _draw_circle(self, x: float, y: float, r: float):
-        cv2.circle(self._img, (int(x), int(y)), int(r), self._color, self._line_thickness, self._line_type)
+        cv2.circle(
+            self._img,
+            (int(x), int(y)),
+            int(r),
+            self._color,
+            self._line_thickness,
+            self._line_type,
+        )
 
     def _draw_square(self, x: float, y: float, r: float):
         r = r * self._INSIDE_SQUARE_RADIUS_RATIO
@@ -179,22 +198,35 @@ class CV2DotShapeDrawer(DotShapeDrawer):
             (int(x + r), int(y + r)),
             self._color,
             self._line_thickness,
-            self._line_type
+            self._line_type,
         )
 
     def _draw_triangle(self, x: float, y: float, r: float):
         points = (self._TRIANGLE_POLY * r + np.array([x, y])).astype(int)
 
-        if(self._line_thickness <= 0):
+        if self._line_thickness <= 0:
             cv2.fillPoly(self._img, [points], self._color, self._line_type)
         else:
-            cv2.polylines(self._img, [points], True, self._color, self._line_thickness, self._line_type)
+            cv2.polylines(
+                self._img,
+                [points],
+                True,
+                self._color,
+                self._line_thickness,
+                self._line_type,
+            )
 
     def _draw_star(self, x: float, y: float, r: float):
         points = (self._STAR_POLY * r + np.array([x, y])).astype(int)
 
-        if (self._line_thickness <= 0):
+        if self._line_thickness <= 0:
             cv2.fillPoly(self._img, [points], self._color, self._line_type)
         else:
-            cv2.polylines(self._img, [points], True, self._color, self._line_thickness, self._line_type)
-
+            cv2.polylines(
+                self._img,
+                [points],
+                True,
+                self._color,
+                self._line_thickness,
+                self._line_type,
+            )

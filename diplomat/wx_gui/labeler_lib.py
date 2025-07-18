@@ -15,6 +15,7 @@ class SettingWidget(ABC):
     """
     Represents a setting that can be configured by the user via a wx Control.
     """
+
     @abstractmethod
     def set_hook(self, hook: Callable[[], None]):
         """
@@ -24,7 +25,7 @@ class SettingWidget(ABC):
         pass
 
     @abstractmethod
-    def get_new_widget(self, parent = None) -> wx.Control:
+    def get_new_widget(self, parent=None) -> wx.Control:
         """
         Get a widget capable of changing this setting.
 
@@ -51,13 +52,14 @@ class Slider(SettingWidget):
     A setting which displays a slider for the user to interact with.
     Allows the user to select over a range of integers.
     """
+
     def __init__(
         self,
         minimum: int,
         maximum: int,
         default: int = None,
         style: int = _bit_or(wx.SL_HORIZONTAL, wx.SL_LABELS),
-        **kwargs
+        **kwargs,
     ):
         """
         Create a new slider setting.
@@ -70,7 +72,7 @@ class Slider(SettingWidget):
         :param style: A wxWidgets style flag (integer), adjust the style of the
                       slider as displayed in the UI.
         """
-        self._value = default if(default is not None) else minimum
+        self._value = default if (default is not None) else minimum
         self._params = (minimum, maximum)
         self._style = style
         self._kwargs = kwargs
@@ -79,18 +81,19 @@ class Slider(SettingWidget):
     def set_hook(self, hook: Callable[[Any], None]):
         self._hook = hook
 
-    def get_new_widget(self, parent = None) -> wx.Control:
+    def get_new_widget(self, parent=None) -> wx.Control:
         slider = wx.Slider(
-            parent, value=self._value,
+            parent,
+            value=self._value,
             minValue=self._params[0],
             maxValue=self._params[1],
             style=self._style,
-            **self._kwargs
+            **self._kwargs,
         )
 
         def val_change(evt):
             self._value = slider.GetValue()
-            if(self._hook is not None):
+            if self._hook is not None:
                 self._hook(self._value)
 
         slider.Bind(wx.EVT_SLIDER, val_change)
@@ -101,7 +104,7 @@ class Slider(SettingWidget):
 
 
 def first_non_none(*vals):
-    return next((v for v in vals if(v is not None)), None)
+    return next((v for v in vals if (v is not None)), None)
 
 
 class FloatSpin(SettingWidget):
@@ -109,6 +112,7 @@ class FloatSpin(SettingWidget):
     A setting which displays a spin control for the user to interact with.
     Can handle any floating point values, both bounded and unbounded.
     """
+
     def __init__(
         self,
         minimum: float = None,
@@ -116,7 +120,7 @@ class FloatSpin(SettingWidget):
         default: float = None,
         increment: float = 1,
         digits: int = -1,
-        **kwargs
+        **kwargs,
     ):
         """
         Create a new floating point spinner setting.
@@ -140,7 +144,7 @@ class FloatSpin(SettingWidget):
             value=self._value,
             increment=increment,
             digits=digits,
-            **kwargs
+            **kwargs,
         )
 
     def set_hook(self, hook: Callable[[Any], None]):
@@ -152,7 +156,7 @@ class FloatSpin(SettingWidget):
 
         def update(evt):
             self._value = float_spin.GetValue()
-            if(self._hook is not None):
+            if self._hook is not None:
                 self._hook(self._value)
 
         float_spin.Bind(floatspin.EVT_FLOATSPIN, update)
@@ -167,6 +171,7 @@ class SettingCollection:
     Represents a collection of named SettingWidgets. Widget values can be
     extacted from the ui using get_values.
     """
+
     def __init__(self, **values):
         """
         Create a new Setting Collection.
@@ -176,8 +181,10 @@ class SettingCollection:
                        SettingWidget.
         """
         for name, setting_widget in values.items():
-            if(not isinstance(setting_widget, SettingWidget)):
-                raise ValueError("Must pass arguments that are names to setting widgets!")
+            if not isinstance(setting_widget, SettingWidget):
+                raise ValueError(
+                    "Must pass arguments that are names to setting widgets!"
+                )
         self.widgets: Dict[str, SettingWidget] = values
 
     def get_values(self) -> Config:
@@ -200,14 +207,10 @@ class PoseLabeler(ABC):
     returns a new pose prediction based on the user input and additonal
     internal information. This allows for 'smart' labelers to be created.
     """
+
     @abstractmethod
     def predict_location(
-        self,
-        frame_idx: int,
-        bp_idx: int,
-        x: float,
-        y: float,
-        probability: float
+        self, frame_idx: int, bp_idx: int, x: float, y: float, probability: float
     ) -> Tuple[Any, Tuple[float, float, float]]:
         """
         Predict the location of a user input, while not changing the internal
@@ -238,10 +241,7 @@ class PoseLabeler(ABC):
         pass
 
     @abstractmethod
-    def pose_change(
-        self,
-        new_state: Any
-    ) -> Any:
+    def pose_change(self, new_state: Any) -> Any:
         """
         Finalize a user change, updating any internal state or frame storage
         to enforce the user labeling.
@@ -298,9 +298,9 @@ class PoseLabeler(ABC):
         :returns: The display name. The default implementation returns the
                   class name with a space inserted before every capital letter.
         """
-        return "".join([
-            f" {c}" if(65 <= ord(c) <= 90) else c for c in type(self).__name__
-        ]).strip()
+        return "".join(
+            [f" {c}" if (65 <= ord(c) <= 90) else c for c in type(self).__name__]
+        ).strip()
 
     @classmethod
     def supports_multi_label(cls) -> bool:
@@ -318,6 +318,7 @@ class SettingCollectionWidget(wx.Control):
     A widget for displaying the settings of a pose labeler. Defaults
     to an empty widget, as no pose labeler is set.
     """
+
     EXPAND_CHAR = "  ▼"
     RETRACT_CHAR = "  ▲"
 
@@ -326,7 +327,7 @@ class SettingCollectionWidget(wx.Control):
         *args,
         title: str = "Advanced Settings",
         collapsable: bool = True,
-        **kwargs
+        **kwargs,
     ):
         """
         Create a new empty settings displaying widget.
@@ -336,13 +337,11 @@ class SettingCollectionWidget(wx.Control):
         self._shown = not collapsable
 
         self._collapse_button = wx.Button(self, label=title + self.EXPAND_CHAR)
-        if(not collapsable):
+        if not collapsable:
             self._collapse_button.SetLabel(title)
             self._collapse_button.Enable(False)
 
-        self._collapse_button.SetFont(
-            self._collapse_button.GetFont().MakeSmaller()
-        )
+        self._collapse_button.SetFont(self._collapse_button.GetFont().MakeSmaller())
         w, h = self._collapse_button.GetSize()
         self._collapse_button.SetMinSize(wx.Size(w, int(h * 0.8)))
 
@@ -375,7 +374,7 @@ class SettingCollectionWidget(wx.Control):
             self._main_layout.Hide(i)
 
     def _expand_panel(self, evt):
-        if(self.is_shown()):
+        if self.is_shown():
             self._collapse_button.SetLabel(self._title + self.EXPAND_CHAR)
             self._hide()
         else:
@@ -407,7 +406,7 @@ class SettingCollectionWidget(wx.Control):
         self.clear()
 
         # Load the new plugin...
-        if(collection is not None):
+        if collection is not None:
             for name, widget_gen in self._selected_settings.widgets.items():
                 nice_name = " ".join(w.capitalize() for w in name.split("_")) + ":"
                 label = wx.StaticText(self, label=nice_name)
@@ -415,7 +414,7 @@ class SettingCollectionWidget(wx.Control):
                 self._main_layout.Add(label, 0, wx.EXPAND)
                 self._main_layout.Add(control, 0, wx.EXPAND)
 
-        if(self.is_shown()):
+        if self.is_shown():
             self._show()
         else:
             self._hide()
@@ -426,8 +425,7 @@ def _test_setting_viewer():
     app = wx.App()
 
     setting_collection = SettingCollection(
-        first_setting = Slider(0, 100, 50),
-        second_setting = FloatSpin(0, 100, 10, 1, 3)
+        first_setting=Slider(0, 100, 50), second_setting=FloatSpin(0, 100, 10, 1, 3)
     )
 
     window = wx.Frame(None, wx.ID_ANY, "Hello World!")
@@ -446,5 +444,5 @@ def _test_setting_viewer():
     app.MainLoop()
 
 
-if(__name__ == "__main__"):
+if __name__ == "__main__":
     _test_setting_viewer()

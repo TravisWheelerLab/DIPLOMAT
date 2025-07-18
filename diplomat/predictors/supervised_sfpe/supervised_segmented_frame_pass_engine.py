@@ -7,12 +7,28 @@ from pathlib import Path
 from diplomat.predictors.sfpe.disk_sparse_storage import DiskBackedForwardBackwardData
 from diplomat.utils.video_io import ContextVideoCapture
 from diplomat.wx_gui.progress_dialog import FBProgressDialog
-from diplomat.predictors.supervised_fpe.labelers import Approximate, Point, NearestPeakInSource, ApproximateSourceOnly
-from diplomat.predictors.supervised_fpe.scorers import EntropyOfTransitions, MaximumJumpInStandardDeviations
+from diplomat.predictors.supervised_fpe.labelers import (
+    Approximate,
+    Point,
+    NearestPeakInSource,
+    ApproximateSourceOnly,
+)
+from diplomat.predictors.supervised_fpe.scorers import (
+    EntropyOfTransitions,
+    MaximumJumpInStandardDeviations,
+)
 from typing import Optional, Dict, Tuple, List, MutableMapping, Iterator, Iterable
-from diplomat.predictors.sfpe.segmented_frame_pass_engine import SegmentedFramePassEngine, AntiCloseObject
+from diplomat.predictors.sfpe.segmented_frame_pass_engine import (
+    SegmentedFramePassEngine,
+    AntiCloseObject,
+)
 from diplomat.wx_gui.fpe_editor import FPEEditor, default_heatmap_entries
-from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame, ForwardBackwardData, SparseTrackingData, sparse_tracking_data_to_video_point
+from diplomat.predictors.fpe.sparse_storage import (
+    ForwardBackwardFrame,
+    ForwardBackwardData,
+    SparseTrackingData,
+    sparse_tracking_data_to_video_point,
+)
 from diplomat.processing import *
 
 import cv2
@@ -38,7 +54,9 @@ class SegmentedSubList(UserList):
 
 
 class SegmentedList(UserList):
-    def __init__(self, data: List, segments: np.ndarray, segment_alignments: np.ndarray):
+    def __init__(
+        self, data: List, segments: np.ndarray, segment_alignments: np.ndarray
+    ):
         super().__init__()
         self.data = data
         self._segments = segments
@@ -64,7 +82,7 @@ class SegmentedDict(MutableMapping):
         wrapper_dict: dict,
         segments: np.ndarray,
         segment_alignments: np.ndarray,
-        rev_segment_alignments: np.ndarray
+        rev_segment_alignments: np.ndarray,
     ):
         super().__init__()
         self.data = wrapper_dict
@@ -97,7 +115,12 @@ class SegmentedDict(MutableMapping):
 
 
 class SegmentedFramePassData(ForwardBackwardData):
-    def __init__(self, data: ForwardBackwardData, segments: np.ndarray, segment_alignments: np.ndarray):
+    def __init__(
+        self,
+        data: ForwardBackwardData,
+        segments: np.ndarray,
+        segment_alignments: np.ndarray,
+    ):
         super().__init__(0, 0)
         self._frames = data.frames
         self._num_bps = data.num_bodyparts
@@ -112,7 +135,9 @@ class SegmentedFramePassData(ForwardBackwardData):
 
     @frames.setter
     def frames(self, frames):
-        raise NotImplementedError("Not allowed to modify the frames directly through this view!")
+        raise NotImplementedError(
+            "Not allowed to modify the frames directly through this view!"
+        )
 
 
 class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
@@ -130,14 +155,22 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         num_frames: int,
         settings: Config,
         video_metadata: Config,
-        restore_path: Optional[str] = None
+        restore_path: Optional[str] = None,
     ):
-        super().__init__(bodyparts, num_outputs, num_frames, settings, video_metadata, restore_path)
+        super().__init__(
+            bodyparts, num_outputs, num_frames, settings, video_metadata, restore_path
+        )
 
-        if(video_metadata["orig-video-path"] is None):
-            raise ValueError("Unable to find the original video file, which is required by this plugin!")
+        if video_metadata["orig-video-path"] is None:
+            raise ValueError(
+                "Unable to find the original video file, which is required by this plugin!"
+            )
 
-        self._video_path = video_metadata["orig-video-path"] if(restore_path is None) else restore_path
+        self._video_path = (
+            video_metadata["orig-video-path"]
+            if (restore_path is None)
+            else restore_path
+        )
         self._video_hdl: Optional[cv2.VideoCapture] = None
         self._final_probabilities = None
         self._fb_editor: Optional[FPEEditor] = None
@@ -151,7 +184,8 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         num_outputs > 1).
         """
         return [
-            self.bodyparts[bp_idx // self.num_outputs] + str((bp_idx % self.num_outputs) + 1)
+            self.bodyparts[bp_idx // self.num_outputs]
+            + str((bp_idx % self.num_outputs) + 1)
             for bp_idx in range(self._num_total_bp)
         ]
 
@@ -161,7 +195,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         """
         offset = self.video_metadata["cropping-offset"]
 
-        if(offset is not None):
+        if offset is not None:
             y, x = offset
             w, h = self._frame_holder.metadata.width, self._frame_holder.metadata.height
             return (int(x), int(y), int(w), int(h))
@@ -178,8 +212,10 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         :returns: A boolean, True if the user confirmed they wanted the action done, otherwise false.
         """
-        message = (f"Are you sure you want to {'undo' if is_undo else 'redo'} the Passes? "
-                   f"Undoing this step might take a while.")
+        message = (
+            f"Are you sure you want to {'undo' if is_undo else 'redo'} the Passes? "
+            f"Undoing this step might take a while."
+        )
         caption = f"Confirm {'Undo' if is_undo else 'Redo'}"
         style = wx.YES_NO | wx.CANCEL | wx.CANCEL_DEFAULT | wx.CENTRE | wx.ICON_WARNING
 
@@ -188,13 +224,10 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         return result == wx.ID_YES
 
-
     @property
     def frame_data(self) -> ForwardBackwardData:
         return SegmentedFramePassData(
-            self._frame_holder,
-            self._segments,
-            self._reverse_segment_bp_order
+            self._frame_holder, self._segments, self._reverse_segment_bp_order
         )
 
     @property
@@ -203,7 +236,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._changed_frames,
             self._segments,
             self._reverse_segment_bp_order,
-            self._segment_bp_order
+            self._segment_bp_order,
         )
 
     def get_maximum_with_defaults(self, frame) -> Tuple[float, float, float]:
@@ -220,12 +253,14 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
     def _make_plot_of(
         self,
         figsize: Tuple[float, float],
-        dpi: int, title: str,
+        dpi: int,
+        title: str,
         track_data: SparseTrackingData,
-        **kwargs
+        **kwargs,
     ) -> wx.Bitmap:
         # Get the frame...
         import matplotlib
+
         matplotlib.use("agg")
         import matplotlib.pyplot as plt
 
@@ -234,7 +269,9 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         axes.set_title(title)
 
         h, w = self.frame_data.metadata.height, self.frame_data.metadata.width
-        track_data = track_data.desparsify(int(w / track_data.downscaling), int(h / track_data.downscaling))
+        track_data = track_data.desparsify(
+            int(w / track_data.downscaling), int(h / track_data.downscaling)
+        )
 
         axes.imshow(track_data.get_prob_table(0, 0), **kwargs)
         figure.tight_layout()
@@ -254,15 +291,21 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         figsize: Tuple[float, float],
         dpi: int,
         title: str,
-        track_datas: List[SparseTrackingData]
+        track_datas: List[SparseTrackingData],
     ) -> wx.Bitmap:
         # Get the frame...
         import matplotlib
+
         matplotlib.use("agg")
         import matplotlib.pyplot as plt
 
-        cmaps = ['Blues', 'Reds', 'Greys', 'Oranges', 'Purples', 'Greens']
-        overlap_color = [0.224, 1, 0.078, 1]  # None of the cmaps use neon green, for good reason...
+        cmaps = ["Blues", "Reds", "Greys", "Oranges", "Purples", "Greens"]
+        overlap_color = [
+            0.224,
+            1,
+            0.078,
+            1,
+        ]  # None of the cmaps use neon green, for good reason...
 
         figure = plt.figure(figsize=figsize, dpi=dpi)
         axes = figure.gca()
@@ -273,23 +316,27 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         counts = 0
         img = 0
 
-        for track_data, cmap in zip(track_datas, cmaps * int(np.ceil(len(track_datas) / len(cmaps)))):
+        for track_data, cmap in zip(
+            track_datas, cmaps * int(np.ceil(len(track_datas) / len(cmaps)))
+        ):
             cmap = plt.get_cmap(cmap).copy()
             cmap.set_extremes(bad=(0, 0, 0, 0), under=(0, 0, 0, 0), over=(0, 0, 0, 0))
 
-            track_data = track_data.desparsify(int(w / track_data.downscaling), int(h / track_data.downscaling)).get_prob_table(0, 0)
+            track_data = track_data.desparsify(
+                int(w / track_data.downscaling), int(h / track_data.downscaling)
+            ).get_prob_table(0, 0)
 
             track_data /= np.nanmax(track_data)
             track_data *= 0.75
 
-            counts += (track_data != 0)
+            counts += track_data != 0
             track_data[track_data == 0] = -np.inf
 
             img += cmap(track_data)
 
         img[counts > 1] = overlap_color
         axes.imshow(img)
-        if(np.any(counts > 1)):
+        if np.any(counts > 1):
             axes.set_title(title + "\n(OVERLAP!)")
 
         figure.tight_layout()
@@ -304,7 +351,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         return bitmap
 
-    def _make_plots(self, evt = None):
+    def _make_plots(self, evt=None):
         """
         PRIVATE: Creates plots of data for current frame in UI and puts them in the side panel.
         """
@@ -319,43 +366,81 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         # For every body part...
         for bp_idx in range(self._num_total_bp):
-            bp_name = self.bodyparts[bp_idx // self.num_outputs] + str((bp_idx % self.num_outputs) + 1)
+            bp_name = self.bodyparts[bp_idx // self.num_outputs] + str(
+                (bp_idx % self.num_outputs) + 1
+            )
             all_data = self.frame_data.frames[frame_idx][bp_idx]
 
-            if ((frame_idx, bp_idx) in self.changed_frames):
+            if (frame_idx, bp_idx) in self.changed_frames:
                 f = self.changed_frames[frame_idx, bp_idx]
-                frames, occluded, occ_coords, orig_data = f.frame_probs, f.occluded_probs, f.occluded_coords, f.orig_data
+                frames, occluded, occ_coords, orig_data = (
+                    f.frame_probs,
+                    f.occluded_probs,
+                    f.occluded_coords,
+                    f.orig_data,
+                )
             else:
-                frames, occluded, occ_coords, orig_data = all_data.frame_probs, all_data.occluded_probs, all_data.occluded_coords, all_data.orig_data
+                frames, occluded, occ_coords, orig_data = (
+                    all_data.frame_probs,
+                    all_data.occluded_probs,
+                    all_data.occluded_coords,
+                    all_data.orig_data,
+                )
 
-            if(frames is not None):
+            if frames is not None:
                 # Plot post MIT-Viterbi frame data if it exists...
                 data = orig_data.unpack()
                 track_data = SparseTrackingData(orig_data.downscaling)
                 track_data.pack(*data[:2], frames)
 
-                new_bitmap_list.append(self._make_plot_of(
-                    figsize, dpi, bp_name + " Post Passes", track_data, vmin=0, vmax=1
-                ))
+                new_bitmap_list.append(
+                    self._make_plot_of(
+                        figsize,
+                        dpi,
+                        bp_name + " Post Passes",
+                        track_data,
+                        vmin=0,
+                        vmax=1,
+                    )
+                )
 
-                occ_data = SparseTrackingData(orig_data.downscaling).pack(*occ_coords.T, occluded)
-                new_bitmap_list.append(self._make_plot_of(
-                    figsize, dpi, bp_name + " Post Passes Occluded", occ_data, vmin=0, vmax=1
-                ))
+                occ_data = SparseTrackingData(orig_data.downscaling).pack(
+                    *occ_coords.T, occluded
+                )
+                new_bitmap_list.append(
+                    self._make_plot_of(
+                        figsize,
+                        dpi,
+                        bp_name + " Post Passes Occluded",
+                        occ_data,
+                        vmin=0,
+                        vmax=1,
+                    )
+                )
 
             # Plot Pre-MIT-Viterbi frame data, or the original suggested probability frame...
-            new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Original Source Frame", orig_data))
-            if(is_fix_frame):
+            new_bitmap_list.append(
+                self._make_plot_of(
+                    figsize, dpi, bp_name + " Original Source Frame", orig_data
+                )
+            )
+            if is_fix_frame:
                 fix_frame_data.append(orig_data)
 
             # If user edited, show user edited frame...
-            if ((frame_idx, bp_idx) in self.changed_frames):
+            if (frame_idx, bp_idx) in self.changed_frames:
                 track_data = all_data.orig_data
-                new_bitmap_list.append(self._make_plot_of(figsize, dpi, bp_name + " Modified Source Frame", track_data))
-
-            if(len(fix_frame_data) >= self.num_outputs):
                 new_bitmap_list.append(
-                    self._custom_multicluster_plot(figsize, dpi, bp_name + " Fix Frame Clustering", fix_frame_data)
+                    self._make_plot_of(
+                        figsize, dpi, bp_name + " Modified Source Frame", track_data
+                    )
+                )
+
+            if len(fix_frame_data) >= self.num_outputs:
+                new_bitmap_list.append(
+                    self._custom_multicluster_plot(
+                        figsize, dpi, bp_name + " Fix Frame Clustering", fix_frame_data
+                    )
                 )
                 fix_frame_data.clear()
 
@@ -363,20 +448,26 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         # with the new images.
         self._fb_editor.plot_list.set_bitmaps(new_bitmap_list)
 
-    def _on_frame_export(self, export_type: int, file_format: str, file_path: Path) -> Tuple[bool, str]:
+    def _on_frame_export(
+        self, export_type: int, file_format: str, file_path: Path
+    ) -> Tuple[bool, str]:
         # TODO...
         self._fb_editor.Enable(False)
 
         changed_frames = {}
 
-        if (export_type >= 1):
+        if export_type >= 1:
             # Option is exporting data after latest fpe run, remove the latest user edits...
             for (fi, bpi), frame in self._changed_frames.items():
-                changed_frames[(fi, bpi)] = self._frame_holder[fi][bpi]
-                self._frame_holder[fi][bpi] = frame
+                changed_frames[(fi, bpi)] = self._frame_holder.frames[fi][bpi]
+                self._frame_holder.frames[fi][bpi] = frame
 
         try:
-            with FBProgressDialog(self._fb_editor, title="Export Progress", inner_msg="Exporting Frames...") as dialog:
+            with FBProgressDialog(
+                self._fb_editor,
+                title="Export Progress",
+                inner_msg="Exporting Frames...",
+            ) as dialog:
                 dialog.Show()
                 self._export_frames(
                     self._frame_holder,
@@ -387,7 +478,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                     file_format,
                     dialog.progress_bar,
                     export_type == 1,
-                    export_type == 2
+                    export_type == 2,
                 )
         except (IOError, OSError, ValueError) as e:
             traceback.print_exc()
@@ -395,7 +486,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         finally:
             # If we overwrote the latest user edits, put them back in now...
             for (fi, bpi), frame in changed_frames.items():
-                self._frame_holder[fi][bpi] = frame
+                self._frame_holder.frames[fi][bpi] = frame
 
             self._fb_editor.Enable(True)
 
@@ -405,13 +496,19 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         self,
         progress_bar: ProgressBar,
         reset_bar: bool = True,
-        reverse_arr: Optional[np.ndarray] = None
+        reverse_arr: Optional[np.ndarray] = None,
     ):
         # Ignore the last argument, we need to be able to reverse segment ordering...
-        self._reverse_segment_bp_order = np.zeros((len(self._segments), self._frame_holder.num_bodyparts), np.uint16)
-        return super()._resolve_frame_orderings(progress_bar, reset_bar, self._reverse_segment_bp_order)
+        self._reverse_segment_bp_order = np.zeros(
+            (len(self._segments), self._frame_holder.num_bodyparts), np.uint16
+        )
+        return super()._resolve_frame_orderings(
+            progress_bar, reset_bar, self._reverse_segment_bp_order
+        )
 
-    def _on_hist_fb(self, old_data: Tuple[np.ndarray, Dict[Tuple[int, int], ForwardBackwardFrame]]):
+    def _on_hist_fb(
+        self, old_data: Tuple[np.ndarray, Dict[Tuple[int, int], ForwardBackwardFrame]]
+    ):
         """
         PRIVATE: Used for handling undo/redo Forward Backward events in history. Takes a older/newer edited point state
         and restores it, returning the current state as a new history event to be added to the history
@@ -445,7 +542,9 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         # If we are doing an undo, use old_dict, otherwise use the data already in current dict...
         # the fb run doesn't use the data in _current_frames, but uses it to determine which segments
         # need to be rerun...
-        self._changed_frames = self.changed_frames if(len(self._changed_frames) > 0) else old_dict
+        self._changed_frames = (
+            self.changed_frames if (len(self._changed_frames) > 0) else old_dict
+        )
         self._on_run_fb(False)
         self._changed_frames = old_dict
 
@@ -463,19 +562,16 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             current_data,
             self._segments,
             self._reverse_segment_bp_order,
-            self._segment_bp_order
+            self._segment_bp_order,
         ).items():
             x, y, prob = sparse_tracking_data_to_video_point(
-                *self.get_maximum_with_defaults(
-                    sparse_frame
-                ), sparse_frame.src_data.downscaling
+                *self.get_maximum_with_defaults(sparse_frame),
+                sparse_frame.src_data.downscaling,
             )
 
             for score in self._fb_editor.score_displays:
                 score.update_at(frm, np.nan)
-            self._fb_editor.video_player.video_viewer.set_pose(
-                frm, bp, (x, y, prob)
-            )
+            self._fb_editor.video_player.video_viewer.set_pose(frm, bp, (x, y, prob))
 
         return (new_user_mods, current_dict)
 
@@ -483,17 +579,26 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         self,
         changed_frames: Dict[Tuple[int, int], ForwardBackwardFrame],
         old_poses: Pose,
-        progress_bar: ProgressBar
+        progress_bar: ProgressBar,
     ) -> Tuple[Pose, Iterable[int]]:
-        
-        #TODO : delete below lines, not doing as expected
-        
-        # Determine what segments have been manipulated...
-        segment_indexes = sorted({np.searchsorted(self._segments[:, 1], f_i, "right") for f_i, b_i in changed_frames})
 
-        poses = old_poses.get_all().reshape((old_poses.get_frame_count(), old_poses.get_bodypart_count(), 3))
+        # TODO : delete below lines, not doing as expected
+
+        # Determine what segments have been manipulated...
+        segment_indexes = sorted(
+            {
+                np.searchsorted(self._segments[:, 1], f_i, "right")
+                for f_i, b_i in changed_frames
+            }
+        )
+
+        poses = old_poses.get_all().reshape(
+            (old_poses.get_frame_count(), old_poses.get_bodypart_count(), 3)
+        )
         # Restore poses to there original order....
-        for (s_i, e_i, f_i), seg_rev in zip(self._segments, self._reverse_segment_bp_order):
+        for (s_i, e_i, f_i), seg_rev in zip(
+            self._segments, self._reverse_segment_bp_order
+        ):
             poses[s_i:e_i, :] = poses[s_i:e_i, seg_rev]
 
         self._run_segmented_passes(progress_bar, segment_indexes)
@@ -502,8 +607,10 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         # Now compute new order of poses...
         for (s_i, e_i, f_i), seg_ord in zip(self._segments, self._segment_bp_order):
             poses[s_i:e_i, :] = poses[s_i:e_i, seg_ord]
-        old_poses.get_all()[:] = poses.reshape(old_poses.get_frame_count(), old_poses.get_bodypart_count() * 3)
-        
+        old_poses.get_all()[:] = poses.reshape(
+            old_poses.get_frame_count(), old_poses.get_bodypart_count() * 3
+        )
+
         return (
             self.get_maximums(
                 self._frame_holder,
@@ -511,9 +618,9 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 self._segment_bp_order,
                 progress_bar,
                 relaxed_radius=self.settings.relaxed_maximum_radius,
-                old_poses=(old_poses, segment_indexes)
+                old_poses=(old_poses, segment_indexes),
             ),
-            segment_indexes
+            segment_indexes,
         )
 
     def _on_run_fb(self, submit_evt: bool = True) -> bool:
@@ -526,7 +633,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         :returns: False. Tells the FBEditor that it should never clear the history when this method is run.
         """
-        if (submit_evt and len(self._changed_frames) == 0):
+        if submit_evt and len(self._changed_frames) == 0:
             return False
 
         with FBProgressDialog(self._fb_editor, title="Rerunning Passes...") as dialog:
@@ -540,13 +647,15 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 new_user_modified_frames = score.get_user_modified_locations()
                 break
 
-            if(submit_evt):
-                self._fb_editor.history.do(self.RERUN_HIST_EVT, (user_modified_frames, self._changed_frames))
+            if submit_evt:
+                self._fb_editor.history.do(
+                    self.RERUN_HIST_EVT, (user_modified_frames, self._changed_frames)
+                )
 
             poses, segments = self._partial_rerun(
                 self._changed_frames,
                 self._fb_editor.video_player.video_viewer.get_all_poses(),
-                AntiCloseObject(dialog.progress_bar)
+                AntiCloseObject(dialog.progress_bar),
             )
             segments = [slice(*self._segments[i, :2]) for i in segments]
 
@@ -563,15 +672,20 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         # Return false to not clear the history....
         return False
 
-    def _copy_to_disk(self, progress_bar: ProgressBar, new_frame_holder: ForwardBackwardData):
+    def _copy_to_disk(
+        self, progress_bar: ProgressBar, new_frame_holder: ForwardBackwardData
+    ):
         progress_bar.message("Saving to Disk")
-        progress_bar.reset(self._frame_holder.num_frames * self._frame_holder.num_bodyparts)
+        progress_bar.reset(
+            self._frame_holder.num_frames * self._frame_holder.num_bodyparts
+        )
 
         new_frame_holder.metadata = self._frame_holder.metadata
         for frame_idx in range(len(self._frame_holder.frames)):
             for bodypart_idx in range(len(self._frame_holder.frames[frame_idx])):
-                new_frame_holder.frames[frame_idx][bodypart_idx] = self._frame_holder.frames[frame_idx][
-                    bodypart_idx]
+                new_frame_holder.frames[frame_idx][bodypart_idx] = (
+                    self._frame_holder.frames[frame_idx][bodypart_idx]
+                )
                 progress_bar.update()
 
     def _on_manual_save(self):
@@ -587,7 +701,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 self.num_frames,
                 self._num_total_bp,
                 disk_ui_file,
-                self.settings.memory_cache_size
+                self.settings.memory_cache_size,
             ) as disk_frame_holder:
                 with FBProgressDialog(self._fb_editor, title="Save to Disk") as dialog:
                     dialog.Show()
@@ -601,16 +715,20 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         self._frame_holder.metadata["video_metadata"] = old_data
 
     def _on_end(self, progress_bar: ProgressBar) -> Optional[Pose]:
-        if(self._restore_path is None):
+        if self._restore_path is None:
             self._run_frame_passes(progress_bar)
             self._frame_holder.metadata["segments"] = self._segments.tolist()
-            self._frame_holder.metadata["segment_scores"] = self._segment_scores.tolist()
+            self._frame_holder.metadata["segment_scores"] = (
+                self._segment_scores.tolist()
+            )
         else:
-            progress_bar.reset(self._frame_holder.num_frames * self._frame_holder.num_bodyparts)
+            progress_bar.reset(
+                self._frame_holder.num_frames * self._frame_holder.num_bodyparts
+            )
             progress_bar.message("Restoring Partial Frames")
             for frame_list in self._frame_holder.frames:
                 for frame in frame_list:
-                    if(frame.frame_probs is None):
+                    if frame.frame_probs is None:
                         frame.frame_probs = frame.src_data.probs[:]
                     progress_bar.update()
 
@@ -624,10 +742,10 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._segments,
             self._segment_bp_order,
             progress_bar,
-            relaxed_radius=self.settings.relaxed_maximum_radius
+            relaxed_radius=self.settings.relaxed_maximum_radius,
         )
 
-        if(self._restore_path is None and self.settings.storage_mode == "hybrid"):
+        if self._restore_path is None and self.settings.storage_mode == "hybrid":
             new_frame_holder = self.get_frame_holder()
             self._copy_to_disk(progress_bar, new_frame_holder)
             self._frame_holder = new_frame_holder
@@ -644,12 +762,18 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             self._get_names(),
             self.video_metadata,
             self._get_crop_box(),
-            [Approximate(self), Point(self), NearestPeakInSource(self), ApproximateSourceOnly(self)],
+            [
+                Approximate(self),
+                Point(self),
+                NearestPeakInSource(self),
+                ApproximateSourceOnly(self),
+            ],
             [EntropyOfTransitions(self), MaximumJumpInStandardDeviations(self)],
             None,
-            list(range(1, self.num_outputs + 1)) * (self._num_total_bp // self.num_outputs),
-            self._on_manual_save if(self.settings.storage_mode == "memory") else None,
-            heatmap_options=default_heatmap_entries(self._get_names(), self)
+            list(range(1, self.num_outputs + 1))
+            * (self._num_total_bp // self.num_outputs),
+            self._on_manual_save if (self.settings.storage_mode == "memory") else None,
+            heatmap_options=default_heatmap_entries(self._get_names(), self),
         )
 
         for s in self._fb_editor.score_displays:
@@ -660,7 +784,9 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
         self._fb_editor.set_frame_exporter(self._on_frame_export)
         self._fb_editor.history.register_undoer(self.RERUN_HIST_EVT, self._on_hist_fb)
         self._fb_editor.history.register_redoer(self.RERUN_HIST_EVT, self._on_hist_fb)
-        self._fb_editor.history.register_confirmer(self.RERUN_HIST_EVT, self._confirm_action)
+        self._fb_editor.history.register_confirmer(
+            self.RERUN_HIST_EVT, self._confirm_action
+        )
         self._fb_editor.set_fb_runner(self._on_run_fb)
         self._fb_editor.set_plot_settings_changer(self._on_visual_settings_change)
 
@@ -678,4 +804,3 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
     @classmethod
     def supports_multi_output(cls) -> bool:
         return True
-

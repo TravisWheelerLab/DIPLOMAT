@@ -21,12 +21,9 @@ class HelpDialog(wx.Dialog):
     A custom wx.Dialog. This dialog can be used to describe UI shortcuts and their related keyboard shortcuts, allowing
     the user to see how to use a UI.
     """
+
     # Modifier key to string for displaying in the help dialog.
-    MOD_TO_STR = {
-        wx.ACCEL_CTRL: "Ctrl",
-        wx.ACCEL_ALT: "Alt",
-        wx.ACCEL_SHIFT: "Shift"
-    }
+    MOD_TO_STR = {wx.ACCEL_CTRL: "Ctrl", wx.ACCEL_ALT: "Alt", wx.ACCEL_SHIFT: "Shift"}
 
     # These get displayed for keyboard shortcuts which are not alphanumeric...
     MIS_KEYS = {
@@ -38,9 +35,18 @@ class HelpDialog(wx.Dialog):
         wx.WXK_BACK: "Backspace",
     }
 
-    def __init__(self, parent, entries: List[Tuple[wx.Bitmap, Opt[Tuple[int, int]], str]], image_sizes: Tuple[int, int],
-                 wid=wx.ID_ANY, title="Help", pos=wx.DefaultPosition, size=wx.DefaultSize,
-                 style=_bit_or(wx.DEFAULT_DIALOG_STYLE, wx.RESIZE_BORDER), name="helpDialog"):
+    def __init__(
+        self,
+        parent,
+        entries: List[Tuple[wx.Bitmap, Opt[Tuple[int, int]], str]],
+        image_sizes: Tuple[int, int],
+        wid=wx.ID_ANY,
+        title="Help",
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=_bit_or(wx.DEFAULT_DIALOG_STYLE, wx.RESIZE_BORDER),
+        name="helpDialog",
+    ):
         """
         Construct a new help dialog.
 
@@ -88,7 +94,7 @@ class HelpDialog(wx.Dialog):
         self._btns = self.CreateButtonSizer(wx.CLOSE)
 
         self._main_sizer.Add(self._main_panel, 1, wx.EXPAND)
-        if(self._btns is not None):
+        if self._btns is not None:
             self._main_sizer.Add(self._btns, 0, wx.EXPAND)
         self.SetSizerAndFit(self._main_sizer)
 
@@ -97,25 +103,29 @@ class HelpDialog(wx.Dialog):
         """
         Meant for internal use: Converts a wx.AcceleratorTable style shortcut to a string for display to the user.
         """
-        if(shortcut is None):
+        if shortcut is None:
             return ""
-        if(isinstance(shortcut, str)):
+        if isinstance(shortcut, str):
             return shortcut
 
         accel, letter = shortcut
 
-        key_list = [string for accel_btn, string in cls.MOD_TO_STR.items() if((accel & accel_btn) == accel_btn)]
+        key_list = [
+            string
+            for accel_btn, string in cls.MOD_TO_STR.items()
+            if ((accel & accel_btn) == accel_btn)
+        ]
 
-        if(letter is not None):
+        if letter is not None:
             letter_c = chr(letter)
-            if(letter_c.isalnum() and is_ascii(letter_c) and (not letter_c.isspace())):
+            if letter_c.isalnum() and is_ascii(letter_c) and (not letter_c.isspace()):
                 key_list.append(letter_c)
             else:
                 letter_c = cls.MIS_KEYS.get(letter, None)
-                if(letter_c is not None):
+                if letter_c is not None:
                     key_list.append(letter_c)
 
-        if(len(key_list) == 0):
+        if len(key_list) == 0:
             return ""
 
         return "+".join(key_list)

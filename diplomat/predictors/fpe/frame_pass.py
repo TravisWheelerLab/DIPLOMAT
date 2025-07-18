@@ -14,12 +14,14 @@ class RangeSlicer:
     """
     A RangeSlicer! Allows for one to convert a slice into a range.
     """
+
     def __init__(self, array: Sequence):
         self._wrap_len = len(array)
 
     def __getitem__(self, item):
-        if(isinstance(item, slice)):
+        if isinstance(item, slice):
             return range(*item.indices(self._wrap_len))
+        raise ValueError("Item is not a slice!")
 
 
 class FramePass(ABC):
@@ -27,11 +29,7 @@ class FramePass(ABC):
     GLOBAL_POOL = None
 
     def __init__(
-        self,
-        width: int,
-        height: int,
-        thread_count: int,
-        config: Dict[str, Any]
+        self, width: int, height: int, thread_count: int, config: Dict[str, Any]
     ):
         # Set defaults to forward iteration...
         self._step = 1
@@ -66,15 +64,22 @@ class FramePass(ABC):
     def _get_step_controls(self) -> Tuple[oint, oint, oint, oint]:
         return self._start, self._stop, self._step, self._prior_off
 
-    def _set_step_controls(self, start: oint, stop: oint, step: oint, prior_offset: oint):
-        self._start, self._stop, self._step, self._prior_off = start, stop, step, prior_offset
+    def _set_step_controls(
+        self, start: oint, stop: oint, step: oint, prior_offset: oint
+    ):
+        self._start, self._stop, self._step, self._prior_off = (
+            start,
+            stop,
+            step,
+            prior_offset,
+        )
 
     def run_pass(
         self,
         fb_data: ForwardBackwardData,
         prog_bar: Optional[ProgressBar] = None,
         in_place: bool = True,
-        reset_bar: bool = True
+        reset_bar: bool = True,
     ) -> ForwardBackwardData:
         """
         Optional Override: Runs a pass of this FramePass.
@@ -82,24 +87,37 @@ class FramePass(ABC):
         self._frame_data = fb_data
 
         arr = fb_data.frames
-        dest = fb_data if(in_place) else ForwardBackwardData(fb_data.num_frames, fb_data.num_bodyparts)
+        dest = (
+            fb_data
+            if (in_place)
+            else ForwardBackwardData(fb_data.num_frames, fb_data.num_bodyparts)
+        )
         dest_arr = dest.frames
 
-        if((prog_bar is not None) and reset_bar):
-            prog_bar.reset(len(RangeSlicer(arr)[self._start:self._stop:self._step]))
+        if (prog_bar is not None) and reset_bar:
+            prog_bar.reset(len(RangeSlicer(arr)[self._start : self._stop : self._step]))
 
-        for frame_idx in RangeSlicer(arr)[self._start:self._stop:self._step]:
+        for frame_idx in RangeSlicer(arr)[self._start : self._stop : self._step]:
             for bp_idx in range(fb_data.num_bodyparts):
-                prior = (dest_arr[frame_idx + self._prior_off][bp_idx]
-                         if(0 <= (frame_idx + self._prior_off) < len(dest_arr)) else None)
-                current = arr[frame_idx][bp_idx] if(in_place) else arr[frame_idx][bp_idx].copy()
-                result = self.run_step(prior, current, frame_idx, bp_idx, fb_data.metadata)
-                if(result is not None):
+                prior = (
+                    dest_arr[frame_idx + self._prior_off][bp_idx]
+                    if (0 <= (frame_idx + self._prior_off) < len(dest_arr))
+                    else None
+                )
+                current = (
+                    arr[frame_idx][bp_idx]
+                    if (in_place)
+                    else arr[frame_idx][bp_idx].copy()
+                )
+                result = self.run_step(
+                    prior, current, frame_idx, bp_idx, fb_data.metadata
+                )
+                if result is not None:
                     dest_arr[frame_idx][bp_idx] = result
                 else:
                     dest_arr[frame_idx][bp_idx] = arr[frame_idx][bp_idx]
 
-            if(prog_bar is not None):
+            if prog_bar is not None:
                 prog_bar.update()
 
         dest.metadata = fb_data.metadata
@@ -113,7 +131,7 @@ class FramePass(ABC):
         current: ForwardBackwardFrame,
         frame_index: int,
         bodypart_index: int,
-        metadata: AttributeDict
+        metadata: AttributeDict,
     ) -> Optional[ForwardBackwardFrame]:
         raise NotImplementedError()
 
@@ -129,7 +147,9 @@ class FramePass(ABC):
 
     @classmethod
     @abstractmethod
-    def get_config_options(cls) -> Optional[Dict[str, Tuple[T, Callable[[Any], T], str]]]:
+    def get_config_options(
+        cls,
+    ) -> Optional[Dict[str, Tuple[T, Callable[[Any], T], str]]]:
         raise NotImplementedError()
 
     @classmethod
@@ -140,9 +160,9 @@ class FramePass(ABC):
     def get_subclasses(cls) -> Set[Type["FramePass"]]:
         from diplomat.utils.pluginloader import load_plugin_classes
         from . import frame_passes
+
         return load_plugin_classes(frame_passes, cls)
 
 
 class ConfigError(ValueError):
     pass
-

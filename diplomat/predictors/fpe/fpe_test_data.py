@@ -305,7 +305,7 @@ TEST_FRAME_SEQUENCES = [
     ct4wOSoeknZgu338wEfxPodZnuv3h9mwHpQ4I+0Q2dl9YP3yBQ4xX4r3L5H8deCeMfsBBhW7A/7a
     hx1SZdkPrLUUPJgrccJh/uyv+79+P2D/IvqQQ/D2DfY/iz7YfVp4eH/2asYDDxbOPeA5/7rDhWe6
     DpYcE+ynbjy9fwH/5f1h83MPAABLj7Rk
-    """
+    """,
     # TODO: Add more...
 ]
 
@@ -321,5 +321,5 @@ def print_test_set():
                 extract_frames.pretty_print_frame(frm, 0, bp_idx)
 
 
-if(__name__ == "__main__"):
+if __name__ == "__main__":
     print_test_set()

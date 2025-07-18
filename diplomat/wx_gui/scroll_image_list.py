@@ -15,9 +15,18 @@ class ScrollImageList(wx.ScrolledCanvas):
 
     SCROLL_RATE = 5
 
-    def __init__(self, parent, img_list: Optional[List[wx.Bitmap]], orientation = wx.VERTICAL, padding = 20,
-                 wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, style=_bit_or(wx.HSCROLL, wx.VSCROLL),
-                 name="ScrollImageList"):
+    def __init__(
+        self,
+        parent,
+        img_list: Optional[List[wx.Bitmap]],
+        orientation=wx.VERTICAL,
+        padding=20,
+        wid=wx.ID_ANY,
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=_bit_or(wx.HSCROLL, wx.VSCROLL),
+        name="ScrollImageList",
+    ):
         """
         Construct a new scrollable image list.
 
@@ -32,8 +41,10 @@ class ScrollImageList(wx.ScrolledCanvas):
                       (Defaults to wx.HSCROLL | wx.VSCROLL).
         :param name: WX internal name of widget.
         """
-        super().__init__(parent, wid, pos, size, style | wx.FULL_REPAINT_ON_RESIZE, name)
-        if(img_list is None):
+        super().__init__(
+            parent, wid, pos, size, style | wx.FULL_REPAINT_ON_RESIZE, name
+        )
+        if img_list is None:
             img_list = []
 
         self._bitmaps = []
@@ -48,7 +59,7 @@ class ScrollImageList(wx.ScrolledCanvas):
         self.set_orientation(orientation)
         self.set_padding(padding)
 
-        if(size == wx.DefaultSize):
+        if size == wx.DefaultSize:
             self.SetInitialSize(wx.Size(*self._dims))
         else:
             self.SetInitialSize(size)
@@ -64,18 +75,22 @@ class ScrollImageList(wx.ScrolledCanvas):
         super().SetScrollPageSize(orient, pageSize)
 
     def OnMouseWheel(self, event: wx.MouseEvent):
-        if(event.GetWheelAxis() != wx.MOUSE_WHEEL_VERTICAL):
+        if event.GetWheelAxis() != wx.MOUSE_WHEEL_VERTICAL:
             return
 
         is_inv_func = getattr(event, "IsWheelInverted", lambda: False)
-        self._scroll_extra += (-1 if(is_inv_func()) else 1) * event.GetWheelRotation()
+        self._scroll_extra += (-1 if (is_inv_func()) else 1) * event.GetWheelRotation()
 
         x, y = self.CalcUnscrolledPosition(0, 0)
         scale_x, scale_y = self.GetScrollPixelsPerUnit()
 
-        if(scale_x != 0 and scale_y != 0):
-            self.Scroll((x // scale_x), (y // scale_y) + (self._scroll_extra // scale_y))
-            self._scroll_extra = (abs(self._scroll_extra) % scale_y) * (1 if(self._scroll_extra >= 0) else -1)
+        if scale_x != 0 and scale_y != 0:
+            self.Scroll(
+                (x // scale_x), (y // scale_y) + (self._scroll_extra // scale_y)
+            )
+            self._scroll_extra = (abs(self._scroll_extra) % scale_y) * (
+                1 if (self._scroll_extra >= 0) else -1
+            )
         else:
             self._scroll_extra = 0
 
@@ -89,26 +104,26 @@ class ScrollImageList(wx.ScrolledCanvas):
         """
         cw, ch = self.GetClientSize()
 
-        if(len(self._bitmaps) == 0):
+        if len(self._bitmaps) == 0:
             width, height = 100, 100
-        elif(self._mode == wx.VERTICAL):
+        elif self._mode == wx.VERTICAL:
             width = cw
-            height = (
-                sum(int(bitmap.GetHeight() * (cw / bitmap.GetWidth())) for bitmap in self._bitmaps)
-                + self._padding * len(self._bitmaps)
-            )
+            height = sum(
+                int(bitmap.GetHeight() * (cw / bitmap.GetWidth()))
+                for bitmap in self._bitmaps
+            ) + self._padding * len(self._bitmaps)
         else:
             height = ch
-            width = (
-                sum(int(bitmap.GetWidth() * (ch / bitmap.GetHeight())) for bitmap in self._bitmaps)
-                + self._padding * len(self._bitmaps)
-            )
+            width = sum(
+                int(bitmap.GetWidth() * (ch / bitmap.GetHeight()))
+                for bitmap in self._bitmaps
+            ) + self._padding * len(self._bitmaps)
 
         self._dims = width, height
         self.SetVirtualSize(width, height)
         self.SetScrollRate(self.SCROLL_RATE, self.SCROLL_RATE)
         self.AdjustScrollbars()
-        if(event is None):
+        if event is None:
             self.SendSizeEvent()
             self.Refresh()
 
@@ -122,21 +137,23 @@ class ScrollImageList(wx.ScrolledCanvas):
         """
         width, height = self.GetClientSize()
 
-        if((not width) or (not height)):
+        if (not width) or (not height):
             return
 
         offset = 0
 
-        if(self._mode == wx.VERTICAL):
+        if self._mode == wx.VERTICAL:
             for bitmap in self._bitmaps:
                 modified_height = bitmap.GetHeight()
-                if(bitmap.GetWidth() != width):
-                    modified_height = int(bitmap.GetHeight() * (width / bitmap.GetWidth()))
+                if bitmap.GetWidth() != width:
+                    modified_height = int(
+                        bitmap.GetHeight() * (width / bitmap.GetWidth())
+                    )
 
                 pos_x, pos_y = self.CalcScrolledPosition(0, offset)
-                if(pos_y + modified_height < 0):
+                if pos_y + modified_height < 0:
                     pass
-                elif(pos_y > height):
+                elif pos_y > height:
                     break
                 else:
                     self._draw_bitmap(dc, bitmap, 0, offset, width, modified_height)
@@ -145,22 +162,28 @@ class ScrollImageList(wx.ScrolledCanvas):
         else:
             for bitmap in self._bitmaps:
                 modified_width = bitmap.GetWidth()
-                if(bitmap.GetHeight() != height):
-                    modified_width = int(bitmap.GetWidth() * (height / bitmap.GetHeight()))
+                if bitmap.GetHeight() != height:
+                    modified_width = int(
+                        bitmap.GetWidth() * (height / bitmap.GetHeight())
+                    )
 
                 pos_x, pos_y = self.CalcScrolledPosition(offset, 0)
-                if(pos_x + modified_width < 0):
+                if pos_x + modified_width < 0:
                     pass
-                elif(pos_x > width):
+                elif pos_x > width:
                     break
                 else:
                     self._draw_bitmap(dc, bitmap, offset, 0, modified_width, height)
 
                 offset += modified_width + self._padding
 
-    def _draw_bitmap(self, dc: wx.DC, bitmap: wx.Bitmap, x: int, y: int, width: int, height: int):
-        if(bitmap.GetWidth() != width or bitmap.GetHeight() != height):
-            bitmap = wx.Bitmap(bitmap.ConvertToImage().Scale(width, height, self.image_quality))
+    def _draw_bitmap(
+        self, dc: wx.DC, bitmap: wx.Bitmap, x: int, y: int, width: int, height: int
+    ):
+        if bitmap.GetWidth() != width or bitmap.GetHeight() != height:
+            bitmap = wx.Bitmap(
+                bitmap.ConvertToImage().Scale(width, height, self.image_quality)
+            )
         dc.DrawBitmap(bitmap, x, y)
 
     def get_padding(self) -> int:
@@ -195,7 +218,7 @@ class ScrollImageList(wx.ScrolledCanvas):
 
         :param value: wx.VERTICAL or wx.HORIZONTAL.
         """
-        if((value != wx.VERTICAL) and (value != wx.HORIZONTAL)):
+        if (value != wx.VERTICAL) and (value != wx.HORIZONTAL):
             raise ValueError("Orientation must be wx.VERTICAL or wx.HORIZONTAL!!!")
         self._mode = value
         self._dims = None
@@ -215,7 +238,7 @@ class ScrollImageList(wx.ScrolledCanvas):
 
         :param bitmaps: A list of wx.Bitmap.
         """
-        if(bitmaps is None):
+        if bitmaps is None:
             bitmaps = []
         self._bitmaps = bitmaps
         self._dims = None
@@ -238,5 +261,5 @@ def scroll_image_demo():
     app.MainLoop()
 
 
-if(__name__ == "__main__"):
+if __name__ == "__main__":
     scroll_image_demo()

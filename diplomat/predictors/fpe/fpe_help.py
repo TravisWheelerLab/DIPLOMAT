@@ -6,12 +6,11 @@ class FPEString:
         self._prefix = prefix
 
     def __sphinx_str__(self) -> str:
-        return (
-            f"{self._prefix} See :ref:`Frame Passes` to see the list of currently supported frame passes and options."
-        )
+        return f"{self._prefix} See :ref:`Frame Passes` to see the list of currently supported frame passes and options."
 
     def __typecaster_str__(self):
         from diplomat import CLI_RUN
+
         if CLI_RUN:
             ref_info = "Run the command 'diplomat predictors list_settings' to see the full set of options for this parameter."
         else:
@@ -23,12 +22,13 @@ class FPEString:
 
     def __str__(self) -> str:
         from diplomat.processing.type_casters import get_type_name
+
         desc_lst = []
 
         for fp in FramePass.get_subclasses():
             desc_lst.append(f"\tPass '{fp.get_name()}' Settings: [[[")
             options = fp.get_config_options()
-            if(options is None):
+            if options is None:
                 desc_lst.append("\t\tNo settings available...")
             else:
                 for name, (def_val, caster, desc) in options.items():
@@ -43,4 +43,3 @@ class FPEString:
             f"{self._prefix} The following frame passes and options are currently supported:\n\n"
             + "\n".join(desc_lst)
         )
-

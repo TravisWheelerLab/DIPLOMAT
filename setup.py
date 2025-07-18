@@ -6,8 +6,8 @@ def _load_version():
     with open("diplomat/__init__.py", "r", encoding="utf-8") as f:
         for line in f.readlines():
             line = line.strip()
-            if(line.startswith("__version__")):
-                return line.split("=")[-1].strip().strip("\"")
+            if line.startswith("__version__"):
+                return line.split("=")[-1].strip().strip('"')
 
     raise ValueError("No version found!")
 
@@ -23,23 +23,16 @@ ONNX_TF_DEPS = [
     "tensorflow",
     "tf2onnx>=1.16.1",
     "onnx",
-    "onnxruntime"
+    "onnxruntime",
 ]
 
 
 VARIANTS = {
     "gui": ["wxpython"],
-    "sleap": [
-        *ONNX_TF_DEPS
-    ],
-    "dlc": [
-        *ONNX_TF_DEPS
-    ],
-    "all": [
-        "wxpython",
-        *ONNX_TF_DEPS
-    ],
-    "test": ["pytest", "scipy"]
+    "sleap": [*ONNX_TF_DEPS],
+    "dlc": [*ONNX_TF_DEPS],
+    "all": ["wxpython", *ONNX_TF_DEPS],
+    "test": ["pytest", "scipy"],
 }
 
 DEVICE_VARIANTS = {
@@ -51,8 +44,8 @@ DEVICE_VARIANTS = {
             "nvidia-cuda-runtime-cu12~=12.0",
             "nvidia-cufft-cu12~=11.0",
             "nvidia-curand-cu12~=10.0",
-            "nvidia-cudnn-cu12~=9.0"
-        ]
+            "nvidia-cudnn-cu12~=9.0",
+        ],
     }
 }
 
@@ -63,7 +56,11 @@ def _attach_device_variants(variants, device_variants):
     for name, pkgs in variants.items():
         non_device_pkgs = [pkg for pkg in pkgs if pkg not in device_variants]
         device_pkgs = [pkg for pkg in pkgs if pkg in device_variants]
-        extensions = set(ext for device_pkg in device_pkgs for ext in device_variants[device_pkg].keys())
+        extensions = set(
+            ext
+            for device_pkg in device_pkgs
+            for ext in device_variants[device_pkg].keys()
+        )
         extensions.add("")
 
         for ext in extensions:
@@ -88,13 +85,11 @@ setuptools.setup(
     packages=find_packages(include="diplomat.*"),
     python_requires=">=3.8",
     platforms="any",
-    entry_points={
-        'console_scripts': ['diplomat=diplomat._cli_runner:main']
-    },
+    entry_points={"console_scripts": ["diplomat=diplomat._cli_runner:main"]},
     project_urls={
         "Homepage": "https://diplomattrack.org",
         "Documentation": "https://diplomat.readthedocs.io",
-        "Source": "https://github.com/TravisWheelerLab/DIPLOMAT"
+        "Source": "https://github.com/TravisWheelerLab/DIPLOMAT",
     },
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -104,7 +99,7 @@ setuptools.setup(
         # TODO: License
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3 :: Only",
-        "Typing :: Typed"
+        "Typing :: Typed",
     ],
     install_requires=[
         "opencv-python-headless",
@@ -114,7 +109,7 @@ setuptools.setup(
         "PyYAML",
         "pandas",
         "numpy",
-        "numba"
+        "numba",
     ],
-    extras_require=_attach_device_variants(VARIANTS, DEVICE_VARIANTS)
+    extras_require=_attach_device_variants(VARIANTS, DEVICE_VARIANTS),
 )

@@ -1,22 +1,24 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
 
-from diplomat.processing import Pose, TrackingData
+from diplomat.processing import TrackingData
 from diplomat.processing.type_casters import (
     StrictCallable,
     PathLike,
     Union,
     List,
-    Dict,
     Any,
     Optional,
     TypeCaster,
     NoneType,
-    Tuple, TypedDict, RangedInteger, RangedFloat
+    Tuple,
+    TypedDict,
+    RangedInteger,
+    RangedFloat,
 )
 import typing
 
@@ -29,45 +31,47 @@ class Select(Union):
         super().__init__(*types)
         self._all_valid_types = []
         for tp in types:
-            if(isinstance(tp, Union)):
+            if isinstance(tp, Union):
                 self._all_valid_types.extend(tp._valid_types)
             else:
                 self._all_valid_types.append(tp)
 
     def __eq__(self, other: TypeCaster):
-        if(isinstance(other, Union)):
+        if isinstance(other, Union):
             # Subset check...
             return all(self.__eq__(val) for val in other._valid_types)
         else:
-            if(other in self._all_valid_types):
+            if other in self._all_valid_types:
                 return True
             else:
                 res = super().__eq__(other)
-                if(res is NotImplemented):
+                if res is NotImplemented:
                     return False
                 return res
 
     def to_metavar(self) -> str:
-        raise ValueError("Select should only be used for type enforcement, not type hints!")
+        raise ValueError(
+            "Select should only be used for type enforcement, not type hints!"
+        )
 
     def to_type_hint(self) -> typing.Type:
-        raise ValueError("Select should only be used for type enforcement, not type hints!")
+        raise ValueError(
+            "Select should only be used for type enforcement, not type hints!"
+        )
 
 
 # Config argument can be a list of paths, single path, or union of the two...
 ConfigPathLikeArgument = Select[List[PathLike], PathLike]
 
 VerifierFunction = StrictCallable(
-    config=Union[List[PathLike], PathLike],
-    _kwargs=True,
-    _return=bool
+    config=Union[List[PathLike], PathLike], _kwargs=True, _return=bool
 )
 
 ConvertResultsFunction = lambda ret: StrictCallable(
     config=ConfigPathLikeArgument,
     videos=Union[List[PathLike], PathLike],
     csvs=Union[List[PathLike], PathLike],
-    _return=ret
+    _return=ret,
 )
 
 ModelInfo = TypedDict(
@@ -82,24 +86,18 @@ ModelInfo = TypedDict(
     line_thickness=RangedInteger(1, np.inf),
     bp_names=List(str),
     skeleton=Union(NoneType, List(Tuple(str, str))),
-    frontend=str
+    frontend=str,
 )
 
-ModelLike = StrictCallable(
-    frames=np.ndarray,
-    _return=TrackingData
-)
+ModelLike = StrictCallable(frames=np.ndarray, _return=TrackingData)
 ModelLoaderFunction = StrictCallable(
     config=ConfigPathLikeArgument,
     num_outputs=Optional[int],
     batch_size=Optional[int],
-    _return=Tuple(ModelInfo, ModelLike)
+    _return=Tuple(ModelInfo, ModelLike),
 )
 
-TracksLoaderFunction = StrictCallable(
-    path=PathLike,
-    _return=pd.DataFrame
-)
+TracksLoaderFunction = StrictCallable(path=PathLike, _return=pd.DataFrame)
 
 
 @dataclass(frozen=True)
@@ -107,6 +105,7 @@ class DIPLOMATContract:
     """
     Represents a 'contract'
     """
+
     method_name: str
     method_type: StrictCallable
 
@@ -121,8 +120,10 @@ class CommandManager(type):
         annotations = typing.get_type_hints(obj)
 
         for name, annot in annotations.items():
-            if(name in obj.__dict__):
-                raise TypeError(f"Command annotation '{name}' has default value, which is not allowed.")
+            if name in obj.__dict__:
+                raise TypeError(
+                    f"Command annotation '{name}' has default value, which is not allowed."
+                )
 
         return obj
 
@@ -141,6 +142,7 @@ class DIPLOMATCommands(metaclass=CommandManager):
     The baseline set of functions each DIPLOMAT backend must implement. Backends can add additional commands
     by passing the methods to this classes constructor.
     """
+
     _verifier: required(VerifierFunction)
     _load_model: required(ModelLoaderFunction)
     _load_tracks: TracksLoaderFunction
@@ -154,17 +156,21 @@ class DIPLOMATCommands(metaclass=CommandManager):
         for name, annot in annotations.items():
             value = kwargs.get(name, missing)
 
-            if(value is missing):
-                if(getattr(annot, "_required", False)):
-                    raise ValueError(f"Command '{name}' is required, but was not provided.")
+            if value is missing:
+                if getattr(annot, "_required", False):
+                    raise ValueError(
+                        f"Command '{name}' is required, but was not provided."
+                    )
                 continue
-            if(annot is None or (not isinstance(annot, TypeCaster))):
-                raise TypeError("DIPLOMAT Command Struct can only contain typecaster types.")
+            if annot is None or (not isinstance(annot, TypeCaster)):
+                raise TypeError(
+                    "DIPLOMAT Command Struct can only contain typecaster types."
+                )
 
             self._commands[name] = annot(value)
 
         for name, value in kwargs.items():
-            if(name not in annotations):
+            if name not in annotations:
                 self._commands[name] = value
 
     def __iter__(self):
@@ -176,7 +182,12 @@ class DIPLOMATCommands(metaclass=CommandManager):
     def __contains__(self, item: str):
         return item in self._commands
 
-    def verify(self, contract: DIPLOMATContract, config: Union[List[PathLike], PathLike], **kwargs: Any) -> bool:
+    def verify(
+        self,
+        contract: DIPLOMATContract,
+        config: Union[List[PathLike], PathLike],
+        **kwargs: Any,
+    ) -> bool:
         """
         Verify this backend can handle the provided command type, config file, and arguments.
 
@@ -187,7 +198,7 @@ class DIPLOMATCommands(metaclass=CommandManager):
 
         :return: A boolean, True if the backend can handle the provided command and arguments, otherwise False.
         """
-        if(self.verify_contract(contract)):
+        if self.verify_contract(contract):
             return self._verifier(config, **kwargs)
         return False
 
@@ -198,7 +209,7 @@ class DIPLOMATCommands(metaclass=CommandManager):
         :param contract: The contract for the command. Includes the name of the method and the type of the method,
                          which will typically be a strict callable.
         """
-        if(contract.method_name in self._commands):
+        if contract.method_name in self._commands:
             func = self._commands[contract.method_name]
             try:
                 contract.method_type(func)
@@ -213,6 +224,7 @@ class DIPLOMATFrontend(ABC):
     """
     Represents a diplomat frontend. Frontends can define commands or functions that can be used in the CLI frontend.
     """
+
     @classmethod
     @abstractmethod
     def init(cls) -> typing.Optional[DIPLOMATCommands]:

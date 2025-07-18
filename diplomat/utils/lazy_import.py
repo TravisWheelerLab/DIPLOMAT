@@ -15,7 +15,7 @@ ImportFunction = Callable[[str, Optional[str]], ModuleType]
 def _simple_import(name: str, pkg: Optional[str] = None) -> ModuleType:
     path = name.split(".")
 
-    if(len(path) == 1):
+    if len(path) == 1:
         return import_module(name, pkg)
     else:
         try:
@@ -35,10 +35,11 @@ class SilentImports:
         self._debug_mode = os.environ.get("DIPLOMAT_DEBUG", False)
 
     def __enter__(self):
-        if(not self._debug_mode):
+        if not self._debug_mode:
             os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
             import tensorflow as tf
-            tf.get_logger().setLevel('ERROR')
+
+            tf.get_logger().setLevel("ERROR")
 
             warnings.filterwarnings("ignore")
             self._true_print = builtins.print
@@ -47,7 +48,7 @@ class SilentImports:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if (not self._debug_mode):
+        if not self._debug_mode:
             builtins.print = self._true_print
             del os.environ["TF_CPP_MIN_LOG_LEVEL"]
 
@@ -68,6 +69,7 @@ class _OnnxPreloadImport:
         if self._onnx_preload and mod.__name__.startswith("onnxruntime"):
             self._onnx_preload = False
             import onnxruntime as ort
+
             if hasattr(ort, "preload_dlls"):
                 ort.preload_dlls()
         return mod
@@ -82,6 +84,7 @@ class ImportFunctions:
      - SIMPLE: A basic implementation of an import function.
      - SILENT: Makes imported package silent by disabling printing and log outputs before importing modules.
     """
+
     SIMPLE = _simple_import
     SILENT = _silent_import
 
@@ -94,12 +97,14 @@ def verify_existence_of(name: str):
 
     :raises: ImportError if the provided module can't be found.
     """
-    if(len(name.split(".")) > 1):
-        raise ValueError("Can only check top-level modules without attempting to import them.")
+    if len(name.split(".")) > 1:
+        raise ValueError(
+            "Can only check top-level modules without attempting to import them."
+        )
 
     try:
         spec = find_spec(name)
-        if(spec is None):
+        if spec is None:
             raise ImportError(f"Unable to find package '{name}'.")
     except Exception as e:
         raise ImportError(str(e))
@@ -108,15 +113,17 @@ def verify_existence_of(name: str):
 def resolve_lazy_imports(func: Callable) -> Callable:
     # Optimization: Lookup lazy imports for this module ahead of time...
     func_module = func.__globals__
-    if(not "__lazy_imports" in func_module):
-        func_module["__lazy_imports"] = [k for k, v in func_module.items() if(isinstance(v, LazyImporter))]
+    if not "__lazy_imports" in func_module:
+        func_module["__lazy_imports"] = [
+            k for k, v in func_module.items() if (isinstance(v, LazyImporter))
+        ]
 
     @functools.wraps(func)
     def do_resolution(*args, **kwargs):
         func_globals = func.__globals__
         lazy_imports = func_globals.get("__lazy_imports", None)
         lazy_imports = [] if lazy_imports is None else lazy_imports
-        while(len(lazy_imports) > 0):
+        while len(lazy_imports) > 0:
             imp_key = lazy_imports.pop()
             v = func_globals.get(imp_key, None)
             if isinstance(v, LazyImporter):
@@ -164,13 +171,13 @@ class LazyImporter:
         """
         Calling an attribute of a LazyImporter triggers import of the module.
         """
-        if(self._mod is self.NOTHING):
+        if self._mod is self.NOTHING:
             self._mod = self._imp(self._name, self._pkg)
 
         return self._mod(*args, **kwargs)
 
     def force_import(self):
-        if(self._mod is self.NOTHING):
+        if self._mod is self.NOTHING:
             self._mod = self._imp(self._name, self._pkg)
         return self._mod
 

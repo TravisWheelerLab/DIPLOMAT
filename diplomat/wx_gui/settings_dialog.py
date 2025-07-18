@@ -2,12 +2,17 @@
 Provides a dialog for displaying an arbitrary set of configurable settings to the user to be changed. Utilizes
 the :class:`~diplomat.wx_gui.labeler_lib.SettingWidget` API for specifying dialog settings and retrieving results.
 """
+
 from typing import Any, Callable, List, Optional, Union
 import numpy as np
 import wx
 from diplomat.processing import Config
 from diplomat.utils.colormaps import DiplomatColormap, to_colormap
-from diplomat.wx_gui.labeler_lib import SettingWidget, SettingCollection, SettingCollectionWidget
+from diplomat.wx_gui.labeler_lib import (
+    SettingWidget,
+    SettingCollection,
+    SettingCollectionWidget,
+)
 import platform
 import matplotlib.colors as mpl_colors
 
@@ -17,7 +22,14 @@ class DropDown(SettingWidget):
     A SettingWidget for representing a drop-down, or selection widget. Allows the user to select from a list of
     options.
     """
-    def __init__(self, options: List[Any], option_names: Optional[List[str]] = None, default: int = 0, **kwargs):
+
+    def __init__(
+        self,
+        options: List[Any],
+        option_names: Optional[List[str]] = None,
+        default: int = 0,
+        **kwargs
+    ):
         """
         Create a new drop-down widget.
 
@@ -28,15 +40,15 @@ class DropDown(SettingWidget):
         :param default: The index of the default selected value when the widget is first loaded. Defaults to 0, or the
                         first element in the selection box.
         """
-        if(len(options) == 0):
+        if len(options) == 0:
             raise ValueError("No options offered!")
-        if(option_names is None):
+        if option_names is None:
             option_names = [str(o) for o in options]
-        if(len(option_names) != len(options)):
+        if len(option_names) != len(options):
             raise ValueError("Options and name arrays don't have the same length.")
         self._options = list(options)
         self._option_names = option_names
-        if(not (0 <= default < len(options))):
+        if not (0 <= default < len(options)):
             raise ValueError("Default index is out of bounds!")
         self._default = int(default)
         self._kwargs = kwargs
@@ -47,22 +59,22 @@ class DropDown(SettingWidget):
         self._hook = hook
 
     def get_new_widget(self, parent=None) -> wx.Control:
-                # Check if the platform is Windows
-        if platform.system() != 'Windows':
+        # Check if the platform is Windows
+        if platform.system() != "Windows":
             # If not Windows, add the style flag to kwargs
-            self._kwargs['style'] = wx.LB_SINGLE
+            self._kwargs["style"] = wx.LB_SINGLE
         text_list = wx.Choice(parent, choices=self._option_names, **self._kwargs)
         text_list.SetSelection(self._default)
 
         def val_change(evt):
             sel = text_list.GetSelection()
-            if(sel == wx.NOT_FOUND):
+            if sel == wx.NOT_FOUND:
                 text_list.SetSelection(self._default)
                 self._value = self._default
             else:
                 self._value = sel
 
-            if(self._hook is not None):
+            if self._hook is not None:
                 self._hook(self._options[self._value])
 
         text_list.Bind(wx.EVT_CHOICE, val_change)
@@ -99,7 +111,7 @@ class ColormapListBox(wx.VListBox):
         pos=wx.DefaultPosition,
         size=wx.DefaultSize,
         style=0,
-        name="ColormapListBox"
+        name="ColormapListBox",
     ):
         super().__init__(parent, id, pos, size, style, name)
         self._colormaps = tuple(colormaps)
@@ -107,7 +119,9 @@ class ColormapListBox(wx.VListBox):
         self.SetItemCount(len(self._colormaps))
 
     def apply_filter(self, filt: Optional[Callable[[DiplomatColormap], bool]] = None):
-        self._colormaps_enabled = [True if filt is None else filt(cmap) for cmap in self._colormaps]
+        self._colormaps_enabled = [
+            True if filt is None else filt(cmap) for cmap in self._colormaps
+        ]
         self.SetItemCount(len(self._colormaps))
         self.Update()
         self.Refresh()
@@ -162,7 +176,10 @@ class ColormapSearch(wx.Panel):
         fw, fh = self.GetFont().GetPixelSize()
         search_bmp_size = int(fh * 1.5)
         search_bmp_thickness = max(1, fw // 3)
-        self.search_bitmap = wx.StaticBitmap(self, bitmap=self.generate_search_bitmap(search_bmp_size, search_bmp_thickness))
+        self.search_bitmap = wx.StaticBitmap(
+            self,
+            bitmap=self.generate_search_bitmap(search_bmp_size, search_bmp_thickness),
+        )
         self.text = wx.TextCtrl(self)
         self._sizer = wx.BoxSizer(wx.HORIZONTAL)
         self._sizer.Add(self.search_bitmap, 0, wx.EXPAND)
@@ -208,7 +225,9 @@ class ColormapPopup(wx.ComboPopup):
     def Create(self, parent):
         self.frame = wx.Panel(parent, style=wx.SIMPLE_BORDER)
         self.search = ColormapSearch(self.frame)
-        self.list = ColormapListBox(self.frame, colormaps=self.colormaps, style=wx.LC_LIST | wx.LC_SINGLE_SEL)
+        self.list = ColormapListBox(
+            self.frame, colormaps=self.colormaps, style=wx.LC_LIST | wx.LC_SINGLE_SEL
+        )
         l1 = wx.BoxSizer(wx.VERTICAL)
         l1.Add(self.search, 0, wx.ALL | wx.EXPAND)
         l1.Add(self.list, 1, wx.ALL | wx.EXPAND)
@@ -253,13 +272,23 @@ class ColormapChoice(wx.ComboCtrl):
         size=wx.DefaultSize,
         style=wx.CB_READONLY,
         validator=wx.DefaultValidator,
-        name="ColormapChoice"
+        name="ColormapChoice",
     ):
         if colormaps is None:
             from matplotlib import colormaps
+
             colormaps = sorted(colormaps)
         colormaps = [to_colormap(c) for c in colormaps]
-        super().__init__(parent, id, colormaps[0].name if len(colormaps) > 0 else "", pos, size, style, validator, name)
+        super().__init__(
+            parent,
+            id,
+            colormaps[0].name if len(colormaps) > 0 else "",
+            pos,
+            size,
+            style,
+            validator,
+            name,
+        )
         self.UseAltPopupWindow(True)
         self._popup = ColormapPopup(colormaps)
         self.SetPopupControl(self._popup)
@@ -272,9 +301,12 @@ class ColormapSelector(SettingWidget):
     """
     A SettingWidget for representing a colormap dropdown, for selecting a colormap.
     """
+
     def __init__(
         self,
-        options: Optional[List[Union[DiplomatColormap, str, mpl_colors.Colormap]]] = None,
+        options: Optional[
+            List[Union[DiplomatColormap, str, mpl_colors.Colormap]]
+        ] = None,
         default: Optional[Union[DiplomatColormap, str, mpl_colors.Colormap]] = None,
         **kwargs
     ):
@@ -295,8 +327,9 @@ class ColormapSelector(SettingWidget):
 
         if options is None:
             from matplotlib import colormaps
+
             options = sorted(colormaps)
-        if(len(options) == 0):
+        if len(options) == 0:
             raise ValueError("No options offered!")
         self._options.extend([to_colormap(op) for op in options])
         self._default = 0
@@ -325,7 +358,7 @@ class ColormapSelector(SettingWidget):
                 text_list.SetValue(self._options[self._default].name)
                 self._value = self._default
 
-            if(self._hook is not None):
+            if self._hook is not None:
                 self._hook(self._options[self._value])
 
         text_list.Bind(wx.EVT_COMBOBOX_CLOSEUP, val_change)
@@ -341,7 +374,10 @@ class SettingsDialog(wx.Dialog):
     A dialog of settings. Allows displaying a :class:`~diplomat.wx_gui.labeler_lib.SettingCollection` to a user in
     a dialog.
     """
-    def __init__(self, *args, title: str = "Settings", settings: SettingCollection, **kwargs):
+
+    def __init__(
+        self, *args, title: str = "Settings", settings: SettingCollection, **kwargs
+    ):
         """
         Create a new dialog.
 
@@ -350,14 +386,23 @@ class SettingsDialog(wx.Dialog):
 
         Additional positional and keyword arguments are passed directly to :class:`wx.Dialog` constructor.
         """
-        super().__init__(*args, title=title, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, **kwargs)
+        super().__init__(
+            *args,
+            title=title,
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+            **kwargs
+        )
 
         self._parent_layout = wx.BoxSizer(wx.VERTICAL)
 
         self._settings = settings
-        self._setting_widget = SettingCollectionWidget(self, title=title, collapsable=False)
+        self._setting_widget = SettingCollectionWidget(
+            self, title=title, collapsable=False
+        )
         self._setting_widget.set_setting_collection(settings)
-        self._parent_layout.Add(self._setting_widget, proportion=1, flag=wx.EXPAND | wx.ALL)
+        self._parent_layout.Add(
+            self._setting_widget, proportion=1, flag=wx.EXPAND | wx.ALL
+        )
 
         self._buttons = self.CreateButtonSizer(wx.OK | wx.CANCEL)
         self._parent_layout.Add(self._buttons, proportion=0, flag=wx.EXPAND | wx.ALL)
@@ -376,9 +421,9 @@ class SettingsDialog(wx.Dialog):
 def _test_colormap_selector():
     app = wx.App()
 
-    with SettingsDialog(None, title="Settings", settings=SettingCollection(
-        colormap=ColormapSelector()
-    )) as dlg:
+    with SettingsDialog(
+        None, title="Settings", settings=SettingCollection(colormap=ColormapSelector())
+    ) as dlg:
         if dlg.ShowModal() == wx.ID_OK:
             print(dlg.get_values())
             print(dlg.get_values().colormap.name)

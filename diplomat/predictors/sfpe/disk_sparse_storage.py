@@ -4,9 +4,9 @@ from diplomat.predictors.fpe.sparse_storage import (
     ForwardBackwardData,
     AttributeDict,
     ForwardBackwardFrame,
-    SettableSequence
+    SettableSequence,
 )
-from diplomat.predictors.sfpe.file_io import DiplomatFPEState, SharedMemory
+from diplomat.predictors.sfpe.file_io import DiplomatFPEState
 import multiprocessing
 
 
@@ -27,7 +27,7 @@ class LIFOCache:
         self._size = size
 
     def get(self, index: int, backing: SettableSequence) -> Any:
-        if(index in self._data):
+        if index in self._data:
             return self._data[index]
 
         self._data[index] = backing[index]
@@ -37,14 +37,14 @@ class LIFOCache:
         return self._data[index]
 
     def set(self, index: int, backing: SettableSequence, value: Any):
-        if(index not in self._data):
+        if index not in self._data:
             self._queue.append(index)
         self._data[index] = value
 
         self._clean_to(self._size, backing)
 
     def _clean_to(self, amount: int, backing: SettableSequence):
-        while(len(self._queue) > amount):
+        while len(self._queue) > amount:
             idx = self._queue.popleft()
             backing[idx] = self._data[idx]
             del self._data[idx]
@@ -74,7 +74,7 @@ class IndexIterator:
         self._idx = 0
 
     def __next__(self):
-        if(self._idx >= len(self._obj)):
+        if self._idx >= len(self._obj):
             raise StopIteration
         res = self._obj[self._idx]
         self._idx += 1
@@ -88,24 +88,24 @@ class CacheList:
         cache: LIFOCache,
         start: int = 0,
         stop: int = None,
-        step: int = None
+        step: int = None,
     ):
         self._backing = backing
         self._cache = cache
-        stop = stop if(stop is not None) else len(backing)
-        step = step if(step is not None) else 1
+        stop = stop if (stop is not None) else len(backing)
+        step = step if (step is not None) else 1
         self._range = range(start, stop, step)
 
     def __getitem__(self, index):
         r = self._range[index]
-        if(isinstance(r, range)):
+        if isinstance(r, range):
             return CacheList(self._backing, self._cache, r.start, r.stop, r.step)
         else:
             return self._cache.get(r, self._backing._frames)
 
     def __setitem__(self, key, value):
         key = self._range[key]
-        if(isinstance(key, range)):
+        if isinstance(key, range):
             for i, index in enumerate(key):
                 self._cache.set(index, self._backing._frames, value[i])
         else:
@@ -126,36 +126,44 @@ class CacheListContainer:
         jump: int,
         start: int = 0,
         stop: Optional[int] = None,
-        step: Optional[int] = None
+        step: Optional[int] = None,
     ):
         self._backing = backing
         self._cache = cache
         self._jump = jump
         self._range = range(
             start,
-            stop if(stop is not None) else self._backing_length_chunks(),
-            step if(step is not None) else 1
+            stop if (stop is not None) else self._backing_length_chunks(),
+            step if (step is not None) else 1,
         )
 
     def __getitem__(self, item: int):
         idx = self._range[item]
-        if(isinstance(idx, range)):
+        if isinstance(idx, range):
             return CacheListContainer(
                 self._backing, self._cache, self._jump, idx.start, idx.stop, idx.step
             )
-        return CacheList(self._backing, self._cache, self._jump * idx, self._jump * (idx + 1), 1)
+        return CacheList(
+            self._backing, self._cache, self._jump * idx, self._jump * (idx + 1), 1
+        )
 
     def __setitem__(self, key: int, value: Union[CacheList, Iterable[CacheList]]):
         idx = self._range[key]
-        if(isinstance(idx, range)):
-            if(isinstance(value, CacheList)):
+        if isinstance(idx, range):
+            if isinstance(value, CacheList):
                 value = [value] * len(idx)
             for sub_idx, sub_value in zip(idx, value):
                 CacheList(
-                    self._backing, self._cache, self._jump * sub_idx, self._jump * (sub_idx + 1), 1
+                    self._backing,
+                    self._cache,
+                    self._jump * sub_idx,
+                    self._jump * (sub_idx + 1),
+                    1,
                 )[:] = sub_value
         else:
-            CacheList(self._backing, self._cache, self._jump * idx, self._jump * (idx + 1), 1)[:] = value
+            CacheList(
+                self._backing, self._cache, self._jump * idx, self._jump * (idx + 1), 1
+            )[:] = value
 
     def _backing_length_chunks(self) -> int:
         return len(self._backing._frames) // self._jump
@@ -171,6 +179,7 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
     """
     A version of ForwardBackwardData that stores its results on disk instead of
     """
+
     @classmethod
     def get_shared_memory_size(cls, num_frames: int, num_bps: int):
         return DiplomatFPEState.get_shared_memory_size(num_frames * num_bps)
@@ -200,10 +209,12 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         self._cache = LIFOCache(cache_size)
         self.allow_pickle = True
 
-        if(isinstance(file_obj, DiplomatFPEState)):
+        if isinstance(file_obj, DiplomatFPEState):
             self._frames = file_obj
         else:
-            self._frames = DiplomatFPEState(file_obj, frame_count=num_frames * num_bp, lock=lock, **kwargs)
+            self._frames = DiplomatFPEState(
+                file_obj, frame_count=num_frames * num_bp, lock=lock, **kwargs
+            )
         self._metadata = MonitoredAttributeDict(self._frames)
 
     def __enter__(self):
@@ -225,7 +236,7 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         self._frames.flush()
 
     def close(self):
-        if(self._frames.closed):
+        if self._frames.closed:
             return
         self._flush_cache()
         self._flush_meta()
@@ -237,11 +248,7 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         Get/Set the frames of this ForwardBackwardData, a 2D list of ForwardBackwardFrame. Indexing is frame, then body
         part.
         """
-        return CacheListContainer(
-            self,
-            self._cache,
-            self._num_bps
-        )
+        return CacheListContainer(self, self._cache, self._num_bps)
 
     @frames.setter
     def frames(self, frames: SettableSequence[SettableSequence[ForwardBackwardFrame]]):
@@ -277,7 +284,7 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         """
         Metadata setter...
         """
-        if(self._metadata is meta):
+        if self._metadata is meta:
             self._metadata = meta
             return
         self._frames.set_metadata(dict(meta))
@@ -288,7 +295,9 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         Copy this ForwardBackwardData, returning a new one.
         """
         self._flush_all()
-        res = type(self)(self._num_frames, self._num_bps, self._frames, self._cache.size)
+        res = type(self)(
+            self._num_frames, self._num_bps, self._frames, self._cache.size
+        )
         res.allow_pickle = self.allow_pickle
         return res
 

@@ -1,6 +1,7 @@
 """
 Provides a generic API and some core data structures for frame store formats, or files which store model outputs on disk.
 """
+
 from typing import Any, Optional, Iterator, List, BinaryIO, MutableMapping
 from abc import ABC, abstractmethod
 import numpy as np
@@ -59,7 +60,11 @@ def edge_list(lister: list):
     lister_new = set()
 
     for item in lister:
-        if not isinstance(item, (list, tuple)) or len(item) != 2 or all(isinstance(v, int) for v in item):
+        if (
+            not isinstance(item, (list, tuple))
+            or len(item) != 2
+            or all(isinstance(v, int) for v in item)
+        ):
             raise ValueError("Must be a list of 2 integer tuples!")
         a, b = item
         lister_new.add(tuple(sorted([int(a), int(b)])))
@@ -101,6 +106,7 @@ class DLFSHeader(MutableMapping):
         ("crop_offset_x", int or None if no cropping, None),
         ("bodypart_names", list of strings, []),
     """
+
     SUPPORTED_FIELDS = [
         ("number_of_frames", int, 0),
         ("frame_height", int, 0),
@@ -112,7 +118,7 @@ class DLFSHeader(MutableMapping):
         ("crop_offset_y", non_max_int32, None),
         ("crop_offset_x", non_max_int32, None),
         ("bodypart_names", string_list, []),
-        ("skeleton", edge_list, [])
+        ("skeleton", edge_list, []),
     ]
 
     GET_VAR_CAST = {name: var_cast for name, var_cast, __ in SUPPORTED_FIELDS}
@@ -147,7 +153,7 @@ class DLFSHeader(MutableMapping):
         self.__dict__["_values"][key] = self.GET_VAR_CAST[key](value)
 
     def _key_check(self, key):
-        if(key not in self.GET_VAR_CAST):
+        if key not in self.GET_VAR_CAST:
             raise ValueError("Not a supported key!")
 
     def __setitem__(self, key, value):
@@ -162,7 +168,9 @@ class DLFSHeader(MutableMapping):
         Clear the specified header property to its default value.
         """
         self._key_check(key)
-        self._values[key] = self.GET_VAR_CAST[key](self.SUPPORTED_FIELDS[self.GET_IDX[key]][2])
+        self._values[key] = self.GET_VAR_CAST[key](
+            self.SUPPORTED_FIELDS[self.GET_IDX[key]][2]
+        )
 
     def __getitem__(self, key) -> Any:
         """
@@ -196,6 +204,7 @@ class FrameReader(ABC):
     The frame reader API. Allows for reading frames from a diplomat frame store format to
     :py:class:`~diplomat.processing.track_data.TrackingData` object.
     """
+
     @abstractmethod
     def __init__(self, file: BinaryIO):
         """
@@ -242,7 +251,9 @@ class FrameReader(ABC):
 
         :param frame_idx: The frame index that the frame reader will move to, an integer.
         """
-        raise NotImplementedError("Seeking functionality is not supported for this implementation of FrameReader!")
+        raise NotImplementedError(
+            "Seeking functionality is not supported for this implementation of FrameReader!"
+        )
 
     @abstractmethod
     def read_frames(self, num_frames: int = 1) -> TrackingData:
@@ -280,6 +291,7 @@ class FrameWriter(ABC):
     The frame writer API. Allows for writing frames in the form of
     :py:class:`~diplomat.processing.track_data.TrackingData` objects to a diplomat frame store format.
     """
+
     @abstractmethod
     def __init__(
         self,
@@ -342,4 +354,3 @@ class FrameWriter(ABC):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
-

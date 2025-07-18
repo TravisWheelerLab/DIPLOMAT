@@ -57,7 +57,7 @@ class TrackingData:
         width: int,
         height: int,
         stride: float = DEFAULT_SCALE,
-        allocate_offsets: bool = False
+        allocate_offsets: bool = False,
     ) -> "TrackingData":
         """
         Create a new empty tracking data object with space allocated to fit the specified sizes of data.
@@ -74,7 +74,11 @@ class TrackingData:
         """
         return cls(
             np.zeros((frame_amt, height, width, part_count), dtype="float32"),
-            np.zeros((frame_amt, height, width, part_count, 2), dtype="float32") if(allocate_offsets) else None,
+            (
+                np.zeros((frame_amt, height, width, part_count, 2), dtype="float32")
+                if (allocate_offsets)
+                else None
+            ),
             stride,
         )
 
@@ -246,7 +250,7 @@ class TrackingData:
 
     @staticmethod
     def _get_count_of(val: Union[int, slice, Sequence[int]], length: int) -> int:
-        """ Internal private method to get length of an index selection(as in how many indexes it selects...) """
+        """Internal private method to get length of an index selection(as in how many indexes it selects...)"""
         if isinstance(val, Sequence):
             return len(val)
         elif isinstance(val, slice):
