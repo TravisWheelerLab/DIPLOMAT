@@ -96,10 +96,10 @@ def _label_videos_single(
         )
 
         with ContextVideoWriter(
-            str(output_path),
-            visual_settings.output_codec,
-            in_video.get(cv2.CAP_PROP_FPS),
-            (out_w, out_h),
+            filename=str(output_path),
+            fourcc=visual_settings.output_codec,
+            fps=in_video.get(cv2.CAP_PROP_FPS),
+            frameSize=(out_w, out_h),
         ) as writer:
             with TQDMProgressBar(total=poses.get_frame_count()) as p:
                 for f_i in range(poses.get_frame_count()):

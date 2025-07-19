@@ -194,7 +194,7 @@ def _new_video_writer(
     suffix = f"_part{segment[0]:0{padding}d}-{segment[1]:0{padding}d}"
     preferred_path = video_path.parent / f"{video_path.stem}{suffix}{ext}"
     writer = ContextVideoWriter(
-        str(preferred_path), four_cc, fps, size, throw_on_unopened=False
+        filename=str(preferred_path), fourcc=four_cc, fps=fps, frameSize=tuple(int(d) for d in size), throw_on_unopened=False
     )
     if writer.isOpened():
         return (writer, preferred_path)
@@ -202,10 +202,10 @@ def _new_video_writer(
     writer.release()
     fallback_path = video_path.parent / f"{video_path.stem}{suffix}{FALLBACK_EXT}"
     writer = ContextVideoWriter(
-        str(fallback_path),
-        cv2.VideoWriter_fourcc(*FALLBACK_CODEC),
-        fps,
-        size,
+        filename=str(fallback_path),
+        fourcc=cv2.VideoWriter_fourcc(*FALLBACK_CODEC),
+        fps=fps,
+        frameSize=size,
         throw_on_unopened=False,
     )
     if writer.isOpened():

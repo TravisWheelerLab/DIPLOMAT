@@ -146,10 +146,10 @@ class FastPlotterArgMax(Predictor):
         self._canvas = np.zeros((self._vid_height, self._vid_width, 3), dtype=np.uint8)
 
         self._vid_writer = ContextVideoWriter(
-            self.VIDEO_PATH,
-            self.settings.codec,
-            self.video_metadata.fps,
-            (self._vid_width, self._vid_height),
+            filename=self.VIDEO_PATH,
+            fourcc=self.settings.codec,
+            fps=self.video_metadata.fps,
+            frameSize=(self._vid_width, self._vid_height),
         )
         # Array which stores color maps temporarily... Takes advantage of numpy's abilities to make custom strides
         # to access data... The colormap_view maps the

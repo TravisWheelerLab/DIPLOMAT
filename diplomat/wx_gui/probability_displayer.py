@@ -317,6 +317,7 @@ class WxPlotStyles:
         self.foreground_color = widget.GetForegroundColour()
 
         def apply_min_contrast(fg, bg, desired_val):
+            # Currently does nothing as contrast algorithm doesn't quite work as expected....
             return wx.Colour(*fg.Get(False), 255)
 
         def alpha_shift(color, salpha):
