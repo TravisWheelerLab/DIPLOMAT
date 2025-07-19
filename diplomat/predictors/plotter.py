@@ -231,7 +231,10 @@ class PlotterArgMax(Predictor):
             if self._vid_writer is None:
                 height, width, colors = img.shape
                 self._vid_writer = ContextVideoWriter(
-                    filename=self.VIDEO_PATH, fourcc=settings.codec, fps=vid_meta.fps, frameSize=(width, height)
+                    filename=self.VIDEO_PATH,
+                    fourcc=settings.codec,
+                    fps=vid_meta.fps,
+                    frameSize=(width, height),
                 )
 
             if not self._vid_writer.isOpened():
