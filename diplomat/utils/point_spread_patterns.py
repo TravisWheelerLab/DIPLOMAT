@@ -3,22 +3,22 @@ from math import ceil, sqrt
 
 def L1(n):
     denominator = ceil(sqrt(n)) - 1.0
-    return 1.0 / denominator
+    return 1.0 / max(1.0, denominator)
 
 
 def L2(n):
     denominator = ceil(sqrt(n + 1.0)) - 3.0 + sqrt(2.0 + sqrt(3.0))
-    return 1.0 / denominator
+    return 1.0 / max(1.0, denominator)
 
 
 def L3a(n):
     denominator = ceil(sqrt(n + 2.0)) - 2.0 + (0.5 * sqrt(3.0))
-    return 1.0 / denominator
+    return 1.0 / max(1.0, denominator)
 
 
 def L3b(n):
     denominator = ceil(sqrt(n + 2.0)) - 5.0 + (2.0 * sqrt(2.0 + sqrt(3.0)))
-    return 1.0 / denominator
+    return 1.0 / max(1.0, denominator)
 
 
 def L4(n):
