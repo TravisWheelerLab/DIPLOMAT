@@ -4,6 +4,7 @@ deque while playing them, allowing for smoother playback...
 """
 
 import dataclasses
+import time
 from typing import Optional, Tuple
 import wx
 from wx.lib.newevent import NewCommandEvent
@@ -17,7 +18,7 @@ from diplomat.utils.video_io import ContextVideoCapture
 
 def read_frame(
     video_hdl: cv2.VideoCapture, frame_idx: Optional[int] = None
-) -> Tuple[bool, np.ndarray]:
+) -> Tuple[bool, int, np.ndarray]:
     valid_frame = False
     frame = None
 
@@ -38,7 +39,7 @@ def read_frame(
             dtype=np.uint8,
         )
 
-    return valid_frame, frame
+    return valid_frame, int(video_hdl.get(cv2.CAP_PROP_POS_FRAMES)), frame
 
 
 def seek_frame(video_hdl: cv2.VideoCapture, new_loc: int):
@@ -255,7 +256,7 @@ class VideoPlayer(wx.Control):
 
     # The number of frames to store in the backward buffer...
     BACK_LOAD_AMT = 50
-    MAX_FAST_FORWARD_MODE = 20
+    MAX_FAST_FORWARD_MODE = 10
 
     # Events for the VideoPlayer class, one triggered for every frame change, and one triggered for every change in
     # play state (starting, stopping, pausing, etc....)
@@ -307,7 +308,6 @@ class VideoPlayer(wx.Control):
 
         # Useful indicator variables...
         self._playing = False
-        self._current_frame = None
         self._frozen = False
 
         self._prior_frames = deque(maxlen=self.BACK_LOAD_AMT)
@@ -321,7 +321,9 @@ class VideoPlayer(wx.Control):
 
         # Create the video loader to start loading frames:
         self._video_hdl = video_hdl
-        self._current_frame = read_frame(video_hdl)[1]
+        self._loaded_frame = None
+        self._max_video_load_rate = (1 / self._fps) / 2
+        self._last_frame_read = time.monotonic() - self._max_video_load_rate * 2
         self._video_transform = None
         self._zoom_config = zoom_config
         self._is_pressed = False
@@ -337,13 +339,15 @@ class VideoPlayer(wx.Control):
 
     @property
     def video_transform(self) -> VideoTransform:
+        if self._loaded_frame is None:
+            raise ValueError("No frame is loaded!")
         if self._video_transform is None:
-            fh, fw = self._current_frame.shape[:2]
+            fh, fw = self._loaded_frame[1].shape[:2]
             self._video_transform = VideoTransform(
                 (fw, fh), self.GetSize().Get(), self._crop_box
             )
         else:
-            fh, fw = self._current_frame.shape[:2]
+            fh, fw = self._loaded_frame[1].shape[:2]
             self._video_transform.update((fw, fh), self.GetSize().Get(), self._crop_box)
         return self._video_transform
 
@@ -355,6 +359,8 @@ class VideoPlayer(wx.Control):
             self._zoom_config.key
         ):
             evt.Skip()
+            return
+        if self._loaded_frame is None:
             return
 
         vt = self.video_transform
@@ -404,6 +410,8 @@ class VideoPlayer(wx.Control):
         if self._zoom_config is None or not self._is_pressed:
             evt.Skip()
             return
+        if self._loaded_frame is None:
+            return
 
         vt = self.video_transform
 
@@ -449,6 +457,34 @@ class VideoPlayer(wx.Control):
         )
         self.on_draw(painter)
 
+    def _attempt_frame_load(self):
+        now = time.monotonic()
+        if now - self._last_frame_read < self._max_video_load_rate:
+            # self.Refresh()  # is this needed?
+            return
+
+        if self._loaded_frame is None:
+            self._prior_frames.clear()
+            self._loaded_frame = read_frame(self._video_hdl, self._current_loc)[1:]
+            return
+
+        offset = self._current_loc - self._loaded_frame[0]
+        if offset == 0:
+            return
+        elif offset > 0 and offset <= self.MAX_FAST_FORWARD_MODE:
+            while self._loaded_frame[0] < self._current_loc:
+                self._prior_frames.append(self._loaded_frame)
+                self._loaded_frame = read_frame(self._video_hdl)[1:]
+        elif offset < 0 and offset >= len(self._prior_frames):
+            while self._loaded_frame[0] > self._current_loc and len(self._prior_frames) > 0:
+                self._loaded_frame = self._prior_frames.pop()
+        else:
+            self._prior_frames.clear()
+            self._loaded_frame = read_frame(self._video_hdl, self._current_loc)[1:]
+
+        self._last_frame_read = now
+
+
     def on_draw(self, dc: wx.DC):
         """
         Draws the widget.
@@ -463,12 +499,14 @@ class VideoPlayer(wx.Control):
         dc.SetBackground(wx.Brush(self.GetBackgroundColour(), wx.BRUSHSTYLE_SOLID))
         dc.Clear()
 
-        if self._current_frame is None:
+        self._attempt_frame_load()
+
+        if self._loaded_frame is None:
             return
 
         vt = self.video_transform
         resized_frame, (loc_x, loc_y) = vt.transform_image(
-            vt.get_cropped_image(self._current_frame),
+            vt.get_cropped_image(self._loaded_frame[1]),
             img_scale=1,
             interpolation=cv2.INTER_LINEAR,
         )
@@ -501,9 +539,7 @@ class VideoPlayer(wx.Control):
                 return
 
             # Get the next frame and set it as the current frame
-            self._prior_frames.append(self._current_frame)
             self._current_loc += 1
-            self._current_frame = read_frame(self._video_hdl, self._current_loc)[1]
             # Post a frame change event.
             self._push_time_change_event()
             # Trigger a redraw on the next pass through the loop and start the timer to play the next frame...
@@ -592,75 +628,6 @@ class VideoPlayer(wx.Control):
         """
         return int(self._num_frames)
 
-    def _full_jump(self, value: int):
-        """
-        PRIVATE: Executes a full jump, clearing both internal deques and refilling them with frames. This is done
-        whenever we need to do a large jump within a video. Should never be called outside of this class.
-        """
-        if self._frozen:
-            return
-
-        current_state = self.is_playing()
-        self._playing = False
-        self._current_loc = value
-
-        # Completely wipe the prior frames...
-        self._prior_frames.clear()
-        self._current_frame = read_frame(self._video_hdl, self._current_loc)[1]
-
-        self._push_time_change_event()
-        # Restore play state prior to frame change...
-        self._playing = current_state
-        self.Refresh()
-        self._core_timer.StartOnce(int(1000 / self._fps))
-
-    def _fast_back(self, amount: int):
-        """
-        PRIVATE: Used to efficiently go back a given amount of frames, popping frames of the back deque instead of
-        clearing both the front and back deques and refilling them. Should never be called outside this class, as it
-        performs no checks itself. Used when jump back is small.
-        """
-        if self._frozen:
-            return
-
-        current_state = self.is_playing()
-        self._playing = False
-
-        # Move back the passed amount of frames.
-        for i in range(amount):
-            self._current_frame = self._prior_frames.pop()
-        self._current_loc = self._current_loc - amount
-
-        self._push_time_change_event()
-
-        self._playing = current_state
-        self.Refresh()
-        self._core_timer.StartOnce(int(1000 / self._fps))
-
-    def _fast_forward(self, amount: int):
-        """
-        PRIVATE: Used to efficiently move forward a given amount of frames, popping frames of the front deque instead
-        of clearing both the front and back deques and refilling them. Should never be called outside this class, as
-        it performs no checks itself. Used when jump forward is small.
-        """
-        if self._frozen:
-            return
-
-        current_state = self.is_playing()
-        self._playing = False
-
-        # Move the passed amount of frames forward. Video reader will automatically move forward with us...
-        for i in range(amount):
-            self._prior_frames.append(self._current_frame)
-            self._current_loc += 1
-            self._current_frame = read_frame(self._video_hdl, self._current_loc)[1]
-
-        self._push_time_change_event()
-
-        self._playing = current_state
-        self.Refresh()
-        self._core_timer.StartOnce(int(1000 / self._fps))
-
     def move_back(self, amount: int = 1):
         """
         Move backward a given amount of frames.
@@ -673,16 +640,7 @@ class VideoPlayer(wx.Control):
             raise ValueError("Offset must be positive!")
         elif amount == 0:
             return
-        if self._current_loc - amount < 0:
-            raise ValueError(
-                f"Can't go back {amount} frames when at frame {self._current_loc}."
-            )
-        # Check if we can perform a 'fast' backtrack, where we have all of the frames in the queue. If not perform
-        # a more computationally expensive full jump.
-        if amount > len(self._prior_frames):
-            self._full_jump(self._current_loc - amount)
-        else:
-            self._fast_back(amount)
+        self.set_offset_frames(self._current_loc - amount)
 
     def move_forward(self, amount: int = 1):
         """
@@ -696,16 +654,7 @@ class VideoPlayer(wx.Control):
             raise ValueError("Offset must be positive!")
         elif amount == 0:
             return
-        if self._current_loc + amount >= self._num_frames:
-            raise ValueError(
-                f"Can't go forward {amount} frames when at frame {self._current_loc}."
-            )
-        # Check if we can do a fast forward, which is basically the same as moving through frames normally...
-        # Otherwise we perform a more expensive full jump.
-        if amount > self.MAX_FAST_FORWARD_MODE:
-            self._full_jump(self._current_loc + amount)
-        else:
-            self._fast_forward(amount)
+        self.set_offset_frames(self._current_loc + amount)
 
     def set_offset_frames(self, value: int):
         """
@@ -718,11 +667,17 @@ class VideoPlayer(wx.Control):
             raise ValueError(
                 f"Can't set frame index to {value}, there is only {self._num_frames} frames."
             )
-        # Determine which way the value is moving the current video location, and move backward/forward based on that.
-        if value < self._current_loc:
-            self.move_back(self._current_loc - value)
-        elif value > self._current_loc:
-            self.move_forward(value - self._current_loc)
+        if self._frozen:
+            return
+
+        #current_state = self._playing
+        #self._playing = False
+        self._current_loc = value
+        # Restore play state prior to frame change...
+        #self._playing = current_state
+        self._push_time_change_event()
+        self.Refresh()
+        #self._core_timer.StartOnce(int(1000 / self._fps))
 
     def __del__(self):
         """
