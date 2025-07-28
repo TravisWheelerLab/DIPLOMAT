@@ -476,14 +476,16 @@ class VideoPlayer(wx.Control):
                 self._prior_frames.append(self._loaded_frame)
                 self._loaded_frame = read_frame(self._video_hdl)[1:]
         elif offset < 0 and offset >= len(self._prior_frames):
-            while self._loaded_frame[0] > self._current_loc and len(self._prior_frames) > 0:
+            while (
+                self._loaded_frame[0] > self._current_loc
+                and len(self._prior_frames) > 0
+            ):
                 self._loaded_frame = self._prior_frames.pop()
         else:
             self._prior_frames.clear()
             self._loaded_frame = read_frame(self._video_hdl, self._current_loc)[1:]
 
         self._last_frame_read = now
-
 
     def on_draw(self, dc: wx.DC):
         """
@@ -670,14 +672,14 @@ class VideoPlayer(wx.Control):
         if self._frozen:
             return
 
-        #current_state = self._playing
-        #self._playing = False
+        # current_state = self._playing
+        # self._playing = False
         self._current_loc = value
         # Restore play state prior to frame change...
-        #self._playing = current_state
+        # self._playing = current_state
         self._push_time_change_event()
         self.Refresh()
-        #self._core_timer.StartOnce(int(1000 / self._fps))
+        # self._core_timer.StartOnce(int(1000 / self._fps))
 
     def __del__(self):
         """
