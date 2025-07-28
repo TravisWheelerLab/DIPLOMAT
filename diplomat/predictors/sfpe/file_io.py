@@ -1,5 +1,10 @@
+import dataclasses
 import json
 import multiprocessing
+import os
+import random
+import shutil
+import time
 from pathlib import Path
 from typing import BinaryIO, Tuple, Optional, Mapping, Any, Union, Callable
 from io import SEEK_END
@@ -15,6 +20,7 @@ from diplomat.predictors.sfpe.avl_tree import (
     remove,
 )
 import zlib
+import string
 
 
 DIPLOMAT_STATE_HEADER = b"DPST"
@@ -545,3 +551,78 @@ class DiplomatFPEState:
         self._free_space = BufferTree(self._shared_mem.buf[offset1:offset2])
         self._free_space_offsets = BufferTree(self._shared_mem.buf[offset2:])
         self._file_obj = open(str(self._file_obj), "r+b")
+
+
+@dataclasses.dataclass
+class SaveConditions:
+    number_writes: int = -1
+    number_seconds: float = -1
+    number_bytes_changed: int = -1
+
+
+class SafeFileIO:
+    """
+    Represents safe file IO object. All file writes are promised to be atomic.
+    This means they will either succeed fully or fail completely.
+    This prevents a file from being found in a corrupted state.
+    """
+    def __init__(self, path: Union[str, Path], mode: str, save_config: SaveConditions, **kwargs):
+        #
+        self._final_path = Path(path).resolve()
+        rng_str = "".join(random.choices(string.ascii_letters, k=10))
+        self._commiter_path = self._final_path.parent / (self._final_path.name + f"_tmp1{rng_str}")
+        self._scratch_path = self._final_path.parent / (self._final_path.name + f"_tmp2{rng_str}")
+        if self._final_path.exists() and "w" not in mode:
+            shutil.copy(self._final_path, self._scratch_path)
+        self._file = open(self._scratch_path, mode, **kwargs)
+        self._save_config = save_config
+        self._edit_count = 0
+        self._changed_bytes = 0
+        self._last_flush = time.monotonic()
+
+    def __getattr__(self, item):
+        if item.startswith("_"):
+            raise AttributeError(item)
+        return getattr(self._file, item)
+
+    def __enter__(self):
+        return self
+
+    def flush(self):
+        self._file.flush()
+        # Copy the file over...
+        shutil.copy(self._scratch_path, self._commiter_path)
+        # Replace the commited file with the final file path...
+        os.replace(self._commiter_path, self._final_path)
+        # Reset edit info...
+        self._last_flush = time.monotonic()
+        self._edit_count = 0
+        self._changed_bytes = 0
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def _can_do_flush(self, current_time: float):
+        cnf = self._save_config
+        writes_pass = 0 < cnf.number_writes < self._edit_count
+        bytes_pass = 0 < cnf.number_bytes_changed < self._changed_bytes
+        time_pass = 1 < cnf.number_seconds < (current_time - self._last_flush)
+        return writes_pass or bytes_pass or time_pass
+
+    def write(self, s):
+        self._edit_count += 1
+        self._changed_bytes += len(s)
+        count = self._file.write(s)
+        if self._can_do_flush(time.monotonic()):
+            self.flush()
+        return count
+
+    def close(self):
+        self.flush()
+        self._file.close()
+        self._scratch_path.unlink(True)
+        self._commiter_path.unlink(True)
+
+    def __del__(self):
+        self._file.close()
+

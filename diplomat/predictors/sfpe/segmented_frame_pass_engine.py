@@ -13,6 +13,7 @@ import time
 import diplomat.utils.frame_store_api as frame_store_api
 from diplomat.predictors.sfpe.segmentation import EndPointSegmentor
 from diplomat.predictors.sfpe.assignment import ASSIGNMENT_ALGORITHMS
+from diplomat.predictors.sfpe.file_io import SafeFileIO, SaveConditions
 
 try:
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -547,7 +548,11 @@ class SegmentedFramePassEngine(Predictor):
         video_path = Path(self.video_metadata["orig-video-path"]).resolve()
         disk_path = output_path.parent / (output_path.stem + ".dipui")
 
-        self._file_obj = disk_path.open("w+b")
+        self._file_obj = SafeFileIO(
+            disk_path,
+            "w+b",
+            save_config=SaveConditions(number_writes=100, number_bytes_changed=20 * 1024 * 1024)
+        )
 
         with video_path.open("rb") as f:
             shutil.copyfileobj(f, self._file_obj)
@@ -591,7 +596,12 @@ class SegmentedFramePassEngine(Predictor):
             )
             self.settings.storage_mode = "disk"
 
-            self._file_obj = self._restore_path.open("r+b")
+            self._file_obj = SafeFileIO(
+                self._restore_path,
+                "r+b",
+                SaveConditions(number_writes=100, number_bytes_changed=20 * 1024 * 1024)
+            )
+
             ctx = PoolWithProgress.get_optimal_ctx()
             self._manager = ctx.Manager()
             self._shared_memory = allocate_shared_memory(
