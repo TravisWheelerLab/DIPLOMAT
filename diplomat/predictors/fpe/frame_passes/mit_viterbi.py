@@ -1171,21 +1171,13 @@ class MITViterbi(FramePass):
                 "prior pass, and otherwise uses the default value of 1...",
             ),
             "skeleton_weight": (
-                1,
+                0.05,
                 float,
                 "A positive float, determines how much impact probabilities "
                 "from skeletal transitions should have in each "
                 "forward/backward step if a skeleton was created and enabled "
                 "by prior passes... This is not a probability, but rather a "
                 "ratio.",
-            ),
-            "minimum_skeleton_weight": (
-                1e-4,
-                float,
-                "A positive float, bounds skeleton_weight from below in the "
-                "adjustment of skeleton weight for poor fix frame quality. "
-                "Avoiding a zero skeleton weight is necessary to stop "
-                "information loss across segment boundaries in SFPE.",
             ),
             "amplitude": (
                 1,
