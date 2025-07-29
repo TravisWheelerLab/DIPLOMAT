@@ -1,1 +1,4 @@
- - Many minor bug fixes.
+ - New code saves dipui files in atomic-like manner to prevent files ending in a corrupted state.
+ - Adjusted hyperparameters for MIT-Viterbi.
+ - Proper handling of CTRL+C in terminal when UI is open.
+ - Improved, less laggy video player.
