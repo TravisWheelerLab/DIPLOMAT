@@ -1,4 +1,5 @@
 import shutil
+import signal
 import traceback
 
 from collections import UserList
@@ -751,7 +752,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         self._video_hdl = ContextVideoCapture(str(self._video_path))
 
-        app = wx.App()
+        app = wx.App(clearSigInt=False)
 
         self._fb_editor = FPEEditor(
             None,
@@ -774,6 +775,15 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             heatmap_options=default_heatmap_entries(self._get_names(), self),
         )
 
+        kill_timer = wx.Timer(self._fb_editor)
+        self._fb_editor.Bind(wx.EVT_TIMER, lambda evt: None)
+
+        def handle_ctrl_c(a, b):
+            app.ExitMainLoop()
+
+        signal.signal(signal.SIGINT, handle_ctrl_c)
+        kill_timer.Start(1000, wx.TIMER_CONTINUOUS)
+
         for s in self._fb_editor.score_displays:
             s.set_segment_starts(self._segments[:, 0])
             s.set_segment_fix_frames(self._segments[:, 2])
@@ -790,6 +800,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         self._fb_editor.Show()
 
+        app.SetTopWindow(self._fb_editor)
         app.MainLoop()
         self._video_hdl.release()
 

@@ -450,7 +450,7 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
             dc = wx.GCDC(dc)
 
         width, height = self.GetClientSize()
-        if (not width) or (not height) or (self._current_frame is None):
+        if (not width) or (not height) or (self._loaded_frame is None):
             return
 
         frame_idx = self.get_offset_count()
@@ -627,11 +627,11 @@ class PointViewNEdit(VideoPlayer, BasicDataFields):
         PRIVATE: Get the mouse location in video coordinates given a mouse event.
         """
         total_w, total_h = self.GetClientSize()
-        if (not total_w) or (not total_h) or (self._current_frame is None):
+        if (not total_w) or (not total_h) or (self._loaded_frame is None):
             return (None, None)
 
         vt = self.video_transform
-        frame = vt.get_cropped_image(self._current_frame)
+        frame = vt.get_cropped_image(self._loaded_frame[1])
 
         if isinstance(evt, wx.MouseEvent):
             x = evt.GetX()

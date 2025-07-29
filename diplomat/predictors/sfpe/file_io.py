@@ -589,7 +589,10 @@ class SafeFileIO:
         return self
 
     def flush(self):
-        self._file.flush()
+        if not self._file.closed:
+            self._file.flush()
+
+    def commit(self):
         # Copy the file over...
         shutil.copy(self._scratch_path, self._commiter_path)
         # Replace the commited file with the final file path...
@@ -602,7 +605,7 @@ class SafeFileIO:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def _can_do_flush(self, current_time: float):
+    def _can_do_commit(self, current_time: float):
         cnf = self._save_config
         writes_pass = 0 < cnf.number_writes < self._edit_count
         bytes_pass = 0 < cnf.number_bytes_changed < self._changed_bytes
@@ -613,12 +616,13 @@ class SafeFileIO:
         self._edit_count += 1
         self._changed_bytes += len(s)
         count = self._file.write(s)
-        if self._can_do_flush(time.monotonic()):
-            self.flush()
+        if self._can_do_commit(time.monotonic()):
+            self.commit()
         return count
 
     def close(self):
         self.flush()
+        self.commit()
         self._file.close()
         self._scratch_path.unlink(True)
         self._commiter_path.unlink(True)

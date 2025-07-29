@@ -4,6 +4,7 @@ to user saved tracking data.
 """
 
 import os
+import signal
 from typing import (
     List,
     Any,
@@ -321,7 +322,7 @@ class TweakUI:
                          saves their results or closes the window. If false, no app is made. Defaults to true.
         :return:
         """
-        app = self._wx.App() if (make_app) else None
+        app = self._wx.App(clearSigInt=False) if (make_app) else None
 
         with self._progress_dialog_cls(
             parent, title="Progress", inner_msg="Computing Average Standard Deviation"
@@ -355,8 +356,17 @@ class TweakUI:
         )
 
         editor.set_plot_settings_changer(self._on_visual_settings_change)
-
         editor.Show()
 
         if make_app:
+            kill_timer = self._wx.Timer(editor)
+            editor.Bind(self._wx.EVT_TIMER, lambda evt: None)
+
+            def handle_ctrl_c(a, b):
+                app.ExitMainLoop()
+
+            signal.signal(signal.SIGINT, handle_ctrl_c)
+            kill_timer.Start(1000, self._wx.TIMER_CONTINUOUS)
+
+            app.SetTopWindow(editor)
             app.MainLoop()

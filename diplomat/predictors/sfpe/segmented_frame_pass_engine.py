@@ -1,6 +1,7 @@
 import itertools
 import os
 import shutil
+import signal
 from enum import Enum
 from datetime import datetime
 from pathlib import Path
@@ -551,7 +552,7 @@ class SegmentedFramePassEngine(Predictor):
         self._file_obj = SafeFileIO(
             disk_path,
             "w+b",
-            save_config=SaveConditions(number_writes=100, number_bytes_changed=20 * 1024 * 1024)
+            save_config=SaveConditions(number_seconds=60 * 3)
         )
 
         with video_path.open("rb") as f:
@@ -599,7 +600,7 @@ class SegmentedFramePassEngine(Predictor):
             self._file_obj = SafeFileIO(
                 self._restore_path,
                 "r+b",
-                SaveConditions(number_writes=100, number_bytes_changed=20 * 1024 * 1024)
+                SaveConditions(number_seconds=60 * 3)
             )
 
             ctx = PoolWithProgress.get_optimal_ctx()
