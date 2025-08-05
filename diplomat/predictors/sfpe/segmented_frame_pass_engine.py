@@ -550,9 +550,7 @@ class SegmentedFramePassEngine(Predictor):
         disk_path = output_path.parent / (output_path.stem + ".dipui")
 
         self._file_obj = SafeFileIO(
-            disk_path,
-            "w+b",
-            save_config=SaveConditions(number_seconds=60 * 3)
+            disk_path, "w+b", save_config=SaveConditions(number_seconds=60 * 3)
         )
 
         with video_path.open("rb") as f:
@@ -598,9 +596,7 @@ class SegmentedFramePassEngine(Predictor):
             self.settings.storage_mode = "disk"
 
             self._file_obj = SafeFileIO(
-                self._restore_path,
-                "r+b",
-                SaveConditions(number_seconds=60 * 3)
+                self._restore_path, "r+b", SaveConditions(number_seconds=60 * 3)
             )
 
             ctx = PoolWithProgress.get_optimal_ctx()

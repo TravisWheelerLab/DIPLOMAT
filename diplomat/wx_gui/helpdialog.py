@@ -2,7 +2,7 @@
 Includes the help dialog for DIPLOMAT's main gui editor. Displays toolbar actions and keyboard shortcuts.
 """
 
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Union, Callable
 from diplomat.utils._bit_or import _bit_or
 import wx
 
@@ -38,7 +38,13 @@ class HelpDialog(wx.Dialog):
     def __init__(
         self,
         parent,
-        entries: List[Tuple[wx.Bitmap, Opt[Tuple[int, int]], str]],
+        entries: List[
+            Tuple[
+                Union[wx.Bitmap, Callable[[wx.Colour, Tuple[int, int]], wx.Bitmap]],
+                Opt[Tuple[int, int]],
+                str,
+            ]
+        ],
         image_sizes: Tuple[int, int],
         wid=wx.ID_ANY,
         title="Help",
@@ -75,8 +81,13 @@ class HelpDialog(wx.Dialog):
         self._list.AppendColumn("Description")
 
         self._img_lst = wx.ImageList(*image_sizes, True)
-        for icon, shortcut, desc in entries:
+        self._dynamic_images = []
+        for i, (icon, shortcut, desc) in enumerate(entries):
+            if not isinstance(icon, wx.Bitmap):
+                self._dynamic_images.append((i, icon))
+                icon = icon(self.GetForegroundColour(), image_sizes)
             self._img_lst.Add(icon)
+
         self._list.SetImageList(self._img_lst, wx.IMAGE_LIST_SMALL)
 
         for i, (icon, shortcut, desc) in enumerate(entries):
@@ -97,6 +108,16 @@ class HelpDialog(wx.Dialog):
         if self._btns is not None:
             self._main_sizer.Add(self._btns, 0, wx.EXPAND)
         self.SetSizerAndFit(self._main_sizer)
+
+        self.Bind(wx.EVT_SYS_COLOUR_CHANGED, self._theme_change)
+
+    def _theme_change(self, evt):
+        img_size = self._img_lst.GetSize().Get()
+        for i, icon_generator in self._dynamic_images:
+            self._img_lst.Replace(
+                i, icon_generator(self.GetForegroundColour(), img_size)
+            )
+        evt.Skip()
 
     @classmethod
     def shortcut_to_string(cls, shortcut: Opt[Tuple[int, int]]):

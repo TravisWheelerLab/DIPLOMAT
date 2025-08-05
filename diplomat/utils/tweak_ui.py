@@ -180,7 +180,6 @@ def _simplify_editor_class(wx, editor_class):
     class SimplifiedEditor(editor_class):
         def __init__(self, do_save, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self._video_splitter.Unsplit(self._plot_panel)
             self._do_save = do_save
 
         def _get_tools(

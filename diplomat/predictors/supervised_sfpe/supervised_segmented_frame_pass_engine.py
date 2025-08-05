@@ -352,103 +352,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
 
         return bitmap
 
-    def _make_plots(self, evt=None):
-        """
-        PRIVATE: Creates plots of data for current frame in UI and puts them in the side panel.
-        """
-        frame_idx = self._fb_editor.video_player.video_viewer.get_offset_count()
-
-        new_bitmap_list = []
-        figsize = (3.6, 2.8)
-        dpi = 200
-
-        is_fix_frame = np.any(frame_idx == self._segments[:, 2])
-        fix_frame_data = []
-
-        # For every body part...
-        for bp_idx in range(self._num_total_bp):
-            bp_name = self.bodyparts[bp_idx // self.num_outputs] + str(
-                (bp_idx % self.num_outputs) + 1
-            )
-            all_data = self.frame_data.frames[frame_idx][bp_idx]
-
-            if (frame_idx, bp_idx) in self.changed_frames:
-                f = self.changed_frames[frame_idx, bp_idx]
-                frames, occluded, occ_coords, orig_data = (
-                    f.frame_probs,
-                    f.occluded_probs,
-                    f.occluded_coords,
-                    f.orig_data,
-                )
-            else:
-                frames, occluded, occ_coords, orig_data = (
-                    all_data.frame_probs,
-                    all_data.occluded_probs,
-                    all_data.occluded_coords,
-                    all_data.orig_data,
-                )
-
-            if frames is not None:
-                # Plot post MIT-Viterbi frame data if it exists...
-                data = orig_data.unpack()
-                track_data = SparseTrackingData(orig_data.downscaling)
-                track_data.pack(*data[:2], frames)
-
-                new_bitmap_list.append(
-                    self._make_plot_of(
-                        figsize,
-                        dpi,
-                        bp_name + " Post Passes",
-                        track_data,
-                        vmin=0,
-                        vmax=1,
-                    )
-                )
-
-                occ_data = SparseTrackingData(orig_data.downscaling).pack(
-                    *occ_coords.T, occluded
-                )
-                new_bitmap_list.append(
-                    self._make_plot_of(
-                        figsize,
-                        dpi,
-                        bp_name + " Post Passes Occluded",
-                        occ_data,
-                        vmin=0,
-                        vmax=1,
-                    )
-                )
-
-            # Plot Pre-MIT-Viterbi frame data, or the original suggested probability frame...
-            new_bitmap_list.append(
-                self._make_plot_of(
-                    figsize, dpi, bp_name + " Original Source Frame", orig_data
-                )
-            )
-            if is_fix_frame:
-                fix_frame_data.append(orig_data)
-
-            # If user edited, show user edited frame...
-            if (frame_idx, bp_idx) in self.changed_frames:
-                track_data = all_data.orig_data
-                new_bitmap_list.append(
-                    self._make_plot_of(
-                        figsize, dpi, bp_name + " Modified Source Frame", track_data
-                    )
-                )
-
-            if len(fix_frame_data) >= self.num_outputs:
-                new_bitmap_list.append(
-                    self._custom_multicluster_plot(
-                        figsize, dpi, bp_name + " Fix Frame Clustering", fix_frame_data
-                    )
-                )
-                fix_frame_data.clear()
-
-        # Now that we have appended all the above bitmaps to a list, update the ScrollImageList widget of the editor
-        # with the new images.
-        self._fb_editor.plot_list.set_bitmaps(new_bitmap_list)
-
     def _on_frame_export(
         self, export_type: int, file_format: str, file_path: Path
     ) -> Tuple[bool, str]:
@@ -589,6 +492,9 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 for f_i, b_i in changed_frames
             }
         )
+        print(self._segments)
+        print(list(changed_frames.keys()))
+        print(segment_indexes)
 
         poses = old_poses.get_all().reshape(
             (old_poses.get_frame_count(), old_poses.get_bodypart_count(), 3)
@@ -788,7 +694,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             s.set_segment_starts(self._segments[:, 0])
             s.set_segment_fix_frames(self._segments[:, 2])
 
-        self._fb_editor.plot_button.Bind(wx.EVT_BUTTON, self._make_plots)
         self._fb_editor.set_frame_exporter(self._on_frame_export)
         self._fb_editor.history.register_undoer(self.RERUN_HIST_EVT, self._on_hist_fb)
         self._fb_editor.history.register_redoer(self.RERUN_HIST_EVT, self._on_hist_fb)

@@ -57,6 +57,11 @@ class Tool:
     toolbar_obj: Optional[wx.ToolBarToolBase] = None
     tool_type: wx.ItemKind = wx.ITEM_NORMAL
 
+    def get_bitmap(
+        self, foreground_color: wx.Colour, img_size: Optional[Tuple[int, int]] = None
+    ):
+        return icons.to_wx_bitmap(self.icon, self.icon_size, foreground_color, img_size)
+
 
 class FramePassEngineData(Protocol):
     @property
@@ -365,13 +370,10 @@ class FPEEditor(wx.Frame):
 
         self._main_splitter = wx.SplitterWindow(self._main_panel)
         self._sub_sizer = wx.BoxSizer(wx.VERTICAL)
-        self._video_splitter = wx.SplitterWindow(self._main_splitter)
         self._side_sizer = wx.BoxSizer(wx.VERTICAL)
         self._sub_panel = wx.Panel(self._main_splitter)
 
-        # Splitter specific settings...
-        self._video_splitter.SetSashGravity(0.0)
-        self._video_splitter.SetMinimumPaneSize(20)
+        # Set splitter weights...
         self._main_splitter.SetSashGravity(1.0)
         self._main_splitter.SetMinimumPaneSize(20)
 
@@ -380,7 +382,7 @@ class FPEEditor(wx.Frame):
             for new_k, old_k in self.PLOT_SETTINGS_MAPPING.items()
         }
         self.video_player = PointEditor(
-            self._video_splitter,
+            self._main_splitter,
             video_hdl=video_hdl,
             crop_box=crop_box,
             poses=poses,
@@ -405,34 +407,13 @@ class FPEEditor(wx.Frame):
                 self._sub_panel, score_engines, poses, dlg.progress_bar
             )
 
-        self._plot_panel = wx.Panel(self._video_splitter)
-
-        self.plot_button = wx.Button(self._plot_panel, label="Plot This Frame")
-        plot_imgs = [
-            wx.Bitmap.FromRGBA(100, 100, 0, 0, 0, 0)
-            for __ in range(poses.get_bodypart_count())
-        ]
-        self.plot_list = ScrollImageList(
-            self._plot_panel, plot_imgs, wx.VERTICAL, size=wx.Size(200, -1)
-        )
-
-        self._side_sizer.Add(self.plot_button, 0, wx.ALIGN_CENTER)
-        self._side_sizer.Add(self.plot_list, 1, wx.EXPAND)
-        self._plot_panel.SetSizerAndFit(self._side_sizer)
-
-        self._video_splitter.SplitVertically(
-            self._plot_panel,
-            self.video_player,
-            self._plot_panel.GetMinSize().GetWidth(),
-        )
-
         self._sub_sizer.Add(self._score_disp, 1, wx.EXPAND)
         self._sub_sizer.Add(self.video_controls, 0, wx.EXPAND)
 
         self._sub_panel.SetSizerAndFit(self._sub_sizer)
 
         self._main_splitter.SplitHorizontally(
-            self._video_splitter,
+            self.video_player,
             self._sub_panel,
             -self._sub_panel.GetMinSize().GetHeight(),
         )
@@ -509,16 +490,16 @@ class FPEEditor(wx.Frame):
         """
         entries = []
 
-        for tool, bmp in zip(self._tools_only(), self._bitmaps):
+        for tool in self._tools_only():
             entries.append(
                 (
-                    bmp,
+                    tool.get_bitmap,
                     tool.shortcut_code if (len(tool.shortcut_code) != 0) else None,
                     self._toolbar.GetToolShortHelp(tool.toolbar_obj.GetId()),
                 )
             )
 
-        empty_bitmap = wx.Bitmap.FromRGBA(32, 32)
+        empty_bitmap = wx.Bitmap.FromRGBA(*self.TOOLBAR_ICON_SIZE)
 
         other_entries = [
             (
@@ -757,9 +738,7 @@ class FPEEditor(wx.Frame):
                 self._toolbar.AddSeparator()
                 continue
 
-            icon = icons.to_wx_bitmap(
-                tool.icon, tool.icon_size, self.GetForegroundColour(), (32, 32)
-            )
+            icon = tool.get_bitmap(self.GetForegroundColour(), self.TOOLBAR_ICON_SIZE)
             self._bitmaps.append(icon)
 
             if tool.widget is None:
@@ -791,8 +770,19 @@ class FPEEditor(wx.Frame):
 
         self._update_hist_btns(self._history)
         self.Bind(wx.EVT_TOOL, self.on_tool)
+        self.Bind(wx.EVT_SYS_COLOUR_CHANGED, self._theme_change)
 
         self._toolbar.Realize()
+
+    def _theme_change(self, evt):
+        toolbar_bitmap_size = self.TOOLBAR_ICON_SIZE
+        for tool in self._tools_only():
+            tool_id = tool.toolbar_obj.GetId()
+            bmp = tool.get_bitmap(self.GetForegroundColour(), toolbar_bitmap_size)
+            self._toolbar.SetToolNormalBitmap(tool_id, bmp)
+            if tool.widget is not None:
+                self._toolbar.SetToolDisabledBitmap(tool_id, bmp)
+        evt.Skip()
 
     def _on_spin(self, evt: wx.SpinEvent):
         """

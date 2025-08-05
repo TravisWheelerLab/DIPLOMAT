@@ -83,8 +83,7 @@ def reconstruct_from_json(data: Union[dict, list]) -> Union[dict, list]:
         if isinstance(val, dict):
             if "___name" in val:
                 if not val["___module"].startswith("diplomat."):
-                    if not val["___module"].startswith("matplotlib.colors"):
-                        raise IOError("Only internal diplomat modules can be stored!")
+                    raise IOError("Only internal diplomat modules can be stored!")
                 mod = import_module(val["___module"])
                 cls = mod
                 for attr in val["___name"].split("."):
@@ -566,12 +565,19 @@ class SafeFileIO:
     This means they will either succeed fully or fail completely.
     This prevents a file from being found in a corrupted state.
     """
-    def __init__(self, path: Union[str, Path], mode: str, save_config: SaveConditions, **kwargs):
+
+    def __init__(
+        self, path: Union[str, Path], mode: str, save_config: SaveConditions, **kwargs
+    ):
         #
         self._final_path = Path(path).resolve()
         rng_str = "".join(random.choices(string.ascii_letters, k=10))
-        self._commiter_path = self._final_path.parent / (self._final_path.name + f"_tmp1{rng_str}")
-        self._scratch_path = self._final_path.parent / (self._final_path.name + f"_tmp2{rng_str}")
+        self._commiter_path = self._final_path.parent / (
+            self._final_path.name + f"_tmp1{rng_str}"
+        )
+        self._scratch_path = self._final_path.parent / (
+            self._final_path.name + f"_tmp2{rng_str}"
+        )
         if self._final_path.exists() and "w" not in mode:
             shutil.copy(self._final_path, self._scratch_path)
         self._file = open(self._scratch_path, mode, **kwargs)
@@ -629,4 +635,3 @@ class SafeFileIO:
 
     def __del__(self):
         self._file.close()
-
