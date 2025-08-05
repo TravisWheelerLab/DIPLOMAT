@@ -309,6 +309,7 @@ class FPEEditor(wx.Frame):
         part_groups: Optional[List[str]] = None,
         manual_save: Optional[Callable] = None,
         heatmap_options: Optional[HeatmapOptions] = None,
+        debug: bool = False,
         w_id=wx.ID_ANY,
         title="",
         pos=wx.DefaultPosition,
@@ -334,6 +335,7 @@ class FPEEditor(wx.Frame):
         :param manual_save: Optional callable, executed when the save button in the UI is pressed. If not set, no
                             save option shows up in the toolbar.
         :param heatmap_options: Optional settings for displaying heatmap overlays in the UI. See the HeatmapOptions dataclass...
+        :param debug: Enable debug features of the editor.
         :param w_id: The WX ID of the window. Defaults to wx.ID_ANY
         :param title: String title of the window. Defaults to "".
         :param pos: WX Position of the window. Defaults to wx.DefaultPosition.
@@ -362,6 +364,7 @@ class FPEEditor(wx.Frame):
         self._fb_runner = None
         self._frame_exporter = None
         self._on_plot_settings_change = None
+        self._debug = debug
 
         self._main_panel = wx.Panel(self, style=wx.WANTS_CHARS | wx.TAB_TRAVERSAL)
         self._main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -420,7 +423,7 @@ class FPEEditor(wx.Frame):
         self._splitter_sizer.Add(self._main_splitter, 1, wx.EXPAND)
 
         self._build_toolbar(
-            manual_save, heatmap_options.entries if self._heatmap_is_enabled else None
+            manual_save, heatmap_options.entries if self._heatmap_is_enabled else None, debug
         )
 
         self._main_panel.SetSizerAndFit(self._splitter_sizer)
@@ -577,7 +580,7 @@ class FPEEditor(wx.Frame):
         )
 
     def _get_tools(
-        self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]
+        self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]], debug: bool = False
     ) -> List[Union[Tool, Literal[SEPERATOR]]]:
         spin_ctrl = wx.SpinCtrl(
             self._toolbar,
@@ -687,7 +690,7 @@ class FPEEditor(wx.Frame):
                 "Export the current modified frames from the UI.",
                 self._on_export,
                 shortcut_code=(wx.ACCEL_ALT, ord("E")),
-            ),
+            ) if debug else None,
             Tool(
                 "Export Tracks to CSV",
                 icons.SAVE_TRACKS_ICON,
@@ -715,7 +718,7 @@ class FPEEditor(wx.Frame):
         return [tool for tool in tools if (tool is not None)]
 
     def _build_toolbar(
-        self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]]
+        self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]], debug: bool = False
     ):
         """
         PRIVATE: Constructs the toolbar, adds all tools to the toolbar, and sets up toolbar events to trigger actions
@@ -730,7 +733,7 @@ class FPEEditor(wx.Frame):
 
         self._toolbar = self.CreateToolBar()
 
-        self._tools = self._get_tools(manual_save, heatmap_entries)
+        self._tools = self._get_tools(manual_save, heatmap_entries, debug)
         self._bitmaps = []
 
         for tool in self._tools:

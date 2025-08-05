@@ -499,10 +499,12 @@ class SegmentedFramePassEngine(Predictor):
         self._width, self._height = None, None
 
         self.FULL_PASSES = FramePassBuilder.sanitize_pass_config_list(
-            settings.full_passes
+            settings.full_passes,
+            settings.debug
         )
         self.SEGMENTED_PASSES = FramePassBuilder.sanitize_pass_config_list(
-            settings.segmented_passes
+            settings.segmented_passes,
+            settings.debug
         )
         self.THRESHOLD = settings.threshold
 
@@ -1811,6 +1813,11 @@ class SegmentedFramePassEngine(Predictor):
                 3.0,
                 float,
                 "The threshold z-score used to detect when a pose is an outlier in the skeletal distance distribution.",
+            ),
+            "debug": (
+                False,
+                bool,
+                "Enable debug mode, which prints extra information to the console and adds extra options to the UI if running in interactive mode."
             ),
             "dipui_file": (
                 None,
