@@ -1,6 +1,7 @@
+import shutil
 import tempfile
 from io import BytesIO
-from pathlib import Path
+from pathlib import Path, PosixPath, PurePosixPath
 from typing import Optional, List
 from zipfile import is_zipfile, ZipFile
 
@@ -303,69 +304,84 @@ def load_model(
     with tmp_dir as tmp_dir:
         if is_zip:
             with ZipFile(config, "r") as z:
-                sub_path, config = _load_dlc_like_zip_file(z)
-                z.extractall(tmp_dir.name)
-                project_dir = (Path(tmp_dir.name) / sub_path).resolve().parent
+                config_path, config = _load_dlc_like_zip_file(z)
+                zip_project_dir = PurePosixPath(config_path).parent
+                for zip_info in z.infolist():
+                    if zip_info.is_dir():
+                        continue
+                    zip_path_obj = PurePosixPath(zip_info.filename)
+                    try:
+                        sub_path = zip_path_obj.relative_to(zip_project_dir)
+                        if sub_path.parts[0] not in ["dlc-models", "config.yaml"]:
+                            continue
+                        dst_path = Path(tmp_dir, sub_path).resolve()
+                        dst_path.parent.mkdir(parents=True, exist_ok=True)
+                        with z.open(zip_info, "r") as fsrc:
+                            with Path(tmp_dir, sub_path).open("wb") as fdst:
+                                shutil.copyfileobj(fsrc, fdst)
+                    except ValueError:
+                        pass
+                project_dir = tmp_dir
         else:
             project_dir = Path(config).resolve().parent
             with open(config, "rb") as f:
                 config = yaml.load(f, yaml.SafeLoader)
 
-    iteration = config["iteration"]
-    train_frac = config["TrainingFraction"][training_set_index]
+        iteration = config["iteration"]
+        train_frac = config["TrainingFraction"][training_set_index]
 
-    model_directory = _get_model_folder(
-        config, project_dir, shuffle, train_frac, model_prefix
-    )
-    model_directory = model_directory.resolve()
-
-    try:
-        with (model_directory / "test" / "pose_cfg.yaml").open("rb") as f:
-            model_config = yaml.load(f, yaml.SafeLoader)
-    except FileNotFoundError as e:
-        print(e)
-        raise FileNotFoundError(
-            f"Invalid model selection: (Iteration {iteration}, Training Fraction {train_frac}, Shuffle: {shuffle})"
+        model_directory = _get_model_folder(
+            config, project_dir, shuffle, train_frac, model_prefix
         )
+        model_directory = model_directory.resolve()
 
-    # Set the number of outputs...
-    num_outputs = (
-        config.get("num_outputs", model_config.get("num_outputs", None))
-        if (num_outputs is None)
-        else num_outputs
-    )
-    if num_outputs is not None:
-        num_outputs = int(num_outputs)
-    batch_size = batch_size if (batch_size is not None) else config["batch_size"]
-    body_parts = list(model_config["all_joints_names"])
-    if "partaffinityfield_graph" in model_config:
-        skeleton = sorted(
-            set(
-                tuple(sorted([body_parts[a], body_parts[b]]))
-                for a, b in model_config["partaffinityfield_graph"]
+        try:
+            with (model_directory / "test" / "pose_cfg.yaml").open("rb") as f:
+                model_config = yaml.load(f, yaml.SafeLoader)
+        except FileNotFoundError as e:
+            print(e)
+            raise FileNotFoundError(
+                f"Invalid model selection: (Iteration {iteration}, Training Fraction {train_frac}, Shuffle: {shuffle})"
             )
-        )
-    else:
-        skeleton = []
 
-    return (
-        ModelInfo(
-            num_outputs=num_outputs,
-            batch_size=batch_size,
-            dotsize=int(config.get("dotsize", 4)),
-            colormap=config.get("colormap", None),
-            shape_list=None,
-            alphavalue=config.get("alphavalue", 0.7),
-            pcutoff=config.get("pcutoff", 0.1),
-            line_thickness=1,
-            bp_names=body_parts,
-            skeleton=skeleton,
-            frontend="deeplabcut",
-        ),
-        FrameExtractor(
-            _load_and_convert_model(
-                model_directory / "train", gpu_index, bool(use_cpu)
+        # Set the number of outputs...
+        num_outputs = (
+            config.get("num_outputs", model_config.get("num_outputs", None))
+            if (num_outputs is None)
+            else num_outputs
+        )
+        if num_outputs is not None:
+            num_outputs = int(num_outputs)
+        batch_size = batch_size if (batch_size is not None) else config["batch_size"]
+        body_parts = list(model_config["all_joints_names"])
+        if "partaffinityfield_graph" in model_config:
+            skeleton = sorted(
+                set(
+                    tuple(sorted([body_parts[a], body_parts[b]]))
+                    for a, b in model_config["partaffinityfield_graph"]
+                )
+            )
+        else:
+            skeleton = []
+
+        return (
+            ModelInfo(
+                num_outputs=num_outputs,
+                batch_size=batch_size,
+                dotsize=int(config.get("dotsize", 4)),
+                colormap=config.get("colormap", None),
+                shape_list=None,
+                alphavalue=config.get("alphavalue", 0.7),
+                pcutoff=config.get("pcutoff", 0.1),
+                line_thickness=1,
+                bp_names=body_parts,
+                skeleton=skeleton,
+                frontend="deeplabcut",
             ),
-            model_config,
-        ),
-    )
+            FrameExtractor(
+                _load_and_convert_model(
+                    model_directory / "train", gpu_index, bool(use_cpu)
+                ),
+                model_config,
+            ),
+        )
