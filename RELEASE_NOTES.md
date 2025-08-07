@@ -1,4 +1,5 @@
- - New code saves dipui files in atomic-like manner to prevent files ending in a corrupted state.
- - Adjusted hyperparameters for MIT-Viterbi.
- - Proper handling of CTRL+C in terminal when UI is open.
- - Improved, less laggy video player.
+ - Removal of debug features from the user interface.
+ - New --debug flag to enable debug dumps and features.
+ - Fixes and performance improvements for both plotting based predictors (PlotterArgMax, FastPlotterArgMax) for generating visuals.
+ - Fix and improve performance of loading from zipped DLC projects.
+ - Recolor icons when user changes there system theme.
