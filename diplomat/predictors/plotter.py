@@ -55,6 +55,8 @@ class PlotterArgMax(Predictor):
             )
         )
 
+        self._matplotlib_colormap = to_colormap(video_metadata["colormap"]).to_matplotlib_colormap()
+
         # Determines grid size of charts
         self._grid_width = int(np.ceil(np.sqrt(len(self._parts_set))))
         self._grid_height = int(np.ceil(len(self._parts_set) / self._grid_width))
@@ -154,7 +156,7 @@ class PlotterArgMax(Predictor):
         vid_meta = self.video_metadata
 
         for frame in range(scmap.get_frame_count()):
-            self._figure.suptitle(f"Frame: {frame}")
+            self._figure.suptitle(f"Frame: {self._current_frame}")
             # Plot all probability maps
             for bp, ax in zip(self._part_idx_list, self._axes.flat):
                 ax.clear()
@@ -176,7 +178,7 @@ class PlotterArgMax(Predictor):
                         if (settings.use_log_scale)
                         else scmap.get_prob_table(frame, bp)
                     )
-                    ax.plot_surface(x, y, z, cmap=settings.colormap)
+                    ax.plot_surface(x, y, z, cmap=self._matplotlib_colormap)
                     z_range = ax.get_zlim()[1] - ax.get_zlim()[0]
                     ax.set_zlim(
                         ax.get_zlim()[0],
@@ -224,9 +226,9 @@ class PlotterArgMax(Predictor):
             self._figure.canvas.draw()
 
             img = np.reshape(
-                np.frombuffer(self._figure.canvas.tostring_rgb(), dtype="uint8"),
-                self._figure.canvas.get_width_height()[::-1] + (3,),
-            )[:, :, ::-1]
+                np.frombuffer(self._figure.canvas.buffer_rgba(), dtype="uint8"),
+                self._figure.canvas.get_width_height()[::-1] + (4,),
+            )[:, :, 2::-1]
 
             if self._vid_writer is None:
                 height, width, colors = img.shape
@@ -299,12 +301,6 @@ class PlotterArgMax(Predictor):
                 type_casters.RangedFloat(0, np.inf),
                 "A float, the threshold under which not to plot an arrow for "
                 "a given location.",
-            ),
-            "colormap": (
-                "Blues",
-                to_colormap,
-                "String, determines the underlying colormap to be passed to "
-                "matplotlib while plotting the heatmap or mesh.",
             ),
             "z_shrink_factor": (
                 5,

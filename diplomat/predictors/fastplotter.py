@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 from diplomat.processing import *
+from diplomat.utils.colormaps import to_colormap
 from diplomat.utils.video_io import ContextVideoWriter
 
 
@@ -20,17 +21,9 @@ _CV2_FONTS = {
     item: getattr(cv2, item) for item in dir(cv2) if (item.startswith("FONT_HERSHEY"))
 }
 
-_CV2_COLORMAPS = {
-    item: getattr(cv2, item) for item in dir(cv2) if (item.startswith("COLORMAP"))
-}
-
 
 def cv2_font(val: str) -> int:
     return _CV2_FONTS[str(val)]
-
-
-def cv2_colormap(val: str) -> int:
-    return _CV2_COLORMAPS[str(val)]
 
 
 bgr_color = type_casters.Tuple(*([type_casters.RangedInteger(0, 255)] * 3))
@@ -76,6 +69,8 @@ class FastPlotterArgMax(Predictor):
         self._grid_height = int(math.ceil(len(self._parts_set) / self._grid_width))
         # Stores opencv video writer...
         self._vid_writer: Optional[cv2.VideoWriter] = None
+
+        self._colormap = to_colormap(video_metadata["colormap"])
 
         # Name of the video file to save to
         video_metadata["orig-video-path"] = (
@@ -251,14 +246,12 @@ class FastPlotterArgMax(Predictor):
         )
 
         # Convert probabilities to a color image...
-        grayscale_img = self._probs_to_grayscale(
+        probs = (
             self._logify(self._normalize_range(prob_map))
             if (s.use_log_scale)
             else self._normalize_range(prob_map)
         )
-        self._colormap_view[:, :] = cv2.applyColorMap(
-            grayscale_img, s.colormap, self._unscaled_cmap_temp
-        )
+        self._colormap_view[:, :] = self._colormap(probs, alpha=1.0, bytes=True)[:, :, 2::-1]
         # Insert the probability map...
         subplot_top_x, subplot_top_y = (
             (x_upper_corner + s.padding) - 1,
@@ -328,8 +321,6 @@ class FastPlotterArgMax(Predictor):
     @classmethod
     def get_settings(cls) -> ConfigSpec:
         font_options = "\n".join([f"\t - {key}" for key in _CV2_FONTS])
-        colormap_options = "\n".join(f"\t - {key}" for key in _CV2_COLORMAPS)
-
         return {
             "video_name": (
                 "$VIDEO-fast-prob-dlc.mp4",
@@ -386,11 +377,6 @@ class FastPlotterArgMax(Predictor):
                 (0, 0, 0),
                 bgr_color,
                 "Tuple of 3 integers, color of the title text in BGR format",
-            ),
-            "colormap": (
-                "COLORMAP_VIRIDIS",
-                cv2_colormap,
-                f"String, the cv2 colormap to use, options for this are:\n{colormap_options}",
             ),
             "font_thickness": (
                 2,
