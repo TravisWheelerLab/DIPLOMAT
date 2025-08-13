@@ -251,7 +251,9 @@ class FastPlotterArgMax(Predictor):
             if (s.use_log_scale)
             else self._normalize_range(prob_map)
         )
-        self._colormap_view[:, :] = self._colormap(probs, alpha=1.0, bytes=True)[:, :, 2::-1]
+        self._colormap_view[:, :] = self._colormap(probs, alpha=1.0, bytes=True)[
+            :, :, 2::-1
+        ]
         # Insert the probability map...
         subplot_top_x, subplot_top_y = (
             (x_upper_corner + s.padding) - 1,

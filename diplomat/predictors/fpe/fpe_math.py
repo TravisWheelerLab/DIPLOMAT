@@ -1,6 +1,10 @@
 from typing import Optional, Callable, Tuple, Iterable, Union
 import numpy as np
 
+to_log_space = np.log
+from_log_space = np.exp
+to_log_space_1p = lambda x: np.log1p
+log_space_adder = np.logaddexp
 
 float_like = Union[float, np.ndarray]
 
@@ -37,8 +41,9 @@ def gaussian_formula(
         )
     else:
         return np.maximum(
-            np.log2(amplitude) - (inner_x_delta + inner_y_delta) * np.log(np.e),
-            np.log2(lowest_value),
+            to_log_space(amplitude)
+            - (inner_x_delta + inner_y_delta) * to_log_space(np.e),
+            to_log_space(lowest_value),
         )
 
 
@@ -79,10 +84,12 @@ def skeleton_formula(
         g = peak_amplitude * np.exp(-((d0 - peak_dist_out) ** 2) / (2 * peak_std**2))
         return np.where(d0 < peak_dist_out, np.maximum(g, trough_amplitude), g)
     else:
-        g = np.log2(peak_amplitude) + np.log2(np.e) * (
+        g = to_log_space(peak_amplitude) + to_log_space(np.e) * (
             -((d0 - peak_dist_out) ** 2) / (2 * peak_std**2)
         )
-        return np.where(d0 < peak_dist_out, np.maximum(g, np.log2(trough_amplitude)), g)
+        return np.where(
+            d0 < peak_dist_out, np.maximum(g, to_log_space(trough_amplitude)), g
+        )
 
 
 def old_skeleton_formula(
@@ -122,7 +129,7 @@ def old_skeleton_formula(
     if not in_log_space:
         return c * np.exp((a * x_y_out) - (b * x_y_out**2))
     else:
-        return np.log2(c) + ((a * x_y_out) - (b * x_y_out**2)) * np.log2(np.e)
+        return to_log_space(c) + ((a * x_y_out) - (b * x_y_out**2)) * to_log_space(np.e)
 
 
 def get_func_table(

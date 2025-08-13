@@ -143,10 +143,9 @@ class DiplomatColormap:
         if self.is_listed:
             return mpl_colors.ListedColormap(self.get_colors(1.0, False), self.name)
         else:
+
             def _to_mpl_segments(seg):
-                lutmap = np.stack([
-                    seg[:, 0], seg[:, 1], seg[:, 1]
-                ], axis=-1)
+                lutmap = np.stack([seg[:, 0], seg[:, 1], seg[:, 1]], axis=-1)
                 to_stack = []
                 if lutmap[0, 0] != 0.0:
                     to_stack.append([[0.0, *lutmap[0, 1:]]])
@@ -155,11 +154,14 @@ class DiplomatColormap:
                     to_stack.append([[1.0, *lutmap[-1, 1:]]])
                 return np.concatenate(to_stack, axis=0)
 
-            return mpl_colors.LinearSegmentedColormap(self.name, {
-                "red": _to_mpl_segments(self._r),
-                "green": _to_mpl_segments(self._g),
-                "blue": _to_mpl_segments(self._b)
-            })
+            return mpl_colors.LinearSegmentedColormap(
+                self.name,
+                {
+                    "red": _to_mpl_segments(self._r),
+                    "green": _to_mpl_segments(self._g),
+                    "blue": _to_mpl_segments(self._b),
+                },
+            )
 
     @staticmethod
     def _normalize_mapper(v):

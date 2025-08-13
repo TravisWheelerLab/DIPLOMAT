@@ -183,7 +183,10 @@ def _simplify_editor_class(wx, editor_class):
             self._do_save = do_save
 
         def _get_tools(
-            self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]], debug: bool = False
+            self,
+            manual_save: Optional[Callable],
+            heatmap_entries: Optional[List[str]],
+            debug: bool = False,
         ):
             tools = super()._get_tools(manual_save, heatmap_entries, debug)
             return [

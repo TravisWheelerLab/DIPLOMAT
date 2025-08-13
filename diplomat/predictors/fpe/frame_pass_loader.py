@@ -30,7 +30,9 @@ class FramePassBuilder:
         return self._clazz(width, height, thread_count, self._config)
 
     @classmethod
-    def sanitize_pass_config_list(cls, passes: List[Any], debug: bool = False) -> List["FramePassBuilder"]:
+    def sanitize_pass_config_list(
+        cls, passes: List[Any], debug: bool = False
+    ) -> List["FramePassBuilder"]:
         new_passes = []
 
         for f_pass in passes:

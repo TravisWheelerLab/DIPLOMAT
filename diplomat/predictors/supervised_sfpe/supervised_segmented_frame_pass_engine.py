@@ -492,9 +492,6 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 for f_i, b_i in changed_frames
             }
         )
-        print(self._segments)
-        print(list(changed_frames.keys()))
-        print(segment_indexes)
 
         poses = old_poses.get_all().reshape(
             (old_poses.get_frame_count(), old_poses.get_bodypart_count(), 3)
@@ -679,7 +676,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
             * (self._num_total_bp // self.num_outputs),
             self._on_manual_save if (self.settings.storage_mode == "memory") else None,
             heatmap_options=default_heatmap_entries(self._get_names(), self),
-            debug=self.settings.debug
+            debug=self.settings.debug,
         )
 
         kill_timer = wx.Timer(self._fb_editor)

@@ -30,25 +30,49 @@ class PlotterArgMax(Predictor):
     Identical to :plugin:`~diplomat.predictors.ArgMax`, but plots probability frames in form of video to the user
     using matplotlib...
     """
+
     @staticmethod
-    def _fast_bar(ax, x, y, z, cmap, anti, shade = False, ignore = 0.01):
-        bottom = Poly3DCollection([[
-            [x[0, 0], y[0, 0], 0],
-            [x[-1, 0] + 1, y[-1, 0], 0],
-            [x[-1, -1] + 1, y[-1, -1] + 1, 0],
-            [x[0, -1], y[0, -1] + 1, 0]
-        ]], facecolors=[cmap(0)], edgecolors=[[0, 0, 0, 0]], zorder=1)
+    def _fast_bar(ax, x, y, z, cmap, anti, shade=False, ignore=0.01):
+        bottom = Poly3DCollection(
+            [
+                [
+                    [x[0, 0], y[0, 0], 0],
+                    [x[-1, 0] + 1, y[-1, 0], 0],
+                    [x[-1, -1] + 1, y[-1, -1] + 1, 0],
+                    [x[0, -1], y[0, -1] + 1, 0],
+                ]
+            ],
+            facecolors=[cmap(0)],
+            edgecolors=[[0, 0, 0, 0]],
+            zorder=1,
+        )
         ax.add_collection3d(bottom, -1)
 
         # Filter any cells with no actual data...
         valid = z > ignore
-        ax.bar3d(x[valid], y[valid], 0, 1, 1, z[valid], color=cmap(z[valid]), shade=shade, antialiased=anti, zorder=10)
-
+        ax.bar3d(
+            x[valid],
+            y[valid],
+            0,
+            1,
+            1,
+            z[valid],
+            color=cmap(z[valid]),
+            shade=shade,
+            antialiased=anti,
+            zorder=10,
+        )
 
     RENDER_METHODS_3D = {
-        "surface": lambda ax, x, y, z, cmap, anti: ax.plot_surface(x, y, z, cmap=cmap, rstride=1, cstride=1, linewidth=0, antialiased=anti),
-        "bar": lambda ax, x, y, z, cmap, anti: PlotterArgMax._fast_bar(ax, x, y, z, cmap, anti),
-        "shaded_bar": lambda ax, x, y, z, cmap, anti: PlotterArgMax._fast_bar(ax, x, y, z, cmap, anti, shade=True)
+        "surface": lambda ax, x, y, z, cmap, anti: ax.plot_surface(
+            x, y, z, cmap=cmap, rstride=1, cstride=1, linewidth=0, antialiased=anti
+        ),
+        "bar": lambda ax, x, y, z, cmap, anti: PlotterArgMax._fast_bar(
+            ax, x, y, z, cmap, anti
+        ),
+        "shaded_bar": lambda ax, x, y, z, cmap, anti: PlotterArgMax._fast_bar(
+            ax, x, y, z, cmap, anti, shade=True
+        ),
     }
 
     def __init__(
@@ -78,7 +102,9 @@ class PlotterArgMax(Predictor):
             )
         )
 
-        self._matplotlib_colormap = to_colormap(video_metadata["colormap"]).to_matplotlib_colormap()
+        self._matplotlib_colormap = to_colormap(
+            video_metadata["colormap"]
+        ).to_matplotlib_colormap()
 
         # Determines grid size of charts
         self._grid_width = int(np.ceil(np.sqrt(len(self._parts_set))))
@@ -98,7 +124,11 @@ class PlotterArgMax(Predictor):
 
         # Build the subplots...
         if settings["3d_projection"]:
-            axes_args = {"projection": "3d", "computed_zorder": False, **settings.axes_args}
+            axes_args = {
+                "projection": "3d",
+                "computed_zorder": False,
+                **settings.axes_args,
+            }
             self._figure, self._axes = pyplot.subplots(
                 self._grid_height,
                 self._grid_width,
@@ -201,7 +231,9 @@ class PlotterArgMax(Predictor):
                         if (settings.use_log_scale)
                         else scmap.get_prob_table(frame, bp)
                     )
-                    self.RENDER_METHODS_3D[settings["3d_render_method"]](ax, x, y, z, self._matplotlib_colormap, settings["antialiased"])
+                    self.RENDER_METHODS_3D[settings["3d_render_method"]](
+                        ax, x, y, z, self._matplotlib_colormap, settings["antialiased"]
+                    )
 
                     ax.set_xlim(0, scmap.get_frame_width())
                     ax.set_ylim(0, scmap.get_frame_height())
@@ -211,7 +243,6 @@ class PlotterArgMax(Predictor):
                         ax.get_zlim()[0] + (z_range * settings.z_shrink_factor),
                     )
                     ax.set_aspect("equalxy")
-
 
                     if settings.display_offsets:
                         res = self._get_offset_map_of(scmap, frame, bp, True)
@@ -232,7 +263,7 @@ class PlotterArgMax(Predictor):
                         ),
                         cmap=self._matplotlib_colormap,
                         origin="lower",
-                        aspect="equal"
+                        aspect="equal",
                     )
 
                     if settings.display_offsets:
@@ -313,12 +344,12 @@ class PlotterArgMax(Predictor):
             "3d_render_method": (
                 "shaded_bar",
                 type_casters.Literal("surface", "bar", "shaded_bar"),
-                "Method to use for rendering a 3D heatmap."
+                "Method to use for rendering a 3D heatmap.",
             ),
             "antialiased": (
                 True,
                 bool,
-                "Apply antialiasing to plots, makes plots smoother at cost of possible gaps between surfaces in 3d plots."
+                "Apply antialiasing to plots, makes plots smoother at cost of possible gaps between surfaces in 3d plots.",
             ),
             "display_offsets": (
                 False,

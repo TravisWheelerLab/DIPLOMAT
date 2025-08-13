@@ -423,7 +423,9 @@ class FPEEditor(wx.Frame):
         self._splitter_sizer.Add(self._main_splitter, 1, wx.EXPAND)
 
         self._build_toolbar(
-            manual_save, heatmap_options.entries if self._heatmap_is_enabled else None, debug
+            manual_save,
+            heatmap_options.entries if self._heatmap_is_enabled else None,
+            debug,
         )
 
         self._main_panel.SetSizerAndFit(self._splitter_sizer)
@@ -580,7 +582,10 @@ class FPEEditor(wx.Frame):
         )
 
     def _get_tools(
-        self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]], debug: bool = False
+        self,
+        manual_save: Optional[Callable],
+        heatmap_entries: Optional[List[str]],
+        debug: bool = False,
     ) -> List[Union[Tool, Literal[SEPERATOR]]]:
         spin_ctrl = wx.SpinCtrl(
             self._toolbar,
@@ -683,14 +688,18 @@ class FPEEditor(wx.Frame):
             ),
             *heatmap_tools,
             self.SEPERATOR,
-            Tool(
-                "Export Frames",
-                icons.DUMP_FRAMES_ICON,
-                icons.DUMP_FRAMES_SIZE,
-                "Export the current modified frames from the UI.",
-                self._on_export,
-                shortcut_code=(wx.ACCEL_ALT, ord("E")),
-            ) if debug else None,
+            (
+                Tool(
+                    "Export Frames",
+                    icons.DUMP_FRAMES_ICON,
+                    icons.DUMP_FRAMES_SIZE,
+                    "Export the current modified frames from the UI.",
+                    self._on_export,
+                    shortcut_code=(wx.ACCEL_ALT, ord("E")),
+                )
+                if debug
+                else None
+            ),
             Tool(
                 "Export Tracks to CSV",
                 icons.SAVE_TRACKS_ICON,
@@ -718,7 +727,10 @@ class FPEEditor(wx.Frame):
         return [tool for tool in tools if (tool is not None)]
 
     def _build_toolbar(
-        self, manual_save: Optional[Callable], heatmap_entries: Optional[List[str]], debug: bool = False
+        self,
+        manual_save: Optional[Callable],
+        heatmap_entries: Optional[List[str]],
+        debug: bool = False,
     ):
         """
         PRIVATE: Constructs the toolbar, adds all tools to the toolbar, and sets up toolbar events to trigger actions

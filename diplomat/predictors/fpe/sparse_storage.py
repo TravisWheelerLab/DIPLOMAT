@@ -355,6 +355,7 @@ class SparseTrackingData:
                 y_off = np.bincount(inverse, inv_counts * y_off)
             elif mode == SparseModes.OFFSET_SUMMATION:
                 # Mode is offset summation, we use domination for offsets, summation for probabilities...
+                max_orig_prob = np.max(probs)
                 ordered_coords = np.lexsort([-probs, true_y, true_x])
 
                 true_x = true_x[ordered_coords]
@@ -367,12 +368,12 @@ class SparseTrackingData:
                 x = true_x[unique_locs]
                 y = true_y[unique_locs]
                 probs = np.bincount(ids, probs[ordered_coords])
-                probs /= np.sum(probs)
+                probs *= max_orig_prob / np.max(probs)
                 x_off = x_off[ordered_coords][unique_locs]
                 y_off = y_off[ordered_coords][unique_locs]
             else:
                 # Mode is offset domination, only keep maximums...
-                # We include -probs, as that sorts makes sure the first unique value is always the one with the
+                # We include -probs, as that sort makes sure the first unique value is always the one with the
                 # highest probability...
                 ordered_coords = np.lexsort([-probs, true_y, true_x])
 

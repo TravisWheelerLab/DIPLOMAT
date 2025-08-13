@@ -12,7 +12,15 @@ from diplomat.predictors.fpe.sparse_storage import (
     ForwardBackwardData,
     SparseTrackingData,
 )
-from diplomat.predictors.fpe.fpe_math import TransitionFunction, Probs, Coords
+from diplomat.predictors.fpe.fpe_math import (
+    TransitionFunction,
+    Probs,
+    Coords,
+    from_log_space,
+    to_log_space,
+    to_log_space_1p,
+    log_space_adder,
+)
 from diplomat.processing import ProgressBar
 from diplomat.predictors.fpe import fpe_math
 from diplomat.predictors.fpe.skeleton_structures import StorageGraph
@@ -48,31 +56,43 @@ class NotAPool:
         return (func(*item) for item in iterable)
 
 
-# General log prob operations defined as function...
-to_log_space = np.log2
-from_log_space = np.exp2
-
-
-def norm(arr):
+# General log prob operations defined as functions...
+def max_norm(arr):
     """
     Normalize in log space such that highest value is 1.
     """
-    return arr - np.max(arr)
+    return arr - np.nanmax(arr)
+
+
+def max_norm_together(arrs):
+    max_val = np.nanmax([np.nanmax(arr) for arr in arrs])
+    return [arr - max_val for arr in arrs]
+
+
+def sum_norm(arr):
+    sum_val = log_space_adder.reduce(arr[~np.isnan(arr)].reshape(-1), axis=0)
+    return arr - sum_val
+
+
+def sum_norm_together(arr):
+    sum_val = log_space_adder.reduce(
+        np.concatenate([a[~np.isnan(a)] for a in arr], axis=None), axis=0
+    )
+    return [a - sum_val for a in arr]
+
+
+trace_norm = max_norm
+trace_norm_together = max_norm_together
 
 
 def log_prob_complement(arr):
     """
     Take the complement of a probability in log space.
     """
-    return to_log_space(1 - from_log_space(arr))
+    return to_log_space_1p(-from_log_space(arr))
 
 
 NumericArray = Union[int, float, np.ndarray]
-
-
-def norm_together(arrs):
-    max_val = max(np.max(arr) for arr in arrs)
-    return [arr - max_val for arr in arrs]
 
 
 def select(*info):
@@ -182,7 +202,7 @@ class MITViterbi(FramePass):
             if (conf.gaussian_plateau is None)
             else self._scaled_std * conf.gaussian_plateau
         )
-        self._gaussian_table = norm(
+        self._gaussian_table = max_norm(
             fpe_math.gaussian_table(
                 self.height,
                 self.width,
@@ -233,7 +253,9 @@ class MITViterbi(FramePass):
                 )
 
                 self._skeleton_tables[n1, n2] = np.maximum(
-                    norm(fpe_math.get_func_table(self.height, self.width, fill_func)),
+                    max_norm(
+                        fpe_math.get_func_table(self.height, self.width, fill_func)
+                    ),
                     self.config.lowest_skeleton_score,
                 )
         else:
@@ -320,22 +342,35 @@ class MITViterbi(FramePass):
                 fix_frame_index + 1, None, 1, -1
             )  # starting from the frame after the fix_frame, going future
             self._run_forward(fb_data, prog_bar, True, False)
-            super()._set_step_controls(None, fix_frame_index, -1, 1)
+            super()._set_step_controls(
+                None, fix_frame_index - 1 if fix_frame_index != 0 else None, -1, 1
+            )
             self._run_backtrace(fb_data, prog_bar)
 
             super()._set_step_controls(
-                fix_frame_index - 1, None, -1, 1
+                max(0, fix_frame_index - 1), None if fix_frame_index != 0 else 0, -1, 1
             )  # starting from the frame before the fix_frame, going past
             self._run_forward(fb_data, prog_bar, True, False)
-            super()._set_step_controls(None, fix_frame_index, 1, -1)
+            super()._set_step_controls(None, fix_frame_index + 1, 1, -1)
             self._run_backtrace(fb_data, prog_bar)
 
             for f_i in range(fb_data.num_frames):
                 for bp_i in range(fb_data.num_bodyparts):
                     fix_frame = fb_data.frames[f_i][bp_i]
-                    fix_frame.frame_probs = from_log_space(fix_frame.frame_probs)
-                    fix_frame.occluded_probs = from_log_space(fix_frame.occluded_probs)
-                    fix_frame.enter_state = from_log_space(fix_frame.enter_state)
+                    (
+                        fix_frame.frame_probs,
+                        fix_frame.occluded_probs,
+                        fix_frame.enter_state,
+                    ) = [
+                        from_log_space(v)
+                        for v in max_norm_together(
+                            [
+                                fix_frame.frame_probs,
+                                fix_frame.occluded_probs,
+                                fix_frame.enter_state,
+                            ]
+                        )
+                    ]
                 if prog_bar is not None:
                     prog_bar.update()
 
@@ -672,12 +707,8 @@ class MITViterbi(FramePass):
 
         # Normalization: Finally, the probabilities are normalized to ensure they are within a valid range
         # and to facilitate comparison between different paths.
-        return norm_together(
-            [
-                # to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
-                t + s * skeleton_weight
-                for t, s in zip(trans_res, skel_res)
-            ]
+        return trace_norm_together(
+            [t + s * skeleton_weight for t, s in zip(trans_res, skel_res)]
         )
 
     @classmethod
@@ -721,7 +752,7 @@ class MITViterbi(FramePass):
 
         # Store results in current frame.
         frame.occluded_coords = occ_coord
-        frame.frame_probs, frame.occluded_probs = norm_together(
+        frame.frame_probs, frame.occluded_probs = trace_norm_together(
             [frame_probs, occ_probs]
         )
 
@@ -804,6 +835,7 @@ class MITViterbi(FramePass):
 
         results = []
         final_result = [0] * len(current_data)
+        result_valid = [False] * len(current_data)
 
         for other_bp_group_idx, trans_table in skeleton_table[bp_group_idx]:
             # Grab the prior frame...
@@ -873,13 +905,16 @@ class MITViterbi(FramePass):
                 if np.all(np.isneginf(bp_sub_res)):
                     # If this skeletal transition is uninformative (all negative infinity), ignore...
                     continue
+                result_valid[i] = True
                 merged_result = current_total + (bp_sub_res / num_links)
                 final_result[i] = merged_result
 
         # If not a single skeletal contribution was informative, set to -inf. Note this is necessary
         # with new arithmetic based combination of in frame and skeleton scores as just setting to
         # 0 can cause the occluded state to be way too high...
-        final_result = [res if (res is not 0) else -np.inf for res in final_result]
+        final_result = [
+            res if valid else -np.inf for valid, res in zip(result_valid, final_result)
+        ]
         return final_result
 
     @classmethod
@@ -965,7 +1000,7 @@ class MITViterbi(FramePass):
 
             # only have source data for the current frame
             c_frame_data = (
-                (States.FRAME, norm(to_log_space(cprob)), (cx, cy), c_scale)
+                (States.FRAME, to_log_space(cprob), (cx, cy), c_scale)
                 if (cy is not None)
                 else (States.FRAME, to_log_space(z_arr()), (z_arr(), z_arr()), c_scale)
             )
@@ -1007,12 +1042,7 @@ class MITViterbi(FramePass):
             # Reverting, the arithmatic avg was destroying performance,
             # causing occluded state to basically always be used...
             results.append(
-                [
-                    t
-                    + s
-                    * skeleton_weight  # to_log_space(from_log_space(t) + from_log_space(s) * skeleton_weight)
-                    for t, s in zip(from_transition, from_skel)
-                ]
+                [t + s * skeleton_weight for t, s in zip(from_transition, from_skel)]
             )
 
             # Result coordinates, exclude the enter state...
@@ -1062,10 +1092,12 @@ class MITViterbi(FramePass):
                     frm_prob[best_frm] = 0
                     frame_dominators[best_frm] = 0
 
-            norm_val = np.nanmax([np.nanmax(frm_prob), np.nanmax(occ_prob), enter_prob])
+            frm_prob, occ_prob, enter_prob = trace_norm_together(
+                [frm_prob, occ_prob, enter_prob]
+            )
 
             # Store the results...
-            current[bp_i].frame_probs = frm_prob[frm_idx] - norm_val
+            current[bp_i].frame_probs = frm_prob[frm_idx]
 
             # Filter occluded probabilities...
             c, p = cls.filter_occluded_probabilities(
@@ -1074,8 +1106,8 @@ class MITViterbi(FramePass):
                 metadata.obscured_survival_max,
             )
             current[bp_i].occluded_coords = c
-            current[bp_i].occluded_probs = p - norm_val
-            current[bp_i].enter_state = enter_prob - norm_val
+            current[bp_i].occluded_probs = p
+            current[bp_i].enter_state = enter_prob
 
         return current
 
@@ -1171,7 +1203,7 @@ class MITViterbi(FramePass):
                 "prior pass, and otherwise uses the default value of 1...",
             ),
             "skeleton_weight": (
-                0.05,
+                1,
                 float,
                 "A positive float, determines how much impact probabilities "
                 "from skeletal transitions should have in each "
