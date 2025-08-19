@@ -10,7 +10,12 @@ If you are a user (not a developer contributing code), you may want to visit:
 
 ## About
 
-DIPLOMAT provides a multi-animal tracking/pose-estimation interface that (1) reduces identity swaps and body part losses, and (2) simplifies correction of automated tracking errors. After pre-processing a video with a pose estimation tool (currently supporting SLEAP and DeepLabCut packages), DIPLOMAT computes a multi-animal maximum-probability trace to _**Track**_ multiple animals (and their body parts); it then provides an intuitive and memory/time efficient _**Interact**_ interface to edit and re-track as needed. DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more accurate tracking results.
+DIPLOMAT provides a multi-animal tracking/pose-estimation interface that (1) reduces identity swaps and body part losses, and (2) simplifies correction of automated tracking errors. 
+Provided with a video and a pose estimation model (trained using [SLEAP](https://sleap.ai/tutorials/tutorial.html)
+or [DeepLabCut](https://deeplabcut.github.io/DeepLabCut/docs/maDLC_UserGuide.html) packages), 
+DIPLOMAT computes a multi-animal maximum-probability trace to _**Track**_ multiple animals (and their body parts).
+DIPLOMAT then provides an intuitive and memory/time efficient _**Interact**_ interface to edit and re-track as needed. 
+DIPLOMAT differs from other multi-animal tracking packages by working directly off of confidence maps instead of running peak detection, allowing for more accurate tracking results.
 
 
 
@@ -23,23 +28,27 @@ DIPLOMAT provides a multi-animal tracking/pose-estimation interface that (1) red
 | ![Example of tracking 2 Degus](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png) | ![Example of tracking 3 Rats](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png) |
 ## Installation
 
-For detailed installation instructions, please refer to the [documentation](https://diplomat.readthedocs.io/en/latest/installation.html)!
+For detailed installation instructions, please refer to the [documentation](https://diplomat.readthedocs.io/en/latest/installation.html).
 
 ## Usage
+
+Below, we provide a few simple instructions to remind users how to run DIPLOMAT commands. New users should 
+read through the [documentation](https://diplomat.readthedocs.io/en/latest/basic_usage.html) to understand
+project setup, etc.
 
 #### Running DIPLOMAT
 
 To run DIPLOMAT on a video once it is installed, simply use DIPLOMAT's `track` and `track_and_interact` commands to track a video:
 ```bash
-# Run DIPLOMAT with no UI...
-diplomat track -c path/to/config -v path/to/video
-# Run DIPLOMAT with UI...
-diplomat track_and_interact -c path/to/config -v path/to/video
+# Run DIPLOMAT with no UI, for 4 animals ...
+diplomat track -c path/to/config -v path/to/video -no 4
+# Run DIPLOMAT with UI, for 3 animals ...
+diplomat track_and_interact -c path/to/config -v path/to/video -no 3
 ```
 
 Multiple videos can be tracked by passing them as a list:
 ```bash
-diplomat track -c path/to/config -v [path/to/video1, path/to/video2, "path/to/video3"]
+diplomat track -c path/to/config -v [path/to/video1, path/to/video2, "path/to/video3"] -no <num_animals>
 ```
 
 Once tracking is done, DIPLOMAT can create labeled videos via it's `annotate` subcommand:
