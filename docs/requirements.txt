@@ -1,5 +1,5 @@
 sphinx
-pydata-sphinx-theme
+furo
 sphinx-toolbox
 sphinx-tabs
 typing_extensions>=3.8
