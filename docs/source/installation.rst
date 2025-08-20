@@ -4,8 +4,6 @@ Installation
 DIPLOMAT currently supports being installed as a normal python package on Windows, Linux, and MacOS.
 DIPLOMAT and can be installed by following the installation guide below.
 
-.. contents:: Contents
-
 Installing Python
 -----------------
 

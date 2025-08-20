@@ -33,7 +33,8 @@ class CLIError(Exception):
 class Flag(ConvertibleTypeCaster):
     """
     Custom type caster type that represents a boolean flag argument on the command line (true/false doesn't need to be
-    specified). It's python type is automatically converted to a boolean.
+    specified). It's python type is automatically converted to a boolean. The default value of a flag argument
+    should be False so the python function signature matches the corresponding generated CLI signature.
     """
 
     def __call__(self, arg: Any) -> bool:
@@ -47,9 +48,18 @@ class Flag(ConvertibleTypeCaster):
 
 
 Flag = Flag()
+"""
+Custom type caster type that represents a boolean flag argument on the command line (true/false doesn't need to be
+specified). It's python type is automatically converted to a boolean. The default value of a flag argument
+should be False so the python function signature matches the corresponding generated CLI signature.
+"""
 
 
 class YAMLArgHelpFormatter(HelpFormatter):
+    """
+    Internal: A Subclass of argparse's HelpFormatter class, that correctly
+    formats arguments when printing a help string to the CLI.
+    """
     def _format_args(self, action: Action, default_metavar: str) -> str:
         get_metavar = self._metavar_formatter(action, default_metavar)
 
@@ -106,6 +116,11 @@ def _func_arg_to_cmd_arg(
 
 
 class ComplexParsingWrapper:
+    """
+    Internal: Parses arguments for a single diplomat sub-command.
+    Diplomat's parses CLI arguments using a yaml parser,
+    so it supports lists, numbers, floats, etc.
+    """
     DELETE = object()
 
     def __init__(
@@ -145,6 +160,9 @@ class ComplexParsingWrapper:
 
 
 def get_summary_from_doc_str(doc_str: str) -> str:
+    """
+    Extracts the summary for a command from a function's doc string.
+    """
     return "".join(re.split(":param |:return|:throw", doc_str)[:1])
 
 

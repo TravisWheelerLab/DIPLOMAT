@@ -227,10 +227,10 @@ class DIPLOMATFrontend(ABC):
 
     @classmethod
     @abstractmethod
-    def init(cls) -> typing.Optional[DIPLOMATCommands]:
+    def init(cls) -> DIPLOMATCommands:
         """
         Attempt to initialize the frontend, returning a list of api functions. If the backend can't initialize due to missing imports/requirements,
-        this function should return None.
+        this function should raise an ImportError, which will automatically get converted to an import warning by diplomat...
 
         :return: A DIPLOMATBaselineCommands or subclass of it, which is simply a dataclass contained all the required frontend functions.
         """

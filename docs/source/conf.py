@@ -11,13 +11,24 @@ os.environ["NUMBA_DISABLE_JIT"] = "1"
 sys.path.insert(0, str(Path(__file__).resolve().parent / "ext"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+_MOCKED_PACKAGES = [
+    "tensorflow",
+    "numba",
+    "wx",
+    "tf2onnx",
+    "onnxruntime",
+    "onnx",
+]
+
 
 def _get_version() -> str:
-    with mock(autodoc_mock_imports):
+    with mock(_MOCKED_PACKAGES):
+        # We hack numba so we can see numba functions properly documented...
+        # import numba
+        # numba.njit = lambda sig: sig if callable(sig) else (lambda x: x)
+
         import diplomat
-
         return diplomat.__version__
-
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -35,7 +46,6 @@ author = "Isaac Robinson, George Glidden, Nathan Insel, Travis Wheeler"
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    "sphinx_rtd_theme",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.imgmath",
@@ -51,17 +61,7 @@ imgmath_image_format = "svg"
 templates_path = ["_templates"]
 exclude_patterns = []
 
-autodoc_mock_imports = [
-    "sleap",
-    "tensorflow",
-    "pandas",
-    "numba",
-    "deeplabcut",
-    "wx",
-    "tf2onnx",
-    "onnxruntime",
-    "onnx",
-]
+autodoc_mock_imports = _MOCKED_PACKAGES
 
 autosummary_generate = True
 autosummary_imported_members = True
@@ -73,7 +73,9 @@ release = version
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
+html_title = f"{project} {version}"
+
 html_static_path = ["_static"]
 
 html_css_files = [

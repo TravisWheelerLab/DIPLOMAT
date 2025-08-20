@@ -1,7 +1,5 @@
-Advanced Usage of DIPLOMAT
-==========================
-
-.. contents:: Contents
+Advanced Usage
+==============
 
 Inspecting DIPLOMAT Plugins
 ---------------------------

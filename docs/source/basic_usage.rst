@@ -1,102 +1,101 @@
-Basic Usage of DIPLOMAT
-=======================
-
-.. contents:: Contents
-
-Using DIPLOMAT with DeepLabCut Projects
----------------------------------------
+Basic Usage
+===========
 
 Setting up a Project
-^^^^^^^^^^^^^^^^^^^^
+--------------------
 
-DIPLOMAT works on both single-animal and multi-animal DeepLabCut based projects, with no adjustments.
-So if you plan on using the DeepLabCut frontend, you'll need to first setup a DeepLabCut project. This
-can be done by following the
-`Single Animal DLC Project <https://deeplabcut.github.io/DeepLabCut/docs/standardDeepLabCut_UserGuide.html>`_
-or
-`Multi-Animal DLC Project <https://deeplabcut.github.io/DeepLabCut/docs/maDLC_UserGuide.html>`_
-guides included in the DeepLabCut documentation. It is recommended you follow the multi-animal
-guide as it will allow you to create a skeleton and label multiple individuals (DIPLOMAT will
-automatically pull the skeleton from DeepLabCut if one isn't manually specified when running
-the ``diplomat`` tracking commands).
+.. tabs::
 
-You'll want to follow these user guides until you have finished
-`training the network <https://deeplabcut.github.io/DeepLabCut/docs/maDLC_UserGuide.html#train-the-network>`_.
-Once the network is trained, you can begin using DIPLOMAT to begin tracking videos.
+    .. group-tab:: DeepLabCut
 
-Tracking a Video
-^^^^^^^^^^^^^^^^
+        DIPLOMAT works on both single-animal and multi-animal DeepLabCut based projects, with no adjustments.
+        So if you plan on using the DeepLabCut frontend, you'll need to first setup a DeepLabCut project. This
+        can be done by following the
+        `Single Animal DLC Project <https://deeplabcut.github.io/DeepLabCut/docs/standardDeepLabCut_UserGuide.html>`_
+        or
+        `Multi-Animal DLC Project <https://deeplabcut.github.io/DeepLabCut/docs/maDLC_UserGuide.html>`_
+        guides included in the DeepLabCut documentation. It is recommended you follow the multi-animal
+        guide as it will allow you to create a skeleton and label multiple individuals (DIPLOMAT will
+        automatically pull the skeleton from DeepLabCut if one isn't manually specified when running
+        the ``diplomat`` tracking commands).
 
-To run DIPLOMAT on a video, simply run either the :py:cli:`diplomat track_and_interact`
-or :py:cli:`diplomat track` command, as shown below (you'll need to replace the paths below
-with actual paths to the project config file and the video):
+        You'll want to follow these user guides until you have finished
+        `training the network <https://deeplabcut.github.io/DeepLabCut/docs/maDLC_UserGuide.html#train-the-network>`_.
+        Once the network is trained, you can begin using DIPLOMAT to begin tracking videos.
 
-.. code-block:: sh
+    .. group-tab:: SLEAP
 
-    # Run diplomat with UI intervention...
-    diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -v path/to/video/to/run/on.mp4
-    # Run without the UI...
-    diplomat track -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -v path/to/video/to/run/on.mp4
-
-These commands will produce a .csv and .dipui file after tracking is done. Both of these commands support running
-on a list videos by simply passing paths using a comma separated list encased in square brackets:
-
-.. code-block:: sh
-
-    diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -v [path/to/video1.mp4, path/to/video2.webm, path/to/video3.mkv]
-
-They also support working on more or less individuals by specifying the ``--num_outputs`` or ``-no`` flag:
-
-.. code-block:: sh
-
-    # Video has 2 individuals.
-    diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -no 2 -v path/to/video1.mp4
-    # Video has 5 individuals.
-    diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -no 5 -v path/to/video2.mp4
+        DIPLOMAT works with all of SLEAP's models, but it's recommended to use their bottom-up models with diplomat.
+        To setup a SLEAP project, you can use SLEAP's UI. You can follow the SLEAP tutorial at
+        `https://sleap.ai/tutorials/tutorial.html <https://sleap.ai/tutorials/tutorial.html>`_
+        all the way to and including the "Start Training" section.
 
 
-Using DIPLOMAT with SLEAP Projects
-----------------------------------
-
-Setting up a Project
-^^^^^^^^^^^^^^^^^^^^
-
-DIPLOMAT works with all of SLEAP's models, but it's recommended to use their bottom-up models with diplomat.
-To setup a SLEAP project, one can simply use SLEAP's UI to create a project
-and label frames. To setup a SLEAP project, you can follow the SLEAP tutorial at
-`https://sleap.ai/tutorials/tutorial.html <https://sleap.ai/tutorials/tutorial.html>`_
-all the way through and including the "Start Training" section.
 
 Tracking a Video
-^^^^^^^^^^^^^^^^
+----------------
 
-To run DIPLOMAT on a video, simply run either the :py:cli:`diplomat track_and_interact`
-or :py:cli:`diplomat track` command, as shown below (you'll need to replace the paths below
-with actual paths to the SLEAP model folder or zip file and the video):
+.. tabs::
 
-.. code-block:: sh
+    .. group-tab:: DeepLabCut
 
-    # Run diplomat with UI intervention...
-    diplomat track_and_interact -c path/to/sleap/model/folder/or/zip -v path/to/video/to/run/on.mp4
-    # Run without the UI...
-    diplomat track -c path/to/sleap/model/folder/or/zip -v path/to/video/to/run/on.mp4
+        To run DIPLOMAT on a video, simply run either the :py:cli:`diplomat track_and_interact`
+        or :py:cli:`diplomat track` command, as shown below (you'll need to replace the paths below
+        with actual paths to the project config file and the video):
 
-Models are typically placed in a folder called "models" placed next to the .slp file for your SLEAP project. Both of the above commands will
-produce a .csv and .dipui file once tracking is done. Both of these commands support running on a list videos by simply passing paths
-using a comma separated list:
+        .. code-block:: sh
 
-.. code-block:: sh
+            # Run diplomat with UI intervention...
+            diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -v path/to/video/to/run/on.mp4
+            # Run without the UI...
+            diplomat track -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -v path/to/video/to/run/on.mp4
 
-    diplomat track_and_interact -c path/to/sleap/model/folder/or/zip -v [path/to/video1.mp4, path/to/video2.webm, path/to/video3.mkv]
+        These commands will produce a .csv and .dipui file after tracking is done. Both of these commands support running
+        on a list videos by simply passing paths using a comma separated list encased in square brackets:
 
-The above commands also support working on more or less individuals by specifying the ``--num_outputs`` or ``-no`` flag, just like for DeepLabCut.
+        .. code-block:: sh
 
-.. code-block:: sh
+            diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -v [path/to/video1.mp4, path/to/video2.webm, path/to/video3.mkv]
 
-    # Video has 2 individuals.
-    diplomat track_and_interact -c path/to/sleap/model/folder/or/zip -no 2 -v path/to/video1.mp4
-    # Video has 5 individuals.
-    diplomat track_and_interact -c path/to/sleap/model/folder/or/zip -no 5 -v path/to/video2.mp4
+        They also support working on more or less individuals by specifying the ``--num_outputs`` or ``-no`` flag:
+
+        .. code-block:: sh
+
+            # Video has 2 individuals.
+            diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -no 2 -v path/to/video1.mp4
+            # Video has 5 individuals.
+            diplomat track_and_interact -c path/to/dlc/project/config.yaml/or/zipped/dlc/project -no 5 -v path/to/video2.mp4
+
+    .. group-tab:: SLEAP
+
+        To run DIPLOMAT on a video, simply run either the :py:cli:`diplomat track_and_interact`
+        or :py:cli:`diplomat track` command, as shown below (you'll need to replace the paths below
+        with actual paths to the SLEAP model folder or zip file and the video):
+
+        .. code-block:: sh
+
+            # Run diplomat with UI intervention...
+            diplomat track_and_interact -c path/to/sleap/model/folder/or/zip -v path/to/video/to/run/on.mp4 -no <num_bodies>
+            # Run without the UI...
+            diplomat track -c path/to/sleap/model/folder/or/zip -v path/to/video/to/run/on.mp4 -no <num_bodies>
+
+        Models are typically placed in a folder called "models" placed next to the .slp file for your SLEAP project. Both of the above commands will
+        produce a .csv and .dipui file once tracking is done. Both of these commands support running on a list videos by simply passing paths
+        using a comma separated list:
+
+        .. code-block:: sh
+
+            diplomat track_and_interact -c path/to/sleap/model/folder/or/zip -v [path/to/video1.mp4, path/to/video2.webm, path/to/video3.mkv] -no <num_bodies>
+
+        The above commands also support working on more or less individuals by specifying the ``--num_outputs`` or ``-no`` flag, just like for DeepLabCut.
+        Unlike DeepLabCut, this argument is required.
+
+        .. code-block:: sh
+
+            # Video has 2 individuals.
+            diplomat track_and_interact -c path/to/sleap/model/folder/or/zip -no 2 -v path/to/video1.mp4
+            # Video has 5 individuals.
+            diplomat track_and_interact -c path/to/sleap/model/folder/or/zip -no 5 -v path/to/video2.mp4
 
 
 Producing a Labeled Video
@@ -112,6 +111,13 @@ command and passing video/csv pairs to it, as shown below:
 This will cause DIPLOMAT to produce another video placed next to the original video with
 ``_labeled`` tacked on to the end of its name. Solid markers indicate a tracked and detected part,
 hollow markers indicate the part is occluded or hidden.
+
+.. note::
+
+    This command supports the following additonal final trace formats on top of DIPLOMAT csv files:
+     - DeepLabCut .csv
+     - DeepLabCut .h5
+     - SLEAP .h5
 
 Restoring UI to Make Major Adjustments
 --------------------------------------
@@ -138,6 +144,12 @@ This can be done passing video/csv pairs :py:cli:`diplomat tweak` command.
 
     diplomat tweak -v path/to/video.mp4 -c path/to/video-track-results.csv
 
+.. note::
+
+    This command supports the following additonal final trace formats on top of DIPLOMAT csv files:
+     - DeepLabCut .csv
+     - DeepLabCut .h5
+     - SLEAP .h5
 
 Saving Model Outputs for Later Analysis (All Frontends)
 -------------------------------------------------------
@@ -149,7 +161,7 @@ a frame store for later analysis, run tracking with the frame store exporting pr
 
 .. code-block:: sh
 
-    diplomat track_with -c path/to/config -v path/to/video -p FrameExporter
+    diplomat track_with -c path/to/config -v path/to/video -p FrameExporter -no 1
 
 The above command will generate a .dlfs file next to the video. To run tracking on it, run one of
 DIPLOMAT's tracking methods, but with the ``-fs`` flag passing in the frame store(s) instead of the video.
@@ -158,11 +170,11 @@ Also, the project config is not needed when running on frame stores.
 .. code-block:: sh
 
     # Run DIPLOMAT with no UI...
-    diplomat track -fs path/to/fstore.dlfs
+    diplomat track -fs path/to/fstore.dlfs -no <num_bodies>
     # Run DIPLOMAT with UI...
-    diplomat track_and_interact -fs path/to/fstore.dlfs
+    diplomat track_and_interact -fs path/to/fstore.dlfs -no <num_bodies>
     # Run DIPLOMAT with some other prediction algorithm
-    diplomat track_with -fs path/to/fstore.dlfs -p NameOfPredictorPlugin
+    diplomat track_with -fs path/to/fstore.dlfs -p NameOfPredictorPlugin -no <num_bodies>
 
 Video Utilities
 ---------------

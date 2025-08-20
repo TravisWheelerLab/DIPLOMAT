@@ -1,5 +1,5 @@
-DIPLOMAT API
-============
+Python API
+==========
 
 DIPLOMAT includes the following python interfaces and plugins below.
 

@@ -14,13 +14,13 @@ DIPLOMAT provides a multi-animal tracking/pose-estimation interface that (1) red
 
 
 
-![UI Demo Showing user correcting tracking in a video](interact_retrack_gif.gif)
+![UI Demo Showing user correcting tracking in a video](docs/source/_static/imgs/UIDemo.gif)
 
 **Correcting and re-tracing on the Interact Interface**
 
-| Example of tracking 2 Degus in a Box | Example of tracking 3 Rats |
-|:------------------------------------:|:--------------------------:|
-| ![Example of tracking 2 Degus](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png) | ![Example of tracking 3 Rats](https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png) |
+| Example of tracking 2 Degus in a Box |                      Example of tracking 3 Rats                      |
+|:------------------------------------:|:--------------------------------------------------------------------:|
+| ![Example of tracking 2 Degus](docs/source/_static/imgs/example1.png) | ![Example of tracking 3 Rats](docs/source/_static/imgs/example2.png) |
 ## Installation
 
 For detailed installation instructions, please refer to the [documentation](https://diplomat.readthedocs.io/en/latest/installation.html)!

@@ -24,7 +24,7 @@ the user can make adjustments and rerun DIPLOMAT as many times as needed on the 
 before saving them. DIPLOMAT also contains additional tools for visualizing, storing, and tweaking
 tracking results.
 
-.. figure:: /_static/imgs/UIDemo.png
+.. figure:: /_static/imgs/UIDemo.gif
     :align: center
     :alt: A gif demonstrating applying corrections in DIPLOMAT's supervised interface.
 

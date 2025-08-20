@@ -1,4 +1,3 @@
-from typing import Optional
 from diplomat.frontends import DIPLOMATFrontend, DIPLOMATCommands
 
 
@@ -8,15 +7,12 @@ class SLEAPFrontend(DIPLOMATFrontend):
     """
 
     @classmethod
-    def init(cls) -> Optional[DIPLOMATCommands]:
-        try:
-            from diplomat.frontends.sleap._verify_func import _verify_sleap_like
-            from diplomat.frontends.sleap.load_model import load_models
-            from diplomat.frontends.sleap.convert_tracks import (
-                _sleap_analysis_h5_to_diplomat_table,
-            )
-        except ImportError:
-            return None
+    def init(cls) -> DIPLOMATCommands:
+        from diplomat.frontends.sleap._verify_func import _verify_sleap_like
+        from diplomat.frontends.sleap.load_model import load_models
+        from diplomat.frontends.sleap.convert_tracks import (
+            _sleap_analysis_h5_to_diplomat_table,
+        )
 
         return DIPLOMATCommands(
             _verifier=_verify_sleap_like,

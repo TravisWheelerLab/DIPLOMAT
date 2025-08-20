@@ -1,11 +1,12 @@
 sphinx
-sphinx-rtd-theme
+pydata-sphinx-theme
 sphinx-toolbox
 sphinx-tabs
 typing_extensions>=3.8
 matplotlib
-opencv-python
+opencv-python-headless
 tqdm
+tables
 pyyaml
 h5py
 pandas

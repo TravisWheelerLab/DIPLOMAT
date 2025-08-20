@@ -19,20 +19,19 @@ try:
     from sphinx.ext.autosummary import autosummary_toc
 except ImportError:
     raise
-import warnings
 
+import warnings
 warnings.simplefilter("error", ImportWarning)
 
-
-MOCK_PACKAGES = ["deeplabcut", "sleap", "tensorflow", "numba", "pandas", "wx"]
+MOCK_PACKAGES = ["tensorflow", "numba", "wx", "onnx", "onnxruntime", "tf2onnx"]
 diplomat = None
 with mock(MOCK_PACKAGES):
+    import diplomat
     from diplomat.predictors.fpe.sparse_storage import AttributeDict
     from diplomat.processing.type_casters import get_type_name
 
     import diplomat.predictors as predictors
     from diplomat.processing import Predictor, ConfigSpec
-    import diplomat
 
     import diplomat.predictors.fpe.frame_passes as frame_passes
     from diplomat.predictors.fpe.frame_pass import FramePass
@@ -40,7 +39,8 @@ with mock(MOCK_PACKAGES):
 
     import diplomat.utils.graph_ops
     import diplomat.wx_gui
-
+    import diplomat.processing
+    import diplomat.utils
 
 def load_plugins_with_mocks(module, clazz):
     from diplomat.utils.pluginloader import load_plugin_classes

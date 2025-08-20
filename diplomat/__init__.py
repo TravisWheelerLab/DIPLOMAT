@@ -3,6 +3,9 @@ A tool providing multi-animal tracking capabilities on top of other Deep learnin
 """
 
 __version__ = "0.3.16"
+
+import warnings
+
 # Can be used by functions to determine if diplomat was invoked through it's CLI interface.
 CLI_RUN = False
 
@@ -41,7 +44,6 @@ __all__ = [
     "convert_tracks",
 ]
 
-
 # Attempt to load all frontends, putting their public functions into submodules of diplomat.
 def _load_frontends():
     from diplomat import frontends
@@ -53,15 +55,23 @@ def _load_frontends():
 
     if current_process().name != "MainProcess":
         # If something in this package is using multiprocessing, disable the automatic frontend loading code.
-        # This is done because some frontends (DEEPLABCUT) use about 1/3 a Gig of memory on import, which can
-        # cause memory issues if a lot of processes are started by a predictor...
+        # This is done because some to save memory...
         return (set(), {})
 
     frontends = load_plugin_classes(frontends, DIPLOMATFrontend, recursive=False)
     loaded_funcs = {}
 
     for frontend in frontends:
-        res = frontend.init()
+        res = None
+        try:
+            res = frontend.init()
+        except ImportError:
+            import traceback
+
+            warnings.warn(
+                f"Can't load frontend '{frontend}'. Due to issue below: \n {traceback.format_exc()}",
+                ImportWarning,
+            )
 
         if res is not None:
             name = frontend.get_package_name()
@@ -83,4 +93,12 @@ def _load_frontends():
     return frontends, loaded_funcs
 
 
+def _move_core_functions():
+    # We change module of core functions to be the root module...
+    for item in __all__:
+        core_func = globals()[item]
+        core_func.__module__ = _move_core_functions.__module__
+
+
+_move_core_functions()
 _FRONTENDS, _LOADED_FRONTENDS = _load_frontends()

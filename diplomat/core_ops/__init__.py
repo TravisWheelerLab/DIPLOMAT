@@ -593,8 +593,7 @@ def convert_tracks(
     force: Flag = False,
 ):
     """
-    Convert files storing final tracking results for a video from other software to diplomat csv's format that can be
-    used with diplomat's tweak and annotate commands.
+    Convert files storing final tracking results for a video from other software to diplomat's csv format.
 
     :param inputs: A single or list of paths to files to convert to diplomat csvs.
     :param outputs: An optional single path or list of paths, the location to write converted files to. If not
