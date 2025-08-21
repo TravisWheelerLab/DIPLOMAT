@@ -4,6 +4,7 @@
     <meta charset="UTF-8">    
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DIPLOMAT - Home</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="docs/source/_static/imgs/logos/DIPLOMAT_icon_small.svg">
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -39,7 +40,7 @@
             display: flex;
             justify-content: center;
             background: #351431;
-            padding: 1rem;
+            padding: 0;
         }
         nav a {
             position: relative;
@@ -196,6 +197,7 @@
         .video {
             flex: 1;
             max-width: 100%;
+            width: 100%;
         }
         .video iframe {
             width: 100%;
@@ -208,7 +210,7 @@
             flex: 1;
             max-width: 100%;
             margin-left: 2rem;
-            text-align: left;
+            text-align: center;
         }
         .tweak-section {
             position: relative;
@@ -271,23 +273,31 @@
             background-color: #351431;
             margin: 2rem 0;
         }
+
+        @media (width < 50em) {
+            .video-row {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 <body>
     <header>
-    <h1 id="logo">DIPLOMAT</h1>
+    <h1 id="logo">
+        <img class="header-logo" src="docs/source/_static/imgs/logos/DIPLOMAT_icon_large_light.svg" alt="DIPLOMAT" style="height: 1.5em; max-width: 100%;">
+    </h1>
     <p>Deep Learning-Based Identity Preserving Labeled-Object Multi-Animal Tracking</p>
-    <a href="https://github.com/TravisWheelerLab/DIPLOMAT" target="_blank" style="text-decoration: none; color: white;">
-        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo" style="width: 20px; vertical-align: middle;">
-        <span style="margin-left: 0.5rem;">DIPLOMAT</span>
-    </a>
-    </header>
-    
     <nav>
-        <a href="index.html">Home</a>
-        <a href="installation.html">Installation</a>
-        <a href="supplementary.html">Supplementary Information</a>
+        <a href="https://github.com/TravisWheelerLab/DIPLOMAT" target="_blank" style="text-decoration: none; color: white;">
+            <img src="docs/source/_static/imgs/logos/github-mark-white.svg" alt="GitHub Logo" style="width: 1.2em; vertical-align: middle;">
+            <span style="margin-left: 0.5rem;">Code</span>
+        </a>
+        <a href="https://diplomat.readthedocs.io/" target="_blank" style="text-decoration: none; color: white;">
+            <img src="docs/source/_static/imgs/logos/rtd-light.svg" alt="GitHub Logo" style="width: 1.2em; vertical-align: middle;">
+            <span style="margin-left: 0.5rem;">Documentation</span>
+        </a>
     </nav>
+    </header>
 
     <div class="container">
         <section>
@@ -296,15 +306,15 @@
         </section>
 
         <div class="images">
-            <img src="https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example1.png" alt="Example of tracking 2 Degus in a Box">
-            <img src="https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/docs/source/_static/imgs/example2.png" alt="Example of tracking 3 Rats">
+            <img src="docs/source/_static/imgs/example1.png" alt="Example of tracking 2 Degus in a Box">
+            <img src="docs/source/_static/imgs/example2.png" alt="Example of tracking 3 Rats">
         </div>
 
         <div class="divider"></div>
 
         <section class="interact-section" id="interact-section">
             <div class="interact-content">
-                <img src="interact_retrack_gif.gif" alt="Interact Interface">
+                <img src="docs/source/_static/imgs/UIDemo.gif" alt="Interact Interface">
                 <div class="interact-text">
                     <h2>Using the Interact Interface</h2>
                     <p>Here we can make precise adjustments to our model's predicted points and re-run trace</p>
@@ -338,7 +348,7 @@
                 </div>
                 <div class="video-text">
                     <h3 class="text-2xl text-dark-purple mb-2">Interact Interface</h3>
-                    <p>Overview of the visual settings, continuous labeling, single/multi body part labeling modes, and re-running trace/p>
+                    <p>Overview of the visual settings, continuous labeling, single/multi body part labeling modes, and re-running trace</p>
                 </div>
             </div>
         </section>

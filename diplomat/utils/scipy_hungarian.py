@@ -53,10 +53,6 @@ def linear_sum_assignment(cost_matrix):
         sorted; in the case of a square cost matrix they will be equal to
         ``numpy.arange(cost_matrix.shape[0])``.
 
-    Notes
-    -----
-    .. versionadded:: 0.17.0
-
     Examples
     --------
     >>> cost = np.array([[4, 1, 3], [2, 0, 5], [3, 2, 2]])
