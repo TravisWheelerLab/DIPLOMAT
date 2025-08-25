@@ -24,8 +24,8 @@ _MOCKED_PACKAGES = [
 def _get_version() -> str:
     with mock(_MOCKED_PACKAGES):
         # We hack numba so we can see numba functions properly documented...
-        # import numba
-        # numba.njit = lambda sig: sig if callable(sig) else (lambda x: x)
+        import numba
+        numba.njit = lambda sig: sig if callable(sig) else (lambda x: x)
 
         import diplomat
         return diplomat.__version__
@@ -77,6 +77,12 @@ html_theme = "furo"
 html_title = f"{project} {version}"
 
 html_static_path = ["_static"]
+html_favicon = "_static/imgs/logos/DIPLOMAT_icon_small.svg"
+html_theme_options = {
+    "light_logo": "imgs/logos/DIPLOMAT_icon_large_dark.svg",
+    "dark_logo": "imgs/logos/DIPLOMAT_icon_large_light.svg",
+    "sidebar_hide_name": True,
+}
 
 html_css_files = [
     "css/custom.css",

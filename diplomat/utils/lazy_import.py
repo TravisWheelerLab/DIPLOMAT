@@ -1,3 +1,7 @@
+"""
+Contains utilities for lazily importing and resolving python modules.
+"""
+
 import builtins
 import functools
 from importlib import import_module

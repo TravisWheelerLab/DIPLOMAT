@@ -14,6 +14,7 @@ import zlib
 from typing import Tuple
 import wx
 import numpy as np
+from wx.svg import SVGimage
 
 r'''
 def _dump_pic(file):
@@ -270,13 +271,56 @@ QEB+zvXgAfg5Rt3u0Ymp1mZRVC/2hw4QSF0L5KIOK5kGPZLraSqdbl7qDuP2Lz7/7NOtn6QbPtqS
 +uEHKclJ+k3vJya8tzF+w7ux69etXfNOzNtvRa9etSJqeSQsi3hJN6MZ/Xf9AyMK2dc=
 """
 
+LOGO_SVG = b"""
+eJyNVctu6zYQ3ecrWGWTLEjzMcNHEOcCLdCiqy568wGGTdnqVSRDUuK0X99D2U7iIretAVsUOa9z
+5gx9df/l9akVL3kYm75bVkbpSuRu3W+abrusHr/+LGP15eHq/gcpxU9DXk15Iw7NtBO/dt/G9Wqf
+xc1umvZ3i8XhcFDNaVP1w3ZxK6SE5/iyhcdm2i0rT5XY5Wa7m47rD2kN3pp8+LF/XVZaaGG8Sg6f
+t0UlUOjduF+t87LaD3nMw0ueN7txWX2o4eDm7FZrvUDuk8nda4viPjM0KaXFfFo93G9yPT7cD6tN
+s2p/KY/cTaLZLKvLLVuJNQp1qNtZj5c/lxVZFa2OOBqWVVTk8QmV2J5cvg6rbqz74WlZTWXZgsob
+fftu8Ng1E5A8A9jvBeVv3eOYUdI49XtRfuS6b3vEvo6OYwQhfV2PGVTqavGZmWNDzrybmWK2uASC
+jSPkrZg+K1Baq1yMxgvpSDFheYuahryeBAg4n1YCBJwNqnO731t3bvppB60f4MDKFcLAWN20LaAP
+7c31P4i+LUVfFPe0mobm9UYRMztjRVELEnOkBLVYlShFLKIynGIEweM09N+yPBWlUvLsPEDsV5Dx
+d1BrZXR0BG/0/olZBR2DFRSVNjEEEVTSySQ8HZ6GzxC6vsvHtRyeWyg1v+Su32zOVaAtdV2/1fTU
+THloGzwgmYL0/9fkteLofBBEygZIYq2sBbQolacYOAnMMhuTpEqs8cQ7rMgwDIKFq4JX8nDGG+HU
+OhfYFjcbTTBloQlSw8IHn5wsCVyiY/woT/FnwpnkHN5wCc5BIjhZi1wID8pkCU/ahOJlQ9JezuG9
+dXIO7z39dSbxepNqXcf/4DGHmuv8fSq3Fy25oP/Ec6HRsbKe2AlyCgpK4QWSTjH5tJbAF488uIgK
+S6FkCJQbxZ40SUx80jxT7diHZMtOCCkQOGZtjZXglzhRxIlGUCuhGIMpccUU7OlCnMaWgYuNsRDk
+ndEzQSFqdA6LhKy6uCCHLaaOAtliYtkkg3QYQx9KFpOiiaVXzN4G6ZRHd9AlTWYOZbS31pemEZUA
+jAF0BUFgJD2m1xjRgol0RH1wTZgzBzo03BTaCPAC0+5NCmi7BU2uyCtoMKfYmoCLG3xCCdYXZRkI
+KwoGXRibkmwGxG/Nw+2b/+gb/BMM/XO3eZuE0iEbISzCSBMCIXdas2IdDOBD+dqmotCSw2sucL3z
+RcWhTGrENCQTfNG3VRCkcaLMMhSOgp1Kgb0XEd1j74CMcIegPFY6WBvamR6ABu8herIXdcE+hDIw
+LuD6MZ6Q0CVTmIfC49qW2w0J0RPrE+4nMOa1w/CgbmYi3CdAEhM7O9NvErl/Y2Sx/fDFP9vD1d8v
+4QbY
+"""
+
+
+def svg_to_wx_bitmap(
+    svg_bytes: bytes,
+    desired_size: Tuple[int, int] = None,
+    window_hint: wx.Window = None,
+) -> wx.Bitmap:
+    """
+    Converts a svg based icon in this module to a wx.Bitmap for rendering in wxWidget UIs.
+
+    :param svg_bytes: SVG bytes for svg icon provided by this module.
+    :param desired_size: The size of the returned bitmap. If none, uses the default size provided by the svg.
+    :param window_hint: Optional wx widget to use for rescaling bitmap to handle hidpi scenarios.
+    """
+    svg_bytes = zlib.decompress(base64.b64decode(svg_bytes))
+    svg_img = SVGimage.CreateFromBytes(svg_bytes)
+
+    if desired_size is None:
+        return svg_img.ConvertToBitmap()
+    else:
+        return svg_img.ConvertToScaledBitmap(desired_size, window_hint)
+
 
 def to_wx_bitmap(
     icon_bytes: bytes,
     icon_size: Tuple[int, int],
     fg_color: wx.Colour,
     bitmap_size: Tuple[int, int] = None,
-):
+) -> wx.Bitmap:
     """
     Converts an icon in this module into a wx.Bitmap for rendering in wxWidget's UIs.
 
@@ -307,9 +351,12 @@ def _main():
     # Tests icon loading code above by displaying the help icon in a wx Frame...,
     app = wx.App()
     frame = wx.Frame(None, title="Image Test!")
+
     bitmap = to_wx_bitmap(
         SAVE_CONT_ICON, SAVE_CONT_ICON_SIZE, frame.GetForegroundColour()
     )
+    logo = svg_to_wx_bitmap(LOGO_SVG, (64, 64), frame)
+    frame.SetIcon(wx.Icon(logo))
     icon = wx.StaticBitmap(frame, wx.ID_ANY, bitmap)
     frame.Show(1)
     app.MainLoop()

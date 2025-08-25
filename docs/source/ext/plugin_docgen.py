@@ -1,3 +1,4 @@
+import importlib
 from typing import Type, Optional, Tuple, List
 
 try:
@@ -26,6 +27,9 @@ warnings.simplefilter("error", ImportWarning)
 MOCK_PACKAGES = ["tensorflow", "numba", "wx", "onnx", "onnxruntime", "tf2onnx"]
 diplomat = None
 with mock(MOCK_PACKAGES):
+    import numba
+    numba.njit = lambda sig: sig if callable(sig) else (lambda x: x)
+
     import diplomat
     from diplomat.predictors.fpe.sparse_storage import AttributeDict
     from diplomat.processing.type_casters import get_type_name
@@ -350,10 +354,12 @@ def fix_all_on_module(module):
             try:
                 with mock(MOCK_PACKAGES):
                     import wx.lib.newevent
-
                     wx.lib.newevent.NewCommandEvent = lambda: (None, None)
+                    import numba
+                    numba.njit = lambda sig: sig if callable(sig) else (lambda x: x)
+
                     setattr(
-                        module, attr_name, importer.find_module(name).load_module(name)
+                        module, attr_name, importlib.import_module(name)
                     )
                 val = getattr(module, attr_name)
                 fix_all_on_module(val)

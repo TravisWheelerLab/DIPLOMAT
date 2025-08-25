@@ -33,8 +33,8 @@ def extract_frames(
     """
     Extract frames from a DIPLOMAT frame store and store them in another frame store.
 
-    :param dlfs_in: A binary file, the input DeepLabCut frame store file. Frames will be extracted from this file.
-    :param dlfs_out: A binary file, the file to write a DeepLabCut frame store to. This will contain the extracted
+    :param dlfs_in: A binary file, the input DIPLOMAT frame store file. Frames will be extracted from this file.
+    :param dlfs_out: A binary file, the file to write a DIPLOMAT frame store to. This will contain the extracted
                       frames.
     :param frames: A sequence of integers, the indexes of the frames to extract, in order of extraction.
     :param threshold: A float between 0 and 1, inclusive. The frame sparsification threshold, any probabilities below
@@ -126,7 +126,7 @@ def pretty_print_frame(
     format_type: Tuple[str, int, tuple] = FrameStringFormats.REGULAR,
 ):
     """
-    Print a DeepLabCut Probability Frame.
+    Print a DIPLOMAT Probability Frame.
 
     :param data: The probability frame, a TrackingData object.
     :param frame_idx: Frame index to print, defaults to 0.
@@ -170,7 +170,7 @@ def pretty_frame_string(
     format_type: Tuple[str, int, tuple] = FrameStringFormats.REGULAR,
 ) -> str:
     """
-    Return a DeepLabCut Probability Frame in a pretty string for printing to the terminal.
+    Return a DIPLOMAT Probability Frame in a pretty string for printing to the terminal.
 
     :param data: The probability frame, a TrackingData object.
     :param frame_idx: Frame index to print, defaults to 0.
@@ -259,9 +259,9 @@ def extract_n_pack(
     on_frames: Optional[Callable[[TrackingData], None]] = None,
 ) -> bytes:
     """
-    Extract frames from a DLC Frame Store file and pack them into a base64 encoded byte string.
+    Extract frames from a DIPLOMAT Frame Store file and pack them into a base64 encoded byte string.
 
-    :param dlfs_in: A binary file, the input DeepLabCut frame store file. Frames will be extracted from this file.
+    :param dlfs_in: A binary file, the input DIPLOMAT frame store file. Frames will be extracted from this file.
     :param frames: A sequence of integers, the indexes of the frames to extract, in order of extraction.
     :param threshold: A float between 0 and 1, inclusive. The frame sparsification threshold, any probabilities below
                       the threshold are ignored. If set to 0, sparsification of frames is disabled. Default is 1e6.

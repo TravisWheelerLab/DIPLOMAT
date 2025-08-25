@@ -1,4 +1,8 @@
-from typing import Union
+"""
+Optimized routines for performing agglomerative clustering on weighted graphs.
+"""
+
+from typing import Union, Tuple
 import numba
 import numpy as np
 from enum import IntEnum
@@ -41,7 +45,7 @@ dist_update_func_sig = numba.float64(
 
 
 @numba.njit(dist_update_func_sig)
-def distance_update(
+def _distance_update(
     mode: int, sx: int, sy: int, si: int, dxy: float, dxi: float, dyi: float
 ) -> float:
     if mode == ClusteringMethod.SINGLE:
@@ -64,16 +68,24 @@ def distance_update(
 
 
 @numba.njit("types.UniTuple(i8, 2)(i8, i8)")
-def dist_index(node1: _numeric, node2: _numeric):
+def _dist_index(node1: _numeric, node2: _numeric):
     if node1 > node2:
         node1, node2 = node2, node1
     return node1, node2
 
 
 @numba.njit("types.Tuple((i8[:, :], f8[:]))(f8[:, :], i8)")
-def nn_chain(dists: np.ndarray, linkage_mode: int):
+def nn_chain(dists: np.ndarray, linkage_mode: int) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Use the nearest neighbor chain algorithm to perform hierarchical clustering.
+    Use the nearest neighbor chain algorithm to perform hierarchical clustering of a graph.
+
+    :param dists: A NxN 2d numpy array of floats, the pairwise distances between each node in the graph.
+    :param linkage_mode: The distance merging rule to use, see :py:class:`~diplomat.utils.clustering.ClusteringMethod`
+                         for available options. Impacts the results hierarchical clustering returns.
+
+    :returns: Two numpy arrays. The first is an array of shape Nx2 of ints, being which nodes to merge in order to
+              produce the clustering. The second array is an length N array of floats, being the distances of the edges
+              merged at each step.
     """
     assert dists.ndim == 2
     assert dists.shape[0] == dists.shape[1]
@@ -107,7 +119,7 @@ def nn_chain(dists: np.ndarray, linkage_mode: int):
             # Set to the past link if chain is long enough, this prevents cycles...
             nn_next = stack[chain_length - 2] if (chain_length >= 2) else nn_current
             current_min = (
-                dists[dist_index(nn_current, nn_next)]
+                dists[_dist_index(nn_current, nn_next)]
                 if (chain_length >= 2)
                 else np.inf
             )
@@ -119,7 +131,7 @@ def nn_chain(dists: np.ndarray, linkage_mode: int):
                     continue
 
                 # If distance is closer, update next nearest neighbor...
-                dist = dists[dist_index(nn_current, k)]
+                dist = dists[_dist_index(nn_current, k)]
                 if dist < current_min:
                     current_min = dist
                     nn_next = k
@@ -155,14 +167,14 @@ def nn_chain(dists: np.ndarray, linkage_mode: int):
             if l_size == 0 or l == nn_current:
                 continue
 
-            dists[dist_index(nn_current, l)] = distance_update(
+            dists[_dist_index(nn_current, l)] = _distance_update(
                 linkage_mode,
                 n1_size,
                 n2_size,
                 l_size,
                 current_min,
-                dists[dist_index(nn_current, l)],
-                dists[dist_index(nn_next, l)],
+                dists[_dist_index(nn_current, l)],
+                dists[_dist_index(nn_next, l)],
             )
 
     # Reorder by distance, stably...
@@ -221,10 +233,17 @@ def _uf_union(uf: UnionFindType, n1: int, n2: int) -> int:
 
 
 @numba.njit("types.Tuple((i8[:], i8))(i8[:, :], f8[:], i8)")
-def get_components(merge_list: np.ndarray, distances: np.ndarray, num_components: int):
+def get_components(merge_list: np.ndarray, distances: np.ndarray, num_components: int) -> Tuple[np.ndarray, int]:
     """
     Get the components or clusters of set of nodes after performing hierarchical clustering, given a specific number
     of desired components to be returned. Returns clustering solution at that level.
+
+    :param merge_list: Nodes to merge at each step of the clustering, first output of :py:func:`~diplomat.utils.clustering.nn_chain`.
+    :param distances: Distances of each edge that was merged at each step of clustering, second output of :py:func:`~diplomat.utils.clustering.nn_chain`.
+    :param num_components: The number of components, or cluster, desired. Stops merging nodes once it reaches this many clusters.
+
+    :returns: Two values, an array of integers giving the component each node belongs to, and an integer giving the
+              total number of components in the final result.
     """
     assert merge_list.ndim == 2
     assert distances.ndim == 1

@@ -1,12 +1,18 @@
+"""
+Contains various optimized graph routines, including counting components, minimum spanning tree, and min cost matching.
+"""
+
 import numba
 import numpy as np
 from typing import Tuple
-
-from .scipy_hungarian import linear_sum_assignment
+from diplomat.utils.scipy_hungarian import linear_sum_assignment
 
 
 @numba.experimental.jitclass([["_stack_ptr", numba.int64], ["_stack", numba.int64[:]]])
 class Stack:
+    """
+    A fixed size stack implemented using numba, used for optimized numba based DFS traversal of graphs.
+    """
     def __init__(self, max_size: int):
         self._stack = np.zeros(max_size, dtype=np.int64)
         self._stack_ptr = 0
@@ -127,8 +133,18 @@ def _min_row_subtract(g: np.ndarray) -> np.ndarray:
 
 
 def min_cost_matching(
-    cost_matrix: np.ndarray, mode="scipy"
+    cost_matrix: np.ndarray, mode: str = "scipy"
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Solve the minimum assignment problem. Given a cost matrix,
+    find the optimal assignment of workers (rows) to jobs (columns).
+
+    :param cost_matrix: The cost matrix to find an optimal matching for.
+    :param mode: Backend to use "scipy" to use scipy's solver, otherwise "internal" for internal solver.
+
+    :returns: A tuple of 2 numpy arrays, first representing row assignments (row -> column) and second column
+              assignments (column -> row). Note, these are inversions of each other.
+    """
     if mode == "scipy":
         return linear_sum_assignment(cost_matrix)
     else:

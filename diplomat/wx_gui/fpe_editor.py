@@ -34,7 +34,6 @@ from diplomat.wx_gui.labeler_lib import SettingCollection
 from diplomat.wx_gui.point_edit import PointEditor, PointViewNEdit, PoseLabeler
 from diplomat.wx_gui.progress_dialog import FBProgressDialog
 from diplomat.wx_gui.score_lib import ScoreEngine, ScoreEngineDisplayer
-from diplomat.wx_gui.scroll_image_list import ScrollImageList
 from diplomat.processing import Pose, ProgressBar
 from diplomat.wx_gui.helpdialog import HelpDialog
 from diplomat.wx_gui.settings_dialog import SettingsDialog
@@ -445,6 +444,8 @@ class FPEEditor(wx.Frame):
         self._was_save_button_flag = False
 
         self.video_controls.Bind(PointViewNEdit.EVT_FRAME_CHANGE, self._on_frame_chg)
+        # Setup the icon...
+        self.SetIcon(wx.Icon(icons.svg_to_wx_bitmap(icons.LOGO_SVG, (64, 64), self)))
 
     def _on_close_caller(self, event: wx.CloseEvent):
         self._on_close(event, self._was_save_button_flag)

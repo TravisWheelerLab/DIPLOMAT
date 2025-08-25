@@ -1,3 +1,7 @@
+"""
+Contains utility functions for converting pose objects to and from DIPLOMAT CSV pose estimate files.
+"""
+
 from typing import List, Union, Tuple
 
 import numpy as np

@@ -231,7 +231,16 @@ def get_typecaster_kwd_arg_name(func: TypeCasterFunction) -> typing.Optional[str
     return getattr(func, "_type_caster_kwd_name", None)
 
 
-def attach_hint(hint: typing.Type):
+def attach_hint(hint: typing.Type) -> typing.Callable[[typing.Callable], typing.Callable]:
+    """
+    Decorator, attach a type hint to a function, allowing it to behave like a full type caster.
+
+    :param hint: A type hint using python's standard typing module. The decorated function, if used as an argument or
+                 return value in a typecaster function, will get converted to this type when inspected by other python
+                 functions and code.
+
+    :returns: A decorator, accepts a function and returns it with the type hint attached.
+    """
     def _attach_hint(f):
         f.to_type_hint = lambda: hint
         return f
