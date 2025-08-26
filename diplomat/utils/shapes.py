@@ -40,7 +40,7 @@ class DotShapeDrawer(ABC):
     )
     _INSIDE_SQUARE_RADIUS_RATIO = 0.9
 
-    SHAPE_TYPES = tuple()
+    SHAPE_TYPES = ("circle", "square", "triangle", "star")
 
     def __getitem__(self, shape: str) -> Callable[[float, float, float], None]:
         """

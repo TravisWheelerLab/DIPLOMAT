@@ -1336,7 +1336,7 @@ class PointEditor(wx.Panel):
         :param labeling_modes: A list of pose labelers, the labeling modes to make available for selection.
         :param group_list: Optional list of integers, groups to group body parts into.
         :param colormap: The matplotlib colormap to use when coloring the points.
-        :param shape_list: A iterable or generator of strings, being the shapes to use to draw each point.
+        :param shape_list: An iterable or generator of strings, being the shapes to use to draw each point.
         :param plot_threshold: The probability threshold at which to not plot a points. Defaults to 0.1.
         :param point_radius: Determines the size of the points. Defaults to 5.
         :param point_alpha: Determines the alpha level of the points. Defaults to 0.7.

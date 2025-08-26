@@ -1,2 +1,1 @@
- - Add logos to website, application, and documentation
- - Expanded and cleaned up documentation for Python API.
+ - Bug fixed that stopped UI from showing up.
