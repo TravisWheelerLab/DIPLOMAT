@@ -1,1 +1,2 @@
-Fix documentation build process.
+ - Add logos to website, application, and documentation
+ - Expanded and cleaned up documentation for Python API.
