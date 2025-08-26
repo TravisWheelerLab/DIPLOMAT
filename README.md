@@ -1,4 +1,4 @@
-<h1 style="margin: auto;">
+<h1 align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/source/_static/imgs/logos/DIPLOMAT_icon_large_light.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/source/_static/imgs/logos/DIPLOMAT_icon_large_dark.svg">
