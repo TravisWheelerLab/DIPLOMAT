@@ -33,7 +33,7 @@ def _dummy_print(*args, **kwargs):
     pass
 
 
-class SilentImports:
+class _SilentImports:
     def __init__(self):
         self._true_print = None
         self._debug_mode = os.environ.get("DIPLOMAT_DEBUG", False)
@@ -59,7 +59,7 @@ class SilentImports:
 
 def _silent_import(name: str, pkg: Optional[str] = None) -> ModuleType:
     with warnings.catch_warnings():
-        with SilentImports():
+        with _SilentImports():
             return _simple_import(name, pkg)
 
 
@@ -79,18 +79,20 @@ class _OnnxPreloadImport:
         return mod
 
 
-onnx_preload_import = _OnnxPreloadImport()
-
-
 class ImportFunctions:
     """
     A set of import functions that can be used by the lazy importer object. Includes the following import functions:
      - SIMPLE: A basic implementation of an import function.
      - SILENT: Makes imported package silent by disabling printing and log outputs before importing modules.
+     - ONNX_PRELOAD: Same as simple import, but if importing onnxruntime, also preloads dlls needed by onnxruntime.
     """
-
+    __init__ = None
     SIMPLE = _simple_import
+    """ A basic implementation of an import function. """
     SILENT = _silent_import
+    """ Makes imported package silent by disabling printing and log outputs before importing modules. """
+    ONNX_PRELOAD = _OnnxPreloadImport().__call__
+    """ Same as simple import, but if importing onnxruntime, also preloads dlls needed by onnxruntime. """
 
 
 def verify_existence_of(name: str):
@@ -115,6 +117,9 @@ def verify_existence_of(name: str):
 
 
 def resolve_lazy_imports(func: Callable) -> Callable:
+    """
+    Decorator, immediately resolves any lazily imported modules the first time the decorated function is called.
+    """
     # Optimization: Lookup lazy imports for this module ahead of time...
     func_module = func.__globals__
     if not "__lazy_imports" in func_module:

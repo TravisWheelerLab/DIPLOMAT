@@ -11,21 +11,41 @@ from diplomat.utils.scipy_hungarian import linear_sum_assignment
 @numba.experimental.jitclass([["_stack_ptr", numba.int64], ["_stack", numba.int64[:]]])
 class Stack:
     """
-    A fixed size stack implemented using numba, used for optimized numba based DFS traversal of graphs.
+    A fixed size integer stack implemented using numba, used for optimized numba based DFS traversal of graphs.
     """
     def __init__(self, max_size: int):
+        """
+        Create a fixed-length integer stack with the specified size.
+
+        :param max_size: The max size of the stack.
+        """
         self._stack = np.zeros(max_size, dtype=np.int64)
         self._stack_ptr = 0
 
     def push(self, val: int):
+        """
+        Add an item to the stack.
+
+        :param val: The value to add to the top of the stack.
+        """
         self._stack[self._stack_ptr] = val
         self._stack_ptr += 1
 
     def pop(self) -> int:
+        """
+        Pop a value from the stack.
+
+        :return: An integer, the value just removed from the top of the stack.
+        """
         self._stack_ptr -= 1
         return self._stack[self._stack_ptr]
 
     def size(self):
+        """
+        Get the size of the stack.
+
+        :return: The number of elements on the stack.
+        """
         return self._stack_ptr
 
 

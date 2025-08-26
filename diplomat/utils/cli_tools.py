@@ -169,6 +169,14 @@ def get_summary_from_doc_str(doc_str: str) -> str:
 def func_args_to_config_spec(
     func: TypeCasterFunction, caller_func: TypeCasterFunction
 ) -> ConfigSpec:
+    """
+    Convert extra typecaster function arguments to a ConfigSpec.
+
+    :param func: The function to get parameters from.
+    :param caller_func: The calling function.
+
+    :return: A ConfigSpec for arguments not in the caller function.
+    """
     config_spec = {}
 
     signature = inspect.signature(func)
@@ -205,6 +213,15 @@ def func_args_to_config_spec(
 def func_to_command(
     func: TypeCasterFunction, parser: ArgumentParser, allow_short_form: bool = True
 ) -> ArgumentParser:
+    """
+    Convert a typecaster function into an argparse command (CLI command).
+
+    :param func: Type caster function to turn into a CLI command.
+    :param parser: The argument parser to add the function CLI command to.
+    :param allow_short_form: If true, allow abbreviated versions of arguments to be passed to the CLI.
+
+    :return: The argparse parser with the function added as a command.
+    """
     parser.formatter_class = YAMLArgHelpFormatter
     parser.allow_abbrev = False
     signature = inspect.signature(func)
@@ -292,7 +309,15 @@ def func_to_command(
 
 
 class CLIEngine:
+    """
+    Represents a CLI program. Is a callable that accepts cli arguments and when called and executes the correct sub-command.
+    """
     def __init__(self, parent_parser: ArgumentParser):
+        """
+        Private: Create a new CLIEngine. Internal, use build_full_parser to create an instance of this class instead.
+
+        :param parent_parser: An argparse ArgumentParser to wrap.
+        """
         self._parser = parent_parser
 
     def _reparse(
@@ -314,6 +339,12 @@ class CLIEngine:
         return self._parser.parse_args(args)
 
     def __call__(self, arg_list: List[str]) -> Any:
+        """
+        Run the command line interface of the constructed CLI program.
+
+        :param arg_list: A list of arguments passed by the user from the command line, excluding the program name.
+                         Equivalent to `sys.argv[1:]`.
+        """
         try:
             res, extra = self._parser.parse_known_args(arg_list)
         except TypeError as e:
@@ -344,6 +375,16 @@ class CLIEngine:
 def build_full_parser(
     function_tree: dict, parent_parser: ArgumentParser, name: Optional[str] = None
 ) -> CLIEngine:
+    """
+    Build an entire CLI interface with subcommands from a tree of typecaster functions.
+
+    :param function_tree: A nested dictionary of strings to type caster functions. Strings specify sub command words
+                          that each type caster function should be referenced by.
+    :param parent_parser: The argument parser to add commands to, or parser for the entire program.
+    :param name: Name of the program.
+
+    :return: A CLIEngine, which represents a command line program.
+    """
     name = parent_parser.prog if (name is None) else name
     parent_parser.allow_abbrev = False
     sub_commands = parent_parser.add_subparsers(
@@ -381,6 +422,9 @@ def build_full_parser(
 
 
 def clear_extra_cli_args_and_copy(func: Callable):
+    """
+    Create a copy of a typecaster function, with all CLI settings cleared.
+    """
     import copy
 
     func = copy.copy(func)
@@ -459,11 +503,21 @@ def extra_cli_args(
 
 
 def allow_arbitrary_flags(func: Callable) -> Callable:
+    """
+    Decorator: Allow arbitrary CLI flags on a typecaster function. Additional CLI flags will be passed to the
+    wildcard keyword argument.
+    """
     func.__allow_arbitrary_flags = True
     return func
 
 
 def positional_argument_count(amt: int) -> Callable[[Callable], Callable]:
+    """
+    Decorator: Mark the first n arguments to this typecaster function as positional. Those arguments will have no
+    flag, and instead must be passed by position to the CLI.
+
+    :param amt: The number of first arguments to the function to mark as positional.
+    """
     def attach_pos_args(func: Callable) -> Callable:
         func.__pos_cmd_arg_count = amt
         return func

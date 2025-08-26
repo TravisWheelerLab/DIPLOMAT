@@ -393,7 +393,7 @@ class WxPlotStyles:
 class ProbabilityDisplayer(wx.Control):
     """
     A custom wx.Control which displays a list of probabilities in the form of a line segment plot. Uses native colors
-    so as to match other native widgets in the UI.
+    to match other native widgets in the UI.
     """
 
     # Minimum pixels between probabilities....
@@ -549,11 +549,10 @@ class ProbabilityDisplayer(wx.Control):
         :param width: The width of the control.
 
         :returns: An iterable of tuples of (str, int, int, numpy array), which represent:
-                      -
-                      - The center of the widget horizontally.
-                      - The current highlighted index or selected index within the point list returned.
-                      - A numpy array of shape (N, 2). Representing the X, Y locations of points. These can be directly
-                        drawn to the widget.
+                  - The center of the widget horizontally.
+                  - The current highlighted index or selected index within the point list returned.
+                  - A numpy array of shape (N, 2). Representing the X, Y locations of points. These can be directly
+                    drawn to the widget.
         """
         data = self._data
         # Compute the amount of probabilities to display per side based on configured parameters...

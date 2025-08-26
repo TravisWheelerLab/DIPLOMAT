@@ -8,14 +8,34 @@ from typing import TextIO
 
 
 class IndentPrinter:
+    """
+    Create a custom printing function that matches python's print function, but also
+    properly handles indented lines in the CLI by indenting each following line
+    when a single line in the printout can't be displayed on a single line in the
+    CLI.
+    """
     def __init__(
         self, output: TextIO = sys.stdout, indent: int = 4, term_width: int = None
     ):
+        """
+        Create a new pretty indenting printer.
+
+        :param output: File object to write resulting text to, defaults to stdout.
+        :param indent: How many spaces to turn each tab in the input into.
+        :param term_width: The width of the terminal, in characters. If None, will try to automatically determine it.
+        """
         self._term_width = term_width
         self._output = output
         self._indent = indent
 
     def __call__(self, *args, sep=" ", end="\n"):
+        """
+        Print to the console.
+
+        :param args: Objects to print.
+        :param sep: The seperator to use between each object in the print-out.
+        :param end: The character to place onto the end of the print-out.
+        """
         term_width = max(
             1,
             (
@@ -66,3 +86,4 @@ class IndentPrinter:
 
 
 printer = IndentPrinter()
+""" Default instance of the indent printer, with the default settings. Import as print to use in a module. """

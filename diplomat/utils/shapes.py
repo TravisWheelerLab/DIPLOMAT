@@ -11,6 +11,12 @@ from abc import ABC, abstractmethod
 class DotShapeDrawer(ABC):
     """
     Abstract class defining an interface for drawing various markers, or dots, based on shape.
+
+    Note: To make a shape drawer, subclass this and implement the required abstract methods. Also, any
+          additional methods you define that start with '_draw_' (such as '_draw_hexagon') and implement the correct
+          signiture (3 floats: x coordinate, y coordinate, and radius) will automatically be registered as an
+          additional shape to draw. The name of the shape will be the method name excluding the '_draw_' prefix.
+          ('_draw_hexagon' adds a shape called 'hexagon')
     """
 
     # Unit polygons for certain types of items that for which built-in drawing functions don't exist in most
@@ -40,7 +46,7 @@ class DotShapeDrawer(ABC):
         """
         Get a drawer for the provided shape type.
 
-        :param shape: The shape to get a drawing function for be default, all drawers must support "circle", "square",
+        :param shape: The shape to get a drawing function for, all drawers must support "circle", "square",
                       "triangle", and "star".
 
         :return: A function or callable which accepts 3 floats (x coordinate, y coordinate, shape radius), that draws a
@@ -59,38 +65,68 @@ class DotShapeDrawer(ABC):
         return hasattr(self, "_draw_" + shape)
 
     def __len__(self):
+        """
+        Get the number of supported shapes.
+
+        :return: The number of supported shapes, and integer.
+        """
         len(self.SHAPE_TYPES)
 
     def __iter__(self):
+        """
+        Iterate over the names of the set of supported shapes.
+
+        :return: Iterable of strings, the supported shapes by their names ("square", "circle", etc.)
+        """
         return self.SHAPE_TYPES
 
     @abstractmethod
     def _draw_circle(self, x: float, y: float, r: float):
+        """
+        Private: Draw a circle at the given x and y position, with the provided radius.
+        """
         pass
 
     @abstractmethod
     def _draw_square(self, x: float, y: float, r: float):
+        """
+        Private: Draw a square at the given x and y position, with the provided radius.
+        """
         pass
 
     @abstractmethod
     def _draw_triangle(self, x: float, y: float, r: float):
+        """
+        Private: Draw a triangle at the given x and y position, with the provided radius.
+        """
         pass
 
     @abstractmethod
     def _draw_star(self, x: float, y: float, r: float):
+        """
+        Private: Draw a star at the given x and y position, with the provided radius.
+        """
         pass
 
-
-DotShapeDrawer.SHAPE_TYPES = tuple(
-    [
-        "_".join(val.split("_")[2:])
-        for val in dir(DotShapeDrawer)
-        if (val.startswith("_draw_"))
-    ]
-)
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.SHAPE_TYPES = [
+            "_".join(val.split("_")[2:])
+            for val in dir(cls)
+            if (val.startswith("_draw_"))
+        ]
 
 
 def shape_str(shape: str) -> str:
+    """
+    Check if a string passes is the name of a required shape (one that must be supported by DotShapeDrawer)
+
+    :param shape: Shape name to check.
+
+    :return: Same shape name.
+
+    :throws: ValueError passed name for a shape is not valid.
+    """
     shape = str(shape)
     if shape not in DotShapeDrawer.SHAPE_TYPES:
         raise ValueError(
@@ -127,11 +163,21 @@ class shape_iterator:
         self._rep = 1 if (rep_count is None) else rep_count
 
     def __iter__(self) -> Iterator[str]:
+        """
+        Iterate over the set of shapes, returns an iterator of strings.
+
+        :returns: An iterator of strings.
+        """
         self._count = 0
         self._iter = iter(self._seq)
         return self
 
     def __next__(self) -> str:
+        """
+        Get the next shape name.
+
+        :returns: A string, the shape name.
+        """
         if self._count >= self._rep:
             self._count = 0
             self._iter = iter(self._seq)

@@ -1,9 +1,13 @@
 from pathlib import Path
 import sys
+from typing import Any, Literal, Dict
 
+from sphinx.application import Sphinx
 # noinspection PyUnresolvedReferences
 from sphinx.ext.autodoc.mock import mock
 import os
+import inspect
+
 
 os.environ["NUMBA_DISABLE_JIT"] = "1"
 
@@ -87,3 +91,44 @@ html_theme_options = {
 html_css_files = [
     "css/custom.css",
 ]
+
+
+WhatType = Literal['module', 'class', 'exception', 'function', 'method', 'attribute']
+
+
+def _resolve_class(func):
+    cls = sys.modules.get(func.__module__)
+    if cls is None:
+        return None
+    for name in func.__qualname__.split('.')[:-1]:
+        cls = getattr(cls, name, None)
+        if cls is None:
+            return None
+    if not inspect.isclass(cls):
+        return None
+    return cls
+
+
+def custom_skip_function(app: Sphinx, what: WhatType, name: str, obj: Any, skip: bool, options: Dict[str, bool]):
+    import inspect
+    # print(app, what, name, obj, skip, options)
+    if what == "class":
+        if not name.startswith("_") or name == "__init__":
+            return skip
+        doc = getattr(obj, "__doc__", None)
+        if inspect.isfunction(obj) and doc is not None and len(doc) > 0:
+            if not obj.__module__.startswith("diplomat"):
+                return True
+            cls = _resolve_class(obj)
+            obj_name = obj.__name__
+            # Only document if explicitly defined in this class (not from parent class...)
+            if cls is not None and (obj_name in cls.__dict__ or obj_name in getattr(cls, "__slots__", [])):
+                return False
+            return True
+        return skip
+
+    return None
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", custom_skip_function)

@@ -13,7 +13,7 @@ from diplomat.utils.cli_tools import Flag, positional_argument_count
 @typecaster_function
 def list_predictor_plugins():
     """
-    Retrieve and print all currently installed and available predictor plugins that can be used with deeplabcut to
+    Retrieve and print all currently installed and available predictor plugins that can be used with DIPLOMAT to
     the console...
 
     :return: Nothing, if one wants to get the plugins for other code look at processing.get_predictor_plugins().

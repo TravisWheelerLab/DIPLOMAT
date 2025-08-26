@@ -476,7 +476,7 @@ def allocate_shared_memory(context: BaseContext, size: int) -> Any:
 class SegmentedFramePassEngine(Predictor):
     """
     A predictor that applies a collection of frame passes to the frames
-    dumped by deeplabcut, and then predicts poses by selecting maximums.
+    dumped by image recognition models, and then predicts poses by selecting maximums.
     Contains a collection of useful prediction algorithms which can be listed
     by calling "get_predictor_settings" on this Predictor. This version
     applies passes in segments, and then stitches those segments together.

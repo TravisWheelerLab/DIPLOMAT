@@ -57,6 +57,14 @@ def string_list(lister: list):
 
 
 def edge_list(lister: list):
+    """
+    Normalizes a list of graph edges. It does so by ordering edges so the node with the lower index goes first,
+    removing duplicates, and then sorting the final list of edges.
+
+    :param lister: A list of tuples, each tuple container 2 integers. Each integer is the index of a node.
+
+    :return: A list of tuples, each tuple with 2 integers, the normalized edge list.
+    """
     lister_new = set()
 
     for item in lister:
@@ -262,7 +270,7 @@ class FrameReader(ABC):
 
         :param num_frames: The number of frames to read from the frame store, and integer. Defaults to 1.
 
-        :returns: A DeepLabCut TrackingData object, which will contain all of the probability frames for num_frames
+        :returns: A DIPLOMAT TrackingData object, which will contain all of the probability frames for num_frames
                   frames.
 
         :throws: ValueError if the frame reader reaches the end of the file and the number of frames requested is

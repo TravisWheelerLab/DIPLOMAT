@@ -10,12 +10,12 @@ from diplomat.processing.pose import Pose
 
 class TrackingData:
     """
-    Represents tracking data received from the DeepLabCut neural network. Includes a source map of probabilities,
+    Represents tracking data received from a neural network. Includes a source map of probabilities,
     the predicted location offsets within the source map, stride info and ect. Also provides many convenience methods
     for working with and getting info from the DLC neural network data.
     """
 
-    """ The default image down scaling used by DeepLabCut """
+    """ The default image down scaling. """
     DEFAULT_SCALE: int = 8
 
     def __init__(
@@ -29,7 +29,7 @@ class TrackingData:
 
         :param scmap: The probability maps produced by the neural network, a 4-dimensional numpy array containing the
                       dimensions: [frame, y location, x location, body part].
-        :param locref: The "offsets" produced by DeepLabCut neural network, stored in a 5-dimensional numpy array
+        :param locref: The "offsets" produced by the neural network, stored in a 5-dimensional numpy array
                        containing the dimensions:
                        [frame, y location, x location, bodypart, 0 for x offset or 1 for y offset]
         :param stride: Float which stores the down scaling of the probability map relative to the size of the original

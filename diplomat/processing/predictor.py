@@ -171,7 +171,7 @@ class Predictor(ABC):
     def get_name(cls) -> str:
         """
         Get the name of this predictor plugin, the name is used when selecting a predictor in the
-        deeplabcut.analyze_videos method. Does not have to be overridden, and defaults to
+        DIPLOMAT. Does not have to be overridden, and defaults to
         returning the name of the class.
 
         :return: The name of this plugin to be used to select it, as a string.
@@ -205,7 +205,7 @@ class Predictor(ABC):
                   setting as stored internally and also specified by the user, and each tuple will contain the following 3 items in order:
 
                    - Setting Default Value: Any type, the default value to be assigned to this setting if it is not
-                     set explicitly in the DeepLabCut config by the user...
+                     set explicitly configured by the user...
                    - Setting Type Caster: A function which accepts and returns a single value, converting the passed
                      value into the desired type of the setting. Can also throw an exception to
                      indicate rogue input.

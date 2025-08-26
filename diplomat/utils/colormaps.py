@@ -25,6 +25,22 @@ class DiplomatColormap:
         bad: Optional[Sequence[float]] = None,
         count_hint: Optional[int] = None,
     ):
+        """
+        Create a new DIPLOMAT Colormap, which maps values from 0 to 1 to colors.
+
+        :param name: The name of the colormap.
+        :param r_values: A Nx2 numpy array, mapping offsets (0-1) to red channel intensity values (0-1).
+        :param g_values: A Nx2 numpy array, mapping offsets (0-1) to green channel intensity values (0-1).
+        :param b_values: A Nx2 numpy array, mapping offsets (0-1) to blue channel intensity values (0-1).
+        :param under: A sequence of 3 floats, rgb color used when a passed offset is under 0. If not set, uses color
+                      at offset 0.
+        :param over: A sequence of 3 floats, rgb color used when a passed offset is over 1. If not set, uses color
+                     at offset 1.
+        :param bad: A sequence of 3 floats, rgb color used when a passed offset is nan. If not set, uses color
+                    at offset 1.
+        :param count_hint: Optional integer, if set provides a count hint for the number of colors in the colormap.
+                           This should only be passed for colormaps that are meant to be listed colormaps.
+        """
         self._r = self._normalize_mapper(r_values)
         self._g = self._normalize_mapper(g_values)
         self._b = self._normalize_mapper(b_values)
@@ -36,11 +52,23 @@ class DiplomatColormap:
 
     @property
     def is_listed(self) -> bool:
+        """
+        Indicates if the colormap is a listed colormap, or just meant to represent a list of colors, and
+        not interpolate between them in any way.
+        """
         return self._count_hint is not None
 
     def get_colors(
         self, alpha: Optional[float] = None, bytes: bool = False
     ) -> np.ndarray:
+        """
+        Get the list of colors represented by this colormap. This is only valid for listed colormaps.
+
+        :param alpha: Optional float, value to use for alpha channel for each color.
+        :param bytes: If true, return the colors as unsigned bytes between 0-255 instead of floats between 0-1.
+
+        :returns: Numpy array of Nx4, list of rgba colors. Type of elements depends on bytes parameter.
+        """
         if not self.is_listed:
             raise ValueError(
                 "This colormap is not a listed colormap, so it does not have a fixed list of colors."
@@ -51,6 +79,9 @@ class DiplomatColormap:
 
     @classmethod
     def to_rgba_optional(cls, color):
+        """
+        Convert a color to a tuple of 4 floats, in rgba format, unless it's not None, in which case it returns None.
+        """
         return color if color is None else mpl_colors.to_rgba(color)
 
     @classmethod
@@ -63,6 +94,19 @@ class DiplomatColormap:
         over=None,
         bad=None,
     ) -> "DiplomatColormap":
+        """
+        Create a diplomat colormap from a list of colors.
+
+        :param name: The name of the colormap.
+        :param colors: A list 'matplotlib' colors. Can be strings, or tuples of integers or floats.
+        :param n: Number of colors in the colormap. If None, use the length of the list of colors. colors are truncated
+                  or repeated to match this value.
+        :param under: The underflow color.
+        :param over: The overflow color.
+        :param bad: The bad (for NaN inputs) color.
+
+        :return: A diplomat colormap.
+        """
         colors = list(
             itertools.islice(itertools.cycle(colors), n if (n is None) else len(colors))
         )
@@ -98,6 +142,19 @@ class DiplomatColormap:
         over=None,
         bad=None,
     ) -> "DiplomatColormap":
+        """
+        Create a diplomat colormap from a colormap segment data.
+
+        :param name: The name of the colormap.
+        :param segmentdata: A dictionary of channel ['r', 'g', 'b'] to a Nx3 array. See matplotlib's segment data format.
+        :param gamma: Gamma correction to apply to offsets before mapping to colors, default to 1.0, or no gamma
+                      correction.
+        :param under: The underflow color.
+        :param over: The overflow color.
+        :param bad: The bad (for NaN inputs) color.
+
+        :return: A diplomat colormap.
+        """
         def _from_segments(d):
             if callable(d):
                 xs = np.linspace(0, 1, 255)
@@ -130,6 +187,13 @@ class DiplomatColormap:
     def from_matplotlib_colormap(
         cls, colormap: mpl_colors.Colormap
     ) -> "DiplomatColormap":
+        """
+        Create a DIPLOMAT colormap from a matplotlib colormap.
+
+        :param colormap: A matplotlib colormap.
+
+        :return: A diplomat colormap.
+        """
         if isinstance(colormap, mpl_colors.ListedColormap):
             return cls.from_list(colormap.name, list(colormap.colors), colormap.N)
         if isinstance(colormap, mpl_colors.LinearSegmentedColormap):
@@ -140,6 +204,11 @@ class DiplomatColormap:
         raise ValueError(f"Unsupported matplotlib colormap type: {type(colormap)}")
 
     def to_matplotlib_colormap(self):
+        """
+        Convert the DIPLOMAT colormap to a matplotlib colormap.
+
+        :return: A matplotlib colormap that matches this DIPLOMAT colormap.
+        """
         if self.is_listed:
             return mpl_colors.ListedColormap(self.get_colors(1.0, False), self.name)
         else:
@@ -171,11 +240,25 @@ class DiplomatColormap:
 
     @property
     def name(self) -> str:
+        """
+        The name of the colormap.
+        """
         return self._name
 
     def __call__(
         self, data: np.ndarray, alpha: Optional[float] = None, bytes: bool = False
     ):
+        """
+        Apply this colormap to some data.
+
+        :param data: The data, an any dimensional array (shape ...) of floats between 0 and 1.
+        :param alpha: Optional float, the value for the alpha channel in the colors. Defaults to 1.0.
+        :param bytes: If true, return color data as unsigned bytes between 0 and 255, otherwise return as floats
+                      between 0 and 1.
+
+        :return: An ...x4 array, the last added dimension being the color channels, being red, green, blue, and alpha
+                 in order. Data type of channels depends on the bytes argument.
+        """
         if alpha is None:
             alpha = 1.0
 
@@ -250,12 +333,14 @@ def to_colormap(
     cmap: Union[None, str, list, mpl_colors.Colormap, DiplomatColormap] = None,
 ) -> DiplomatColormap:
     """
-    Convert any colormap like object to a matplotlib Colormap.
+    Convert any colormap like object to a :py:class:`~diplomat.utils.colormaps.DiplomatColormap`.
 
-    :param cmap: The colormap-like object, can be a list of colors, the name of a matplotlib colormap, a matplotlib colormap, or None. None
-                 indicates that the default matplotlib colormap should be returned.
+    :param cmap: The colormap-like object, can be a list of colors, the name of a matplotlib colormap,
+                 a matplotlib colormap, a :py:class:`~diplomat.utils.colormaps.DiplomatColormap`, or None. None
+                 indicates that the default matplotlib colormap should be converted to a
+                 :py:class:`~diplomat.utils.colormaps.DiplomatColormap` and returned.
 
-    :return: A matplotlib Colormap object.
+    :return: A :py:class:`~diplomat.utils.colormaps.DiplomatColormap` object.
     """
     if isinstance(cmap, DiplomatColormap):
         return cmap
@@ -281,9 +366,9 @@ def iter_colormap(
     cmap: DiplomatColormap, count: int, bytes: bool = False
 ) -> Sequence[Tuple[float, float, float, float]]:
     """
-    Iterate a matplotlib colormap, returning a sequence of colors sampled from it.
+    Iterate a :py:class:`~diplomat.utils.colormaps.DiplomatColormap`, returning a sequence of colors sampled from it.
 
-    :param cmap: The matplotlib Colormap to draw colors from.
+    :param cmap: The :py:class:`~diplomat.utils.colormaps.DiplomatColormap` to draw colors from.
     :param count: The number of colors to be sampled from the colormap.
     :param bytes: If True, returned colors are tuples of integers between 0 and 255, if False, they are tuples of floats between 0 and 1
 

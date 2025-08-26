@@ -1,7 +1,7 @@
 """
-Contains 2 Utility Classes for reading and writing the DeepLabCut Frame Store format. The format allows for processing
-videos using DeepLabCut and then running predictions on the probability map data later. Below is a specification for
-the DeepLabCut Frame Store format.
+Contains 2 Utility Classes for reading and writing the DIPLOMAT Frame Store format. The format allows for processing
+videos using DIPLOMAT and then running predictions on the probability map data later. Below is a specification for
+the DIPLOMAT Frame Store format.
 
 ::
 
@@ -116,7 +116,7 @@ class DLFSConstants:
 
 class DLFSReader(FrameReader):
     """
-    A DeepLabCut Frame Store Reader. Allows for reading ".dlfs" files.
+    A DIPLOMAT Frame Store Reader. Allows for reading ".dlfs" files.
     """
 
     # See spec above, describing each of these types in order...
@@ -168,7 +168,7 @@ class DLFSReader(FrameReader):
 
     def __init__(self, file: BinaryIO):
         """
-        Create a new DeepLabCut Frame Store Reader.
+        Create a new DIPLOMAT Frame Store Reader.
 
         :param file: The binary file object to read a frame store from, file opened with 'rb'.
         """
@@ -428,7 +428,7 @@ class DLFSReader(FrameReader):
 
 class DLFSWriter(FrameWriter):
     """
-    A DeepLabCut Frame Store Writer. Allows for writing ".dlfs" files.
+    A DIPLOMAT Frame Store Writer. Allows for writing ".dlfs" files.
     """
 
     def __init__(
@@ -439,7 +439,7 @@ class DLFSWriter(FrameWriter):
         compression_level: int = 6,
     ):
         """
-        Create a new DeepLabCut Frame Store Writer.
+        Create a new DIPLOMAT Frame Store Writer.
 
         :param file: The file to write to, a file opened in 'wb' mode.
         :param header: The DLFSHeader, with all properties filled out.
