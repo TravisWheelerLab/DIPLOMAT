@@ -85,9 +85,9 @@
         }
         .images {
             display: flex;
-            justify-content: space-around;
+            justify-content: space-evenly;
             flex-wrap: wrap;
-            margin: 2rem 0;
+            margin: 1rem 0;
         }
         .images img {
             max-width: 30%;
@@ -100,7 +100,7 @@
             position: relative;
             overflow: hidden;
             background-color: #d5e5e8;
-            padding: 2rem;
+            padding: 1rem;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
             margin-top: 2rem;
@@ -129,17 +129,17 @@
         .interact-text {
             flex: 1;
             max-width: 100%;
-            margin-left: 2rem;
+            margin-left: 1rem;
+            margin-right: 1rem;
             text-align: center;
         }
         .video-section {
             position: relative;
             overflow: hidden;
             background-color: #d5e5e8;
-            padding: 2rem;
+            padding: 1rem;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            margin-top: 2rem;
             opacity: 0;
             transform: translateY(20px);
             transition: opacity 1s ease-out, transform 1s ease-out;
@@ -201,25 +201,25 @@
         }
         .video iframe {
             width: 100%;
-            height: 500px;
             border: none;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            aspect-ratio: 16 / 9;
         }
         .video-text {
             flex: 1;
             max-width: 100%;
-            margin-left: 2rem;
+            margin-left: 1rem;
+            margin-right: 1rem;
             text-align: center;
         }
         .tweak-section {
             position: relative;
             overflow: hidden;
             background-color: #d5e5e8;
-            padding: 2rem;
+            padding: 1rem;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            margin-top: 2rem;
             opacity: 0;
             transition: opacity 1s ease-out, transform 1s ease-out;
         }
@@ -274,8 +274,14 @@
             margin: 2rem 0;
         }
 
-        @media (width < 50em) {
+        @media (width < 50rem) {
             .video-row {
+                flex-direction: column;
+            }
+        }
+
+        @media (width < 60rem) {
+            .interact-content {
                 flex-direction: column;
             }
         }
@@ -317,7 +323,7 @@
                 <img src="docs/source/_static/imgs/UIDemo.gif" alt="Interact Interface">
                 <div class="interact-text">
                     <h2>Using the Interact Interface</h2>
-                    <p>Here we can make precise adjustments to our model's predicted points and re-run trace</p>
+                    <p>Here we can make precise adjustments to our model's predicted points and re-run tracing.</p>
                 </div>
             </div>
         </section>
@@ -328,46 +334,49 @@
             <h2 class="text-3xl text-dark-purple mb-4">Explore Our Features</h2>
             <p class="text-lg text-gray-700">Learn more about DIPLOMAT's functionalities through our video guides.</p>
             <div class="button-row">
-                <button onclick="showVideo('track-interact')">Track and Interact</button>
+                <button onclick="showVideo('installation')">Install</button>
+                <button onclick="showVideo('track-interact')">Track</button>
                 <button onclick="showVideo('interact')">Interact</button>
+                <button onclick="showVideo('tweak')">Tweak</button>
+            </div>
+
+            <div id="installation" class="video-row">
+                <div class="video">
+                    <iframe src="https://www.youtube.com/embed/WMJS80r-pD4" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                </div>
+                <div class="video-text">
+                    <h3 class="text-2xl text-dark-purple mb-2">Install</h3>
+                    <p>Learn how to install and configure DIPLOMAT using either conda or pip.</p>
+                </div>
             </div>
 
             <div id="track-interact" class="video-row">
                 <div class="video">
-                    <iframe src="https://www.youtube.com/embed/T-8y4f_4XTA" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    <iframe src="https://www.youtube.com/embed/p_7uDRVpybU" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                 </div>
                 <div class="video-text">
-                    <h3 class="text-2xl text-dark-purple mb-2">Track and Interact Interface</h3>
-                    <p>Introduction on how you can track and interact with pose data in DIPLOMAT, leveraging models created through SLEAP or DeepLabCut (DLC).</p>
+                    <h3 class="text-2xl text-dark-purple mb-2">Track</h3>
+                    <p>Introduction on how to track videos with DIPLOMAT, leveraging models created through SLEAP or DeepLabCut (DLC).</p>
                 </div>
             </div>
 
             <div id="interact" class="video-row">
                 <div class="video">
-                    <iframe src="https://www.youtube.com/embed/-Y9z8KOVSEo" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    <iframe src="https://www.youtube.com/embed/0-a2xEzvI80" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                 </div>
                 <div class="video-text">
-                    <h3 class="text-2xl text-dark-purple mb-2">Interact Interface</h3>
-                    <p>Overview of the visual settings, continuous labeling, single/multi body part labeling modes, and re-running trace</p>
+                    <h3 class="text-2xl text-dark-purple mb-2">Interact</h3>
+                    <p>Overview of the interactive tracking interface in DIPLOMAT. Demonstrates how to adjust visual settings, predicted tracks, and re-run tracing.</p>
                 </div>
             </div>
-        </section>
 
-        <div class="divider"></div>
-
-        <section class="tweak-section" id="tweak-section">
-            <h2 class="text-3xl text-dark-purple mb-4">Additional Features: Tweak Interface</h2>
-            <p class="text-lg text-gray-700">The Tweak Interface allows for fine-tuning to minimize identity swaps and other issues. Explore the tutorial video to learn more.</p>
-            <div class="tweak-button">
-                <button onclick="showTweakVideo()">Explore Tweak Interface</button>
-            </div>
             <div id="tweak" class="video-row">
                 <div class="video">
                     <iframe src="https://www.youtube.com/embed/OC1soECO2r4" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                 </div>
                 <div class="video-text">
-                    <h3 class="text-2xl text-dark-purple mb-2">Tweak Interface</h3>
-                    <p>Tutorial on navigating the Tweak Interface</p>
+                    <h3 class="text-2xl text-dark-purple mb-2">Tweak</h3>
+                    <p>Demonstrates DIPLOMAT's tweak interface. The tweak interface allows for quickly touching up finished tracks, removing swaps and making minor point adjustments.</p>
                 </div>
             </div>
         </section>
@@ -386,15 +395,6 @@
             });
             const selectedVideo = document.getElementById(videoId);
             selectedVideo.classList.add('visible');
-        }
-
-        function showTweakVideo() {
-            const videoRows = document.querySelectorAll('.video-row');
-            videoRows.forEach(row => {
-                row.classList.remove('visible');
-            });
-            const tweakSection = document.getElementById('tweak');
-            tweakSection.classList.add('visible');
         }
 
         window.addEventListener('scroll', () => {
