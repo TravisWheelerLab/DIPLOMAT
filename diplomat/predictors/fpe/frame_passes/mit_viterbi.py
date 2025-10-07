@@ -717,26 +717,25 @@ class MITViterbi(FramePass):
     ) -> ForwardBackwardFrame:
         x, y, probs = frame.src_data.unpack()
 
-        if len(y) == 1:
-            if y == x == probs == [0]:
-                print("Invalid frame to start on! Using enter state...")
-                # The enter_state is used when no good fix frame is found over the entire video
-                # (one where all parts are separable) the best scoring frame for the video
-                # (typically one with most parts separated) is picked and parts that weren't
-                # separated via clustering start in the enter state, which allows transitioning to
-                # the frame, but not back to the enter state.
+        if (x is None or y is None) or (len(y) == 1 and (y == x == probs == [0])):
+            print("Invalid frame to start on! Using enter state...")
+            # The enter_state is used when no good fix frame is found over the entire video
+            # (one where all parts are separable) the best scoring frame for the video
+            # (typically one with most parts separated) is picked and parts that weren't
+            # separated via clustering start in the enter state, which allows transitioning to
+            # the frame, but not back to the enter state.
 
-                # this needs to change; setting the occluded coordinate to (0,0) introduces bias to the transition probabilities.
-                # (that is, jumping to the nearest point will be favored arbitrarily.)
-                # but it can't be a +/- inf, and it can't be empty. might need to make inf a condition in/above the transition table logic?
-                frame.occluded_probs = to_log_space(np.array([0]))
-                frame.occluded_coords = np.array([[0, 0]])
-                # can't use these
-                frame.frame_probs = [-np.inf]
-                # set the enter state
-                frame.enter_state = to_log_space(1)
+            # this needs to change; setting the occluded coordinate to (0,0) introduces bias to the transition probabilities.
+            # (that is, jumping to the nearest point will be favored arbitrarily.)
+            # but it can't be a +/- inf, and it can't be empty. might need to make inf a condition in/above the transition table logic?
+            frame.occluded_probs = to_log_space(np.array([0]))
+            frame.occluded_coords = np.array([[0, 0]])
+            # can't use these
+            frame.frame_probs = [-np.inf]
+            # set the enter state
+            frame.enter_state = to_log_space(1)
 
-                return frame
+            return frame
 
         frame_probs = to_log_space(probs)
 
