@@ -1,1 +1,1 @@
- - Bug fixed that stopped UI from showing up.
+ - Bug fixed that caused DIPLOMAT to crash when initial frame was None.

@@ -2,7 +2,7 @@
 A tool providing multi-animal tracking capabilities on top of other Deep learning based tracking software.
 """
 
-__version__ = "0.3.19"
+__version__ = "0.3.20"
 
 import warnings
 
