@@ -571,6 +571,7 @@ class SegmentedFramePassEngine(Predictor):
             self._file_obj,
             self.settings.memory_cache_size,
             lock=self._manager.RLock(),
+            debug=self.settings.debug,
             memory_backing=self._shared_memory,
         )
 
@@ -614,6 +615,7 @@ class SegmentedFramePassEngine(Predictor):
                 self._file_obj,
                 self.settings.memory_cache_size,
                 lock=self._manager.RLock(),
+                debug=self.settings.debug,
                 memory_backing=self._shared_memory,
             )
 

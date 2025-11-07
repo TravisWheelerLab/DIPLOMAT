@@ -1,3 +1,4 @@
+import types
 from collections import deque
 from typing import BinaryIO, Any, Dict, Optional, Union, Iterable
 from diplomat.predictors.fpe.sparse_storage import (
@@ -21,32 +22,52 @@ class MonitoredAttributeDict(AttributeDict):
 
 
 class LIFOCache:
-    def __init__(self, size: int):
+    def __init__(self, size: int, debug: bool = False):
         self._data = {}
         self._queue = deque()
         self._size = size
+        self._debug = debug
 
     def get(self, index: int, backing: SettableSequence) -> Any:
         if index in self._data:
-            return self._data[index]
+            return self._data[index][0]
 
-        self._data[index] = backing[index]
+        self._data[index] = self._value_tuple(backing[index])
         self._queue.append(index)
 
         self._clean_to(self._size, backing)
-        return self._data[index]
+        return self._data[index][0]
 
     def set(self, index: int, backing: SettableSequence, value: Any):
         if index not in self._data:
             self._queue.append(index)
-        self._data[index] = value
+        self._data[index] = self._value_tuple(value)
 
         self._clean_to(self._size, backing)
+
+    def _value_tuple(self, value):
+        if not self._debug:
+            return (value, None)
+
+        exp = None
+        try:
+            raise ValueError(f"Error Serializing the value: {value}, originally stored at the following traceback.")
+        except ValueError as e:
+            exp = e
+
+        return (value, exp)
 
     def _clean_to(self, amount: int, backing: SettableSequence):
         while len(self._queue) > amount:
             idx = self._queue.popleft()
-            backing[idx] = self._data[idx]
+            value, exp = self._data[idx]
+            try:
+                backing[idx] = value
+            except Exception as e:
+                if exp is not None:
+                    raise exp from e
+                else:
+                    raise
             del self._data[idx]
 
     def flush(self, backing: SettableSequence):
@@ -191,6 +212,7 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         file_obj: Union[BinaryIO, DiplomatFPEState],
         cache_size: int = 100,
         lock: Optional[multiprocessing.RLock] = None,
+        debug: bool = False,
         **kwargs
     ):
         """
@@ -201,12 +223,13 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
         :param file_obj: The file to use to store files on disk.
         :param cache_size: The size of the cache to use to temporarily store files on disk.
         :param lock: Lock to use when accessing the file (read or write). Defaults to no lock...
+        :param debug: Enables more useful errors, with a performance cost.
         :param kwargs: Additional arguments passed to the storage backend.
         """
         super().__init__(0, 0)
         self._num_bps = num_bp
         self._num_frames = num_frames
-        self._cache = LIFOCache(cache_size)
+        self._cache = LIFOCache(cache_size, debug)
         self.allow_pickle = True
 
         if isinstance(file_obj, DiplomatFPEState):

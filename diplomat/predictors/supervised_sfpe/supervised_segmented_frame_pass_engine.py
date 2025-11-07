@@ -603,6 +603,7 @@ class SupervisedSegmentedFramePassEngine(SegmentedFramePassEngine):
                 self._num_total_bp,
                 disk_ui_file,
                 self.settings.memory_cache_size,
+                debug=self.settings.debug
             ) as disk_frame_holder:
                 with FBProgressDialog(self._fb_editor, title="Save to Disk") as dialog:
                     dialog.Show()

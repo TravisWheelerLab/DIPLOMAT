@@ -51,7 +51,7 @@ class CreateSkeleton(FramePass):
         if self.config.part_weights is not None:
             new_skeleton_info = StorageGraph(fb_data.metadata.bodyparts)
             for node1, node2, val in self.config.part_weights:
-                new_skeleton_info[node1, node2] = (val, 1, val)
+                new_skeleton_info[node1, node2] = (val, 1, val, 1)
 
             new_frame_data = fb_data
         else:

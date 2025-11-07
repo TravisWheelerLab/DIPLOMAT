@@ -439,6 +439,7 @@ class DiplomatFPEState:
     def _encode_frame(self, frame: ForwardBackwardFrame) -> bytes:
         return zlib.compress(frame.to_bytes(self._float_type), self._compression_level)
 
+
     def _decode_frame(self, data: bytes) -> ForwardBackwardFrame:
         if len(data) == 0:
             return ForwardBackwardFrame()
@@ -469,7 +470,11 @@ class DiplomatFPEState:
             raise ValueError("State object is closed!")
         if item < 0:
             raise IndexError("Negative indexes not supported...")
-        data = self._encode_frame(value)
+        try:
+            data = self._encode_frame(value)
+        except Exception as e:
+            # Print frame data so we get more info about a failure...
+            raise ValueError(f"Failed to encode frame data: {value} at index {item}.") from e
         self._write_chunk(1 + item, DIPST_FRAME_HEADER, data)
 
     def __len__(self) -> int:

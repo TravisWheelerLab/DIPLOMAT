@@ -121,12 +121,22 @@ class Approximate(labeler_lib.PoseLabeler):
     def __init__(self, frame_engine: EditableFramePassEngine):
         super().__init__()
         self._frame_engine = frame_engine
+        spread_default = self._calculate_optimal_input_spread(self._frame_engine.frame_data.metadata)
         self._settings = labeler_lib.SettingCollection(
             user_input_strength=labeler_lib.Slider(500, 1000, 667),
-            user_input_spread=labeler_lib.FloatSpin(0.5, None, 20, 1, 4),
+            user_input_spread=labeler_lib.FloatSpin(0.5, None, spread_default, 1, 4),
         )
         self._cached_gaussian_std = None
         self._cached_gaussian = None
+
+    def _calculate_optimal_input_spread(self, meta) -> float:
+        if "skeleton" in meta:
+            max_limb_dist = max(avg for bin_val, freq, avg, std in meta.skeleton.values())
+            return max(max_limb_dist, 5)
+        elif "optimal_std" in meta:
+            return max(meta.optimal_std[2] * 5, 5)
+        else:
+            return 20
 
     def _make_gaussian(self, new_std: float, down_scaling: float):
         self._cached_gaussian_std = new_std

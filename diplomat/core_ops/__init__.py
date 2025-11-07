@@ -523,13 +523,17 @@ def tweak(
 
 
 @typecaster_function
-def interact(state: Union[List[PathLike], PathLike]):
+def interact(
+    state: Union[List[PathLike], PathLike],
+    debug: Flag = False,
+):
     """
     Open diplomat's interactive UI from a .dipui file. Allows for reloading the UI when diplomat crashes, or for
     further editing. Settings and backend will be restored automatically based on the settings and info passed during
     the first run.
 
     :param state: A path or list of paths to the ui states to restore. Files should be of ".dipui" format.
+    :param debug: Enable additional debug information to be displayed when running the UI.
     """
     from diplomat.predictors.sfpe.file_io import DiplomatFPEState
     from diplomat.processing import TQDMProgressBar, Config
@@ -555,12 +559,15 @@ def interact(state: Union[List[PathLike], PathLike]):
                     len(meta["bodyparts"]) * meta["num_outputs"]
                 )
 
+        settings = Config(meta["settings"], SupervisedSegmentedFramePassEngine.get_settings())
+        settings.debug = debug
+
         # Create the UI...
         pred = SupervisedSegmentedFramePassEngine(
             meta["bodyparts"],
             meta["num_outputs"],
             num_frames,
-            Config(meta["settings"], SupervisedSegmentedFramePassEngine.get_settings()),
+            settings,
             Config(meta["video_metadata"]),
             restore_path=str(state_file_path),
         )
