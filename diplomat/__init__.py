@@ -55,7 +55,7 @@ def _load_frontends():
 
     if current_process().name != "MainProcess":
         # If something in this package is using multiprocessing, disable the automatic frontend loading code.
-        # This is done because some to save memory...
+        # This is done to save memory...
         return (set(), {})
 
     frontends = load_plugin_classes(frontends, DIPLOMATFrontend, recursive=False)

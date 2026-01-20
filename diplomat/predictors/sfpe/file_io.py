@@ -607,7 +607,17 @@ class SafeFileIO:
         # Copy the file over...
         shutil.copy(self._scratch_path, self._commiter_path)
         # Replace the commited file with the final file path...
-        os.replace(self._commiter_path, self._final_path)
+        try:
+            os.replace(self._commiter_path, self._final_path)
+        except PermissionError as e:
+            print(f"Failed to replace the file due to {repr(e)}, running fallback method...")
+            # Windows does some weird stuff here... We fallback to the 'unsafe' option...
+            try:
+                os.remove(self._final_path)
+            except FileNotFoundError:
+                pass
+            os.rename(self._commiter_path, self._final_path)
+
         # Reset edit info...
         self._last_flush = time.monotonic()
         self._edit_count = 0

@@ -4,3 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.black]
 include='diplomat/.*\.pyi?$|docs/source/.*\.pyi?$|setup.py'
+
+[project]
+requires-python = ">= 3.8"
