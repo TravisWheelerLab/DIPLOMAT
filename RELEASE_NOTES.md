@@ -1,3 +1,1 @@
- - Add enhanced outputs for serialization errors.
- - Add support for tracing back serialization errors through the cache via the `--debug` flag.
- - Add more sensible defaults for Approximate labelers. 
+ - Fix permission issue triggered on Windows when attempting to perform safe saving.
