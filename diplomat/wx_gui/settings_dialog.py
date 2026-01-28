@@ -95,7 +95,7 @@ def _draw_colormap_entry(dc, rect, cmap):
     pad_w = fw
 
     img = cmap(np.linspace(0, 1, img_w), bytes=True)[..., :3]
-    img = np.repeat(img[None], img_h, axis=0)
+    img = np.repeat(img[None], img_h, axis=0).astype(np.uint8)
     bitmap = wx.Bitmap.FromBuffer(img_w, img_h, img.tobytes())
 
     dc.DrawBitmap(bitmap, x + pad_w, y + (h - img_h) // 2)
