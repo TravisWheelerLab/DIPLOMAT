@@ -387,12 +387,15 @@ class SettingCollectionWidget(wx.Control):
         # window to resize to fit everything...
         self.SetSizerAndFit(self._main_layout)
         self.Layout()
-        # This is also stupid...
+        # This is also stupid... We have to update the parent element too...
+        parent = self.GetParent()
+        if parent is not None:
+            parent.SetSizerAndFit(parent.GetSizer())
+            parent.Layout()
+
         window = wx.GetTopLevelParent(self)
-        w, h = window.GetSize()
         window.Layout()
-        window.SetSize(w + 1, h + 1)
-        window.SetSize(w, h)
+        window.Update()
 
     def set_setting_collection(self, collection: SettingCollection):
         """

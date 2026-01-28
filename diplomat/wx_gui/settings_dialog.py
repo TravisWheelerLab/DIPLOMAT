@@ -88,8 +88,12 @@ class DropDown(SettingWidget):
 def _draw_colormap_entry(dc, rect, cmap):
     fw, fh = dc.GetFont().GetPixelSize()
     x, y, w, h = rect.Get()
-    if h <= 0 or w <= 0:
+    if fh <= 0 or h <= 0 or w <= 0:
         return
+    # Windows will return a null, or 0 width, in which case we assume width is half the font height (typical for monospace fonts...)
+    if fw <= 0:
+        fw = max(fh // 2, 1)
+
     img_w = fw * 8
     img_h = int(fh * 1.5)
     pad_w = fw
