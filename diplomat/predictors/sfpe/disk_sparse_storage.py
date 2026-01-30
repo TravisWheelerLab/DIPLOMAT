@@ -203,7 +203,7 @@ class DiskBackedForwardBackwardData(ForwardBackwardData):
 
     @classmethod
     def get_shared_memory_size(cls, num_frames: int, num_bps: int):
-        return DiplomatFPEState.get_shared_memory_size(num_frames * num_bps)
+        return DiplomatFPEState.get_shared_structure_size(num_frames * num_bps)
 
     def __init__(
         self,

@@ -27,15 +27,19 @@ class NumpyTree:
 
 
 class BufferTree:
-    def __init__(self, buffer):
+    def __init__(self, buffer, offset: int = None, size: int = None):
+        if offset is None:
+            offset = 0
+        if size is None:
+            size = len(buffer)
         int_size = np.dtype(np.int64).itemsize
-        max_size = (len(buffer) - (2 * int_size)) // (6 * int_size)
+        max_size = (size - (2 * int_size)) // (6 * int_size)
         if max_size <= 0:
             raise ValueError("Buffer provided not big enough to store a tree...")
 
-        self._root = np.ndarray((1,), np.int64, buffer, 0, order="C")
-        self._size = np.ndarray((1,), np.int64, buffer, int_size, order="C")
-        self.data = np.ndarray((max_size, 6), np.int64, buffer, int_size * 2, order="C")
+        self._root = np.ndarray((1,), np.int64, buffer, offset, order="C")
+        self._size = np.ndarray((1,), np.int64, buffer, offset + int_size, order="C")
+        self.data = np.ndarray((max_size, 6), np.int64, buffer, offset + int_size * 2, order="C")
 
     @property
     def size(self) -> int:
