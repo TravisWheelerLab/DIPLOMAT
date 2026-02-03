@@ -1,1 +1,1 @@
- - Fix permission issue triggered on Windows when attempting to perform safe saving.
+ - Better debug output for windows when saving dipui files.
