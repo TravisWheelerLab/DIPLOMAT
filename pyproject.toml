@@ -26,6 +26,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "numba", # Required, make sure this goes before numpy...
     "opencv-python-headless",
     "matplotlib",
     "typing_extensions>=3.8",
@@ -33,7 +34,7 @@ dependencies = [
     "PyYAML",
     "pandas",
     "numpy",
-    "numba",
+    "psutil"
 ]
 dynamic = ["version"]
 

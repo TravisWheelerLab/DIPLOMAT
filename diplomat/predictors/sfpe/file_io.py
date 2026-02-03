@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import BinaryIO, Tuple, Optional, Mapping, Any, Union, Callable
 from io import SEEK_END
 import numpy as np
+import psutil
 from typing_extensions import Protocol
 from importlib import import_module
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame
@@ -603,6 +604,26 @@ class SafeFileIO:
         if not self._file.closed:
             self._file.flush()
 
+    def _check_for_offending_processes(self, path: Union[str, Path]):
+        path = Path(path).resolve()
+        offending_procs = []
+
+        for pid in psutil.pids():
+            try:
+                proc = psutil.Process(pid)
+
+                for file in proc.open_files():
+                    p = Path(file.path).resolve()
+                    if p == path:
+                        offending_procs.append(proc)
+                        break
+            except Exception as e:
+                pass
+
+        for proc in offending_procs:
+            print(f"Process {proc.name()} has diplomat file {path} open...")
+
+
     def commit(self):
         # Copy the file over...
         shutil.copy(self._scratch_path, self._commiter_path)
@@ -611,14 +632,17 @@ class SafeFileIO:
             os.replace(self._commiter_path, self._final_path)
         except PermissionError as e:
             print(f"Failed to replace the file due to {repr(e)}, running fallback method...")
+            self._check_for_offending_processes(self._final_path)
             # Windows does some weird stuff here... We fallback to the 'unsafe' option...
             try:
                 os.remove(self._final_path)
                 os.rename(self._commiter_path, self._final_path)
             except (FileNotFoundError, PermissionError) as e:
-                print(f"Unable to remove the file due to {e}")
+                # The above can still fail on windows...
+                print(f"Unable to move the file with fallback due to {repr(e)}, copying instead...")
+                if isinstance(e, PermissionError):
+                    self._check_for_offending_processes(self._final_path)
                 shutil.copyfile(self._commiter_path, self._final_path)
-
 
         # Reset edit info...
         self._last_flush = time.monotonic()
