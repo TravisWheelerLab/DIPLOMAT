@@ -614,9 +614,11 @@ class SafeFileIO:
             # Windows does some weird stuff here... We fallback to the 'unsafe' option...
             try:
                 os.remove(self._final_path)
-            except FileNotFoundError:
-                pass
-            os.rename(self._commiter_path, self._final_path)
+                os.rename(self._commiter_path, self._final_path)
+            except (FileNotFoundError, PermissionError) as e:
+                print(f"Unable to remove the file due to {e}")
+                shutil.copyfile(self._commiter_path, self._final_path)
+
 
         # Reset edit info...
         self._last_flush = time.monotonic()
