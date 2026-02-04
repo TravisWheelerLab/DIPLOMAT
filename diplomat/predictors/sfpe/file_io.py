@@ -335,7 +335,7 @@ class DiplomatFPEState:
     def _select_frame(self, frames, select_old: bool = False) -> tuple[int, np.ndarray]:
         # Frame 2 is newer, swap them...
         select_second = (frames[1, 2] - frames[0, 2]).astype(np.int64) > 0
-        select_second = not select_second if select_old else select_second
+        select_second = int(not select_second if select_old else select_second)
 
         return select_second, frames[select_second]
 
@@ -361,6 +361,9 @@ class DiplomatFPEState:
 
                 if available_size == self.INFINITY:
                     appending_to_end = True
+                    total_file_size = self._file_start + new_offset + needed_size + 12
+                    if self._file_map.size() < total_file_size:
+                        self._file_map.resize(total_file_size)
                     self._add_free_space(new_offset + needed_size, self.INFINITY)
                 elif needed_size < available_size:
                     self._add_free_space(
@@ -370,7 +373,7 @@ class DiplomatFPEState:
                 self._frame_offsets[index, frame_version_idx] = (
                     new_offset,
                     needed_size,
-                    self._frame_offsets[index, not frame_version_idx, 2] + 1
+                    self._frame_offsets[index, int(not frame_version_idx), 2] + 1
                 )
 
             offset, size, version = self._frame_offsets[index, frame_version_idx]
@@ -391,20 +394,19 @@ class DiplomatFPEState:
             header_type = DIPST_FRAME_HEADER if (index != 0) else DIPST_METADATA_HEADER
             frame = self._frame_offsets[index]
 
-            frame_idx, (offset, size, _) = self._select_frame(frame, use_fallback)
+            frame_idx, (offset, size, version) = self._select_frame(frame, use_fallback)
 
             if size == 0:
                 return (header_type, frame_idx, b"")
 
-            self._file_obj.seek(int(self._file_start + offset))
-            data = self._file_obj.read(size)
+            data, _ = self._read(int(self._file_start + offset), size)
 
             if data[: len(header_type)] != header_type:
                 raise IOError(
                     f"Found incorrect chunk type for chunk {index}, (offset {offset}, size {size}).\nData:\n{data}"
                 )
 
-            return (header_type, frame_idx, data[4:])
+            return (header_type, frame_idx, data[len(header_type):])
 
     def _robust_load_chunk(self, index: int, decoder: Callable[[bytes], Any]):
         with self._lock:
@@ -412,10 +414,11 @@ class DiplomatFPEState:
                 __, __, data = self._load_chunk(index, False)
                 data = decoder(data)
             except Exception:
+                warnings.warn(f"Fallback to old data for chunk {index}")
                 __, frame_idx, data = self._load_chunk(index, False)
                 data = decoder(data)
                 # Increment the versioning number...
-                self._frame_offsets[index, not frame_idx, 2] = self._frame_offsets[index, frame_idx, 2] + 1
+                self._frame_offsets[index, int(not frame_idx), 2] = self._frame_offsets[index, frame_idx, 2] + 1
 
         return data
 
