@@ -199,12 +199,8 @@ class CacheListContainer:
 class DiskBackedForwardBackwardData(ForwardBackwardData):
     """
     A version of ForwardBackwardData that stores its results on disk instead of
+    in memory.
     """
-
-    @classmethod
-    def get_shared_memory_size(cls, num_frames: int, num_bps: int):
-        return DiplomatFPEState.get_shared_structure_size(num_frames * num_bps)
-
     def __init__(
         self,
         num_frames: int,

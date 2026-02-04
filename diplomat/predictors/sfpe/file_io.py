@@ -112,7 +112,6 @@ class DiplomatFPEState:
         frame_count: int = 0,
         compression_level: int = 6,
         float_type: str = "<f4",
-        immediate_mode: bool = False,
         lock: Optional[multiprocessing.RLock] = None,
     ):
         # Get file length...
@@ -132,7 +131,6 @@ class DiplomatFPEState:
         self._compression_level = compression_level
         self._file_start = 0
         self._float_type = float_type
-        self._immediate_mode = immediate_mode
         self._lock = lock if (lock is not None) else DummyLock()
         self._from_pickle = False
         self._closed = False
@@ -334,7 +332,7 @@ class DiplomatFPEState:
         remove(self._free_space_offsets, offset, size)
         return offset, size
 
-    def _select_frame(self, frames, select_old: bool = False):
+    def _select_frame(self, frames, select_old: bool = False) -> tuple[int, np.ndarray]:
         # Frame 2 is newer, swap them...
         select_second = (frames[1, 2] - frames[0, 2]).astype(np.int64) > 0
         select_second = not select_second if select_old else select_second
@@ -347,36 +345,43 @@ class DiplomatFPEState:
             if index > self._frame_offsets.shape[0]:
                 raise ValueError("Growth not supported yet...")
 
-            offset, size = self._frame_offsets[index]
+            frame = self._frame_offsets[index]
+            frame_version_idx, (offset, size, version) = self._select_frame(frame, True)
+
             needed_size = (
                 len(full_data)
                 if (index > 0)
                 else int(1 << int(np.ceil(np.log2(len(full_data)))))
             )
+            appending_to_end = False
 
             if needed_size > size or needed_size < size:
                 self._add_free_space(offset, size)
                 new_offset, available_size = self._find_free_space(needed_size)
 
                 if available_size == self.INFINITY:
+                    appending_to_end = True
                     self._add_free_space(new_offset + needed_size, self.INFINITY)
                 elif needed_size < available_size:
                     self._add_free_space(
                         new_offset + needed_size, available_size - needed_size
                     )
 
-                self._frame_offsets[index] = (new_offset, needed_size)
+                self._frame_offsets[index, frame_version_idx] = (
+                    new_offset,
+                    needed_size,
+                    self._frame_offsets[index, not frame_version_idx, 2] + 1
+                )
 
-            offset, size = self._frame_offsets[index]
+            offset, size, version = self._frame_offsets[index, frame_version_idx]
+            if appending_to_end:
+                full_data = (
+                    full_data
+                    + DIPST_END_CHUNK
+                    + self._file_start.to_bytes(Offset.itemsize, "little", signed=False)
+                )
 
-            if self._immediate_mode:
-                self._write_offsets()
-                self._write_end()
-
-            self._file_obj.seek(int(self._file_start + offset))
-            self._file_obj.write(full_data)
-            if not isinstance(self._lock, DummyLock):
-                self._file_obj.flush()
+            self._write(int(self._file_start + offset), full_data)
 
     def _load_chunk(self, index: int, use_fallback: bool = False) -> Tuple[bytes, int, bytes]:
         with self._lock:
@@ -395,21 +400,24 @@ class DiplomatFPEState:
             data = self._file_obj.read(size)
 
             if data[: len(header_type)] != header_type:
-                print(data)
                 raise IOError(
-                    f"Found incorrect chunk type for chunk {index}, (offset {offset}, size {size})."
+                    f"Found incorrect chunk type for chunk {index}, (offset {offset}, size {size}).\nData:\n{data}"
                 )
 
             return (header_type, frame_idx, data[4:])
 
-    def _robust_load_chunk(self, index: int, decoder):
+    def _robust_load_chunk(self, index: int, decoder: Callable[[bytes], Any]):
         with self._lock:
             try:
                 __, __, data = self._load_chunk(index, False)
                 data = decoder(data)
-            except Exception as e:
-                __, __, data = self._load_chunk(index, False)
+            except Exception:
+                __, frame_idx, data = self._load_chunk(index, False)
                 data = decoder(data)
+                # Increment the versioning number...
+                self._frame_offsets[index, not frame_idx, 2] = self._frame_offsets[index, frame_idx, 2] + 1
+
+        return data
 
     def _space_coverage(self):
         from diplomat.predictors.sfpe.avl_tree import inorder_traversal
@@ -464,8 +472,8 @@ class DiplomatFPEState:
             raise ValueError("State object is closed!")
         if item < 0:
             raise IndexError("Negative indexes not supported...")
-        __, data = self._load_chunk(1 + item)
-        return self._decode_frame(data)
+        __, data = self._robust_load_chunk(1 + item, self._decode_frame)
+        return data
 
     def __setitem__(self, item: int, value: ForwardBackwardFrame):
         if self._closed:
@@ -485,17 +493,7 @@ class DiplomatFPEState:
     def get_metadata(self) -> dict:
         if self._closed:
             raise ValueError("State object is closed!")
-        try:
-            __, frame_idx, data = self._load_chunk(0)
-            data = self._decode_meta_chunk(data)
-        except Exception:
-            __, frame_idx, data = self._load_chunk(0, True)
-            data = self._decode_meta_chunk(data)
-            # Increment the versioning number...
-            with self._lock:
-                self._frame_offsets[0, not frame_idx, 2] = self._frame_offsets[0, frame_idx, 2] + 1
-
-        return data
+        return self._robust_load_chunk(0, self._decode_meta_chunk)
 
     def set_metadata(self, data: Mapping):
         if self._closed:
@@ -507,8 +505,6 @@ class DiplomatFPEState:
         with self._lock:
             if self._closed:
                 raise ValueError("State object is closed!")
-            self._write_offsets()
-            self._write_end()
             self._file_map.flush()
 
     def close(self):
@@ -516,8 +512,6 @@ class DiplomatFPEState:
             if self._closed:
                 return
             self.flush()
-            if self._from_pickle:
-                self._file_map.close()
             self._closed = True
 
     @classmethod
@@ -547,129 +541,3 @@ class DiplomatFPEState:
     @property
     def closed(self) -> bool:
         return self._closed
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-
-        if state["_shared_mem"] is None:
-            raise RuntimeError(
-                "Attempting to pickle a diplomat file state without memory backing."
-            )
-
-        state["_file_obj"] = state["_file_obj"].name
-        state["_frame_offsets"] = state["_frame_offsets"].shape[0] - 1
-        state["_free_space"] = None
-        state["_frame_space_offsets"] = None
-        state["_from_pickle"] = True
-        return state
-
-    def __setstate__(self, state: dict):
-        self.__dict__ = state
-        frame_count = self._frame_offsets
-        offset1 = (frame_count + 1) * Offset.itemsize * 2
-        offset2 = offset1 + BufferTree.get_buffer_size(int(frame_count + 2))
-
-        self._frame_offsets = np.ndarray(
-            (frame_count + 1, 2),
-            dtype=Offset,
-            buffer=self._shared_mem.buf[:offset1],
-            order="C",
-        )
-        self._free_space = BufferTree(self._shared_mem.buf[offset1:offset2])
-        self._free_space_offsets = BufferTree(self._shared_mem.buf[offset2:])
-        self._file_obj = open(str(self._file_obj), "r+b")
-
-
-@dataclasses.dataclass
-class SaveConditions:
-    number_writes: int = -1
-    number_seconds: float = -1
-    number_bytes_changed: int = -1
-
-
-class SafeFileIO:
-    """
-    Represents safe file IO object. All file writes are promised to be atomic.
-    This means they will either succeed fully or fail completely.
-    This prevents a file from being found in a corrupted state.
-    """
-
-    def __init__(
-        self, path: Union[str, Path], mode: str, save_config: SaveConditions, **kwargs
-    ):
-        #
-        self._final_path = Path(path).resolve()
-        rng_str = "".join(random.choices(string.ascii_letters, k=10))
-        self._commiter_path = self._final_path.parent / (
-            self._final_path.name + f"_tmp1{rng_str}"
-        )
-        self._scratch_path = self._final_path.parent / (
-            self._final_path.name + f"_tmp2{rng_str}"
-        )
-        if self._final_path.exists() and "w" not in mode:
-            shutil.copy(self._final_path, self._scratch_path)
-        self._file = open(self._scratch_path, mode, **kwargs)
-        self._save_config = save_config
-        self._edit_count = 0
-        self._changed_bytes = 0
-        self._last_flush = time.monotonic()
-
-    def __getattr__(self, item):
-        if item.startswith("_"):
-            raise AttributeError(item)
-        return getattr(self._file, item)
-
-    def __enter__(self):
-        return self
-
-    def flush(self):
-        if not self._file.closed:
-            self._file.flush()
-
-    def commit(self):
-        # Copy the file over...
-        shutil.copy(self._scratch_path, self._commiter_path)
-        # Replace the commited file with the final file path...
-        try:
-            os.replace(self._commiter_path, self._final_path)
-        except PermissionError as e:
-            print(f"Failed to replace the file due to {repr(e)}, running fallback method...")
-            # Windows does some weird stuff here... We fallback to the 'unsafe' option...
-            try:
-                os.remove(self._final_path)
-            except FileNotFoundError:
-                pass
-            os.rename(self._commiter_path, self._final_path)
-
-        # Reset edit info...
-        self._last_flush = time.monotonic()
-        self._edit_count = 0
-        self._changed_bytes = 0
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def _can_do_commit(self, current_time: float):
-        cnf = self._save_config
-        writes_pass = 0 < cnf.number_writes < self._edit_count
-        bytes_pass = 0 < cnf.number_bytes_changed < self._changed_bytes
-        time_pass = 1 < cnf.number_seconds < (current_time - self._last_flush)
-        return writes_pass or bytes_pass or time_pass
-
-    def write(self, s):
-        self._edit_count += 1
-        self._changed_bytes += len(s)
-        count = self._file.write(s)
-        if self._can_do_commit(time.monotonic()):
-            self.commit()
-        return count
-
-    def close(self):
-        self.flush()
-        self.commit()
-        self._file.close()
-        self._scratch_path.unlink(True)
-        self._commiter_path.unlink(True)
-
-    def __del__(self):
-        self._file.close()

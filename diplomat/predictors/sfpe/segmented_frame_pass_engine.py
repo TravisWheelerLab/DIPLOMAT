@@ -14,7 +14,6 @@ import time
 import diplomat.utils.frame_store_api as frame_store_api
 from diplomat.predictors.sfpe.segmentation import EndPointSegmentor
 from diplomat.predictors.sfpe.assignment import ASSIGNMENT_ALGORITHMS
-from diplomat.predictors.sfpe.file_io import SafeFileIO, SaveConditions
 
 try:
     from ..fpe.frame_pass import FramePass, ProgressBar
@@ -511,8 +510,6 @@ class SegmentedFramePassEngine(Predictor):
 
         self._frame_holder = None
         self._file_obj = None
-        self._shared_memory = None
-        self._manager = None
 
         self._segments = None
         self._segment_scores = None
@@ -549,30 +546,20 @@ class SegmentedFramePassEngine(Predictor):
         video_path = Path(self.video_metadata["orig-video-path"]).resolve()
         disk_path = output_path.parent / (output_path.stem + ".dipui")
 
-        self._file_obj = SafeFileIO(
-            disk_path, "w+b", save_config=SaveConditions(number_seconds=60 * 3)
-        )
+        self._file_obj = open(disk_path, "w+b")
 
         with video_path.open("rb") as f:
             shutil.copyfileobj(f, self._file_obj)
 
         ctx = PoolWithProgress.get_optimal_ctx()
-        self._manager = ctx.Manager()
-        self._shared_memory = allocate_shared_memory(
-            ctx,
-            DiskBackedForwardBackwardData.get_shared_memory_size(
-                self.num_frames, self._num_total_bp
-            ),
-        )
 
         _frame_holder = DiskBackedForwardBackwardData(
             self.num_frames,
             self._num_total_bp,
             self._file_obj,
             self.settings.memory_cache_size,
-            lock=self._manager.RLock(),
-            debug=self.settings.debug,
-            memory_backing=self._shared_memory,
+            lock=ctx.RLock(),
+            debug=self.settings.debug
         )
 
         return _frame_holder
@@ -596,27 +583,17 @@ class SegmentedFramePassEngine(Predictor):
             )
             self.settings.storage_mode = "disk"
 
-            self._file_obj = SafeFileIO(
-                self._restore_path, "r+b", SaveConditions(number_seconds=60 * 3)
-            )
+            self._file_obj = open(self._restore_path, "r+b")
 
             ctx = PoolWithProgress.get_optimal_ctx()
-            self._manager = ctx.Manager()
-            self._shared_memory = allocate_shared_memory(
-                ctx,
-                DiskBackedForwardBackwardData.get_shared_memory_size(
-                    self.num_frames, self._num_total_bp
-                ),
-            )
 
             self._frame_holder = DiskBackedForwardBackwardData(
                 self.num_frames,
                 self._num_total_bp,
                 self._file_obj,
                 self.settings.memory_cache_size,
-                lock=self._manager.RLock(),
+                lock=ctx.RLock(),
                 debug=self.settings.debug,
-                memory_backing=self._shared_memory,
             )
 
             self._segments = np.array(
@@ -654,12 +631,6 @@ class SegmentedFramePassEngine(Predictor):
             self._frame_holder.close()
         if self._file_obj is not None:
             self._file_obj.close()
-        if self._shared_memory is not None and hasattr(self._shared_memory, "close"):
-            self._shared_memory.close()
-            if hasattr(self._shared_memory, "unlink"):
-                self._shared_memory.unlink()
-        if self._manager is not None:
-            self._manager.shutdown()
 
     def _sparcify_and_store(
         self,
