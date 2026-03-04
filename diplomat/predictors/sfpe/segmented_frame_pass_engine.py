@@ -514,6 +514,7 @@ class SegmentedFramePassEngine(Predictor):
         self._segments = None
         self._segment_scores = None
         self._segment_bp_order = None
+        self._manager = None
 
         self._restore_path = restore_path
 
@@ -552,13 +553,15 @@ class SegmentedFramePassEngine(Predictor):
             shutil.copyfileobj(f, self._file_obj)
 
         ctx = PoolWithProgress.get_optimal_ctx()
+        if self._manager is None:
+            self._manager = ctx.Manager()
 
         _frame_holder = DiskBackedForwardBackwardData(
             self.num_frames,
             self._num_total_bp,
             self._file_obj,
             self.settings.memory_cache_size,
-            lock=ctx.RLock(),
+            lock=self._manager.RLock(),
             debug=self.settings.debug
         )
 
@@ -586,13 +589,15 @@ class SegmentedFramePassEngine(Predictor):
             self._file_obj = open(self._restore_path, "r+b")
 
             ctx = PoolWithProgress.get_optimal_ctx()
+            if self._manager is None:
+                self._manager = ctx.Manager()
 
             self._frame_holder = DiskBackedForwardBackwardData(
                 self.num_frames,
                 self._num_total_bp,
                 self._file_obj,
                 self.settings.memory_cache_size,
-                lock=ctx.RLock(),
+                lock=self._manager.RLock(),
                 debug=self.settings.debug,
             )
 
@@ -631,6 +636,9 @@ class SegmentedFramePassEngine(Predictor):
             self._frame_holder.close()
         if self._file_obj is not None:
             self._file_obj.close()
+        if self._manager is not None:
+            self._manager.shutdown()
+            self._manager = None
 
     def _sparcify_and_store(
         self,

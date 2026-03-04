@@ -1,29 +1,22 @@
-import dataclasses
+import io
 import json
 import mmap
 import multiprocessing
 import os
-import random
-import shutil
-import time
 import warnings
 from pathlib import Path
 from typing import BinaryIO, Tuple, Optional, Mapping, Any, Union, Callable
-from io import SEEK_END
 import numpy as np
-from PIL.ImageChops import offset
 from typing_extensions import Protocol
 from importlib import import_module
 from diplomat.predictors.fpe.sparse_storage import ForwardBackwardFrame
 from diplomat.predictors.sfpe.avl_tree import (
     BufferTree,
-    NumpyTree,
     insert,
     nearest_pop,
     remove, Tree,
 )
 import zlib
-import string
 
 
 DIPLOMAT_STATE_HEADER = b"DPST"
@@ -38,6 +31,7 @@ DIPST_END_CHUNK = b"DEND"
 
 Offset = np.dtype("<u8")
 
+warnings.simplefilter("module")
 
 class DummyLock:
     """
@@ -114,20 +108,9 @@ class DiplomatFPEState:
         float_type: str = "<f4",
         lock: Optional[multiprocessing.RLock] = None,
     ):
-        # Get file length...
-        c_loc = file_obj.tell()
-        file_obj.seek(0, os.SEEK_END)
-        file_length = file_obj.tell()
-        file_obj.seek(c_loc)
-
-        if file_length == 0:
-            if frame_count <= 0:
-                raise ValueError("Trying to read an empty file!")
-            memmap_alloc = self.get_minimum_file_size(frame_count)
-        else:
-            memmap_alloc = 0
-
-        self._file_map = mmap.mmap(file_obj.fileno(), memmap_alloc)
+        self._file_obj = file_obj
+        self._file_mmap = None
+        self._file_mmap_flush_range = None
         self._compression_level = compression_level
         self._file_start = 0
         self._float_type = float_type
@@ -138,7 +121,7 @@ class DiplomatFPEState:
         self._free_space: Tree = None
         self._free_space_offsets: Tree = None
 
-        self._find_chunks(frame_count, file_length)
+        self._find_chunks(frame_count)
 
         if (
             self._free_space.data.shape[0] <= self._frame_offsets.shape[0]
@@ -147,20 +130,20 @@ class DiplomatFPEState:
             raise ValueError("Free space buffer not large enough...")
         self._compute_free_space()
 
-    def _find_chunks(self, frame_count: int, file_size: int):
+    def _find_chunks(self, frame_count: int):
         with self._lock:
-            data = self._file_map[-12:]
+            data, file_size = self._read(-12, 12)
 
             if data[:4] == DIPST_END_CHUNK:
                 self._file_start = int.from_bytes(data[4:], "little", signed=False)
             else:
-                self._file_start = file_size
+                self._file_start = 0
 
-            dip_header = self._file_map[self._file_start:self._file_start + 4]
+            dip_header = self._read(self._file_start, 4)[0]
 
             if dip_header != DIPLOMAT_STATE_HEADER and file_size != 0:
                 warnings.warn("DIPLOMAT found possibly corrupted file, attempting to recover...")
-                header_loc = self._file_map.rfind(DIPLOMAT_STATE_HEADER + DIPST_OFFSET_CHUNK)
+                header_loc = self._rfind(DIPLOMAT_STATE_HEADER + DIPST_OFFSET_CHUNK, io.DEFAULT_BUFFER_SIZE)
                 if header_loc >= 0:
                     dip_header = DIPLOMAT_STATE_HEADER
                     self._file_start = header_loc
@@ -169,9 +152,6 @@ class DiplomatFPEState:
                 if frame_count <= 0:
                     raise IOError("No ui state found in this file.")
                 self._file_start = file_size
-                new_size = self._file_start + self.get_minimum_file_size(frame_count)
-                if new_size > self._file_map.size():
-                    self._file_map.resize(new_size)
                 self._init_new_header(frame_count)
 
             self._init_offset_structures()
@@ -180,6 +160,22 @@ class DiplomatFPEState:
                 (self._frame_offsets.shape[0] - 1) != frame_count
             ):
                 raise ValueError("Loaded file doesn't have same frame count!")
+
+    def _rfind(self, msg, block_size):
+        self._file_obj.seek(0, os.SEEK_END)
+        offset = self._file_obj.tell()
+
+        while offset > 0:
+            blk_size = min(offset, block_size)
+            offset -= blk_size
+            self._file_obj.seek(offset)
+            data = self._file_obj.read(blk_size)
+            idx = data.rfind(msg)
+
+            if idx >= 0:
+                return offset + idx
+
+        return -1
 
     def _compute_free_space(self):
         with self._lock:
@@ -232,14 +228,17 @@ class DiplomatFPEState:
         )
 
     def _write(self, offset: int, data: bytes):
-        self._file_map[offset:offset + len(data)] = data
-        return offset + len(data)
+        self._file_obj.seek(offset, os.SEEK_SET if (offset >= 0) else os.SEEK_END)
+        self._file_obj.write(data)
+        return self._file_obj.tell()
 
     def _simple_read(self, offset: int, size: int):
         return self._read(offset, size)[0]
 
     def _read(self, offset: int, size: int):
-        return self._file_map[offset:offset + size], offset + size
+        self._file_obj.seek(offset, os.SEEK_SET if (offset >= 0) else os.SEEK_END)
+        data = self._file_obj.read(size)
+        return data, self._file_obj.tell()
 
     def _init_new_header(self, frame_count: int):
         with self._lock:
@@ -257,8 +256,11 @@ class DiplomatFPEState:
             # Data chunk...
             return offset
 
-    def _init_offset_structures(self):
+    def _init_offset_structures(self, clear_tmp_structures: bool = True):
         with self._lock:
+            if self._file_mmap is None:
+                self._file_obj.flush()
+                self._file_mmap = mmap.mmap(self._file_obj.fileno(), 0)
             header, struct_offset = self._read(self._file_start + len(DIPLOMAT_STATE_HEADER), 12)
 
             if header[:4] != DIPST_OFFSET_CHUNK:
@@ -269,21 +271,32 @@ class DiplomatFPEState:
             self._frame_offsets = np.ndarray(
                 (length + 1, 2, 3),
                 Offset,
-                self._file_map,
+                self._file_mmap,
                 struct_offset
             )
             tree1_offset = struct_offset + self._frame_offsets.nbytes
             tree_size = BufferTree.get_buffer_size((length + 1) * 2 + 1)
+            if clear_tmp_structures:
+                self._file_mmap[tree1_offset:tree1_offset + tree_size] = bytes(tree_size)
             self._free_space = BufferTree(
-                self._file_map,
+                self._file_mmap,
                 tree1_offset,
                 tree_size
             )
             tree2_offset = tree1_offset + tree_size
+            if clear_tmp_structures:
+                self._file_mmap[tree2_offset:tree2_offset + tree_size] = bytes(tree_size)
             self._free_space_offsets = BufferTree(
-                self._file_map,
+                self._file_mmap,
                 tree2_offset,
                 tree_size
+            )
+
+            alloc_gran = min(mmap.ALLOCATIONGRANULARITY, mmap.PAGESIZE)
+
+            self._file_mmap_flush_range = (
+                struct_offset // alloc_gran * alloc_gran,
+                (((tree_size - 1) // alloc_gran) + 1) * alloc_gran
             )
 
     def _add_free_space(self, offset: int, size: int):
@@ -334,10 +347,18 @@ class DiplomatFPEState:
 
     def _select_frame(self, frames, select_old: bool = False) -> tuple[int, np.ndarray]:
         # Frame 2 is newer, swap them...
-        select_second = (frames[1, 2] - frames[0, 2]).astype(np.int64) > 0
+        select_second = (int(frames[1, 2]) - int(frames[0, 2])) > 0
         select_second = int(not select_second if select_old else select_second)
 
         return select_second, frames[select_second]
+
+    def _mark_latest(self, frame_idx, version_idx):
+        old_version = self._frame_offsets[frame_idx, int(not version_idx), 2]
+        i_info = np.iinfo(self._frame_offsets.dtype)
+        if old_version == i_info.max:
+            old_version = i_info.min
+            self._frame_offsets[frame_idx, int(not version_idx), 2] = old_version
+        self._frame_offsets[frame_idx, int(version_idx), 2] = old_version + 1
 
     def _write_chunk(self, index: int, chunk_type: bytes, data: bytes):
         with self._lock:
@@ -361,21 +382,18 @@ class DiplomatFPEState:
 
                 if available_size == self.INFINITY:
                     appending_to_end = True
-                    total_file_size = self._file_start + new_offset + needed_size + 12
-                    if self._file_map.size() < total_file_size:
-                        self._file_map.resize(total_file_size)
                     self._add_free_space(new_offset + needed_size, self.INFINITY)
                 elif needed_size < available_size:
                     self._add_free_space(
                         new_offset + needed_size, available_size - needed_size
                     )
 
-                self._frame_offsets[index, frame_version_idx] = (
+                self._frame_offsets[index, frame_version_idx, :2] = (
                     new_offset,
-                    needed_size,
-                    self._frame_offsets[index, int(not frame_version_idx), 2] + 1
+                    needed_size
                 )
 
+            self._mark_latest(index, frame_version_idx)
             offset, size, version = self._frame_offsets[index, frame_version_idx]
             if appending_to_end:
                 full_data = (
@@ -385,6 +403,7 @@ class DiplomatFPEState:
                 )
 
             self._write(int(self._file_start + offset), full_data)
+            self.flush()
 
     def _load_chunk(self, index: int, use_fallback: bool = False) -> Tuple[bytes, int, bytes]:
         with self._lock:
@@ -415,10 +434,10 @@ class DiplomatFPEState:
                 data = decoder(data)
             except Exception:
                 warnings.warn(f"Fallback to old data for chunk {index}")
-                __, frame_idx, data = self._load_chunk(index, False)
+                __, frame_idx, data = self._load_chunk(index, True)
                 data = decoder(data)
                 # Increment the versioning number...
-                self._frame_offsets[index, int(not frame_idx), 2] = self._frame_offsets[index, frame_idx, 2] + 1
+                self._mark_latest(index, int(not frame_idx))
 
         return data
 
@@ -475,7 +494,7 @@ class DiplomatFPEState:
             raise ValueError("State object is closed!")
         if item < 0:
             raise IndexError("Negative indexes not supported...")
-        __, data = self._robust_load_chunk(1 + item, self._decode_frame)
+        data = self._robust_load_chunk(1 + item, self._decode_frame)
         return data
 
     def __setitem__(self, item: int, value: ForwardBackwardFrame):
@@ -501,20 +520,28 @@ class DiplomatFPEState:
     def set_metadata(self, data: Mapping):
         if self._closed:
             raise ValueError("State object is closed!")
-        data = self._encode_meta_chunk(dict(data))
-        self._write_chunk(0, DIPST_METADATA_HEADER, data)
+        # print("Writing:", data)
+        enc_data = self._encode_meta_chunk(dict(data))
+        self._write_chunk(0, DIPST_METADATA_HEADER, enc_data)
+
 
     def flush(self):
         with self._lock:
             if self._closed:
                 raise ValueError("State object is closed!")
-            self._file_map.flush()
+            if self._file_mmap is not None:
+                self._file_mmap.flush(*self._file_mmap_flush_range)
+            self._file_obj.flush()
 
     def close(self):
         with self._lock:
             if self._closed:
                 return
             self.flush()
+            if self._file_mmap is not None:
+                self._file_mmap.close()
+            if self._from_pickle:
+                self._file_obj.close()
             self._closed = True
 
     @classmethod
@@ -543,4 +570,32 @@ class DiplomatFPEState:
 
     @property
     def closed(self) -> bool:
-        return self._closed
+        return self._closed or self._file_obj.closed
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+
+        if isinstance(state["_lock"], DummyLock):
+            raise RuntimeError(
+                "Attempting to pickle a diplomat file state without a lock!"
+            )
+
+        state["_file_obj"] = state["_file_obj"].name
+        state["_frame_offsets"] = self._frame_offsets.shape[0]
+        state["_file_mmap"] = None
+        state["_free_space"] = None
+        state["_frame_space_offsets"] = None
+        self.flush()
+        return state
+
+    def __setstate__(self, state: dict):
+        self.__dict__ = state
+        frame_count = self._frame_offsets
+
+        self._file_obj = open(str(self._file_obj), "r+b")
+        self._init_offset_structures(False)
+
+        if self._frame_offsets.shape[0] != frame_count:
+            raise IOError("Unable to restore dipui header!")
+
+        self._from_pickle = True
