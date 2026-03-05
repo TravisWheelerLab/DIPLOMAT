@@ -1,1 +1,1 @@
- - Fix permission issue triggered on Windows when attempting to perform safe saving.
+ - Add new setting `backup_every` to the SegmentedFramePassEngine to specify how often to save dipui files, in seconds. The default value has been adjusted from 3 to 6 minutes. You can access the setting via the `--backup_every` CLI flag on the `track` and `track_and_interact` commands.

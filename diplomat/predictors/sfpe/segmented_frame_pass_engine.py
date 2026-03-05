@@ -1801,7 +1801,7 @@ class SegmentedFramePassEngine(Predictor):
             "dipui_file": (
                 None,
                 type_casters.Union(type_casters.Literal(None), str),
-                "A path specifying where to save the dipui file",
+                "A path specifying where to save the dipui file.",
             ),
         }
 
