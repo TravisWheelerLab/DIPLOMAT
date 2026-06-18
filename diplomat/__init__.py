@@ -2,31 +2,31 @@
 A tool providing multi-animal tracking capabilities on top of other Deep learning based tracking software.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 import warnings
 
 # Can be used by functions to determine if diplomat was invoked through it's CLI interface.
 CLI_RUN = False
 
-from diplomat.predictor_ops import (
-    list_predictor_plugins,
-    get_predictor_settings,
-    test_predictor_plugin,
-)
-from diplomat.frontend_ops import list_all_frontends, list_loaded_frontends
-from diplomat.utils.video_splitter import split_videos
 from diplomat.core_ops import (
-    track_with,
+    annotate,
+    convert_tracks,
+    interact,
     track,
     track_and_interact,
-    annotate,
+    track_with,
     tweak,
+    update_ui_state,
     yaml,
-    interact,
-    convert_tracks,
-    update_ui_state
 )
+from diplomat.frontend_ops import list_all_frontends, list_loaded_frontends
+from diplomat.predictor_ops import (
+    get_predictor_settings,
+    list_predictor_plugins,
+    test_predictor_plugin,
+)
+from diplomat.utils.video_splitter import split_videos
 
 __all__ = [
     "list_predictor_plugins",
@@ -43,17 +43,19 @@ __all__ = [
     "yaml",
     "interact",
     "convert_tracks",
-    "update_ui_state"
+    "update_ui_state",
 ]
+
 
 # Attempt to load all frontends, putting their public functions into submodules of diplomat.
 def _load_frontends():
+    from multiprocessing import current_process
+    from types import ModuleType
+
     from diplomat import frontends
     from diplomat.frontends import DIPLOMATFrontend
-    from diplomat.utils.pluginloader import load_plugin_classes
     from diplomat.utils._function_tools import replace_function_name_and_module
-    from types import ModuleType
-    from multiprocessing import current_process
+    from diplomat.utils.pluginloader import load_plugin_classes
 
     if current_process().name != "MainProcess":
         # If something in this package is using multiprocessing, disable the automatic frontend loading code.

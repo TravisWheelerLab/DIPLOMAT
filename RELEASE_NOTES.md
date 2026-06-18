@@ -1,1 +1,3 @@
- - Uses new dipui format, that is robust to being corrupted on crashed and contains error correcting behavior.
+ - Fix regression caused by new version of keras that caused sleap models to fail to load by pinning the keras version.
+ - Add code to detect old dipui files (created before version 0.4.0) and notify the user instead of crashing. 
+ - Adds command `diplomat update_ui_state` which allows for converting old dipui files to the new dipui format.
