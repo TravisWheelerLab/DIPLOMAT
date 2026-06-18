@@ -2,9 +2,10 @@
 Provides the :py:class:`~diplomat.processing.pose.Pose` class, used for storing final predicted body part locations.
 """
 
-from typing import Union, Tuple
-from numpy import ndarray
+from typing import Tuple, Union
+
 import numpy as np
+from numpy import ndarray
 
 
 class Pose:

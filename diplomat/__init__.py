@@ -25,6 +25,7 @@ from diplomat.core_ops import (
     yaml,
     interact,
     convert_tracks,
+    update_ui_state
 )
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     "yaml",
     "interact",
     "convert_tracks",
+    "update_ui_state"
 ]
 
 # Attempt to load all frontends, putting their public functions into submodules of diplomat.

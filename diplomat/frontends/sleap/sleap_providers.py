@@ -1,15 +1,17 @@
 from abc import ABC, abstractmethod
 from io import BytesIO
-from typing import Optional, Union, List, Tuple
+from typing import List, Optional, Tuple, Union
 
-from .onnx_graph_builder import OnnxVar, OnnxOp, to_onnx_graph_def
-from .sleap_imports import onnx, tf2onnx, tf, ort
+import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from typing_extensions import TypedDict
-import numpy as np
-from .run_utils import _dict_get_path
+
 from diplomat.processing import TrackingData
 from diplomat.utils.lazy_import import resolve_lazy_imports
+
+from .onnx_graph_builder import OnnxOp, OnnxVar, to_onnx_graph_def
+from .run_utils import _dict_get_path
+from .sleap_imports import onnx, ort, tf, tf2onnx
 
 
 class SleapMetadata(TypedDict):

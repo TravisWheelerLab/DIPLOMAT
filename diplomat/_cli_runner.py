@@ -1,7 +1,8 @@
 import sys
+from argparse import ArgumentParser
+
 import diplomat
 from diplomat.utils.cli_tools import build_full_parser
-from argparse import ArgumentParser
 
 
 def get_static_cli_tree() -> dict:
@@ -24,6 +25,7 @@ def get_static_cli_tree() -> dict:
         "yaml": diplomat.yaml,
         "interact": diplomat.interact,
         "convert_tracks": diplomat.convert_tracks,
+        "update_ui_state": diplomat.update_ui_state,
         "frontends": {
             "__description": "Contains subcommands for listing available frontends and inspecting the functions "
             "each frontend supports.",

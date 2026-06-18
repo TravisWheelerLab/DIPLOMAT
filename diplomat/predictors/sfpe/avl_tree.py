@@ -1,9 +1,9 @@
-from typing import Tuple, Optional
-from typing_extensions import Protocol
-import numpy as np
-import numba
-from numba.core.types.containers import Tuple as NumbaTuple
+from typing import Optional, Tuple
 
+import numba
+import numpy as np
+from numba.core.types.containers import Tuple as NumbaTuple
+from typing_extensions import Protocol
 
 _KEY = 0
 _VALUE = 1
@@ -14,8 +14,18 @@ _PARENT = 5
 
 
 class Tree(Protocol):
-    root: int
-    size: int
+    @property
+    def root(self) -> int: ...
+
+    @root.setter
+    def root(self, val: int): ...
+
+    @property
+    def size(self) -> int: ...
+
+    @size.setter
+    def size(self, val: int): ...
+
     data: np.ndarray
 
 
@@ -27,7 +37,9 @@ class NumpyTree:
 
 
 class BufferTree:
-    def __init__(self, buffer, offset: int = None, size: int = None):
+    def __init__(
+        self, buffer, offset: Optional[int] = None, size: Optional[int] = None
+    ):
         if offset is None:
             offset = 0
         if size is None:
@@ -39,7 +51,9 @@ class BufferTree:
 
         self._root = np.ndarray((1,), np.int64, buffer, offset, order="C")
         self._size = np.ndarray((1,), np.int64, buffer, offset + int_size, order="C")
-        self.data = np.ndarray((max_size, 6), np.int64, buffer, offset + int_size * 2, order="C")
+        self.data = np.ndarray(
+            (max_size, 6), np.int64, buffer, offset + int_size * 2, order="C"
+        )
 
     @property
     def size(self) -> int:
@@ -64,7 +78,7 @@ class BufferTree:
 
 
 def tree_to_string(tree: Tree) -> str:
-    return f"{type(tree).__name__}(root={tree.root}, size={tree.size}, data=\n{tree.data[:tree.size]}\n)"
+    return f"{type(tree).__name__}(root={tree.root}, size={tree.size}, data=\n{tree.data[: tree.size]}\n)"
 
 
 def insert(tree: Tree, key: int, val: int) -> bool:

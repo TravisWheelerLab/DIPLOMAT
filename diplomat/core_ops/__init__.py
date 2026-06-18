@@ -1,50 +1,50 @@
 import os
 import sys
+import typing
+from argparse import ArgumentParser
+from types import ModuleType
+
 from diplomat.core_ops.shared_commands.annotate import _label_videos_single
 from diplomat.core_ops.shared_commands.save_from_restore import _save_from_restore
 from diplomat.core_ops.shared_commands.tracking import analyze_frames, analyze_videos
+from diplomat.core_ops.shared_commands.tweak import _tweak_video_single
 from diplomat.core_ops.shared_commands.utils import (
     _fix_path_pairs,
     _get_track_loaders,
     _load_tracks_from_loaders,
 )
-from diplomat.core_ops.shared_commands.tweak import _tweak_video_single
 from diplomat.core_ops.shared_commands.visual_settings import (
-    VISUAL_SETTINGS,
     FULL_VISUAL_SETTINGS,
+    VISUAL_SETTINGS,
 )
+from diplomat.frontends import DIPLOMATCommands, DIPLOMATContract
 from diplomat.processing import Config, Predictor, get_predictor
 from diplomat.processing.type_casters import (
-    typecaster_function,
-    PathLike,
-    Union,
-    Optional,
-    List,
-    Dict,
     Any,
-    get_typecaster_annotations,
+    Dict,
+    List,
     NoneType,
-    get_typecaster_required_arguments,
+    Optional,
+    PathLike,
     TypeCasterFunction,
+    Union,
+    get_typecaster_annotations,
+    get_typecaster_required_arguments,
+    typecaster_function,
 )
-from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.cli_tools import (
-    func_to_command,
-    allow_arbitrary_flags,
-    Flag,
-    positional_argument_count,
     CLIError,
+    Flag,
+    allow_arbitrary_flags,
+    clear_extra_cli_args_and_copy,
     extra_cli_args,
     func_args_to_config_spec,
-    clear_extra_cli_args_and_copy,
+    func_to_command,
+    positional_argument_count,
 )
-from argparse import ArgumentParser
-import typing
-from types import ModuleType
-
+from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.track_formats import save_diplomat_table
 from diplomat.utils.tweak_ui import UIImportError
-from diplomat.frontends import DIPLOMATContract, DIPLOMATCommands
 
 
 class ArgumentError(CLIError):
@@ -179,11 +179,11 @@ def yaml(run_config: Union[PathLike, NoneType] = None, **extra_args):
 
     if not isinstance(command_name, str):
         raise ArgumentError(
-            f"Yaml file 'command' attribute does not have a value that is a string."
+            "Yaml file 'command' attribute does not have a value that is a string."
         )
     if not isinstance(arguments, dict):
         raise ArgumentError(
-            f"Yaml file 'arguments' attribute not a list of key-value pairs, or mapping."
+            "Yaml file 'arguments' attribute not a list of key-value pairs, or mapping."
         )
 
     # Load the command...
@@ -535,9 +535,10 @@ def interact(
     :param state: A path or list of paths to the ui states to restore. Files should be of ".dipui" format.
     :param debug: Enable additional debug information to be displayed when running the UI.
     """
-    from diplomat.predictors.sfpe.file_io import DiplomatFPEState
-    from diplomat.processing import TQDMProgressBar, Config
     import time
+
+    from diplomat.predictors.sfpe.file_io import DiplomatFPEState
+    from diplomat.processing import Config, TQDMProgressBar
 
     try:
         from diplomat.predictors.supervised_sfpe.supervised_segmented_frame_pass_engine import (
@@ -559,7 +560,9 @@ def interact(
                     len(meta["bodyparts"]) * meta["num_outputs"]
                 )
 
-        settings = Config(meta["settings"], SupervisedSegmentedFramePassEngine.get_settings())
+        settings = Config(
+            meta["settings"], SupervisedSegmentedFramePassEngine.get_settings()
+        )
         settings.debug = debug
 
         # Create the UI...
@@ -593,6 +596,96 @@ def interact(
         )
 
 
+def _resolve_in_out_paths(inputs, outputs, ext_change, extra_name_ext_if_needed):
+    from pathlib import Path
+
+    if not isinstance(inputs, (list, tuple)):
+        inputs = [inputs]
+
+    if outputs is None:
+        outputs = []
+        for p in inputs:
+            p = Path(p).resolve()
+            fname = (
+                (p.stem + ext_change)
+                if p.suffix != ext_change
+                else (p.stem + f"{extra_name_ext_if_needed}{ext_change}")
+            )
+            outputs.append(p.parent / fname)
+    if not isinstance(outputs, (list, tuple)):
+        outputs = [outputs]
+
+    if len(inputs) != len(outputs):
+        raise ValueError(
+            "The provided paths and destinations do not have the same length!"
+        )
+
+    return ([Path(i).resolve() for i in inputs], [Path(o).resolve() for o in outputs])
+
+
+@typecaster_function
+def update_ui_state(
+    inputs: Union[List[PathLike], PathLike],
+    outputs: Union[NoneType, List[PathLike], PathLike] = None,
+    force: Flag = False,
+):
+    """
+    Update diplomat state files ('.dipui' extension) from older versions of diplomat (all versions before 0.4.0) to the latest version of the format.
+
+    :param inputs: A single path or list of paths to dipui files to update.
+    :param outputs: An optional single path or list of paths, the locations to write updated files to. If not
+                    specified, each updated file will be placed at same location as its input file with a '.dipui' extension.
+                    If the old file has an extension of '.dipui' already, '_updated' is added to the filename.
+    :param force: If enabled diplomat won't ask if before overwriting an output file it already exists...
+    """
+    import shutil
+    from pathlib import Path
+
+    from diplomat.processing import TQDMProgressBar
+
+    inputs, outputs = _resolve_in_out_paths(inputs, outputs, ".dipui", "_updated")
+
+    from diplomat.predictors.sfpe.file_io import DiplomatFPEState
+    from diplomat.predictors.sfpe.file_io_old import OldDiplomatFPEState
+
+    def copy_up_to(fsrc, fdst, stop_at):
+        read = fsrc.read
+        write = fdst.write
+        total_read = 0
+        chunk_size = shutil.COPY_BUFSIZE
+
+        while data := read(min(stop_at - total_read, chunk_size)):
+            write(data)
+            total_read += len(data)
+
+    for inp, out in zip(inputs, outputs):
+        print(f"Update to latest version of the dipui format: {inp}->{out}")
+        if out.exists():
+            print(f"WARNING: Output {out} already exists!")
+            if not force:
+                res = input("Are you sure you want to overwrite the file? (Y/[N]): ")
+                if res.strip().lower() not in ["y", "yes"]:
+                    print(f"Skipping conversion of {inp}.")
+                    continue
+            print(f"Overwriting file {out}...")
+
+        with inp.open("rb") as fi:
+            with out.open("w+b") as fo:
+                with OldDiplomatFPEState(fi) as old_dipui:
+                    fi.seek(0)
+                    copy_up_to(fi, fo, old_dipui.file_start())
+
+                    with DiplomatFPEState(
+                        fo, len(old_dipui), is_new_file=True
+                    ) as new_dipui:
+                        with TQDMProgressBar(total=len(old_dipui) + 1) as p:
+                            new_dipui.set_metadata(old_dipui.get_metadata())
+                            p.update()
+                            for i in range(len(old_dipui)):
+                                new_dipui[i] = old_dipui[i]
+                                p.update()
+
+
 @typecaster_function
 def convert_tracks(
     inputs: Union[List[PathLike], PathLike],
@@ -607,7 +700,7 @@ def convert_tracks(
                     specified, places the converted files at same locations as inputs with an extension of .csv
                     instead of the original extension. If the original file was a csv,
                     appends _converted to the filename
-    :param force: Flag, if enabled diplomat won't ask if before overwriting an output file that already exists...
+    :param force: Flag, if enabled diplomat won't ask if before overwriting an output file it already exists...
     """
     from pathlib import Path
 
@@ -617,35 +710,18 @@ def convert_tracks(
             "Unable to find any loaded frontends with csv conversion support."
         )
 
-    if not isinstance(inputs, (list, tuple)):
-        inputs = [inputs]
-    if outputs is None:
-        outputs = []
-        for p in inputs:
-            p = Path(p).resolve()
-            fname = (
-                (p.stem + ".csv") if p.suffix != ".csv" else (p.stem + "_converted.csv")
-            )
-            outputs.append(p.parent / fname)
-    if not isinstance(outputs, (list, tuple)):
-        outputs = [outputs]
-
-    if len(inputs) != len(outputs):
-        raise ValueError(
-            "The provided paths and destinations do not have the same length!"
-        )
+    inputs, outputs = _resolve_in_out_paths(inputs, outputs, ".csv", "_converted")
 
     for inp, out in zip(inputs, outputs):
-        print(f"Converting HDF5 to CSV: {inp}->{out}")
+        print(f"Converting to CSV: {inp}->{out}")
         if out.exists():
             print(f"WARNING: Output {out} already exists!")
             if not force:
                 res = input("Are you sure you want to overwrite the file? (Y/[N]): ")
-                if not res.strip().lower() in ["y", "yes"]:
+                if res.strip().lower() not in ["y", "yes"]:
                     print(f"Skipping conversion of {inp}.")
                     continue
             print(f"Overwriting file {out}...")
 
-        out = Path(out).resolve()
         diplomat_table = _load_tracks_from_loaders(loaders, inp)
         save_diplomat_table(diplomat_table, str(out))

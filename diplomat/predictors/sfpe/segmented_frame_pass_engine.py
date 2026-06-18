@@ -562,7 +562,8 @@ class SegmentedFramePassEngine(Predictor):
             self._file_obj,
             self.settings.memory_cache_size,
             lock=self._manager.RLock(),
-            debug=self.settings.debug
+            debug=self.settings.debug,
+            is_new_file=True,
         )
 
         return _frame_holder
