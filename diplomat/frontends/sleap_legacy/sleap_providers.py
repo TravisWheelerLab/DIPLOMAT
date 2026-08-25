@@ -699,7 +699,7 @@ def _restore_crops(
     crop_h, crop_w = crops.shape[-2:]
     y = np.clip(y, 0, img_shape[1])
     x = np.clip(x, 0, img_shape[2])
-    crop_start_x = np.floor().astype(int)
+    crop_start_x = np.floor(x - crop_w / 2).astype(int)
     crop_end_x = crop_start_x + crop_w
     crop_start_y = np.floor(y - crop_h / 2).astype(int)
     crop_end_y = crop_start_y + crop_h

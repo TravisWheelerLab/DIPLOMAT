@@ -1,50 +1,60 @@
 import importlib
-from typing import Type, Optional, Tuple, List
+from typing import List, Optional, Tuple, Type
 
 try:
-    from sphinx.application import Sphinx, Config
-    from docutils import nodes
-    from sphinx import addnodes
     from pathlib import Path
 
+    from docutils import nodes
+    from sphinx import addnodes
+    from sphinx.application import Config, Sphinx
     from sphinx.domains.python import (
-        PyClasslike,
-        PythonDomain,
         ObjType,
         PyAttribute,
+        PyClasslike,
+        PythonDomain,
         PyXRefRole,
     )
     from sphinx.environment import BuildEnvironment
     from sphinx.ext.autodoc.mock import mock
-    from sphinx.roles import XRefRole
     from sphinx.ext.autosummary import autosummary_toc
+    from sphinx.roles import XRefRole
 except ImportError:
     raise
 
 import warnings
+
 warnings.simplefilter("error", ImportWarning)
 
-MOCK_PACKAGES = ["tensorflow", "numba", "wx", "onnx", "onnxruntime", "tf2onnx"]
+MOCK_PACKAGES = [
+    "tensorflow",
+    "numba",
+    "wx",
+    "onnx",
+    "onnxruntime",
+    "tf2onnx",
+    "torch",
+    "sleap_nn",
+    "sleap_io",
+]
 diplomat = None
 with mock(MOCK_PACKAGES):
     import numba
+
     numba.njit = lambda sig: sig if callable(sig) else (lambda x: x)
 
     import diplomat
-    from diplomat.predictors.fpe.sparse_storage import AttributeDict
-    from diplomat.processing.type_casters import get_type_name
-
     import diplomat.predictors as predictors
-    from diplomat.processing import Predictor, ConfigSpec
-
     import diplomat.predictors.fpe.frame_passes as frame_passes
-    from diplomat.predictors.fpe.frame_pass import FramePass
-    from diplomat.frontends import DIPLOMATCommands
-
-    import diplomat.utils.graph_ops
-    import diplomat.wx_gui
     import diplomat.processing
     import diplomat.utils
+    import diplomat.utils.graph_ops
+    import diplomat.wx_gui
+    from diplomat.frontends import DIPLOMATCommands
+    from diplomat.predictors.fpe.frame_pass import FramePass
+    from diplomat.predictors.fpe.sparse_storage import AttributeDict
+    from diplomat.processing import ConfigSpec, Predictor
+    from diplomat.processing.type_casters import get_type_name
+
 
 def load_plugins_with_mocks(module, clazz):
     from diplomat.utils.pluginloader import load_plugin_classes
@@ -337,8 +347,8 @@ FIX_ALL = {diplomat.utils, diplomat.processing, diplomat.wx_gui}
 
 
 def fix_all_on_module(module):
-    from types import ModuleType, FunctionType
     import pkgutil
+    from types import FunctionType, ModuleType
 
     if hasattr(module, "__path__"):
         path = list(iter(module.__path__))[0]
@@ -354,13 +364,13 @@ def fix_all_on_module(module):
             try:
                 with mock(MOCK_PACKAGES):
                     import wx.lib.newevent
+
                     wx.lib.newevent.NewCommandEvent = lambda: (None, None)
                     import numba
+
                     numba.njit = lambda sig: sig if callable(sig) else (lambda x: x)
 
-                    setattr(
-                        module, attr_name, importlib.import_module(name)
-                    )
+                    setattr(module, attr_name, importlib.import_module(name))
                 val = getattr(module, attr_name)
                 fix_all_on_module(val)
             except:
@@ -399,9 +409,10 @@ def write_api_rst(api_dir: Path, document_lists: AttributeDict) -> None:
 
 
 def write_cli_entry(cli_dir: Path, cmd_name: str, func) -> Tuple[str, str]:
-    from diplomat.utils.cli_tools import func_to_command
-    from argparse import ArgumentParser
     import os
+    from argparse import ArgumentParser
+
+    from diplomat.utils.cli_tools import func_to_command
 
     os.environ["COLUMNS"] = "80"
     os.environ["LINES"] = "24"
@@ -428,7 +439,7 @@ def write_cli_entry(cli_dir: Path, cmd_name: str, func) -> Tuple[str, str]:
 
     summary = "\n".join(f"    {line}" for line in help_str.split("\n\n")[1].split("\n"))
     usage = "\n".join(
-        f"        {line[7:] if(line.startswith('usage: ')) else line}"
+        f"        {line[7:] if (line.startswith('usage: ')) else line}"
         for line in help_str.split("\n\n")[0].split("\n")
     )
 
@@ -490,7 +501,7 @@ def write_cli_rst(cli_dir: Path) -> None:
         )
 
         entries[name] = "\n".join(
-            f"    * - :py:cli:`{n}`\n" f"      - {summary}" for n, summary in val
+            f"    * - :py:cli:`{n}`\n      - {summary}" for n, summary in val
         )
 
     entries.files = files
@@ -518,8 +529,7 @@ def on_config_init(app: Sphinx, config: Config) -> None:
         print(f"Documenting {name}...")
         file_list = documenter(build_dir)
         document_lists[name] = "\n".join(
-            f"    * - :py:plugin:`~{file}`\n" f"      - {doc}"
-            for file, doc in file_list
+            f"    * - :py:plugin:`~{file}`\n      - {doc}" for file, doc in file_list
         )
 
         document_lists.files[name] = "\n".join(

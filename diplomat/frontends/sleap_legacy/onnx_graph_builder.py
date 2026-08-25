@@ -1,4 +1,5 @@
-from typing import Iterable, Optional, Union, List
+from typing import Iterable, List, Optional, Union
+
 from .sleap_imports import onnx
 
 
@@ -39,7 +40,6 @@ class _OnnxOpOutput:
 
 
 class OnnxOp:
-
     def __init__(
         self,
         op_type: str,

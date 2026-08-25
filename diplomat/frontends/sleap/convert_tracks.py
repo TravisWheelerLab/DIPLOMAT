@@ -1,78 +1,28 @@
-import json
-
-import numpy as np
 import pandas as pd
+
 import diplomat.processing.type_casters as tc
+from diplomat.utils.lazy_import import resolve_lazy_imports
+
+from .sleap_imports import sleap_io
 
 
+@resolve_lazy_imports
 @tc.typecaster_function
-def _sleap_analysis_h5_to_diplomat_table(path: tc.PathLike) -> pd.DataFrame:
-    import h5py
+def _sleap_nn_tracks_to_diplomat_table(path: tc.PathLike) -> pd.DataFrame:
+    labels = sleap_io.load_file(str(path))
 
-    if not h5py.is_hdf5(path):
-        raise ValueError("Passed file is not an hdf5 file!")
-
-    with h5py.File(path, "r") as f:
-        info = json.loads(f["metadata"].attrs["json"])
-
-        for k in ("videos", "tracks"):
-            outside_key = f"{k}_json"
-            if outside_key in f:
-                info[k] = [json.loads(item) for item in f[outside_key]]
-
-        if len(info["videos"]) < 1:
-            raise ValueError("Sleap analysis file must have at least 1 video file...")
-
-        part_names = [n["name"] for n in info["nodes"]]
-
-        frames = f["frames"][:]
-        instances = f["instances"][:]
-        points = f["points"][:]
-        pred_points = f["pred_points"][:]
-
-        # Allocate an array to store all tracks...
-        track_names = [name for t_id, name in info["tracks"]]
-        track_inst_counts = np.zeros(len(track_names), dtype=np.int64)
-        first_video_frames = frames[frames["video"] == 0]
-        frame_count = int(np.max(first_video_frames["frame_idx"])) + 1
-
-        tracks = np.zeros(
-            (len(track_inst_counts), len(part_names), 3, frame_count), dtype=np.float32
+    if not isinstance(labels, sleap_io.Labels):
+        raise ValueError(
+            f"Invalid file passed, only can convert labels, passed {type(labels)}"
         )
 
-        for frame in first_video_frames:
-            frame_idx = frame["frame_idx"]
-            sub_instances = instances[
-                frame["instance_id_start"] : frame["instance_id_end"]
-            ]
-            sub_instances = sub_instances[np.argsort(sub_instances["instance_type"])]
-
-            for instance in sub_instances:
-                track_idx = instance["track"]
-                # Not assigned to first skeleton or no assigned track, skip...
-                if track_idx >= len(track_names):
-                    continue
-
-                track_inst_counts[track_idx] += 1
-                p_ref = points if (instance["instance_type"] == 0) else pred_points
-                sub_points = p_ref[
-                    instance["point_id_start"] : instance["point_id_end"]
-                ]
-                scores = sub_points["score"] if "score" in sub_points.dtype.names else 1
-                tracks[track_idx, :, 0, frame_idx] = sub_points["x"]
-                tracks[track_idx, :, 1, frame_idx] = sub_points["y"]
-                tracks[track_idx, :, 2, frame_idx] = scores * sub_points["visible"]
-
-        # Throw away tracks that have no instances...
-        track_names = [
-            n for i, n in enumerate(track_names) if (track_inst_counts[i] > 0)
-        ]
-        tracks = tracks[track_inst_counts > 0]
-
-        # Make header...
-        header = pd.MultiIndex.from_product(
-            [track_names, part_names, ["x", "y", "likelihood"]]
-        )
-        table = pd.DataFrame(tracks.reshape((-1, frame_count)).T, columns=header)
-
-    return table
+    arr = labels.numpy(return_confidence=True)
+    track_names = [t.name for t in labels.tracks] or [
+        f"track_{i}" for i in range(arr.shape[1])
+    ]
+    bp_names = [n.name for n in labels.skeletons[0].nodes]
+    n_frames = arr.shape[0]
+    header = pd.MultiIndex.from_product(
+        [track_names, bp_names, ["x", "y", "likelihood"]]
+    )
+    return pd.DataFrame(arr.reshape(n_frames, -1), columns=header)

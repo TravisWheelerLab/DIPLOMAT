@@ -12,7 +12,7 @@ authors = [
 ]
 description="Deep learning-based Identity Preserving Labeled-Object Multi-Animal Tracking."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 keywords = ["tracking", "ml", "computer vision", "vision"]
 license = "BSD-3-Clause"
 classifiers = [
@@ -27,7 +27,7 @@ classifiers = [
 
 dependencies = [
     "numba", # Required, make sure this goes before numpy...
-    "opencv-python-headless",
+    "opencv-python",  # Changed due to sleap_nn, used to be opencv-python-headless
     "matplotlib",
     "typing_extensions>=3.8",
     "tqdm",
@@ -42,7 +42,8 @@ diplomat = "diplomat._cli_runner:main"
 
 [project.optional-dependencies]
 gui = ["wxpython"]
-sleap = [
+sleap = ["sleap-nn", "sleap-io", "torch"]
+sleap-legacy = [
     "h5py",
     "tables",
     "tensorflow",
@@ -61,6 +62,9 @@ dlc = [
     "onnxruntime>=1.19",
 ]
 all = [
+    "sleap-nn",
+    "sleap-io",
+    "torch",
     "wxpython",
     "h5py",
     "tables",
@@ -70,7 +74,7 @@ all = [
     "onnx",
     "onnxruntime>=1.19",
 ]
-sleap-nvidia = [
+sleap-legacy-nvidia = [
     "h5py",
     "tables",
     "tensorflow",
@@ -99,6 +103,9 @@ dlc-nvidia = [
     "nvidia-cudnn-cu12~=9.0",
 ]
 all-nvidia = [
+    "sleap-nn",
+    "sleap-io",
+    "torch",
     "wxpython",
     "h5py",
     "tables",

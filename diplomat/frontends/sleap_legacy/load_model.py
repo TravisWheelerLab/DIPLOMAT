@@ -4,9 +4,10 @@ import numpy as np
 
 import diplomat.processing.type_casters as tc
 from diplomat.frontends import ModelInfo, ModelLike
-from diplomat.frontends.sleap.run_utils import _load_configs
-from diplomat.frontends.sleap.sleap_providers import PredictorExtractor
+from diplomat.frontends.sleap_legacy.run_utils import _load_configs
+from diplomat.frontends.sleap_legacy.sleap_providers import PredictorExtractor
 from diplomat.utils.cli_tools import Flag
+
 from .sleap_imports import ort
 
 
