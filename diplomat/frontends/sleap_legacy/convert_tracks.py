@@ -33,6 +33,12 @@ def _sleap_analysis_h5_to_diplomat_table(path: tc.PathLike) -> pd.DataFrame:
 
         # Allocate an array to store all tracks...
         track_names = [name for t_id, name in info["tracks"]]
+
+        if len(track_names) == 0:
+            raise ValueError(
+                "Sleap analysis file has no tracks, this may be in sleap's new format."
+            )
+
         track_inst_counts = np.zeros(len(track_names), dtype=np.int64)
         first_video_frames = frames[frames["video"] == 0]
         frame_count = int(np.max(first_video_frames["frame_idx"])) + 1

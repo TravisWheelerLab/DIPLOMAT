@@ -1,7 +1,6 @@
 from diplomat.processing.type_casters import List, PathLike, Union, typecaster_function
 
 from .run_utils import _load_model_configs, _paths_to_str
-from .sleap_imports import sleap_io, sleap_nn
 
 
 @typecaster_function

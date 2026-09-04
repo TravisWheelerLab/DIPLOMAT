@@ -1,3 +1,4 @@
+import shutil
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -62,8 +63,13 @@ def _resolve_model_path(files):
 
 
 @resolve_lazy_imports
-def _load_configs_from_zip(zip_path: Path, unpack_zips_to=None):
-    cfg_lst = []
+def _load_configs_from_zip(cfg_lst: list, zip_path: Path, unpack_zips_to=None):
+    def files_in_dir(directory, as_path=False):
+        return (
+            PurePosixPath(name) if as_path else str(name)
+            for name in z.namelist()
+            if (PurePosixPath(name).parent == directory)
+        )
 
     with zipfile.ZipFile(zip_path, "r") as z:
         for file in z.infolist():
@@ -71,48 +77,58 @@ def _load_configs_from_zip(zip_path: Path, unpack_zips_to=None):
                 inner_path = PurePosixPath(file.filename)
                 config_dir = inner_path.parent
 
-                cfg = yaml.load(z.read(str(inner_path)))
-                model_path = _resolve_model_path(
-                    PurePosixPath(name)
-                    for name in z.namelist()
-                    if (PurePosixPath(name).parent == config_dir)
-                )
+                cfg = yaml.safe_load(z.read(str(inner_path)))
+                model_path = _resolve_model_path(files_in_dir(config_dir, True))
                 if unpack_zips_to is not None:
                     unpack_zips_to = Path(unpack_zips_to)
-                    data_dir = unpack_zips_to / "i"
+                    data_dir = unpack_zips_to / f"model{len(cfg_lst)}"
+                    data_dir.mkdir(exist_ok=True)
+                    for name in files_in_dir(config_dir):
+                        with (
+                            z.open(name, "r") as r,
+                            open(data_dir / PurePosixPath(name).name, "wb") as w,
+                        ):
+                            shutil.copyfileobj(r, w)
+                    cfg_lst.append(
+                        (
+                            cfg,
+                            str(data_dir / "training_config.yaml"),
+                            str(data_dir / model_path.name),
+                        )
+                    )
                 else:
-                    cfg_lst.append((cfg, f"{}:{str(inner_path)}", f"{}:{model_path}"))
+                    cfg_lst.append(
+                        (
+                            cfg,
+                            f"{zip_path}:{str(inner_path)}",
+                            f"{zip_path}:{model_path}",
+                        )
+                    )
 
         if len(cfg_lst) == 0:
             raise IOError(
                 "Sleap model zip file does not contain a training configuration file!"
             )
 
-    return cfg_lst
 
-
-def _load_config_and_model(path, unpack_zips_to):
+def _load_config_and_model(cfg_lst, path, unpack_zips_to=None):
     path = Path(path)
     if zipfile.is_zipfile(path):
-        return _load_configs_from_zip(path, unpack_zips_to)
+        return _load_configs_from_zip(cfg_lst, path, unpack_zips_to)
 
     if path.is_dir():
         path = path / "training_config.yaml"
     path = path.resolve()
 
     with path.open("rb") as f:
-        cfg = yaml.load(f)
+        cfg = yaml.safe_load(f)
     model_path = _resolve_model_path(path.parent.iterdir())
-    return [(cfg, path, model_path)]
+    cfg_lst.append((cfg, path, model_path))
 
 
-@resolve_lazy_imports
-def _load_model_configs(model_paths):
-    # from sleap_nn.config.utils import resolve_model_dir
-    # from sleap_nn.inference.loaders import _load_training_config
+def _load_model_configs(model_paths, unpack_zips_to=None):
     cfgs = []
     for mp in model_paths:
-        cfg, _ = _load_training_config(mp)
-        cfgs.append((mp, cfg))
+        _load_config_and_model(cfgs, mp, unpack_zips_to)
 
     return cfgs

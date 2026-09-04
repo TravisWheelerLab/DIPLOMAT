@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from io import BytesIO
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -10,7 +9,7 @@ from diplomat.processing import TrackingData
 from diplomat.utils.lazy_import import resolve_lazy_imports
 
 from .run_utils import _dict_get_path, _find_key_nested
-from .sleap_imports import omegaconf, sleap_nn
+from .sleap_imports import sleap_nn, torch
 
 
 class SleapMetadata(TypedDict):
@@ -21,7 +20,7 @@ class SleapMetadata(TypedDict):
     batch_size: int
 
 
-Configs = List[Tuple[str, dict]]
+Configs = List[Tuple[dict, str, str]]
 
 
 # noinspection PyTypeChecker
@@ -33,7 +32,7 @@ def sleap_metadata_from_config(configs: Configs) -> SleapMetadata:
     parts = None
     edge_list = None
 
-    for _cfg_path, cfg in configs:
+    for cfg, _, _ in configs:
         skeletons = _dict_get_path(cfg, ("data_config", "skeletons"), None)
         if skeletons is not None:
             if len(skeletons) == 0:
@@ -46,7 +45,7 @@ def sleap_metadata_from_config(configs: Configs) -> SleapMetadata:
             break
     else:
         # Scenario 2...
-        for _cfg_path, cfg in configs:
+        for cfg, _, _ in configs:
             parts = _find_key_nested(cfg["model_config"]["head_configs"], "part_names")
             if parts is None:
                 continue
@@ -59,7 +58,7 @@ def sleap_metadata_from_config(configs: Configs) -> SleapMetadata:
 
     batch_size = 4
 
-    for _cfg_path, cfg in configs:
+    for cfg, _, _ in configs:
         input_scaling = float(
             _dict_get_path(cfg, ("data_config", "preprocessing", "scale"), 1.0)
         )
@@ -70,13 +69,11 @@ def sleap_metadata_from_config(configs: Configs) -> SleapMetadata:
             "centered_instance",
             "multi_class_topdown",
         ]:
-            print(cfg.get("model_config", None))
             sigma = _dict_get_path(
                 cfg,
                 ("model_config", "head_configs", sigma_model_type, "confmaps", "sigma"),
                 None,
             )
-            print(sigma)
             if sigma is not None:
                 batch_size = int(
                     _dict_get_path(
@@ -136,88 +133,147 @@ def _get_config_paths(cfg, paths, default=None):
     return [_dict_get_path(cfg, path, default) for path in paths]
 
 
+class IntegralOffsets:
+    @staticmethod
+    @resolve_lazy_imports
+    def make_kernel(kernel_size, stride, dtype):
+        # Construct kernels for computing centers of mass computed around a point...
+        kernel_half = (kernel_size - 1) // 2
+        y_kernel, x_kernel = [
+            v * stride
+            for v in torch.meshgrid(
+                torch.arange(-kernel_half, kernel_half + 1, dtype=dtype),
+                torch.arange(-kernel_half, kernel_half + 1, dtype=dtype),
+                indexing="ij",
+            )
+        ]
+        # Simple summation kernel, adds all values in an area...
+        ones_kernel = torch.ones((kernel_size, kernel_size), dtype=dtype)
+        return (
+            torch.stack([x_kernel, y_kernel, ones_kernel], dim=0)
+            .reshape((3, 1, *x_kernel.shape))
+            .to(dtype)
+        )
+
+    @resolve_lazy_imports
+    def __init__(self, kernel_refinement_size: int, stride: float, device: str):
+        import torch
+
+        self._kernel_refinement_size = kernel_refinement_size
+        self._kernel = self.make_kernel(
+            kernel_refinement_size, stride, torch.float32
+        ).to(device)
+
+    @resolve_lazy_imports
+    def __call__(self, confmap):
+        batch, height, width, channels = confmap.shape
+        integration_fields = (
+            torch.nn.functional.conv2d(
+                confmap.permute(0, 3, 1, 2).view(batch * channels, 1, height, width),
+                self._kernel,
+                padding="same",
+            )
+            .view(batch, channels, 3, height, width)
+            .permute(0, 3, 4, 1, 2)
+        )
+
+        offsets = integration_fields[..., :2] / integration_fields[..., 2:]
+        return torch.where(torch.isfinite(offsets), offsets, 0.0)
+
+
 class BottomUpModelExtractor(SleapModelExtractor):
     MODEL_CONFIGS = {
-        ("model_config", "heads_configs", "multi_instance"): "",
-        ("model_config", "heads_configs", "bottomup"): "",
-        ("model_config", "heads_configs", "multi_class_bottomup"): "",
-        ("model_config", "heads_configs", "single_instance"): "",
+        "multi_instance": "MultiInstanceConfmapsHead",
+        "bottomup": "MultiInstanceConfmapsHead",
+        "multi_class_bottomup": "MultiInstanceConfmapsHead",
+        "single_instance": "SingleInstanceConfmapsHead",
     }
 
     @classmethod
+    def model_type(cls, config: dict) -> Optional[str]:
+        for key in cls.MODEL_CONFIGS:
+            if (
+                _get_config_paths(config, ("model_config", "heads_configs", key))
+                is not None
+            ):
+                return key
+        return None
+
+    @classmethod
     def can_build(cls, models: Configs) -> bool:
-        return len(models) == 1 and any(
-            _get_config_paths(models[0][0], key) for key in cls.MODEL_CONFIGS
-        )
+        return len(models) == 1 and cls.model_type(models[0][0]) is not None
 
     def __init__(
         self, models: Configs, device: str, refinement_kernel_size: int, **kwargs
     ):
         super().__init__(models, device, refinement_kernel_size, **kwargs)
-        self._config_path, self._config = models[0]
-        from sleap_nn.inference import Predictor
+        self._config, self._config_path, self._model_path = models[0]
+        model_type = self.model_type(self._config)
+        if model_type is None:
+            raise ValueError("Provided config not a supported model!")
 
-        self._predictor = self._predictor = (
-            sleap_nn.inference.Predictor.from_model_paths(
-                [pth for pth, _ in models],
-                device=device,
-                batch_size=1,
-                return_confmaps=True,
-                integral_refinement="integral",
-            )
+        self._predictor = sleap_nn.inference.Predictor.from_model_paths(
+            [self._config_path],
+            device=device,
+            batch_size=1,
+            return_confmaps=True,
+            integral_refinement="integral",
         )
-        self._refinement_kernel_size = refinement_kernel_size
+        self._confmaps_output_name = self.MODEL_CONFIGS[model_type]
+        self._integral_offsets = (
+            IntegralOffsets(refinement_kernel_size, 1.0, device)
+            if refinement_kernel_size > 1
+            else None
+        )
 
     def extract(
         self, data: np.ndarray
     ) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
-        x, _info = self._predictor._layer.preprocess(data)
-        outputs = self._predictor._layer.backend(x)
-        print(outputs)
-        raise ValueError("Don't know key!!!")
-        confmaps = outputs["???"].detach().cpu().numpy()  # (B, N, H, W)
-        confmaps = confmaps.transpose(0, 2, 3, 1)  # (B, H, W, N)
+        x, _info = self._predictor.layer.preprocess(data)
+        outputs = self._predictor.layer.backend(x)
+        # raise ValueError("Don't know key!!!")
+        confmaps = outputs[self._confmaps_output_name].detach()  # (B, N, H, W)
+        confmaps = confmaps.permute(0, 2, 3, 1)  # (B, H, W, N)
         cmap_dscale = data.shape[1] / confmaps.shape[1]
-        offsets = (
-            _create_integral_offsets(
-                confmaps, cmap_dscale, self._refinement_kernel_size
-            )
-            if self._refinement_kernel_size > 1
-            else None
-        )
-        return _fix_conf_map(confmaps), offsets, cmap_dscale
+
+        if self._integral_offsets is not None:
+            offsets = self._integral_offsets(confmaps)
+            offsets = (offsets * cmap_dscale).cpu().numpy()
+        else:
+            offsets = None
+
+        return _fix_conf_map(confmaps.cpu().numpy()), offsets, cmap_dscale
 
 
 class TopDownModelExtractor(SleapModelExtractor):
-    CENTROID_MODELS = [
-        ("model", "heads", "centroid"),
-    ]
-    CENTERED_INST_MODELS = [
-        ("model", "heads", "centered_instance"),
-        ("model", "heads", "multi_class_topdown"),
-    ]
+    CENTROID_MODELS = ["centroid"]
+    CENTERED_INST_MODELS = ["centered_instance", "multi_class_topdown"]
 
     @classmethod
-    def can_build(cls, config: Configs) -> bool:
+    def model_type(cls, config: dict) -> Optional[str]:
+        for key in [*cls.CENTROID_MODELS, *cls.CENTERED_INST_MODELS]:
+            if (
+                _get_config_paths(config, ("model_config", "heads_configs", key))
+                is not None
+            ):
+                return key
+        return None
+
+    @classmethod
+    def can_build(cls, configs: Configs) -> bool:
+        model_types = [cls.model_type(cfg) for cfg, _, _ in configs]
+
         return (
-            len(config) == 2
-            and any(
-                c
-                for cfg, mdl in config
-                for c in _get_config_paths(cfg, cls.CENTROID_MODELS)
-            )
-            and any(
-                c
-                for cfg, mdl in config
-                for c in _get_config_paths(cfg, cls.CENTERED_INST_MODELS)
-            )
+            len(configs) == 2
+            and any(cm in model_types for cm in cls.CENTROID_MODELS)
+            and any(ci in model_types for ci in cls.CENTERED_INST_MODELS)
         )
 
     def __init__(
         self, configs: Configs, device: str, refinement_kernel_size: int, **kwargs
     ):
-        super().__init__(models, **kwargs)
-        for cfg, mdl in models:
+        super().__init__(configs, device, **kwargs)
+        for cfg, _, _ in models:
             if any(_get_config_paths(cfg, self.CENTROID_MODELS)):
                 self._centroid_model = _onnx_model_to_inference_session(
                     _keras_to_onnx_model(_reset_input_layer(mdl)), **kwargs
@@ -494,46 +550,6 @@ def _extract_crops(
         np.reshape(part, (-1, 1, 1)),
     ]
     return crops
-
-
-def _get_integral_offset_kernels(
-    kernel_size: int, stride: float, dtype: np.dtype = np.float32
-):
-    # Construct kernels for computing centers of mass computed around a point...
-    kernel_half = (kernel_size - 1) // 2
-    y_kernel, x_kernel = [
-        v * stride
-        for v in np.mgrid[
-            -kernel_half : kernel_half + 1, -kernel_half : kernel_half + 1
-        ]
-    ]
-    # Simple summation kernel, adds all values in an area...
-    ones_kernel = np.ones((kernel_size, kernel_size), dtype=dtype)
-    return (
-        np.stack([x_kernel, y_kernel, ones_kernel], axis=0)
-        .reshape((3, 1, *x_kernel.shape))
-        .astype(dtype)
-    )
-
-
-def _create_integral_offsets(
-    probs: np.ndarray, stride: float, kernel_size: int
-) -> np.ndarray:
-    """
-    Compute estimated offsets for parts based on confidence values in source map. Does this via a
-    center-of-mass style calculation locally for each pixel.
-    """
-    # Concept: We can do localized position integration via 3 convolutions...
-    # Two kernels for summing positions * weights in
-    if kernel_size % 2 == 0:
-        kernel_size += 1
-
-    # Construct kernels for computing centers of mass computed around a point...
-    filters = _get_integral_offset_kernels(kernel_size, stride, probs.dtype)
-    results = _convolve_2d(probs, filters)
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return np.nan_to_num(results[:, :, :, :, :2] / results[:, :, :, :, 2:])
 
 
 class PredictorExtractor:

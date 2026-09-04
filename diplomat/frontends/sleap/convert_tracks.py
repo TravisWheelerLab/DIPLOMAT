@@ -16,12 +16,13 @@ def _sleap_nn_tracks_to_diplomat_table(path: tc.PathLike) -> pd.DataFrame:
             f"Invalid file passed, only can convert labels, passed {type(labels)}"
         )
 
-    arr = labels.numpy(return_confidence=True)
+    arr = labels.numpy(return_confidence=True, user_instances=True)
     track_names = [t.name for t in labels.tracks] or [
         f"track_{i}" for i in range(arr.shape[1])
     ]
     bp_names = [n.name for n in labels.skeletons[0].nodes]
     n_frames = arr.shape[0]
+    print(track_names, bp_names, n_frames)
     header = pd.MultiIndex.from_product(
         [track_names, bp_names, ["x", "y", "likelihood"]]
     )

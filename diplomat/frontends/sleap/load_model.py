@@ -1,6 +1,8 @@
+import tempfile
 from typing import Optional
 
 import numpy as np
+from numpy.testing import tempdir
 
 import diplomat.processing.type_casters as tc
 from diplomat.frontends import ModelInfo, ModelLike
@@ -34,9 +36,11 @@ def load_models(
     refinement_kernel_size: int = 5,
     use_cpu: Flag = False,
 ) -> tc.Tuple[ModelInfo, ModelLike]:
-    config = _load_model_configs(_paths_to_str(config))
-    device = _resolve_device(gpu_index, bool(use_cpu))
-    provider = PredictorExtractor(config, device, refinement_kernel_size)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        config = _load_model_configs(_paths_to_str(config), temp_dir)
+        device = _resolve_device(gpu_index, bool(use_cpu))
+        provider = PredictorExtractor(config, device, refinement_kernel_size)
+
     meta = provider.get_metadata()
 
     if batch_size is None:
