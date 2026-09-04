@@ -3,7 +3,7 @@ from diplomat.frontends import DIPLOMATCommands, DIPLOMATFrontend
 
 class SLEAPFrontend(DIPLOMATFrontend):
     """
-    The SLEAP Legacy frontend for DIPLOMAT. Contains functions for running DIPLOMAT on SLEAP Legacy projects.
+    The SLEAP frontend for DIPLOMAT. Contains functions for running DIPLOMAT on SLEAP projects.
     """
 
     @classmethod

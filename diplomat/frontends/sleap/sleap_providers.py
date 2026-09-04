@@ -33,52 +33,56 @@ def sleap_metadata_from_config(configs: Configs) -> SleapMetadata:
     parts = None
     edge_list = None
 
-    for cfg_path, cfg in configs:
-        skeletons = _dict_get_path(cfg, ("data", "labels", "skeletons"), None)
+    for _cfg_path, cfg in configs:
+        skeletons = _dict_get_path(cfg, ("data_config", "skeletons"), None)
         if skeletons is not None:
             if len(skeletons) == 0:
                 continue
             skel = skeletons[0]
-            parts = [n["id"][0] for n in skel["nodes"]]
+            parts = [n["name"] for n in skel["nodes"]]
             edge_list = _normalize_edges(
-                (e["source"][0], e["target"][0])
-                for e in skel["links"]
-                if (e["type"] == "BODY")
+                (e["source"]["name"], e["destination"]["name"]) for e in skel["edges"]
             )
             break
     else:
         # Scenario 2...
-        for cfg_path, cfg in configs:
-            parts = _find_key_nested(cfg["model"]["heads"], "part_names")
+        for _cfg_path, cfg in configs:
+            parts = _find_key_nested(cfg["model_config"]["head_configs"], "part_names")
             if parts is None:
                 continue
             edge_list = _normalize_edges(
-                _find_key_nested(cfg["model"]["heads"], "pafs", {"edges": []})["edges"]
+                _find_key_nested(
+                    cfg["model_config"]["head_configs"], "pafs", {"edges": []}
+                )["edges"]
             )
             break
 
     batch_size = 4
 
-    for cfg_path, cfg in configs:
+    for _cfg_path, cfg in configs:
         input_scaling = float(
-            _dict_get_path(cfg, ("data", "preprocessing", "input_scaling"), 1.0)
+            _dict_get_path(cfg, ("data_config", "preprocessing", "scale"), 1.0)
         )
         for sigma_model_type in [
-            "multi_instance",
+            "bottomup",
             "multi_class_bottomup",
             "single_instance",
             "centered_instance",
             "multi_class_topdown",
         ]:
+            print(cfg.get("model_config", None))
             sigma = _dict_get_path(
-                cfg, ("model", "heads", sigma_model_type, "sigma"), None
+                cfg,
+                ("model_config", "head_configs", sigma_model_type, "confmaps", "sigma"),
+                None,
             )
-            if sigma is None:
-                sigma = _dict_get_path(
-                    cfg, ("model", "heads", sigma_model_type, "confmaps", "sigma"), None
-                )
+            print(sigma)
             if sigma is not None:
-                batch_size = int(_dict_get_path(cfg, ("optimization", "batch_size"), 4))
+                batch_size = int(
+                    _dict_get_path(
+                        cfg, ("trainer_config", "val_data_loader", "batch_size"), 4
+                    )
+                )
                 break
         if sigma is not None:
             break
@@ -133,16 +137,17 @@ def _get_config_paths(cfg, paths, default=None):
 
 
 class BottomUpModelExtractor(SleapModelExtractor):
-    MODEL_CONFIGS = [
-        ("model", "heads", "multi_instance"),
-        ("model", "heads", "multi_class_bottomup"),
-        ("model", "heads", "single_instance"),
-    ]
+    MODEL_CONFIGS = {
+        ("model_config", "heads_configs", "multi_instance"): "",
+        ("model_config", "heads_configs", "bottomup"): "",
+        ("model_config", "heads_configs", "multi_class_bottomup"): "",
+        ("model_config", "heads_configs", "single_instance"): "",
+    }
 
     @classmethod
     def can_build(cls, models: Configs) -> bool:
         return len(models) == 1 and any(
-            _get_config_paths(models[0][0], cls.MODEL_CONFIGS)
+            _get_config_paths(models[0][0], key) for key in cls.MODEL_CONFIGS
         )
 
     def __init__(
@@ -150,6 +155,8 @@ class BottomUpModelExtractor(SleapModelExtractor):
     ):
         super().__init__(models, device, refinement_kernel_size, **kwargs)
         self._config_path, self._config = models[0]
+        from sleap_nn.inference import Predictor
+
         self._predictor = self._predictor = (
             sleap_nn.inference.Predictor.from_model_paths(
                 [pth for pth, _ in models],
@@ -164,8 +171,10 @@ class BottomUpModelExtractor(SleapModelExtractor):
     def extract(
         self, data: np.ndarray
     ) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
-        x, info = self._predictor._layer.preprocess(data)
+        x, _info = self._predictor._layer.preprocess(data)
         outputs = self._predictor._layer.backend(x)
+        print(outputs)
+        raise ValueError("Don't know key!!!")
         confmaps = outputs["???"].detach().cpu().numpy()  # (B, N, H, W)
         confmaps = confmaps.transpose(0, 2, 3, 1)  # (B, H, W, N)
         cmap_dscale = data.shape[1] / confmaps.shape[1]
@@ -189,7 +198,7 @@ class TopDownModelExtractor(SleapModelExtractor):
     ]
 
     @classmethod
-    def can_build(cls, config: ConfigAndModels) -> bool:
+    def can_build(cls, config: Configs) -> bool:
         return (
             len(config) == 2
             and any(
@@ -204,7 +213,9 @@ class TopDownModelExtractor(SleapModelExtractor):
             )
         )
 
-    def __init__(self, models: ConfigAndModels, **kwargs):
+    def __init__(
+        self, configs: Configs, device: str, refinement_kernel_size: int, **kwargs
+    ):
         super().__init__(models, **kwargs)
         for cfg, mdl in models:
             if any(_get_config_paths(cfg, self.CENTROID_MODELS)):

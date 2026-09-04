@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy as np
 
 import diplomat.processing.type_casters as tc
@@ -5,10 +7,12 @@ from diplomat.frontends import ModelInfo, ModelLike
 from diplomat.utils.cli_tools import Flag
 from diplomat.utils.lazy_import import resolve_lazy_imports
 
+from .run_utils import _load_model_configs, _paths_to_str
 from .sleap_imports import torch
+from .sleap_providers import PredictorExtractor
 
 
-def _resolve_device(gpu_index, use_cpu) -> str:
+def _resolve_device(gpu_index: Optional[int], use_cpu: bool) -> str:
     if use_cpu:
         return "cpu"
     if gpu_index is not None:
@@ -30,9 +34,11 @@ def load_models(
     refinement_kernel_size: int = 5,
     use_cpu: Flag = False,
 ) -> tc.Tuple[ModelInfo, ModelLike]:
+    config = _load_model_configs(_paths_to_str(config))
     device = _resolve_device(gpu_index, bool(use_cpu))
-    provider = PredictorExtractor(configs, device, refinement_kernel_size)
+    provider = PredictorExtractor(config, device, refinement_kernel_size)
     meta = provider.get_metadata()
+
     if batch_size is None:
         batch_size = meta["batch_size"]
 

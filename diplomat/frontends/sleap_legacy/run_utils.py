@@ -1,15 +1,11 @@
 import contextlib
 import json
 import zipfile
-from inspect import signature
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import Optional, Type
-
-from diplomat.processing import Config, Predictor
 
 from ...utils.lazy_import import resolve_lazy_imports
-from .sleap_imports import h5py, tf
+from .sleap_imports import h5py
 
 
 def _paths_to_str(paths):
@@ -139,7 +135,12 @@ def _load_configs_from_zip(z: zipfile.ZipFile, include_model=True):
 
 @resolve_lazy_imports
 def _load_config_and_model(path, include_model=True):
-    device_ctx = tf.device("/cpu:0") if include_model else contextlib.nullcontext()
+    if include_model:
+        import tensorflow as tf
+
+        device_ctx = tf.device("/cpu:0")
+    else:
+        device_ctx = contextlib.nullcontext()
     with device_ctx:
         path = Path(path)
         if zipfile.is_zipfile(path):
@@ -155,6 +156,8 @@ def _load_config_and_model(path, include_model=True):
             _correct_skeletons_in_config(cfg)
         model_path = _resolve_model_path(path.parent.iterdir())
         if include_model:
+            import tensorflow as tf
+
             model = tf.keras.models.load_model(model_path, compile=False)
             return [(cfg, model)]
         else:
@@ -173,19 +176,3 @@ def _load_configs(paths, include_models: bool = True):
         configs.extend(_load_config_and_model(p, include_models))
 
     return configs
-
-
-def _get_default_value(func, attr, fallback):
-    param = signature(func).parameters.get(attr, None)
-    return fallback if (param is None) else param.default
-
-
-def _get_predictor_settings(
-    predictor_cls: Type[Predictor], user_passed_settings
-) -> Optional[Config]:
-    settings_backing = predictor_cls.get_settings()
-
-    if settings_backing is None:
-        return None
-
-    return Config(user_passed_settings, settings_backing)
