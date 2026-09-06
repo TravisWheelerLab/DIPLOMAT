@@ -129,10 +129,6 @@ def _fix_conf_map(conf_map: np.ndarray) -> np.ndarray:
     return np.clip(conf_map, 0, 1)
 
 
-def _get_config_paths(cfg, paths, default=None):
-    return [_dict_get_path(cfg, path, default) for path in paths]
-
-
 class IntegralOffsets:
     @staticmethod
     @resolve_lazy_imports
@@ -193,7 +189,7 @@ class BottomUpModelExtractor(SleapModelExtractor):
     def model_type(cls, config: dict) -> Optional[str]:
         for key in cls.MODEL_CONFIGS:
             if (
-                _get_config_paths(config, ("model_config", "heads_configs", key))
+                _dict_get_path(config, ("model_config", "heads_configs", key))
                 is not None
             ):
                 return key
@@ -231,7 +227,6 @@ class BottomUpModelExtractor(SleapModelExtractor):
     ) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
         x, _info = self._predictor.layer.preprocess(data)
         outputs = self._predictor.layer.backend(x)
-        # raise ValueError("Don't know key!!!")
         confmaps = outputs[self._confmaps_output_name].detach()  # (B, N, H, W)
         confmaps = confmaps.permute(0, 2, 3, 1)  # (B, H, W, N)
         cmap_dscale = data.shape[1] / confmaps.shape[1]
@@ -249,11 +244,14 @@ class TopDownModelExtractor(SleapModelExtractor):
     CENTROID_MODELS = ["centroid"]
     CENTERED_INST_MODELS = ["centered_instance", "multi_class_topdown"]
 
+    CENTROID_KEY = "CentroidConfmapsHead"
+    CONFMAP_KEY = "CenteredInstanceConfmapsHead"
+
     @classmethod
     def model_type(cls, config: dict) -> Optional[str]:
         for key in [*cls.CENTROID_MODELS, *cls.CENTERED_INST_MODELS]:
             if (
-                _get_config_paths(config, ("model_config", "heads_configs", key))
+                _dict_get_path(config, ("model_config", "head_configs", key))
                 is not None
             ):
                 return key
@@ -272,36 +270,31 @@ class TopDownModelExtractor(SleapModelExtractor):
     def __init__(
         self, configs: Configs, device: str, refinement_kernel_size: int, **kwargs
     ):
-        super().__init__(configs, device, **kwargs)
-        for cfg, _, _ in models:
-            if any(_get_config_paths(cfg, self.CENTROID_MODELS)):
-                self._centroid_model = _onnx_model_to_inference_session(
-                    _keras_to_onnx_model(_reset_input_layer(mdl)), **kwargs
-                )
-                self._centroid_pre = PreProcessingLayer(cfg, **kwargs)
-                self._centroid_cfg = cfg
-                self._centroid_heads = [
-                    _find_model_output(self._centroid_model, "CentroidConfmapsHead"),
-                    _find_model_output(
-                        self._centroid_model, "OffsetRefinementHead", False
-                    ),
-                ]
-            if any(_get_config_paths(cfg, self.CENTERED_INST_MODELS)):
+        super().__init__(configs, device, refinement_kernel_size, **kwargs)
+        self._predictor = sleap_nn.inference.Predictor.from_model_paths(
+            [cfg_path for _, cfg_path, _ in configs],
+            device=device,
+            batch_size=1,
+            return_confmaps=True,
+            integral_refinement="integral",
+        )
+
+        self._crop_size = None
+
+        for cfg, _, _ in configs:
+            if self.model_type(cfg) in self.CENTERED_INST_MODELS:
                 self._crop_size = _dict_get_path(
-                    cfg, ("data", "instance_cropping", "crop_size")
+                    cfg, ("data_config", "preprocessing", "crop_size")
                 )
-                if self._crop_size is None:
-                    raise ValueError("Provided top-down model doesn't have crop size!")
-                self._cent_inst_model = _onnx_model_to_inference_session(
-                    _keras_to_onnx_model(_reset_input_layer(mdl)), **kwargs
-                )
-                self._cent_inst_pre = PreProcessingLayer(cfg, **kwargs)
-                self._cent_inst_cfg = cfg
-                self._cent_inst_heads = [
-                    _find_model_output(
-                        self._centroid_model, "CenteredInstanceConfmapsHead"
-                    )
-                ]
+
+        if self._crop_size is None:
+            raise ValueError("Provided top-down model doesn't have crop size!")
+
+        self._integral_refinement = (
+            IntegralOffsets(refinement_kernel_size, 1.0, device)
+            if refinement_kernel_size > 1
+            else None
+        )
 
     @staticmethod
     def _merge_tiles(
@@ -331,83 +324,41 @@ class TopDownModelExtractor(SleapModelExtractor):
 
         return result
 
+    @staticmethod
+    def _local_peak_estimation(
+        img: torch.Tensor,
+        stride: float,
+        local_search_area: int,
+        threshold: float,
+    ):
+        if local_search_area % 2 == 0:
+            local_search_area += 1
+
+        max_neighbors = torch.nn.functional.max_pool2d(
+            img, local_search_area, 1, local_search_area // 2
+        )
+
+        peaks = (img >= max_neighbors) & img > threshold
+        rb, rx, ry, rp = np.nonzero(peaks)
+
     def extract(
         self, orig_img: np.ndarray
     ) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
         # Run the centroid model to find individuals...
-        centroid_img, centroid_dscale = self._centroid_pre(orig_img)
-        confs, offsets = _resolve_heads(
-            self._centroid_model.run(
-                None, {self._centroid_model.get_inputs()[0].name: centroid_img}
-            ),
-            self._centroid_heads,
-        )
-        centroid_dscale *= centroid_img.shape[1] / confs.shape[1]
-        crop_centers = _local_peak_estimation(
-            confs,
-            offsets,
-            centroid_dscale,
-            local_search_area=5,
-            threshold=0.1,
-            integral_refinement=5,
-        )
+        centroid_layer = self._predictor.layer.centroid_layer
+        cent_out = centroid_layer.backend(centroid_layer.preprocess(orig_img)[0])[
+            "output"
+        ]
+        cent_dscale = cent_out.shape[2] / cent_out.shape[2]
 
-        crops = _extract_crops(orig_img, crop_centers, self._crop_size)
-        crops, inst_dscale = self._cent_inst_pre(crops)
-        crops_conf = _resolve_heads(
-            self._cent_inst_model.run(
-                None, {self._cent_inst_model.get_inputs()[0].name: crops}
-            ),
-            self._cent_inst_heads,
-        )[0]
-        inst_dscale *= crops.shape[1] / crops_conf.shape[1]
-
-        conf_h = int(np.ceil(orig_img.shape[1] / inst_dscale) + 1)
-        conf_w = int(np.ceil(orig_img.shape[2] / inst_dscale) + 1)
-
-        if len(crops) == 0:
-            img = np.zeros(
-                (orig_img.shape[0], conf_h, conf_w, orig_img.shape[-1]),
-                dtype=np.float32,
-            )
-        else:
-            img = _restore_crops(
-                (orig_img.shape[0], conf_h, conf_w, orig_img.shape[-1]),
-                (
-                    crop_centers[0],
-                    crop_centers[1] / inst_dscale,
-                    crop_centers[2] / inst_dscale,
-                    crop_centers[3],
-                ),
-                crops_conf,
-            )
-
-        return (img, None, inst_dscale)
+        print(orig_img.shape, cent_out_dict.shape)
+        raise ValueError
 
 
 EXTRACTORS = [
     BottomUpModelExtractor,
     TopDownModelExtractor,
 ]
-
-
-def _convolve_2d(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
-    """
-    Fast-ish manual 2D convolution written using numpy's sliding windows implementation.
-    """
-    pad_h = kernel.shape[-2] - 1
-    pad_w = kernel.shape[-1] - 1
-    img = np.pad(
-        img,
-        (
-            (0, 0),
-            (pad_h // 2, pad_h - pad_h // 2),
-            (pad_w // 2, pad_w - pad_w // 2),
-            (0, 0),
-        ),
-    )
-    conv_view = sliding_window_view(img, (kernel.shape[0], kernel.shape[1]), (1, 2))
-    return np.einsum("...ij,...kij->...k", conv_view, kernel)
 
 
 def _local_peak_estimation(
