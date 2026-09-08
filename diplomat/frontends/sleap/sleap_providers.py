@@ -165,11 +165,11 @@ class IntegralOffsets:
         batch, height, width, channels = confmap.shape
         integration_fields = (
             torch.nn.functional.conv2d(
-                confmap.permute(0, 3, 1, 2).view(batch * channels, 1, height, width),
+                confmap.permute(0, 3, 1, 2).reshape(batch * channels, 1, height, width),
                 self._kernel,
                 padding="same",
             )
-            .view(batch, channels, 3, height, width)
+            .reshape(batch, channels, 3, height, width)
             .permute(0, 3, 4, 1, 2)
         )
 
@@ -189,7 +189,7 @@ class BottomUpModelExtractor(SleapModelExtractor):
     def model_type(cls, config: dict) -> Optional[str]:
         for key in cls.MODEL_CONFIGS:
             if (
-                _dict_get_path(config, ("model_config", "heads_configs", key))
+                _dict_get_path(config, ("model_config", "head_configs", key))
                 is not None
             ):
                 return key
@@ -295,37 +295,10 @@ class TopDownModelExtractor(SleapModelExtractor):
             if refinement_kernel_size > 1
             else None
         )
+        self._device = device
 
-    @staticmethod
-    def _merge_tiles(
-        result: Optional[np.ndarray],
-        batch_sz: int,
-        tile_counts: tuple,
-        orig_im_sz: tuple,
-        d_scale: int,
-    ) -> Union[np.ndarray, np.ndarray, None]:
-        if result is None:
-            return None
-
-        ceil = lambda n: int(np.ceil(n))
-        tiles_wide, tiles_high = tile_counts
-        og_w, og_h = orig_im_sz
-
-        __, out_h, out_w, out_d = result.shape
-
-        result = np.reshape(
-            result, [batch_sz, tiles_high, tiles_wide, out_h, out_w, out_d]
-        )
-        result = np.reshape(
-            np.transpose(result, [0, 1, 3, 2, 4, 5]),
-            [batch_sz, tiles_high * out_h, tiles_wide * out_w, out_d],
-        )
-        result = result[:, : ceil(og_h / d_scale), : ceil(og_w / d_scale)]
-
-        return result
-
-    @staticmethod
     def _local_peak_estimation(
+        self,
         img: torch.Tensor,
         stride: float,
         local_search_area: int,
@@ -334,25 +307,161 @@ class TopDownModelExtractor(SleapModelExtractor):
         if local_search_area % 2 == 0:
             local_search_area += 1
 
+        if self._integral_refinement is not None:
+            offsets = self._integral_refinement(img.permute(0, 2, 3, 1))
+        else:
+            offsets = None
+
         max_neighbors = torch.nn.functional.max_pool2d(
             img, local_search_area, 1, local_search_area // 2
         )
 
-        peaks = (img >= max_neighbors) & img > threshold
-        rb, rx, ry, rp = np.nonzero(peaks)
+        peaks = (img >= max_neighbors) & (img > threshold)
+        rb, rp, ry, rx = torch.nonzero(peaks, as_tuple=True)
+
+        if offsets is not None:
+            img_x = (rx + 0.5) * stride + offsets[rb, ry, rx, rp, 0] * stride
+            img_y = (ry + 0.5) * stride + offsets[rb, ry, rx, rp, 1] * stride
+        else:
+            img_x = (rx + 0.5) * stride
+            img_y = (ry + 0.5) * stride
+
+        return (rb, img_y, img_x, rp)
+
+    def _extract_crops(self, img, crop_centers, crop_size):
+        batch, y, x, _part = crop_centers
+        y = torch.clamp(y, 0, img.shape[1])
+        x = torch.clamp(x, 0, img.shape[2])
+        crop_start_x = torch.floor(x - crop_size / 2).to(torch.int64)
+        crop_end_x = crop_start_x + crop_size
+        crop_start_y = torch.floor(y - crop_size / 2).to(torch.int64)
+        crop_end_y = crop_start_y + crop_size
+
+        # Add padding to image for crops near the edges to not attempt indexing out of bounds...
+        pad_x = (
+            -min(0, torch.min(crop_start_x)),
+            max(img.shape[2], torch.max(crop_end_x)) - img.shape[2],
+        )
+        pad_y = (
+            -min(0, torch.min(crop_start_y)),
+            max(img.shape[1], torch.max(crop_end_y)) - img.shape[1],
+        )
+
+        if any(v != 0 for pad in [pad_x, pad_y] for v in pad):
+            # Torch padding direction is backwards....
+            img = torch.nn.functional.pad(img, (0, 0, *pad_x, *pad_y))
+
+        crop_shift_x = torch.reshape(crop_start_x + pad_x[0], (-1, 1, 1))
+        crop_shift_y = torch.reshape(crop_start_y + pad_y[0], (-1, 1, 1))
+        gy, gx = [
+            v.to(crop_shift_x.device)
+            for v in torch.meshgrid(
+                torch.arange(crop_size), torch.arange(crop_size), indexing="ij"
+            )
+        ]
+
+        # Indexing magic...
+        crops = img[
+            torch.reshape(batch, (-1, 1, 1)), crop_shift_y + gy, crop_shift_x + gx, :
+        ]
+        return crops
+
+    def _restore_crops(self, img_shape, crop_centers, crops):
+        batch, y, x, _part = crop_centers
+        crop_h, crop_w = crops.shape[1:3]
+        y = torch.clamp(y, 0, img_shape[1])
+        x = torch.clamp(x, 0, img_shape[2])
+        crop_start_x = torch.floor(x - crop_w / 2).to(torch.int64)
+        crop_end_x = crop_start_x + crop_w
+        crop_start_y = torch.floor(y - crop_h / 2).to(torch.int64)
+        crop_end_y = crop_start_y + crop_h
+
+        pad_x = (
+            -min(0, torch.min(crop_start_x)),
+            max(img_shape[2], torch.max(crop_end_x)) - img_shape[2],
+        )
+        pad_y = (
+            -min(0, torch.min(crop_start_y)),
+            max(img_shape[1], torch.max(crop_end_y)) - img_shape[1],
+        )
+
+        img = torch.zeros(
+            (
+                img_shape[0],
+                img_shape[1] + sum(pad_y),
+                img_shape[2] + sum(pad_x),
+                img_shape[3],
+            ),
+            dtype=crops.dtype,
+            device=crops.device,
+        )
+
+        crop_shift_x = torch.reshape(crop_start_x + pad_x[0], (-1, 1, 1))
+        crop_shift_y = torch.reshape(crop_start_y + pad_y[0], (-1, 1, 1))
+        gy, gx = [
+            v.to(crop_shift_x.device)
+            for v in torch.meshgrid(
+                torch.arange(crop_h), torch.arange(crop_w), indexing="ij"
+            )
+        ]
+
+        img[
+            torch.reshape(batch, (-1, 1, 1)), crop_shift_y + gy, crop_shift_x + gx, :
+        ] = _interpolate_crop(x - crop_w / 2, y - crop_h / 2, crops)
+
+        return img[
+            :, pad_y[0] : img.shape[1] - pad_y[1], pad_x[0] : img.shape[2] - pad_x[1], :
+        ]
 
     def extract(
         self, orig_img: np.ndarray
     ) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
         # Run the centroid model to find individuals...
         centroid_layer = self._predictor.layer.centroid_layer
+        centered_inst_layer = self._predictor.layer.centered_instance_layer
         cent_out = centroid_layer.backend(centroid_layer.preprocess(orig_img)[0])[
             "output"
         ]
-        cent_dscale = cent_out.shape[2] / cent_out.shape[2]
+        cent_dscale = float(orig_img.shape[2] / cent_out.shape[2])
 
-        print(orig_img.shape, cent_out_dict.shape)
-        raise ValueError
+        crop_centers = self._local_peak_estimation(
+            cent_out, cent_dscale, local_search_area=5, threshold=0.1
+        )
+
+        tensor_img = torch.tensor(orig_img).to(self._device)
+
+        extracted_crops = self._extract_crops(tensor_img, crop_centers, self._crop_size)
+        extracted_crops = extracted_crops.permute(0, 3, 1, 2)
+
+        center_inst_out = centered_inst_layer.backend(
+            centered_inst_layer.preprocess(extracted_crops)[0]
+        )["output"].permute(0, 2, 3, 1)
+
+        inst_dscale = float(extracted_crops.shape[2] / center_inst_out.shape[2])
+
+        confmaps = self._restore_crops(
+            (
+                int(orig_img.shape[0]),
+                int(orig_img.shape[1] / inst_dscale),
+                int(orig_img.shape[2] / inst_dscale),
+                int(center_inst_out.shape[-1]),
+            ),
+            (
+                crop_centers[0],
+                crop_centers[1] / inst_dscale,
+                crop_centers[2] / inst_dscale,
+                crop_centers[3],
+            ),
+            center_inst_out,
+        )
+
+        if self._integral_refinement is not None:
+            offsets = self._integral_refinement(confmaps)
+            offsets = (offsets * inst_dscale).cpu().numpy()
+        else:
+            offsets = None
+
+        return _fix_conf_map(confmaps.cpu().numpy()), offsets, inst_dscale
 
 
 EXTRACTORS = [
@@ -361,51 +470,10 @@ EXTRACTORS = [
 ]
 
 
-def _local_peak_estimation(
-    img: np.ndarray,
-    offsets: Optional[np.ndarray],
-    stride: float,
-    local_search_area: int,
-    threshold: float,
-    integral_refinement: int = 0,
-):
-    pad = local_search_area - 1
-    h_pad = pad // 2
-    img = np.pad(img, ((0, 0), (h_pad, pad - h_pad), (h_pad, pad - h_pad), (0, 0)))
-    conv_view = sliding_window_view(img, (local_search_area, local_search_area), (1, 2))
-    center_idx = (local_search_area * local_search_area - 1) // 2
-    conv_view = conv_view.reshape(
-        conv_view.shape[:-2] + (local_search_area * local_search_area,)
-    )
-
-    peaks = (center_idx != np.argmax(conv_view, axis=-1, keepdims=False)) & (
-        img > threshold
-    )
-    rb, rx, ry, rp = np.nonzero(peaks)
-
-    if offsets is not None:
-        offsets_per_crop = offsets[rb, rx, ry, rp]
-    elif integral_refinement > 1:
-        if integral_refinement % 2 == 0:
-            integral_refinement += 1
-        kernel = _get_integral_offset_kernels(integral_refinement, stride, img.dtype)
-        neighborhoods = _extract_crops(img, [rb, rx, ry, rp], integral_refinement)
-        offsets_per_crop = np.sum(
-            np.expand_dims(neighborhoods, -1) * kernel, axis=[-3, -2]
-        )
-    else:
-        offsets_per_crop = np.zeros((len(rx), 2), dtype=np.float32)
-
-    true_x = (rx + 0.5) * stride + offsets_per_crop[:, 0]
-    true_y = (ry + 0.5) * stride + offsets_per_crop[:, 1]
-
-    return (rb, true_y, true_x, rp)
-
-
-def _interpolate_crop(x: np.ndarray, y: np.ndarray, crops: np.ndarray) -> np.ndarray:
-    crops = np.pad(crops, ((0, 0), (1, 1), (1, 1)))
-    x = np.reshape(x % 1, [-1, 1, 1])
-    y = np.reshape(y % 1, [-1, 1, 1])
+def _interpolate_crop(x, y, crops):
+    crops = torch.nn.functional.pad(crops, (0, 0, 0, 1, 0, 1))
+    x = torch.reshape(x % 1, [-1, 1, 1, 1])
+    y = torch.reshape(y % 1, [-1, 1, 1, 1])
 
     return (
         x * y * crops[:, 1:, 1:]
@@ -413,94 +481,6 @@ def _interpolate_crop(x: np.ndarray, y: np.ndarray, crops: np.ndarray) -> np.nda
         + x * (1 - y) * crops[:, :-1, 1:]
         + (1 - x) * (1 - y) * crops[:, :-1, :-1]
     )
-
-
-def _restore_crops(
-    img_shape: tuple,
-    crop_centers: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
-    crops: np.ndarray,
-):
-    batch, y, x, part = crop_centers
-    crop_h, crop_w = crops.shape[-2:]
-    y = np.clip(y, 0, img_shape[1])
-    x = np.clip(x, 0, img_shape[2])
-    crop_start_x = np.floor(x - crop_w / 2).astype(int)
-    crop_end_x = crop_start_x + crop_w
-    crop_start_y = np.floor(y - crop_h / 2).astype(int)
-    crop_end_y = crop_start_y + crop_h
-
-    pad_x = (
-        -min(0, np.min(crop_start_x)),
-        max(img_shape[2], np.max(crop_end_x)) - img_shape[2],
-    )
-    pad_y = (
-        -min(0, np.min(crop_start_y)),
-        max(img_shape[1], np.max(crop_end_y)) - img_shape[1],
-    )
-
-    img = np.zeros(
-        (
-            img_shape[0],
-            img_shape[1] + sum(pad_y),
-            img_shape[2] + sum(pad_x),
-            img_shape[3],
-        ),
-        dtype=np.float32,
-    )
-
-    crop_shift_x = np.reshape(crop_start_x + pad_x[0], (-1, 1, 1))
-    crop_shift_y = np.reshape(crop_start_y + pad_y[0], (-1, 1, 1))
-    gy, gx = np.ogrid[0:crop_h, 0:crop_w]
-
-    img[
-        np.reshape(batch, (-1, 1, 1)),
-        crop_shift_y + gy,
-        crop_shift_x + gx,
-        np.reshape(part, (-1, 1, 1)),
-    ] = _interpolate_crop(x - crop_w / 2, y - crop_h / 2, crops)
-
-    return img[
-        :, pad_y[0] : img.shape[1] - pad_y[1], pad_x[0] : img.shape[2] - pad_x[1], :
-    ]
-
-
-def _extract_crops(
-    img: np.ndarray,
-    crop_centers: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
-    crop_size: int,
-):
-    batch, y, x, part = crop_centers
-    y = np.clip(y, 0, img.shape[1])
-    x = np.clip(x, 0, img.shape[2])
-    crop_start_x = np.floor(x - crop_size / 2).astype(int)
-    crop_end_x = crop_start_x + crop_size
-    crop_start_y = np.floor(y - crop_size / 2).astype(int)
-    crop_end_y = crop_start_y + crop_size
-
-    pad_x = (
-        -min(0, np.min(crop_start_x)),
-        max(img.shape[2], np.max(crop_end_x)) - img.shape[2],
-    )
-    pad_y = (
-        -min(0, np.min(crop_start_y)),
-        max(img.shape[1], np.max(crop_end_y)) - img.shape[1],
-    )
-
-    if any(v != 0 for pad in [pad_x, pad_y] for v in pad):
-        img = np.pad(img, ((0, 0), pad_y, pad_x, (0, 0)))
-
-    crop_shift_x = np.reshape(crop_start_x + pad_x[0], (-1, 1, 1))
-    crop_shift_y = np.reshape(crop_start_y + pad_y[0], (-1, 1, 1))
-    gy, gx = np.ogrid[0:crop_size, 0:crop_size]
-
-    # Indexing magic...
-    crops = img[
-        np.reshape(batch, (-1, 1, 1)),
-        crop_shift_y + gy,
-        crop_shift_x + gx,
-        np.reshape(part, (-1, 1, 1)),
-    ]
-    return crops
 
 
 class PredictorExtractor:
