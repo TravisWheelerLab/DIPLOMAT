@@ -39,16 +39,18 @@ pull down this repository and create an environment for it using the commands sh
 
     git clone https://github.com/TravisWheelerLab/DIPLOMAT.git
     cd DIPLOMAT
-    # Create a python environment
-    python -m venv venv
-    # On windows use the command: venv/Scripts/activate.bat
-    source venv/bin/activate
+    # Create and syncronize python environment using uv...
+    uv sync
 
     # Run one of the two below...
     # Install DIPLOMAT dependencies with all extras (sleap, dlc, and gui) You may want to change this to only install some extras.
-    pip install -e .[all, test]
+    uv sync --extra all --extra test
     # Same command for systems with NVIDIA GPUs...
-    pip install -e .[all-nvidia, test]
+    uv sync --extra all-nvidia --extra test
+
+    # Run the diplomat command. You can also just use 'diplomat' if you activate the virtual environment at '.venv'
+    uv run diplomat
+
 
 For most development, you'll most likely want to add additional predictor plugins.
 Predictors can be found in the ``diplomat/predictors`` directory. Classes that extend Predictor are automatically

@@ -8,12 +8,23 @@ Installing Python
 -----------------
 
 If you have not already, you'll need to install python to utilize DIPLOMAT. It is recommend that you use
-`Miniforge <https://github.com/conda-forge/miniforge>`_ which provides a python environment
-and install process that is consistent across platforms. To install Miniforge:
+`uv <https://docs.astral.sh/uv/>`_ which provides a python environment
+and install process that is consistent across platforms. To install uv:
 
- - Visit `https://github.com/conda-forge/miniforge <https://github.com/conda-forge/miniforge>`_.
- - Select the installer for your OS from the list of installers.
- - Run the installer and follow the installation instructions.
+ - Visit `https://docs.astral.sh/uv/getting-started/installation/ <https://docs.astral.sh/uv/getting-started/installation/>`_.
+ - Copy and paste the installation command in the terminal for your operating system, and press :kbd:`ENTER`.
+
+
+.. hint::
+
+     Both running and installing diplomat requires access to a terminal. To access one:
+
+     **Windows:** Open the start menu and search for *Terminal*.
+
+     **Linux:** Press :kbd:`CTRL` + :kbd:`ALT` + :kbd:`T`. This will open a terminal window.
+
+     **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
+     then search for *Terminal*.
 
 .. hint::
 
@@ -23,8 +34,8 @@ and install process that is consistent across platforms. To install Miniforge:
 
 .. hint::
 
-    DIPLOMAT requires a Python version of at least 3.8 or higher. Check your python version by running ``python3 --version``.
-    If your version of Python is not at least 3.8, you'll need to install using the conda/Miniforge approach, or install a
+    DIPLOMAT requires a Python version of at least 3.11 or higher. Check your python version by running ``python3 --version``.
+    If your version of Python is not at least 3.11, you'll need to install using the conda/Miniforge approach, or install a
     supported version of python before using the pip based install approach.
 
 Installing DIPLOMAT
@@ -41,7 +52,7 @@ own separate python environment. This can be done by following the directions be
 It you want to create new SLEAP or DeepLabCut projects or train new models, you'll need to install their
 software packages. This can be done by following their installation guides at the links below:
 
-* SLEAP: `<https://sleap.ai/installation.html>`_
+* SLEAP: `<https://docs.sleap.ai/latest/installation/>`_
 * DeepLabCut: `<https://deeplabcut.github.io/DeepLabCut/README.html>`_
 
 Note that neither is required to run diplomat, if you just want to run diplomat you can skip this section
@@ -50,46 +61,42 @@ and follow one of the installation procedures below based on your platform.
 Installation
 ^^^^^^^^^^^^
 
-.. hint::
-
-    Both running and installing diplomat requires access to a terminal. To access one:
-
-    **Windows:** Open the start menu and search for *Miniforge Prompt*.
-
-    **Linux:** Press :kbd:`CTRL` + :kbd:`ALT` + :kbd:`T`. This will open a terminal window.
-
-    **Mac:** Select the search icon in the top right corner of the screen to open Spotlight, and
-    then search for *Terminal*.
-
-
-
 .. tabs::
 
     .. group-tab:: Windows
 
         .. tabs::
 
-            .. group-tab:: Miniforge or Conda
+            .. group-tab:: uv
 
                 Open the terminal and run one of the two commands below:
 
                 .. code-block::
 
                     # On systems with an NVIDIA GPU:
-                    conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-NVIDIA.yaml
+                    uv tool install "diplomat-track[all-nvidia]"
                     # On any other system:
-                    conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT.yaml
+                    uv tool install "diplomat-track[all]"
 
-                Once the installation finishes, you can test the installation by running the commands below.
+                If more granular control is needed of what parts of diplomat should be installed,
+                you can mix and match the frontend specific and ui optional dependency flags, all listed
+                in the commands below.
 
                 .. code-block::
 
-                    # Activate the diplomat environment.
-                    conda activate diplomat
+                    # Equivalent to all-nvidia, remove parts you don't want.
+                    uv tool install "diplomat-track[sleap, dlc-nvidia, gui]"
+                    # Equivalent to all, remove parts you don't want.
+                    uv tool install "diplomat-track[sleap, dlc, gui]"
+
+                Once the installation finishes, you can test the installation by running the command below.
+
+                .. code-block::
+
                     # Test diplomat can access the frontends it needs...
                     diplomat frontends list loaded
 
-            .. group-tab:: Pip
+            .. group-tab:: pip
 
                 Open the terminal, with access to the python environment you would like to install diplomat in.
                 Then run one of the commands below.
@@ -108,7 +115,7 @@ Installation
                 .. code-block::
 
                     # Equivalent to all-nvidia, remove parts you don't want.
-                    pip install diplomat-track[sleap-nvidia, dlc-nvidia, gui]
+                    pip install diplomat-track[sleap, dlc-nvidia, gui]
                     # Equivalent to all, remove parts you don't want.
                     pip install diplomat-track[sleap, dlc, gui]
 
@@ -124,20 +131,27 @@ Installation
 
         .. tabs::
 
-            .. group-tab:: Miniforge or Conda
+            .. group-tab:: uv
 
                 Open the terminal and run the command below:
 
                 .. code-block::
 
-                    conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT.yaml
+                    uv tool install "diplomat-track[all]"
 
-                Once the installation finishes, you can test the installation by running the commands below.
+                If more granular control is needed of what parts of diplomat should be installed,
+                you can mix and match the frontend specific and ui optional dependency flags, all listed
+                in the command below.
 
                 .. code-block::
 
-                    # Activate the diplomat environment.
-                    conda activate diplomat
+                    # Equivalent to all, remove parts you don't want.
+                    uv tool install "diplomat-track[sleap, dlc, gui]"
+
+                Once the installation finishes, you can test the installation by running the command below.
+
+                .. code-block::
+
                     # Test diplomat can access the frontends it needs...
                     diplomat frontends list loaded
 
@@ -153,7 +167,7 @@ Installation
 
                 If more granular control is needed of what parts of diplomat should be installed,
                 you can mix and match the frontend specific and ui optional dependency flags, all listed
-                in the commands below.
+                in the command below.
 
                 .. code-block::
 
@@ -172,27 +186,36 @@ Installation
 
         .. tabs::
 
-            .. group-tab:: Miniforge or Conda
+            .. group-tab:: uv
 
                 Open the terminal and run one of the two commands below:
 
                 .. code-block::
 
                     # On systems with an NVIDIA GPU:
-                    conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT-NVIDIA.yaml
+                    uv tool install "diplomat-track[all-nvidia]"
                     # On any other system:
-                    conda env create -f https://raw.githubusercontent.com/TravisWheelerLab/DIPLOMAT/main/conda-environments/DIPLOMAT.yaml
+                    uv tool install "diplomat-track[all]"
 
-                Once the installation finishes, you can test the installation by running the commands below.
+                If more granular control is needed of what parts of diplomat should be installed,
+                you can mix and match the frontend specific and ui optional dependency flags, all listed
+                in the commands below.
 
                 .. code-block::
 
-                    # Activate the diplomat environment.
-                    conda activate diplomat
+                    # Equivalent to all-nvidia, remove parts you don't want.
+                    uv tool install "diplomat-track[sleap, dlc-nvidia, gui]"
+                    # Equivalent to all, remove parts you don't want.
+                    uv tool install "diplomat-track[sleap, dlc, gui]"
+
+                Once the installation finishes, you can test the installation by running the command below.
+
+                .. code-block::
+
                     # Test diplomat can access the frontends it needs...
                     diplomat frontends list loaded
 
-            .. group-tab:: Pip
+            .. group-tab:: pip
 
                 Open the terminal, with access to the python environment you would like to install diplomat in.
                 Then run one of the commands below.
@@ -211,7 +234,7 @@ Installation
                 .. code-block::
 
                     # Equivalent to all-nvidia, remove parts you don't want.
-                    pip install diplomat-track[sleap-nvidia, dlc-nvidia, gui]
+                    pip install diplomat-track[sleap, dlc-nvidia, gui]
                     # Equivalent to all, remove parts you don't want.
                     pip install diplomat-track[sleap, dlc, gui]
 
@@ -261,12 +284,12 @@ with which you can check your DIPLOMAT installation.
 
 
     Verify that DIPLOMAT's primary tracking functionality works.
-	
+
     .. code-block:: sh
 
         # verify that tracking works
         diplomat track -c test_sleap_5/ -v N5PZS.avi -no 3
-	
+
     If you installed diplomat with ``"all"``, or ui support, verify that the Interact GUI appears after this command completes.
 
     .. code-block:: sh
@@ -302,9 +325,9 @@ with which you can check your DIPLOMAT installation.
 
         # verify that tracking works
         diplomat track -c test_dlc_5/config.yaml -v N5PZS.avi -no 3
-	
+
     If you installed If you installed diplomat with ``"all"``, or ui support, verify that the Interact GUI appears after this command completes.
-	
+
     .. code-block:: sh
 
         # verify that tracking works

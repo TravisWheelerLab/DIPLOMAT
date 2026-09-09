@@ -45,7 +45,7 @@ def load_models(
     use_cpu: Flag = False,
 ) -> tc.Tuple[ModelInfo, ModelLike]:
     """
-    Run DIPLOMAT tracking on videos using a SLEAP trained network.
+    Run DIPLOMAT tracking on videos using a SLEAP-Legacy trained network.
 
     :param config: The path or list of paths to the SLEAP model folders or config files ("training_config.json").
                    Can also be a zip file containing a single or multiple sleap models, in which case DIPLOMAT will

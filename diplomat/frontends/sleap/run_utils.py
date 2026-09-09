@@ -4,8 +4,6 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-from diplomat.utils.lazy_import import resolve_lazy_imports
-
 
 def _dict_get_path(dict_obj, key, default=None):
     for k_p in key:
@@ -62,7 +60,6 @@ def _resolve_model_path(files):
     return max_model
 
 
-@resolve_lazy_imports
 def _load_configs_from_zip(cfg_lst: list, zip_path: Path, unpack_zips_to=None):
     def files_in_dir(directory, as_path=False):
         return (
