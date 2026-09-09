@@ -1,3 +1,2 @@
- - Fix regression caused by new version of keras that caused sleap models to fail to load by pinning the keras version.
- - Add code to detect old dipui files (created before version 0.4.0) and notify the user instead of crashing. 
- - Adds command `diplomat update_ui_state` which allows for converting old dipui files to the new dipui format.
+- Add support for the latest versions of SLEAP via the new `sleap` backend. Old sleap models will now be run with the renamed `sleap-legacy` backend.
+- Update installation docs to use uv.
