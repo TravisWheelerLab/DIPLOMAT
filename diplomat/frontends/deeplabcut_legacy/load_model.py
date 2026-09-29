@@ -44,6 +44,182 @@ def _get_model_folder(
     )
 
 
+def _build_provider_ordering(device_index: Optional[int], use_cpu: bool):
+    supported_devices = ort.get_available_providers()
+    device_config = []
+
+    def _add(val, extra=None):
+        if extra is None:
+            extra = {}
+        if device_index is not None:
+            extra["device_id"] = device_index
+        return (val, extra)
+
+    if not use_cpu:
+        if "CUDAExecutionProvider" in supported_devices:
+            device_config.append(_add("CUDAExecutionProvider"))
+        if "ROCMExecutionProvider" in supported_devices:
+            device_config.append(_add("ROCMExecutionProvider"))
+        if "CoreMLExecutionProvider" in supported_devices:
+            device_config.append("CoreMLExecutionProvider")
+
+    # Fallback...
+    device_config.append("CPUExecutionProvider")
+    return device_config
+
+
+def _prune_tf_model(graph_def, outputs: List[str]):
+    name_to_idx = {n.name: i for i, n in enumerate(graph_def.node)}
+    visited = [False] * len(name_to_idx)
+
+    if not all(o in name_to_idx for o in outputs):
+        raise ValueError("Not all output nodes exist in the model!")
+
+    stack = []
+    stack.extend(outputs)
+
+    while len(stack) > 0:
+        node_name = stack.pop()
+        idx = name_to_idx[node_name]
+        visited[idx] = True
+        for input_node_name in graph_def.node[idx].input:
+            if (
+                input_node_name in name_to_idx
+                and not visited[name_to_idx[input_node_name]]
+            ):
+                stack.append(input_node_name)
+
+    temp_stack = []
+    for i in range(len(visited) - 1, -1, -1):
+        node = graph_def.node.pop()
+        if visited[i]:
+            temp_stack.append(node)
+    graph_def.node.extend(temp_stack[::-1])
+
+    print(f"Total nodes: {len(visited)}")
+    print(f"Removed nodes: {len(visited) - sum(visited)}")
+
+    return graph_def
+
+
+def _load_meta_graph_def(meta_file):
+    meta_graph_def = tf.compat.v1.MetaGraphDef()
+    with open(meta_file, "rb") as f:
+        meta_graph_def.MergeFromString(f.read())
+    return meta_graph_def
+
+
+def from_checkpoint(model_path, input_names, output_names):
+    """Load tensorflow graph from checkpoint."""
+    import tensorflow as tf
+    import tf2onnx
+
+    tf_v1 = tf.compat.v1
+    # make sure we start with clean default graph
+    tf_v1.reset_default_graph()
+    # model_path = checkpoint/checkpoint.meta
+    with tf.device("/cpu:0"):
+        with tf_v1.Session() as sess:
+            saver = tf_v1.train.import_meta_graph(model_path, clear_devices=True)
+            # restore from model_path minus the ".meta"
+            sess.run(tf_v1.global_variables_initializer())
+            saver.restore(sess, model_path[:-5])
+            input_names = tf2onnx.tf_loader.inputs_without_resource(sess, input_names)
+            frozen_graph = tf2onnx.tf_loader.freeze_session(
+                sess, input_names=input_names, output_names=output_names
+            )
+            input_names = tf2onnx.tf_loader.remove_redundant_inputs(
+                frozen_graph, input_names
+            )
+
+        tf_v1.reset_default_graph()
+        with tf_v1.Session() as sess:
+            frozen_graph = tf2onnx.tf_loader.tf_optimize(
+                input_names, output_names, frozen_graph
+            )
+    tf_v1.reset_default_graph()
+    return frozen_graph, input_names, output_names
+
+
+def _find_direct_consumers(graph_def, node):
+    consumers = []
+    for n in graph_def.node:
+        for i, ins in enumerate(n.input):
+            if ins == node:
+                consumers.append(f"{n.name}:{i}")
+
+    return consumers
+
+
+def _get_dlc_inputs_and_outputs(meta_path):
+    meta_graph_def = _load_meta_graph_def(meta_path)
+
+    desired_outputs = [
+        ("pose/part_pred/block4/BiasAdd:0", True),
+        ("pose/locref_pred/block4/BiasAdd:0", False),
+    ]
+    output_names = []
+    op_names = {n.name for n in meta_graph_def.graph_def.node}
+
+    for op_name, is_required in desired_outputs:
+        op_only = op_name.split(":")[0]
+        if op_only in op_names:
+            output_names.append(op_name)
+        elif is_required:
+            raise ValueError(
+                f"Unable to find weights for layer: {op_name} in DLC model, which is required."
+            )
+
+    input_names = ["fifo_queue_Dequeue:0"]
+    for input_name in input_names:
+        if input_name.split(":")[0] not in op_names:
+            raise ValueError("Can't find input node!")
+    return input_names, output_names
+
+
+def _load_and_convert_model(
+    model_dir: Path, device_index: Optional[int], use_cpu: bool
+):
+    import tensorflow as tf
+    import tensorflow.compat.v1 as tf_v1
+    import tf2onnx
+
+    tf.compat.v1.disable_eager_execution()
+    tf.compat.v1.disable_v2_behavior()
+    tf.compat.v1.reset_default_graph()
+
+    meta_files = [
+        file
+        for file in model_dir.iterdir()
+        if file.stem.startswith("snapshot-") and file.suffix == ".meta"
+    ]
+    if len(meta_files) == 0:
+        raise ValueError(
+            "No checkpoint files, make sure you've trained a DLC model first!"
+        )
+    latest_meta_file = max(meta_files, key=lambda k: int(k.stem.split("-")[-1]))
+
+    inputs, outputs = _get_dlc_inputs_and_outputs(str(latest_meta_file))
+
+    graph_def, inputs, outputs = from_checkpoint(str(latest_meta_file), inputs, outputs)
+
+    model, __ = tf2onnx.convert.from_graph_def(
+        graph_def,
+        name=str(latest_meta_file.name),
+        input_names=inputs,
+        output_names=outputs,
+        shape_override={inputs[0]: [None, None, None, 3]},
+        opset=17,
+    )
+
+    b = BytesIO()
+    onnx.save(model, b)
+
+    return ort.InferenceSession(
+        b.getvalue(), providers=_build_provider_ordering(device_index, use_cpu)
+    )
+
+
 class FakeTempDir:
     def __init__(self, name):
         self.name = name
@@ -98,7 +274,7 @@ def load_model(
     use_cpu: Flag = False,
 ) -> tc.Tuple[ModelInfo, ModelLike]:
     """
-    Run DIPLOMAT tracking on videos using a DEEPLABCUT project and trained network.
+    Run DIPLOMAT tracking on videos using a DEEPLABCUT legacy project and trained network (tensorflow based).
 
     :param config: The path to the DLC config for the DEEPLABCUT project.
     :param shuffle: int, optional. Integer specifying which TrainingsetFraction to use. By default, the first
@@ -137,15 +313,12 @@ def load_model(
                     zip_path_obj = PurePosixPath(zip_info.filename)
                     try:
                         sub_path = zip_path_obj.relative_to(zip_project_dir)
-                        if sub_path.parts[0] not in [
-                            "dlc-models-pytorch",
-                            "config.yaml",
-                        ]:
+                        if sub_path.parts[0] not in ["dlc-models", "config.yaml"]:
                             continue
                         dst_path = Path(tmp_dir, sub_path).resolve()
                         dst_path.parent.mkdir(parents=True, exist_ok=True)
                         with z.open(zip_info, "r") as fsrc:
-                            with dst_path.open("wb") as fdst:
+                            with Path(tmp_dir, sub_path).open("wb") as fdst:
                                 shutil.copyfileobj(fsrc, fdst)
                     except ValueError:
                         pass
@@ -173,14 +346,11 @@ def load_model(
             )
 
         # Set the number of outputs...
-        if num_outputs is None:
-            if "individuals" in config:
-                num_outputs = len(config["individuals"])
-            else:
-                num_outputs = config.get(
-                    "num_outputs", model_config.get("num_outputs", None)
-                )
-
+        num_outputs = (
+            config.get("num_outputs", model_config.get("num_outputs", None))
+            if (num_outputs is None)
+            else num_outputs
+        )
         if num_outputs is not None:
             num_outputs = int(num_outputs)
         batch_size = batch_size if (batch_size is not None) else config["batch_size"]

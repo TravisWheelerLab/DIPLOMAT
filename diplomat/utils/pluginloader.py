@@ -3,15 +3,13 @@ Module includes methods useful to loading all plugins placed in a folder, or mod
 """
 
 import importlib
-from typing import Set
-from typing import Type
-from typing import TypeVar
-from types import ModuleType
+import logging
 import pkgutil
 import sys
-import warnings
+from types import ModuleType
+from typing import Callable, Set, Type, TypeVar, Union
 
-warnings.simplefilter("always", ImportWarning)
+logger = logging.getLogger(__name__)
 
 # Generic type for method below
 T = TypeVar("T")
@@ -21,7 +19,7 @@ def load_plugin_classes(
     plugin_dir: ModuleType,
     plugin_metaclass: Type[T],
     do_reload: bool = False,
-    display_error: bool = True,
+    display_error: Union[bool, Callable[[str, Exception], bool]] = True,
     recursive: bool = True,
 ) -> Set[Type[T]]:
     """
@@ -33,18 +31,27 @@ def load_plugin_classes(
     :param plugin_metaclass: The metaclass that all plugins extend. Please note this is the class type, not the
                              instance of the class, so if the base class is Foo just type Foo as this argument.
     :param do_reload: Boolean, Determines if plugins should be reloaded if they already exist. Defaults to True.
-    :param display_error: Boolean, determines if import errors are sent using python's warning system when they occur.
-                          Defaults to True. Note these warnings won't be visible unless you set up a filter for them,
-                          such as below:
-
-                          import warnings
-                          warnings.simplefilter("always", ImportWarning)
+    :param display_error: Boolean or callable.
+                          If a boolean, determines if import errors are sent using python's logging system when they occur.
+                          Defaults to True. By default, these warnings are visible.
+                          If a callable, it should accept the package name and an exception, and return a boolean determining
+                          if an exception should be thrown. This function can also perform logging.
     :param recursive: Boolean, if true recursively search subpackages for the class. Otherwise, only the first level is
                       searched.
 
     :return: A list of class types that directly extend the provided base class and where found in the specified
              module folder.
     """
+    if isinstance(display_error, bool):
+        if display_error:
+
+            def _display_error_default(p, e):
+                logger.warning(f"Can't load '{p}'.", exc_info=e)
+                return False
+
+            display_error = _display_error_default
+        else:
+            display_error = lambda _p, _e: False
     # Get absolute and relative package paths for this module...
     path = list(iter(plugin_dir.__path__))[0]
     rel_path = plugin_dir.__name__
@@ -61,13 +68,8 @@ def load_plugin_classes(
                     del sys.modules[package_name]
                 sub_module = importlib.import_module(package_name)
             except Exception as e:
-                if display_error:
-                    import traceback
-
-                    warnings.warn(
-                        f"Can't load '{package_name}'. Due to issue below: \n {traceback.format_exc()}",
-                        ImportWarning,
-                    )
+                if display_error(package_name, e):
+                    raise
                 continue
         else:
             sub_module = sys.modules[package_name]
@@ -75,7 +77,7 @@ def load_plugin_classes(
         # Now we check if the module is a package, and if so, recursively call this method...
         if ispkg and recursive:
             plugins = plugins | load_plugin_classes(
-                sub_module, plugin_metaclass, do_reload
+                sub_module, plugin_metaclass, do_reload, display_error, recursive
             )
 
         # We begin looking for plugin classes

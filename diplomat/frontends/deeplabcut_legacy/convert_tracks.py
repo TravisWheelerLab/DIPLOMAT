@@ -1,10 +1,9 @@
 from collections import defaultdict
 from pathlib import Path
-
+import diplomat.processing.type_casters as tc
 import numpy as np
 import pandas as pd
 
-import diplomat.processing.type_casters as tc
 
 DLC_HEADER_ROW_NAMES = [
     ["scorer", "bodyparts", "coords"],

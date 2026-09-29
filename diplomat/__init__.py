@@ -4,10 +4,11 @@ A tool providing multi-animal tracking capabilities on top of other Deep learnin
 
 __version__ = "0.5.0"
 
-import warnings
 
 # Can be used by functions to determine if diplomat was invoked through it's CLI interface.
 CLI_RUN = False
+
+import logging
 
 from diplomat.core_ops import (
     annotate,
@@ -27,6 +28,8 @@ from diplomat.predictor_ops import (
     test_predictor_plugin,
 )
 from diplomat.utils.video_splitter import split_videos
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "list_predictor_plugins",
@@ -69,12 +72,11 @@ def _load_frontends():
         res = None
         try:
             res = frontend.init()
-        except ImportError:
+        except ImportError as e:
             import traceback
 
-            warnings.warn(
-                f"Can't load frontend '{frontend}'. Due to issue below: \n {traceback.format_exc()}",
-                ImportWarning,
+            logger.warning(
+                f"Can't load frontend '{frontend.get_package_name()}'. Reason: {repr(e)}",
             )
 
         if res is not None:

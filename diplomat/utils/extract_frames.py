@@ -3,23 +3,25 @@ Provides utility functions for quickly extracting frames from diplomat frame sto
 for debugging and display purposes.
 """
 
+import base64
+from io import BytesIO
 from typing import (
     BinaryIO,
-    Sequence,
     Callable,
-    Optional,
     Generator,
-    Union,
-    Tuple,
-    NamedTuple,
     List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
 )
+
+import cv2
+import numpy as np
+
 from diplomat.processing import TrackingData
 from diplomat.utils import frame_store_fmt
-from io import BytesIO
-import base64
-import numpy as np
-import cv2
 
 
 def extract_frames(
@@ -123,6 +125,7 @@ def pretty_print_frame(
     dynamic_sz: bool = True,
     size_up: bool = False,
     interpol: int = cv2.INTER_CUBIC,
+    normalize: bool = False,
     format_type: Tuple[str, int, tuple] = FrameStringFormats.REGULAR,
 ):
     """
@@ -136,6 +139,7 @@ def pretty_print_frame(
                     extra room.
     :param interpol: The interpolation method if a size is specified. Defaults to cv2.INTER_CUBIC, but any cv2
                      interpolation value works.
+    :param normalize: Boolean, if true normalize confidences so the largest value is 1.
     :param format_type: The format or 'font' to use for the pretty printed string. A tuple, containing a sequence of
                         strings being the displayed characters at given magnitudes, and an integer being the number
                         of times to repeat the characters when displaying them. ('abcd', 2 with 0 becomes aa)
@@ -149,13 +153,14 @@ def pretty_print_frame(
                 get_terminal_size()[0],
                 size_up,
                 interpol,
+                normalize,
                 format_type,
             )
         )
     else:
         print(
             pretty_frame_string(
-                data, frame_idx, body_part, 0, size_up, interpol, format_type
+                data, frame_idx, body_part, 0, size_up, interpol, normalize, format_type
             )
         )
 
@@ -167,6 +172,7 @@ def pretty_frame_string(
     width_limit: int = 0,
     size_up: bool = False,
     interpol: int = cv2.INTER_CUBIC,
+    normalize: bool = False,
     format_type: Tuple[str, int, tuple] = FrameStringFormats.REGULAR,
 ) -> str:
     """
@@ -181,6 +187,7 @@ def pretty_frame_string(
                     gives extra room...
     :param interpol: The interpolation method if a size is specified. Defaults to cv2.INTER_CUBIC, but any cv2
                      interpolation value works.
+    :param normalize: Boolean, if true normalize confidences so the largest value is 1.
     :param format_type: The format or 'font' to use for the pretty printed string. A length 3 tuple, containing a
                         sequence of characters being the displayed characters at given magnitudes, an integer being
                         the number of times to repeat the characters when displaying them. ('abcd', 2 with 0 becomes
@@ -197,9 +204,10 @@ def pretty_frame_string(
 
     frame = data.get_prob_table(frame_idx, body_part)
     # Make range 0-1...
-    max_val = np.nanmax(frame)
-    if max_val != 0:
-        frame = frame / max_val
+    if normalize:
+        max_val = np.nanmax(frame)
+        if max_val != 0:
+            frame = frame / max_val
 
     if width_limit >= (char_rep_amt * 2):
         new_w = (width_limit / char_rep_amt) - 1
@@ -210,9 +218,10 @@ def pretty_frame_string(
             (int(new_w), int(frame.shape[0] * (new_w / frame.shape[1]))),
             interpolation=interpol,
         )
-        max_val = np.nanmax(sized_f)
-        if max_val != 0:
-            sized_f = sized_f / max_val
+        if normalize:
+            max_val = np.nanmax(sized_f)
+            if max_val != 0:
+                sized_f = sized_f / max_val
     else:
         sized_f = frame
 

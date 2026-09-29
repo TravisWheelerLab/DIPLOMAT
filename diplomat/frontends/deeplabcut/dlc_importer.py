@@ -1,17 +1,11 @@
 from diplomat.utils.lazy_import import (
     LazyImporter,
     verify_existence_of,
-    ImportFunctions,
 )
 
 # This enforces dlc exists so this module can't be imported when DLC doesn't exist, but still avoids
 # executing DLC's code which has a bunch of side effects...
-verify_existence_of("tensorflow")
-verify_existence_of("tf2onnx")
-verify_existence_of("onnx")
-verify_existence_of("onnxruntime")
+verify_existence_of("deeplabcut")
 
-tf = LazyImporter("tensorflow")
-ort = LazyImporter("onnxruntime", import_function=ImportFunctions.ONNX_PRELOAD)
-onnx = LazyImporter("onnx")
-tf2onnx = LazyImporter("tf2onnx")
+dlc_config = LazyImporter("deeplabcut.core.config")
+dlc_torch = LazyImporter("deeplabcut.pose_estimation_pytorch")

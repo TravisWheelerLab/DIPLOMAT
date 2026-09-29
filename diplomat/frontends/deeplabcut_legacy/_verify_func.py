@@ -17,10 +17,7 @@ def _load_dlc_like_zip_file(z: ZipFile) -> Tuple[PurePosixPath, dict]:
     }
     for path in z.namelist():
         path = PurePosixPath(path)
-        if (
-            path.name == "config.yaml"
-            and (path.parent / "dlc-models-pytorch") in all_dirs
-        ):
+        if path.name == "config.yaml" and (path.parent / "dlc-models") in all_dirs:
             config_files.append(path)
 
     if len(config_files) < 1:
@@ -45,7 +42,7 @@ def _verify_dlc_like(config: Union[List[PathLike], PathLike], **kwargs) -> bool:
             with ZipFile(config, "r") as z:
                 __, cfg = _load_dlc_like_zip_file(z)
         else:
-            if not (Path(str(config)).parent / "dlc-models-pytorch").exists():
+            if not (Path(str(config)).parent / "dlc-models").exists():
                 return False
 
             with open(str(config)) as f:
@@ -66,6 +63,6 @@ def _verify_dlc_like(config: Union[List[PathLike], PathLike], **kwargs) -> bool:
             if not any((sub_key in cfg) for sub_key in key):
                 return False
 
-        return cfg.get("engine", "pytorch") == "pytorch"
+        return cfg.get("engine", None) != "pytorch"
     except Exception:
         return False

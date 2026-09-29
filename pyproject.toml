@@ -43,29 +43,20 @@ diplomat = "diplomat._cli_runner:main"
 [project.optional-dependencies]
 gui = ["wxpython"]
 sleap = ["sleap-nn", "sleap-io", "torch"]
-sleap-legacy = [
-    "h5py",
-    "tables",
-    "tensorflow",
-    "keras<=3.13.2",
-    "tf2onnx>=1.16.1",
-    "onnx",
-    "onnxruntime>=1.19",
-]
 dlc = [
     "h5py",
-    "tables",
-    "tensorflow",
-    "keras<=3.13.2",
-    "tf2onnx>=1.16.1",
-    "onnx",
-    "onnxruntime>=1.19",
+    "deeplabcut",
+    "torch",
 ]
 all = [
+    "h5py",
+    "deeplabcut",
     "sleap-nn",
     "sleap-io",
     "torch",
     "wxpython",
+]
+legacy = [
     "h5py",
     "tables",
     "tensorflow",
@@ -74,35 +65,7 @@ all = [
     "onnx",
     "onnxruntime>=1.19",
 ]
-sleap-legacy-nvidia = [
-    "h5py",
-    "tables",
-    "tensorflow",
-    "keras<=3.13.2",
-    "tf2onnx>=1.16.1",
-    "onnx",
-    "onnxruntime-gpu>=1.19",
-    "nvidia-cuda-nvrtc-cu12~=12.0",
-    "nvidia-cuda-runtime-cu12~=12.0",
-    "nvidia-cufft-cu12~=11.0",
-    "nvidia-curand-cu12~=10.0",
-    "nvidia-cudnn-cu12~=9.0",
-]
-dlc-nvidia = [
-    "h5py",
-    "tables",
-    "tensorflow",
-    "keras<=3.13.2",
-    "tf2onnx>=1.16.1",
-    "onnx",
-    "onnxruntime-gpu>=1.19",
-    "nvidia-cuda-nvrtc-cu12~=12.0",
-    "nvidia-cuda-runtime-cu12~=12.0",
-    "nvidia-cufft-cu12~=11.0",
-    "nvidia-curand-cu12~=10.0",
-    "nvidia-cudnn-cu12~=9.0",
-]
-all-nvidia = [
+legacy-nvidia = [
     "sleap-nn",
     "sleap-io",
     "torch",
@@ -118,7 +81,6 @@ all-nvidia = [
     "nvidia-cuda-runtime-cu12~=12.0",
     "nvidia-cufft-cu12~=11.0",
     "nvidia-curand-cu12~=10.0",
-    "nvidia-cudnn-cu12~=9.0",
 ]
 test = ["pytest", "scipy"]
 

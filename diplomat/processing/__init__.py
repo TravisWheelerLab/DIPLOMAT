@@ -4,20 +4,25 @@ processing network outputs into body part pose predictions.
 """
 
 # Used for type hints
-from typing import Type, Set
+import logging
+from logging import warning
+from typing import Set, Type
 
-# Used by get_predictor for loading plugins
-from diplomat.utils import pluginloader
 from diplomat import predictors
+from diplomat.processing import type_casters
+from diplomat.processing.containers import Config, ConfigSpec
+from diplomat.processing.pose import Pose
 
 # Imports for other stuff in this module...
 from diplomat.processing.predictor import Predictor, TestFunction
-from diplomat.processing.track_data import TrackingData
 from diplomat.processing.progress_bar import ProgressBar, TQDMProgressBar
-from diplomat.processing.pose import Pose
-from diplomat.processing import type_casters
+from diplomat.processing.track_data import TrackingData
 from diplomat.processing.type_casters import TypeCaster
-from diplomat.processing.containers import Config, ConfigSpec
+
+# Used by get_predictor for loading plugins
+from diplomat.utils import pluginloader
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "Predictor",
@@ -60,4 +65,16 @@ def get_predictor_plugins() -> Set[Type[Predictor]]:
 
     :returns: A Set of Predictors, being the all classes that extend the Predictor class currently loaded visible to the python interpreter.
     """
-    return pluginloader.load_plugin_classes(predictors, Predictor)
+
+    def on_load_error(package_name, exception):
+        if isinstance(exception, ModuleNotFoundError):
+            if exception.name == "wx":
+                logger.warning(
+                    f"Can't load '{package_name}' due to missing UI packages."
+                )
+                return False
+        return True
+
+    return pluginloader.load_plugin_classes(
+        predictors, Predictor, display_error=on_load_error
+    )
