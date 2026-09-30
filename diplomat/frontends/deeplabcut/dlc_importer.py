@@ -6,6 +6,7 @@ from diplomat.utils.lazy_import import (
 # This enforces dlc exists so this module can't be imported when DLC doesn't exist, but still avoids
 # executing DLC's code which has a bunch of side effects...
 verify_existence_of("deeplabcut")
+verify_existence_of("torch")
 
-dlc_config = LazyImporter("deeplabcut.core.config")
 dlc_torch = LazyImporter("deeplabcut.pose_estimation_pytorch")
+torch = LazyImporter("torch")

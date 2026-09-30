@@ -17,9 +17,9 @@ from .sleap_providers import PredictorExtractor
 def _resolve_device(gpu_index: Optional[int], use_cpu: bool) -> str:
     if use_cpu:
         return "cpu"
-    if gpu_index is not None:
-        return f"cuda:{gpu_index}"
     if torch.cuda.is_available():
+        if gpu_index is not None:
+            return f"cuda:{gpu_index}"
         return "cuda"
     if torch.backends.mps.is_available():
         return "mps"

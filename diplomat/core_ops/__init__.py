@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import typing
@@ -45,6 +46,8 @@ from diplomat.utils.cli_tools import (
 from diplomat.utils.pretty_printer import printer as print
 from diplomat.utils.track_formats import save_diplomat_table
 from diplomat.utils.tweak_ui import UIImportError
+
+logger = logging.getLogger(__name__)
 
 
 class ArgumentError(CLIError):
@@ -102,21 +105,37 @@ def _find_frontend(
 
     contracts = [contracts] if (isinstance(contracts, DIPLOMATContract)) else contracts
 
-    print(f"Loaded frontends: {_LOADED_FRONTENDS}")
+    print(f"Loaded frontends: {list(_LOADED_FRONTENDS.keys())}")
 
     print(f"Config: {config}")
 
     for name, funcs in _LOADED_FRONTENDS.items():
         print(f"Checking frontend '{name}'...")
 
-        for contract in contracts:
-            print(f"Verifying contract '{contract}'...")
-            verified = funcs.verify(contract=contract, config=config, **kwargs)
-            print(f"Verified: {verified}")
+        for c in contracts:
+            if c.method_name in funcs:
+                func = getattr(funcs, c.method_name)
+                try:
+                    c.method_type(func)
+                except Exception as e:
+                    logger.warning(
+                        f"Frontend '{name}''s implementation of '{c.method_name}' doesn't work due to: {repr(e)}"
+                    )
+                    continue
+            else:
+                logger.warning(
+                    f"Frontend '{name}' does not implement '{c.method_name}'"
+                )
+                continue
 
-        if all(funcs.verify(contract=c, config=config, **kwargs) for c in contracts):
-            print(f"Frontend '{name}' selected.")
-            return (name, funcs)
+        try:
+            if funcs._verifier(config=config, **kwargs):
+                print(f"Using frontend '{name}'.")
+                return (name, funcs)
+            else:
+                logger.warning(f"Arguments invalid for frontend '{name}'.")
+        except (ValueError, FileNotFoundError) as e:
+            print(f"Arguments invalid for frontend '{name}'. Reason: {e}")
 
     print(
         "Could not find a frontend that correctly handles the passed config and other arguments. Make sure the "

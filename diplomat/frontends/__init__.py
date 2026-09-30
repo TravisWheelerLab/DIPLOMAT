@@ -1,27 +1,26 @@
+import typing
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from collections import OrderedDict
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
 from diplomat.processing import TrackingData
 from diplomat.processing.type_casters import (
-    StrictCallable,
-    PathLike,
-    Union,
-    List,
     Any,
-    Optional,
-    TypeCaster,
+    List,
     NoneType,
-    Tuple,
-    TypedDict,
-    RangedInteger,
+    Optional,
+    PathLike,
     RangedFloat,
+    RangedInteger,
+    StrictCallable,
+    Tuple,
+    TypeCaster,
+    TypedDict,
+    Union,
 )
-import typing
-
 from diplomat.utils.colormaps import to_colormap
 from diplomat.utils.shapes import shape_iterator
 
@@ -111,7 +110,6 @@ class DIPLOMATContract:
 
 
 class CommandManager(type):
-
     __no_type_check__ = False
 
     def __new__(cls, *args, **kwargs):
@@ -181,43 +179,6 @@ class DIPLOMATCommands(metaclass=CommandManager):
 
     def __contains__(self, item: str):
         return item in self._commands
-
-    def verify(
-        self,
-        contract: DIPLOMATContract,
-        config: Union[List[PathLike], PathLike],
-        **kwargs: Any,
-    ) -> bool:
-        """
-        Verify this backend can handle the provided command type, config file, and arguments.
-
-        :param contract: The contract for the command. Includes the name of the method and the type of the method,
-                         which will typically be a strict callable.
-        :param config: The configuration file, checks if the backend can handle this configuration file.
-        :param kwargs: Any additional arguments to pass to the backends verifier.
-
-        :return: A boolean, True if the backend can handle the provided command and arguments, otherwise False.
-        """
-        if self.verify_contract(contract):
-            return self._verifier(config, **kwargs)
-        return False
-
-    def verify_contract(self, contract: DIPLOMATContract):
-        """
-        Verify this frontend has the provided contract, or function with a specified name and arguments.
-
-        :param contract: The contract for the command. Includes the name of the method and the type of the method,
-                         which will typically be a strict callable.
-        """
-        if contract.method_name in self._commands:
-            func = self._commands[contract.method_name]
-            try:
-                contract.method_type(func)
-                return True
-            except Exception:
-                return False
-
-        return False
 
 
 class DIPLOMATFrontend(ABC):

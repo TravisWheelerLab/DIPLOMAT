@@ -1030,6 +1030,8 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "deeplabcut" },
+    { name = "h5py" },
     { name = "sleap-io" },
     { name = "sleap-nn" },
     { name = "torch" },
@@ -1082,7 +1084,9 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "deeplabcut", marker = "extra == 'all'" },
     { name = "deeplabcut", marker = "extra == 'dlc'" },
+    { name = "h5py", marker = "extra == 'all'" },
     { name = "h5py", marker = "extra == 'dlc'" },
     { name = "h5py", marker = "extra == 'legacy'" },
     { name = "h5py", marker = "extra == 'legacy-nvidia'" },

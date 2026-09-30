@@ -72,9 +72,8 @@ def _load_frontends():
         res = None
         try:
             res = frontend.init()
+            res.origin_frontend = frontend.get_package_name()
         except ImportError as e:
-            import traceback
-
             logger.warning(
                 f"Can't load frontend '{frontend.get_package_name()}'. Reason: {repr(e)}",
             )
