@@ -69,4 +69,5 @@ def main():
     parser = build_full_parser(function_tree, parser)
 
     diplomat.CLI_RUN = True
+
     parser(sys.argv[1:])

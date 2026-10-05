@@ -229,7 +229,9 @@ class BottomUpModelExtractor(SleapModelExtractor):
         outputs = self._predictor.layer.backend(x)
         confmaps = outputs[self._confmaps_output_name].detach()  # (B, N, H, W)
         confmaps = confmaps.permute(0, 2, 3, 1)  # (B, H, W, N)
-        cmap_dscale = data.shape[1] / confmaps.shape[1]
+        cmap_dscale = float(
+            max(data.shape[1] / confmaps.shape[1], data.shape[2] / confmaps.shape[2])
+        )
 
         if self._integral_offsets is not None:
             offsets = self._integral_offsets(confmaps)
@@ -297,6 +299,7 @@ class TopDownModelExtractor(SleapModelExtractor):
         )
         self._device = device
 
+    @resolve_lazy_imports
     def _local_peak_estimation(
         self,
         img: torch.Tensor,
@@ -328,6 +331,7 @@ class TopDownModelExtractor(SleapModelExtractor):
 
         return (rb, img_y, img_x, rp)
 
+    @resolve_lazy_imports
     def _extract_crops(self, img, crop_centers, crop_size):
         batch, y, x, _part = crop_centers
         y = torch.clamp(y, 0, img.shape[1])
@@ -366,6 +370,7 @@ class TopDownModelExtractor(SleapModelExtractor):
         ]
         return crops
 
+    @resolve_lazy_imports
     def _restore_crops(self, img_shape, crop_centers, crops):
         batch, y, x, _part = crop_centers
         crop_h, crop_w = crops.shape[1:3]

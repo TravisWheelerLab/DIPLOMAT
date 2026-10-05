@@ -70,37 +70,359 @@ class FakeTempDir:
         pass
 
 
+class IntegralOffsets:
+    @staticmethod
+    @resolve_lazy_imports
+    def make_kernel(kernel_size, stride, dtype):
+        # Construct kernels for computing centers of mass computed around a point...
+        kernel_half = (kernel_size - 1) // 2
+        y_kernel, x_kernel = [
+            v * stride
+            for v in torch.meshgrid(
+                torch.arange(-kernel_half, kernel_half + 1, dtype=dtype),
+                torch.arange(-kernel_half, kernel_half + 1, dtype=dtype),
+                indexing="ij",
+            )
+        ]
+        # Simple summation kernel, adds all values in an area...
+        ones_kernel = torch.ones((kernel_size, kernel_size), dtype=dtype)
+        return (
+            torch.stack([x_kernel, y_kernel, ones_kernel], dim=0)
+            .reshape((3, 1, *x_kernel.shape))
+            .to(dtype)
+        )
+
+    @resolve_lazy_imports
+    def __init__(self, kernel_refinement_size: int, stride: float, device: str):
+        import torch
+
+        self._kernel_refinement_size = kernel_refinement_size
+        self._kernel = self.make_kernel(
+            kernel_refinement_size, stride, torch.float32
+        ).to(device)
+
+    @resolve_lazy_imports
+    def __call__(self, confmap):
+        batch, height, width, channels = confmap.shape
+        integration_fields = (
+            torch.nn.functional.conv2d(
+                confmap.permute(0, 3, 1, 2).reshape(batch * channels, 1, height, width),
+                self._kernel,
+                padding="same",
+            )
+            .reshape(batch, channels, 3, height, width)
+            .permute(0, 3, 4, 1, 2)
+        )
+
+        offsets = integration_fields[..., :2] / integration_fields[..., 2:]
+        return torch.where(torch.isfinite(offsets), offsets, 0.0)
+
+
+def _interpolate_crop_single(x, y, crops):
+    crops = torch.nn.functional.pad(crops, (0, 0, 0, 1, 0, 1))
+    x = x % 1
+    y = y % 1
+
+    res = (
+        x * y * crops[1:, 1:, :]
+        + (1 - x) * y * crops[1:, :-1, :]
+        + x * (1 - y) * crops[:-1, 1:, :]
+        + (1 - x) * (1 - y) * crops[:-1, :-1, :]
+    )
+
+    return res
+
+
+def _correct_crop_range(start, end, max_value):
+    clamp = lambda x: max(0, min(max_value, x))
+    new_start = -start if start < 0 else 0
+    c_start = clamp(start)
+    c_end = clamp(end)
+
+    if c_start >= c_end:
+        return None, None
+
+    return (
+        slice(c_start, c_end),
+        slice(new_start, new_start + (c_end - c_start)),
+    )
+
+
 class FrameExtractor:
-    def __init__(self, model_config, pose_runner, detector_runner):
+    @resolve_lazy_imports
+    def __init__(
+        self,
+        model_config,
+        pose_runner,
+        detector_runner,
+        score_threshold=0.25,
+        refinement_kernel_size=0,
+    ):
         self._config = model_config
         self._pose_runner = pose_runner
         self._detector_runner = detector_runner
-        self._device = next(pose_runner.model.parameters()).device
+        self._integral_refiner = None
+        self._locref_stdev = float(
+            _dict_get_path(
+                model_config, ("model", "bodypart", "predictor", "locref_stdev"), 7.2801
+            )
+        )
+        self._apply_sigmoid = bool(
+            _dict_get_path(
+                model_config, ("model", "bodypart", "predictor", "apply_sigmoid"), True
+            )
+        )
+        self._clip_scores = bool(
+            _dict_get_path(
+                model_config, ("model", "bodypart", "predictor", "clip_scores"), False
+            )
+        )
+        self._score_threshold = score_threshold
 
-    def _run_batched(self, func, frames, context):
+        if refinement_kernel_size is not None and refinement_kernel_size > 2:
+            self._integral_refiner = IntegralOffsets(
+                refinement_kernel_size, 1.0, self._pose_runner.device
+            )
+
+    @resolve_lazy_imports
+    def _cat_values(self, val):
+        if isinstance(val[0], np.ndarray):
+            return np.concatenate(val, axis=0)
+        if isinstance(val[0], torch.Tensor):
+            return torch.cat(val, dim=0)
+        else:
+            raise ValueError(f"Model arguments must be tensors or numpy arrays!")
+
+    def _run_batched(self, func, frames, context, extraction_key=None):
         new_context = {}
         new_frames = []
 
-        def batched_iter(ctx):
-            for *items in zip(ctx):
-                
+        def batched_iter(frames_in, ctx):
+            if isinstance(ctx, list):
+                yield from zip(frames_in, ctx)
+            else:
+                keys = list(ctx.keys())
+                min_len = min(
+                    len(frames_in),
+                    min((len(v) for v in ctx.values()), default=len(frames_in)),
+                )
 
-        for frame in frames:
-            func(frame, context)
+                for i in range(min_len):
+                    yield (frames_in[i], {k: ctx[k][i] for k in keys})
+
+        for img, inner_ctx in batched_iter(frames, context):
+            res_img, res_ctx = func(img, inner_ctx)
+            if extraction_key is not None:
+                res_ctx = res_ctx.pop(extraction_key, {})
+            new_frames.append(res_img)
+            for key in res_ctx:
+                if key not in new_context:
+                    new_context[key] = []
+                new_context[key].append(res_ctx[key])
+
+        return (
+            self._cat_values(new_frames),
+            {k: self._cat_values(v) for k, v in new_context.items()},
+        )
+
+    @resolve_lazy_imports
+    def _bottom_up_impl(self, frames: np.ndarray):
+        pr = self._pose_runner
+
+        preproc_frames, model_kwargs = self._run_batched(
+            pr.preprocessor, frames, {}, "model_kwargs"
+        )
+
+        if pr.inference_cfg.autocast.enabled:
+            with torch.autocast(device_type=str(pr.device)):
+                outputs = pr.model(preproc_frames.to(pr.device), **model_kwargs)
+        else:
+            outputs = pr.model(preproc_frames.to(pr.device), **model_kwargs)
+
+        bodypart_data = outputs["bodypart"]
+        heatmap = bodypart_data["heatmap"].permute(0, 2, 3, 1)
+
+        if self._apply_sigmoid:
+            heatmap = torch.sigmoid(heatmap)
+        if self._clip_scores:
+            heatmap = torch.clamp(heatmap, 0.0, 1.0)
+
+        downscale = float(
+            max(
+                frames.shape[1] / heatmap.shape[1],
+                frames.shape[2] / heatmap.shape[2],
+            )
+        )
+        locref = bodypart_data.get("locref", None)
+
+        if locref is not None:
+            locref = locref.permute(0, 2, 3, 1)
+            b, h, w, _c = locref.shape
+            locref = locref.reshape(b, h, w, -1, 2) * self._locref_stdev
+        elif self._integral_refiner is not None:
+            locref = self._integral_refiner(heatmap) * downscale
+
+        return TrackingData(
+            heatmap.cpu().numpy(),
+            locref.cpu().numpy() if locref is not None else None,
+            downscale,
+        )
+
+    @resolve_lazy_imports
+    def _restore_crop(
+        self,
+        heatmap_buffer,
+        score_buffer,
+        crop_x,
+        crop_y,
+        crop_scale_x,
+        crop_scale_y,
+        crop,
+        score,
+    ):
+        # Crop is h, w, num_parts...
+        crop_old_h, crop_old_w = crop.shape[:2]
+
+        from torchvision.transforms.functional import resize
+
+        crop_proper_size = resize(
+            crop.permute(2, 0, 1),
+            [int(crop_old_h * crop_scale_y), int(crop_old_w * crop_scale_x)],
+        ).permute(1, 2, 0)
+
+        crop_h, crop_w = crop_proper_size.shape[:2]
+
+        crop_start_x = int(np.floor(crop_x))
+        crop_end_x = crop_start_x + crop_w
+        crop_start_y = int(np.floor(crop_y))
+        crop_end_y = crop_start_y + crop_h
+
+        x_dst, x_src = _correct_crop_range(
+            crop_start_x, crop_end_x, int(min(crop_w, heatmap_buffer.shape[1]))
+        )
+        y_dst, y_src = _correct_crop_range(
+            crop_start_y, crop_end_y, int(min(crop_h, heatmap_buffer.shape[0]))
+        )
+
+        if x_dst is None or y_dst is None:
+            return
+
+        score_buffer[y_dst, x_dst, :] += score
+        heatmap_buffer[y_dst, x_dst, :] += (
+            _interpolate_crop_single(crop_x, crop_y, crop_proper_size) * score
+        )[y_src, x_src, :]
+
+    @resolve_lazy_imports
+    def _top_down_impl(self, frames: np.ndarray):
+        det = self._detector_runner
+        pr = self._pose_runner
+
+        det_frames, det_kwargs = self._run_batched(
+            det.preprocessor, frames, {}, "model_kwargs"
+        )
+        det_boxes = det.predict(det_frames, **det_kwargs)
+
+        reconstructed_heatmaps = None
+        reconstructed_score_sum = None
+        downscale = 1.0
+
+        for batch_i, (frm, detection) in enumerate(zip(frames, det_boxes)):
+            detection_data = detection["detection"]
+            det_filter = detection_data["scores"] > self._score_threshold
+            detection_data = {
+                k: v[det_filter]
+                for k, v in detection_data.items()
+                if k in ("scores", "bboxes")
+            }
+
+            pose_frame, detection_data = pr.preprocessor(frm, detection_data)
+            pose_kwargs = detection_data.pop("model_kwargs", {})
+
+            if pr.inference_cfg.autocast.enabled:
+                with torch.autocast(device_type=str(pr.device)):
+                    outputs = pr.model(pose_frame.to(pr.device), **pose_kwargs)
+            else:
+                outputs = pr.model(pose_frame.to(pr.device), **pose_kwargs)
+
+            bodypart_data = outputs["bodypart"]
+            heatmap = bodypart_data["heatmap"].permute(0, 2, 3, 1)
+
+            if self._apply_sigmoid:
+                heatmap = torch.sigmoid(heatmap)
+            if self._clip_scores:
+                heatmap = torch.clamp(heatmap, 0.0, 1.0)
+
+            downscale = float(
+                max(
+                    pose_frame.shape[1] / heatmap.shape[1],
+                    pose_frame.shape[2] / heatmap.shape[2],
+                )
+            )
+
+            if reconstructed_heatmaps is None:
+                reconstructed_heatmaps = torch.zeros(
+                    (
+                        frames.shape[0],
+                        int(np.ceil(frames.shape[1] / downscale)),
+                        int(np.ceil(frames.shape[2] / downscale)),
+                        heatmap.shape[3],
+                    ),
+                    device=heatmap.device,
+                    dtype=heatmap.dtype,
+                )
+                reconstructed_score_sum = torch.zeros(
+                    (
+                        frames.shape[0],
+                        int(np.ceil(frames.shape[1] / downscale)),
+                        int(np.ceil(frames.shape[2] / downscale)),
+                        heatmap.shape[3],
+                    ),
+                    device=heatmap.device,
+                    dtype=heatmap.dtype,
+                )
+
+            for indv_hm, offset, scale, score in zip(
+                heatmap,
+                detection_data["offsets"],
+                detection_data["scales"],
+                detection_data["scores"],
+            ):
+                self._restore_crop(
+                    reconstructed_heatmaps[batch_i],
+                    reconstructed_score_sum[batch_i],
+                    offset[0] / downscale,
+                    offset[1] / downscale,
+                    scale[0],
+                    scale[1],
+                    indv_hm,
+                    score,
+                )
+
+        reconstructed_score_sum = torch.clamp(reconstructed_score_sum, min=1)
+        heatmaps_final = reconstructed_heatmaps / reconstructed_score_sum
+
+        if self._integral_refiner is not None:
+            locref = self._integral_refiner(heatmaps_final) * downscale
+        else:
+            locref = None
+
+        return TrackingData(
+            heatmaps_final.cpu().numpy(),
+            locref.cpu().numpy() if locref is not None else None,
+            downscale,
+        )
 
     @resolve_lazy_imports
     def __call__(self, frames: np.ndarray) -> TrackingData:
-        full_context = {}
-        frames_proc = []
-
-        for frame in frames:
-            preproc_frames, context = self._pose_runner.preprocessor(frames, {})
-            frames.append(frames_proc)
-        model_kwargs = context.pop("model_kwargs", {})
-        for i in range(10):
-            print(preproc_frames.shape)
-        print(self._pose_runner.predict(preproc_frames, **model_kwargs))
-        raise ValueError()
+        with torch.no_grad():
+            if self._detector_runner is None:
+                return self._bottom_up_impl(frames)
+            else:
+                # TODO: Need to find a new approach, initial sleap-like approach gives really poor results...
+                # return self._top_down_impl(frames)
+                raise NotImplementedError(
+                    "DIPLOMAT doesn't support DeepLabCut top-down models currently. Please use a bottom-up model instead."
+                )
 
 
 class DLCProject(NamedTuple):
@@ -172,12 +494,20 @@ def _load_dlc_project(
 
 
 def _select_snapshot(
-    snapshot_dir: Union[str, Path], prefix: str, snapshot_epoch: Optional[int] = None
+    snapshot_dir: Union[str, Path],
+    prefix: str,
+    avoid_prefix: Optional[str] = None,
+    snapshot_epoch: Optional[int] = None,
 ) -> Path:
     snapshots = []
 
     for file in Path(snapshot_dir).iterdir():
-        if not file.is_dir() and file.suffix == ".pt" and file.stem.startswith(prefix):
+        if (
+            not file.is_dir()
+            and file.suffix == ".pt"
+            and file.stem.startswith(prefix)
+            and (avoid_prefix is None or not file.stem.startswith(avoid_prefix))
+        ):
             try:
                 parts = file.stem.split("-")
                 epoch = int(parts[-1])
@@ -208,7 +538,10 @@ def _load_dlc_pose_runner(
     # import deeplabcut.pose_estimation_pytorch as dlc_torch
     task = dlc_torch.Task(dlc_project.model_train_config["method"])
     snapshot_path = _select_snapshot(
-        dlc_project.model_directory / "train", "snapshot-", snapshot_epoch
+        dlc_project.model_directory / "train",
+        "snapshot-",
+        "snapshot-detector-",
+        snapshot_epoch,
     )
 
     pose_runner = dlc_torch.get_pose_inference_runner(
@@ -221,7 +554,10 @@ def _load_dlc_pose_runner(
 
     if task == dlc_torch.Task.TOP_DOWN:
         detector_snapshot_path = _select_snapshot(
-            dlc_project.model_directory / "train", "detector-snapshot-", snapshot_epoch
+            dlc_project.model_directory / "train",
+            "snapshot-detector-",
+            None,
+            snapshot_epoch,
         )
         detector_runner = dlc_torch.get_detector_inference_runner(
             model_config=dlc_project.model_train_config,
@@ -250,6 +586,7 @@ def load_model(
     batch_size: tc.Optional[int] = None,
     gpu_index: tc.Optional[int] = None,
     snapshot_epoch: tc.Optional[int] = None,
+    refinement_kernel_size: int = 5,
     model_prefix: str = "",
     shuffle: int = 1,
     training_set_index: int = 0,
@@ -266,6 +603,7 @@ def load_model(
     :param gpu_index: Integer index of the GPU to use for inference (in tensorflow) defaults to 0, or selecting the first detected GPU if available.
     :param snapshot_epoch: Integer being the epoch of the saved model snapshot to use for inference. If not set, uses the best snapshot if available,
                            otherwise using the latest snapshot.
+    :param refinement_kernel_size: Size of refinement kernel used for computing offsets if an offset map is not generated by the model. Defaults to 5.
     :param batch_size: The batch size to use while processing. Defaults to None, which uses the default batch size for the project.
     :param model_prefix: The string prefix of the DEEPLABCUT model to use defaults to no prefix (the default model).
     :param num_outputs: The number of outputs, or bodies to track in the video. Defaults to the value specified in the DLC config, or None if one
@@ -348,5 +686,6 @@ def load_model(
                     device_str,
                     snapshot_epoch,
                 ),
+                refinement_kernel_size=refinement_kernel_size,
             ),
         )

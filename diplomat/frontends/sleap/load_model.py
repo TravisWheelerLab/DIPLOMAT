@@ -2,7 +2,6 @@ import tempfile
 from typing import Optional
 
 import numpy as np
-from numpy.testing import tempdir
 
 import diplomat.processing.type_casters as tc
 from diplomat.frontends import ModelInfo, ModelLike
