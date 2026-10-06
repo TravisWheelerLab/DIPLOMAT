@@ -53,7 +53,19 @@ It you want to create new SLEAP or DeepLabCut projects or train new models, you'
 software packages. This can be done by following their installation guides at the links below:
 
 * SLEAP: `<https://docs.sleap.ai/latest/installation/>`_
-* DeepLabCut: `<https://deeplabcut.github.io/DeepLabCut/README.html>`_
+* DeepLabCut: `<https://deeplabcut.github.io/DeepLabCut/docs/installation.html>`_
+
+.. warning::
+
+    DeepLabCut's install guide still recommends using an outdated conda based installation, which we don't
+    recommend due to conda based installations being buggy, especially with newer python versions. We recommend
+    installing it with uv, which can be done with this single command:
+
+    .. code-block:: sh
+
+        # You can launch the UI after installation by typing 'dlc' into your terminal.
+        uv tool install "deeplabcut[gui]"
+
 
 Note that neither is required to run diplomat, if you just want to run diplomat you can skip this section
 and follow one of the installation procedures below based on your platform.
@@ -69,23 +81,18 @@ Installation
 
             .. group-tab:: uv
 
-                Open the terminal and run one of the two commands below:
+                Open the terminal and run the command below:
 
                 .. code-block::
 
-                    # On systems with an NVIDIA GPU:
-                    uv tool install "diplomat-track[all-nvidia]"
-                    # On any other system:
                     uv tool install "diplomat-track[all]"
 
                 If more granular control is needed of what parts of diplomat should be installed,
                 you can mix and match the frontend specific and ui optional dependency flags, all listed
-                in the commands below.
+                in the command below.
 
                 .. code-block::
 
-                    # Equivalent to all-nvidia, remove parts you don't want.
-                    uv tool install "diplomat-track[sleap, dlc-nvidia, gui]"
                     # Equivalent to all, remove parts you don't want.
                     uv tool install "diplomat-track[sleap, dlc, gui]"
 
@@ -99,23 +106,18 @@ Installation
             .. group-tab:: pip
 
                 Open the terminal, with access to the python environment you would like to install diplomat in.
-                Then run one of the commands below.
+                Then run the command below.
 
                 .. code-block::
 
-                    # Install with all frontends and gui support on system with a NVIDIA GPU
-                    pip install diplomat-track[all-nvidia]
-                    # Install with all frontends and gui support on any other system
                     pip install diplomat-track[all]
 
                 If more granular control is needed of what parts of diplomat should be installed,
                 you can mix and match the frontend specific and ui optional dependency flags, all listed
-                in the commands below.
+                in the command below.
 
                 .. code-block::
 
-                    # Equivalent to all-nvidia, remove parts you don't want.
-                    pip install diplomat-track[sleap, dlc-nvidia, gui]
                     # Equivalent to all, remove parts you don't want.
                     pip install diplomat-track[sleap, dlc, gui]
 
@@ -188,23 +190,18 @@ Installation
 
             .. group-tab:: uv
 
-                Open the terminal and run one of the two commands below:
+                Open the terminal and run the command below:
 
                 .. code-block::
 
-                    # On systems with an NVIDIA GPU:
-                    uv tool install "diplomat-track[all-nvidia]"
-                    # On any other system:
                     uv tool install "diplomat-track[all]"
 
                 If more granular control is needed of what parts of diplomat should be installed,
                 you can mix and match the frontend specific and ui optional dependency flags, all listed
-                in the commands below.
+                in the command below.
 
                 .. code-block::
 
-                    # Equivalent to all-nvidia, remove parts you don't want.
-                    uv tool install "diplomat-track[sleap, dlc-nvidia, gui]"
                     # Equivalent to all, remove parts you don't want.
                     uv tool install "diplomat-track[sleap, dlc, gui]"
 
@@ -218,23 +215,18 @@ Installation
             .. group-tab:: pip
 
                 Open the terminal, with access to the python environment you would like to install diplomat in.
-                Then run one of the commands below.
+                Then run the command below.
 
                 .. code-block::
 
-                    # Install with all frontends and gui support on system with a NVIDIA GPU
-                    pip install diplomat-track[all-nvidia]
-                    # Install with all frontends and gui support on any other system
                     pip install diplomat-track[all]
 
                 If more granular control is needed of what parts of diplomat should be installed,
                 you can mix and match the frontend specific and ui optional dependency flags, all listed
-                in the commands below.
+                in the command below.
 
                 .. code-block::
 
-                    # Equivalent to all-nvidia, remove parts you don't want.
-                    pip install diplomat-track[sleap, dlc-nvidia, gui]
                     # Equivalent to all, remove parts you don't want.
                     pip install diplomat-track[sleap, dlc, gui]
 
@@ -246,91 +238,28 @@ Installation
                     diplomat frontends list loaded
 
 
+Legacy Project Support
+^^^^^^^^^^^^^^^^^^^^^^
+
+DIPLOMAT has support for running old DeepLabCut and SLEAP models and projects that still use tensorflow,
+but the additional packages for doing so are not included by default. They can be installed using the
+`legacy` and `legacy-nvidia` dependency flags. Note these only install legacy support, so you still need
+to include other flags to get the UI or modern pytorch project support. Some examples of custom installation
+combinations are included below:
+
+.. code-block::
+
+    # Install support for legacy, and new SLEAP and DLC projects (includes UI).
+    uv tool install "diplomat-track[all, legacy]"
+    # Install support for support for legacy, and new SLEAP and DLC projects on system with an nvidia GPU (includes UI)...
+    uv tool install "diplomat-track[all, legacy-nvidia]"
+    # Install support for just legacy projects, and include UI support...
+    uv tool install "diplomat-track[gui, legacy]"
+    # Install support for just legacy projects...
+    uv tool install "diplomat-track[all, legacy]"
+
+
 Development Installation Method
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. collapse:: DIPLOMAT Installation for Development
-
-    |
-
-    * If you plan on developing frontends or predictors for DIPLOMAT, consider installing DIPLOMAT from source with the `developer installation method <advanced_usage.html>`_.
-
-|
-
-Verifying your DIPLOMAT Installation
-------------------------------------
-
-We have created a  `Zenodo record <https://zenodo.org/records/14232002>`_ with pretrained SLEAP and DeepLabCut projects and a short video clip
-with which you can check your DIPLOMAT installation.
-
-.. collapse:: Verify with SLEAP
-
-    |
-
-    In order to verify the installation, download the testing resources
-    **N5PZS.avi** and **SLEAP_5bp.zip** from our `Zenodo record <https://zenodo.org/records/14232002>`_.
-    Unzip **SLEAP_5bp.zip** and put the **test_sleap_5** folder in the same directory as **N5PZS.avi**.
-    Alternatively, use these `curl` commands to download and unzip the resources.
-
-    .. code-block:: sh
-
-        # download and unzip files from https://zenodo.org/records/14232002,
-        # or do it in the terminal with curl:
-        curl https://zenodo.org/records/14232002/files/SLEAP_5bp.zip --output SLEAP_5bp.zip && unzip SLEAP_5bp.zip
-        curl https://zenodo.org/records/14232002/files/N5PZS.avi --output N5PZS.avi
-
-    Finally, verify the tracking functionality for DIPLOMAT-SLEAP.
-    **Make sure both the video file `N5PZS.avi` and the SLEAP project folder `test_sleap_5` are in your current directory.**
-
-
-    Verify that DIPLOMAT's primary tracking functionality works.
-
-    .. code-block:: sh
-
-        # verify that tracking works
-        diplomat track -c test_sleap_5/ -v N5PZS.avi -no 3
-
-    If you installed diplomat with ``"all"``, or ui support, verify that the Interact GUI appears after this command completes.
-
-    .. code-block:: sh
-
-        # verify that interact works
-        diplomat track_and_interact -c test_sleap_5/ -v N5PZS.avi -no 3
-
-|
-
-.. collapse:: Verify with DeepLabCut
-
-    |
-
-    In order to verify the installation, download the testing resources
-    **N5PZS.avi** and **DLC_5bp.zip** from our Zenodo record: `Zenodo record <https://zenodo.org/records/14232002>`_.
-    Unzip **DLC_5bp.zip** and put the **test_dlc_5** folder in the same directory as **N5PZS.avi**.
-    Alternatively, use these `curl` commands to download and unzip the resources.
-
-    .. code-block:: sh
-
-        # download and unzip files from https://zenodo.org/records/14232002,
-	    # or do it in the terminal with curl:
-        curl https://zenodo.org/records/14232002/files/DLC_5bp.zip --output DLC_5bp.zip && unzip DLC_5bp.zip
-        curl https://zenodo.org/records/14232002/files/N5PZS.avi --output N5PZS.avi
-        # your working directory should now contain "test_dlc_5" and "N5PZS.avi".
-
-    Finally, verify the tracking functionality for DIPLOMAT-DLC.
-    **Make sure both the video file `N5PZS.avi` and the DLC project folder `test_dlc_5` are in your current directory.**
-
-    Verify that DIPLOMAT's primary tracking functionality works.
-
-    .. code-block:: sh
-
-        # verify that tracking works
-        diplomat track -c test_dlc_5/config.yaml -v N5PZS.avi -no 3
-
-    If you installed If you installed diplomat with ``"all"``, or ui support, verify that the Interact GUI appears after this command completes.
-
-    .. code-block:: sh
-
-        # verify that tracking works
-        diplomat track_and_interact -c test_dlc_5/config.yaml -v N5PZS.avi -no 3
-
-|
+If you plan on developing frontends or predictors for DIPLOMAT, consider installing DIPLOMAT from source with the `developer installation method <advanced_usage.html#development-usage>`_.

@@ -25,6 +25,8 @@ _MOCKED_PACKAGES = [
     "torch",
     "sleap_nn",
     "sleap_io",
+    "h5py",
+    "deeplabcut",
 ]
 
 

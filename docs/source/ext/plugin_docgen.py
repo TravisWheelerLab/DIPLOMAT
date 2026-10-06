@@ -35,6 +35,8 @@ MOCK_PACKAGES = [
     "torch",
     "sleap_nn",
     "sleap_io",
+    "h5py",
+    "deeplabcut",
 ]
 diplomat = None
 with mock(MOCK_PACKAGES):

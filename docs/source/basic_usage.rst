@@ -11,24 +11,25 @@ Setting up a Project
         DIPLOMAT works on both single-animal and multi-animal DeepLabCut based projects, with no adjustments.
         So if you plan on using the DeepLabCut frontend, you'll need to first setup a DeepLabCut project. This
         can be done by following the
-        `Single Animal DLC Project <https://deeplabcut.github.io/DeepLabCut/docs/standardDeepLabCut_UserGuide.html>`_
+        `Single Animal DLC Project <https://deeplabcut.github.io/DeepLabCut/docs/quick-start/single_animal_quick_guide.html>`_
         or
-        `Multi-Animal DLC Project <https://deeplabcut.github.io/DeepLabCut/docs/maDLC_UserGuide.html>`_
-        guides included in the DeepLabCut documentation. It is recommended you follow the multi-animal
-        guide as it will allow you to create a skeleton and label multiple individuals (DIPLOMAT will
-        automatically pull the skeleton from DeepLabCut if one isn't manually specified when running
+        `Multi-Animal DLC Project <https://deeplabcut.github.io/DeepLabCut/docs/quick-start/tutorial_maDLC.html>`_
+        guides included in the DeepLabCut documentation. Both project types can also be created and managed easily
+        using the included `GUI <https://deeplabcut.github.io/DeepLabCut/docs/main-workflows/user-guide.html#gui-recommended-for-beginners>`_
+        in new versions. It is recommended you create a multi-animal project as it will allow you to create a skeleton and label multiple
+        individuals (DIPLOMAT will automatically pull the skeleton from DeepLabCut if one isn't manually specified when running
         the ``diplomat`` tracking commands).
 
         You'll want to follow these user guides until you have finished
-        `training the network <https://deeplabcut.github.io/DeepLabCut/docs/maDLC_UserGuide.html#train-the-network>`_.
+        `training the network <https://deeplabcut.github.io/DeepLabCut/docs/quick-start/tutorial_maDLC.html#train-the-network>`_.
         Once the network is trained, you can begin using DIPLOMAT to begin tracking videos.
 
     .. group-tab:: SLEAP
 
         DIPLOMAT works with all of SLEAP's models, but it's recommended to use their bottom-up models with diplomat.
         To setup a SLEAP project, you can use SLEAP's UI. You can follow the SLEAP tutorial at
-        `https://sleap.ai/tutorials/tutorial.html <https://sleap.ai/tutorials/tutorial.html>`_
-        all the way to and including the "Start Training" section.
+        `https://docs.sleap.ai/latest/tutorial/overview/ <https://docs.sleap.ai/latest/tutorial/overview/>`_
+        all the way to and including the "Training a Model" section.
 
 
 
@@ -175,6 +176,50 @@ Also, the project config is not needed when running on frame stores.
     diplomat track_and_interact -fs path/to/fstore.dlfs -no <num_bodies>
     # Run DIPLOMAT with some other prediction algorithm
     diplomat track_with -fs path/to/fstore.dlfs -p NameOfPredictorPlugin -no <num_bodies>
+
+Saving DIPLOMAT Run Settings
+----------------------------
+
+DIPLOMAT does not have a global or project-like configuration file, but instead provides a special command,
+:py:cli:`diplomat yaml`, that allows for running any DIPLOMAT CLI command with a custom configuration by specifying the options in a YAML file.
+
+To use it, simply create a yaml file, similar to the one below. The yaml below runs the :py:cli:`diplomat track`
+command with some of the settings modified for the main tracking algorithm.
+
+.. code-block:: yaml
+
+    # The name of the sub-command to run.
+    command: track
+    # The arguments to pass to the command. Note you can't use abbreviations here, but instead you need to use the full setting names.
+    arguments:
+      # Change this to your actual project path...
+      config: path/to/project/model/or/config
+      num_outputs: 2
+      output_suffix: "boost-occluded"
+      segmented_passes:
+        - - MITViterbi
+          - occluded_transition_probability: 0.75
+            lowest_value: 1e-8
+            obscured_survival_max: 100
+
+Then, you can run it using:
+
+.. code-block:: sh
+
+    diplomat yaml name_of_yaml_file.yaml --video path/to/video.mp4
+
+
+Notice, since we don't include a video path in the yaml file, we include it as an extra argument to the
+:py:cli:`diplomat yaml` command. :py:cli:`diplomat yaml` will automatically detect and indicate when required
+arguments to the command you are attempting to run haven't been specified. You can also override arguments
+in the yaml file by passing a new value to the command, as shown below. Note that you must use the full name
+for the option, abbreviations are not supported.
+
+.. code-block:: sh
+
+    # Using '-no' does not work...
+    diplomat yaml name_of_yaml_file.yaml --video path/to/video.mp4 --num_outputs 3
+
 
 Video Utilities
 ---------------

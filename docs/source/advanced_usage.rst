@@ -42,11 +42,8 @@ pull down this repository and create an environment for it using the commands sh
     # Create and syncronize python environment using uv...
     uv sync
 
-    # Run one of the two below...
     # Install DIPLOMAT dependencies with all extras (sleap, dlc, and gui) You may want to change this to only install some extras.
     uv sync --extra all --extra test
-    # Same command for systems with NVIDIA GPUs...
-    uv sync --extra all-nvidia --extra test
 
     # Run the diplomat command. You can also just use 'diplomat' if you activate the virtual environment at '.venv'
     uv run diplomat
